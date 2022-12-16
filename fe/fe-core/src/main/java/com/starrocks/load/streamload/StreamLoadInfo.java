@@ -405,6 +405,12 @@ public class StreamLoadInfo {
         if (request.isSetTrimSpace()) {
             trimSpace = request.isTrimSpace();
         }
+        if (request.isSetIgnoreTailColumns()) {
+            ignoreTailColumns = request.isIgnoreTailColumns();
+        }
+        if (request.isSetSkipUtf8Check()) {
+            skipUtf8Check = request.isSkipUtf8Check();
+        }
         if (request.isSetPartitions()) {
             String[] partNames = PART_NAME_SPLIT.split(request.getPartitions().trim());
             if (request.isSetIsTempPartition()) {

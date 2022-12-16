@@ -952,6 +952,11 @@ struct TStreamLoadPutRequest {
     55: optional Types.TPartialUpdateMode partial_update_mode
     56: optional string payload_compression_type
 
+    // if ignore tail columns is true,
+    // the columns after TBrokerRangeDesc.num_of_columns_from_file will be ignored
+    71: optional bool ignoreTailColumns
+    72: optional bool skipUtf8Check
+
     // begin from 101, in case of conflict with other's change
     101: optional string warehouse  // deprecated, use backend_id implicitly convey information about the warehouse
     102: optional i64 backend_id
