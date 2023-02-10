@@ -44,6 +44,7 @@
 #include "runtime/small_file_mgr.h"
 #include "service/backend_options.h"
 #include "util/defer_op.h"
+#include "util/monotime.h"
 #include "util/stopwatch.hpp"
 #include "util/uid_util.h"
 
@@ -325,16 +326,35 @@ Status KafkaDataConsumer::get_partition_offset(std::vector<int32_t>* partition_i
         if (left_ms <= 0) {
             return Status::TimedOut("get kafka partition offset timeout");
         }
-        RdKafka::ErrorCode err =
-                _k_consumer->query_watermark_offsets(_topic, p_id, &beginning_offset, &latest_offset, left_ms);
-        if (err != RdKafka::ERR_NO_ERROR) {
-            LOG(WARNING) << "failed to get offset of partition: " << p_id << " in topic: " << _topic
-                         << ", err: " << RdKafka::err2str(err);
-            return Status::InternalError(fmt::format("failed to get offset of partition: {} in topic: {}, err: {}, {}",
-                                                     p_id, _topic, RdKafka::err2str(err), _k_event_cb.get_error_msg()));
+        // query_watermark_offsets() get offsets from local cache by default,
+        // but the cache might be expired when new partitions added, which will return ERR__UNKNOWN_PARTITION,
+        // add retry mechanism here to avoid the glitch.
+        int i = 0;
+        while (true) {
+            RdKafka::ErrorCode err =
+                    _k_consumer->query_watermark_offsets(_topic, p_id, &beginning_offset, &latest_offset, left_ms);
+            if (err != RdKafka::ERR_NO_ERROR) {
+                // add 200ms per iteration(200ms, 400ms, 600ms, 800ms)
+                // the interval between 1st and 4th retry will be longer than 2s. Enough for retry mechanism.
+                if (err == RdKafka::ERR__UNKNOWN_PARTITION && i < 4) {
+                    int sleep_time_ms = (i + 1) * 200;
+                    LOG(WARNING) << "failed to query watermark offset of topic: " << _topic << " partition: " << p_id
+                                 << ", err: " << RdKafka::err2str(err) << ". will sleep " << sleep_time_ms
+                                 << "(ms) and retry.";
+                    SleepFor(MonoDelta::FromMilliseconds(sleep_time_ms));
+                    i++;
+                } else {
+                    LOG(WARNING) << "failed to get offset of partition: " << p_id << " in topic: " << _topic
+                                 << ", err: " << RdKafka::err2str(err);
+                    return Status::InternalError(fmt::format("failed to get offset of partition: {} in topic: {}, err: {}, {}",
+                                                             p_id, _topic, RdKafka::err2str(err), _k_event_cb.get_error_msg()));
+                }
+            } else {
+                beginning_offsets->push_back(beginning_offset);
+                latest_offsets->push_back(latest_offset);
+                break;
+            }
         }
-        beginning_offsets->push_back(beginning_offset);
-        latest_offsets->push_back(latest_offset);
     }
 
     return Status::OK();
