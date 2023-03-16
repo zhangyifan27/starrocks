@@ -602,6 +602,8 @@ CONF_mInt32(max_consumer_num_per_group, "3");
 // Max pulsar consumer num in one data consumer group, for routine load.
 CONF_mInt32(max_pulsar_consumer_num_per_group, "10");
 
+CONF_mInt32(routine_load_consumer_pool_size, "100");
+
 // the size of consumer group queue
 CONF_Int32(routine_load_consumer_group_queue_size, "500");
 

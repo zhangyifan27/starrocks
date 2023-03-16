@@ -72,6 +72,9 @@ public:
     // return true the if the consumer match the need
     virtual bool match(StreamLoadContext* ctx) = 0;
 
+    virtual void return_metric() = 0;
+    virtual void clean_metric() = 0;
+
     const UniqueId& id() { return _id; }
     time_t last_visit_time() const { return _last_visit_time; }
     void set_grp(const UniqueId& grp_id) { _grp_id = grp_id; }
@@ -156,6 +159,7 @@ public:
             delete _k_consumer;
             _k_consumer = nullptr;
         }
+        StarRocksMetrics::instance()->destroy_kafka_consumer_num.increment(1);
     }
 
     Status init(StreamLoadContext* ctx) override;
@@ -164,6 +168,8 @@ public:
     Status cancel(StreamLoadContext* ctx) override;
     // reassign partition topics
     Status reset() override;
+    void return_metric() override;
+    void clean_metric() override;
     bool match(StreamLoadContext* ctx) override;
     // commit kafka offset
     Status commit(const std::string& topic, const std::map<int32_t, int64_t>& offsets);
@@ -211,6 +217,7 @@ public:
             delete _p_client;
             _p_client = nullptr;
         }
+        StarRocksMetrics::instance()->destroy_pulsar_consumer_num.increment(1);
     }
 
     enum InitialPosition { LATEST, EARLIEST };
@@ -222,6 +229,8 @@ public:
     Status cancel(StreamLoadContext* ctx) override;
     // reassign partition topics
     Status reset() override;
+    void return_metric() override;
+    void clean_metric() override;
     bool match(StreamLoadContext* ctx) override;
     // acknowledge pulsar message
     Status acknowledge_cumulative(pulsar::MessageId& message_id);

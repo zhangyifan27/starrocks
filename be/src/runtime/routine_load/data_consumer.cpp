@@ -153,6 +153,8 @@ Status KafkaDataConsumer::init(StreamLoadContext* ctx) {
     VLOG(3) << "finished to init kafka consumer. " << ctx->brief();
 
     _init = true;
+
+    StarRocksMetrics::instance()->create_kafka_consumer_num.increment(1);
     return Status::OK();
 }
 
@@ -508,6 +510,15 @@ Status KafkaDataConsumer::reset() {
     return Status::OK();
 }
 
+void KafkaDataConsumer::return_metric() {
+    StarRocksMetrics::instance()->idle_kafka_consumer_num.increment(1);
+}
+
+void KafkaDataConsumer::clean_metric() {
+    StarRocksMetrics::instance()->idle_kafka_consumer_num.decrement(1);
+    StarRocksMetrics::instance()->bg_clean_kafka_consumer_num.increment(1);
+}
+
 // The offsets is the last consumed message for every partition. We need to +1 when we commit offset.
 Status KafkaDataConsumer::commit(const std::string& topic, const std::map<int32_t, int64_t>& offsets) {
     DCHECK(!_k_consumer->closed());
@@ -553,6 +564,8 @@ bool KafkaDataConsumer::match(StreamLoadContext* ctx) {
             return false;
         }
     }
+
+    StarRocksMetrics::instance()->idle_kafka_consumer_num.decrement(1);
     return true;
 }
 
@@ -589,6 +602,8 @@ Status PulsarDataConsumer::init(StreamLoadContext* ctx) {
 
     _init = true;
     _init_time = time(nullptr);
+
+    StarRocksMetrics::instance()->create_pulsar_consumer_num.increment(1);
     return Status::OK();
 }
 
@@ -744,6 +759,15 @@ Status PulsarDataConsumer::reset() {
     return Status::OK();
 }
 
+void PulsarDataConsumer::return_metric() {
+    StarRocksMetrics::instance()->idle_pulsar_consumer_num.increment(1);
+}
+
+void PulsarDataConsumer::clean_metric() {
+    StarRocksMetrics::instance()->idle_pulsar_consumer_num.decrement(1);
+    StarRocksMetrics::instance()->bg_clean_pulsar_consumer_num.increment(1);
+}
+
 Status PulsarDataConsumer::acknowledge_cumulative(pulsar::MessageId& message_id) {
     pulsar::Result res = _p_consumer.acknowledgeCumulative(message_id);
     if (res != pulsar::ResultOk) {
@@ -780,6 +804,7 @@ bool PulsarDataConsumer::match(StreamLoadContext* ctx) {
         }
     }
 
+    StarRocksMetrics::instance()->idle_pulsar_consumer_num.decrement(1);
     return true;
 }
 

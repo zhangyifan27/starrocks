@@ -167,6 +167,7 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_ROUTINE_LOAD_RECEIVED_BYTES;
     public static LongCounterMetric COUNTER_ROUTINE_LOAD_ERROR_ROWS;
     public static LongCounterMetric COUNTER_ROUTINE_LOAD_PAUSED;
+    public static LongCounterMetric COUNTER_MAX_ROUTINE_LOAD_TASK_PER_BE;
     public static LongCounterMetric COUNTER_SHORTCIRCUIT_QUERY;
     public static LongCounterMetric COUNTER_SHORTCIRCUIT_RPC;
     public static LongCounterMetric COUNTER_LOST_TQ_METADATA_NUM;
@@ -530,6 +531,10 @@ public final class MetricRepo {
         COUNTER_ROUTINE_LOAD_ERROR_ROWS = new LongCounterMetric("routine_load_error_rows", MetricUnit.ROWS,
                 "total error rows of routine load");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_ERROR_ROWS);
+        COUNTER_MAX_ROUTINE_LOAD_TASK_PER_BE = new LongCounterMetric("max_routine_load_task_per_be", MetricUnit.NOUNIT,
+                "max routine load task num per be");
+        COUNTER_MAX_ROUTINE_LOAD_TASK_PER_BE.increase((long) Config.max_routine_load_task_num_per_be);
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_MAX_ROUTINE_LOAD_TASK_PER_BE);
 
         COUNTER_UNFINISHED_BACKUP_JOB = new LongCounterMetric("unfinished_backup_job", MetricUnit.REQUESTS,
                 "current unfinished backup job");
