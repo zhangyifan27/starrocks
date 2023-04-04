@@ -67,6 +67,10 @@ public:
               confluent_schema_registry_url(t_info.confluent_schema_registry_url),
               begin_offset(t_info.partition_begin_offset),
               properties(t_info.properties) {
+        if (t_info.__isset.auto_offset_reset) {
+            auto_offset_reset = t_info.auto_offset_reset;
+        }
+
         // The offset(begin_offset) sent from FE is the starting offset,
         // and the offset(cmt_offset) reported by BE to FE is the consumed offset,
         // so we need to minus 1 here.
@@ -95,6 +99,8 @@ public:
     std::map<int32_t, int64_t> cmt_offset_timestamp;
     //custom kafka property key -> value
     std::map<std::string, std::string> properties;
+    // auto reset offset when offset out of range
+    bool auto_offset_reset = false;
 };
 
 // pulsar related info

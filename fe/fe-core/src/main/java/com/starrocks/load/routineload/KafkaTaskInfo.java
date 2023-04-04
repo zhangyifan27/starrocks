@@ -191,6 +191,9 @@ public class KafkaTaskInfo extends RoutineLoadTaskInfo {
         if ((routineLoadJob).getConfluentSchemaRegistryUrl() != null) {
             tKafkaLoadInfo.setConfluent_schema_registry_url((routineLoadJob).getConfluentSchemaRegistryUrl());
         }
+        if ((routineLoadJob).getAutoOffsetReset()) {
+            tKafkaLoadInfo.setAuto_offset_reset(routineLoadJob.getAutoOffsetReset());
+        }
         tRoutineLoadTask.setKafka_load_info(tKafkaLoadInfo);
         tRoutineLoadTask.setType(TLoadSourceType.KAFKA);
         tRoutineLoadTask.setParams(plan(routineLoadJob));

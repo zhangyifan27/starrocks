@@ -64,6 +64,7 @@ import com.starrocks.common.util.LogBuilder;
 import com.starrocks.common.util.LogKey;
 import com.starrocks.common.util.SmallFileMgr;
 import com.starrocks.common.util.SmallFileMgr.SmallFile;
+import com.starrocks.common.util.Util;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
 import com.starrocks.load.Load;
@@ -113,6 +114,7 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
     // current kafka partitions is the actually partition which will be fetched
     @SerializedName("ctkp")
     private List<Integer> currentKafkaPartitions = Lists.newArrayList();
+    private boolean autoOffsetReset = false;
     // optional, user want to set default offset when new partition add or offset not set.
     private Long kafkaDefaultOffSet = null;
     // kafka properties, property prefix will be mapped to kafka custom parameters, which can be extended in the future
@@ -161,6 +163,10 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
 
     public Map<String, String> getConvertedCustomProperties() {
         return convertedCustomProperties;
+    }
+
+    public boolean getAutoOffsetReset() {
+        return autoOffsetReset;
     }
 
     @Override
@@ -222,6 +228,15 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
             try {
                 kafkaDefaultOffSet = CreateRoutineLoadStmt.getKafkaOffset(
                         convertedCustomProperties.remove(CreateRoutineLoadStmt.KAFKA_DEFAULT_OFFSETS));
+            } catch (AnalysisException e) {
+                throw new DdlException(e.getMessage());
+            }
+        }
+        if (convertedCustomProperties.containsKey(CreateRoutineLoadStmt.KAFKA_AUTO_OFFSET_RESET_PROPERTY)) {
+            try {
+                autoOffsetReset = Util.getBooleanPropertyOrDefault(
+                        convertedCustomProperties.remove(CreateRoutineLoadStmt.KAFKA_AUTO_OFFSET_RESET_PROPERTY), false,
+                        CreateRoutineLoadStmt.KAFKA_AUTO_OFFSET_RESET_PROPERTY + " should be a boolean");
             } catch (AnalysisException e) {
                 throw new DdlException(e.getMessage());
             }

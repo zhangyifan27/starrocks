@@ -125,6 +125,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     // optional
     public static final String KAFKA_PARTITIONS_PROPERTY = "kafka_partitions";
     public static final String KAFKA_OFFSETS_PROPERTY = "kafka_offsets";
+    public static final String KAFKA_AUTO_OFFSET_RESET_PROPERTY = "kafka_auto_offset_reset";
     public static final String KAFKA_DEFAULT_OFFSETS = "kafka_default_offsets";
     // optional
     public static final String CONFLUENT_SCHEMA_REGISTRY_URL = "confluent.schema.registry.url";
@@ -837,6 +838,11 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         if (customKafkaProperties.containsKey(KAFKA_DEFAULT_OFFSETS)) {
             getKafkaOffset(customKafkaProperties.get(KAFKA_DEFAULT_OFFSETS));
         }
+
+        // check auto_offset_reset
+        Util.getBooleanPropertyOrDefault(customKafkaProperties.get(KAFKA_AUTO_OFFSET_RESET_PROPERTY),
+                false,
+                KAFKA_AUTO_OFFSET_RESET_PROPERTY + " should be a boolean");
     }
 
     private void checkPulsarProperties() throws AnalysisException {
