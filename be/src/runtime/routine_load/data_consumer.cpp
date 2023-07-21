@@ -186,6 +186,7 @@ Status KafkaDataConsumer::assign_topic_partitions(const std::map<int32_t, int64_
     // assign partition
     RdKafka::ErrorCode err = _k_consumer->assign(topic_partitions);
     if (err) {
+        StarRocksMetrics::instance()->assign_failed_kafka_consumer_num.increment(1);
         LOG(WARNING) << "failed to assign topic partitions: " << ctx->brief(true) << ", err: " << RdKafka::err2str(err);
         return Status::InternalError(fmt::format("failed to assign partitions of topic: {}, err: {}, {}", topic,
                                                  RdKafka::err2str(err), _k_event_cb.get_error_msg()));
@@ -625,6 +626,7 @@ Status PulsarDataConsumer::assign_partition(StreamLoadContext* ctx,
     }
     result = _p_client->createReader(initial_position.first, p_initial_position, config, _p_reader);
     if (result != pulsar::ResultOk) {
+        StarRocksMetrics::instance()->assign_failed_pulsar_consumer_num.increment(1);
         LOG(WARNING) << "PAUSE: failed to create pulsar reader: " << ctx->brief(true) << ", err: " << result;
         return Status::InternalError("PAUSE: failed to create pulsar reader: " +
                                      std::string(pulsar::strResult(result)));
