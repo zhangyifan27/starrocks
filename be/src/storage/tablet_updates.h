@@ -77,6 +77,13 @@ struct ExtraFileSize {
     int64_t col_size = 0;
 };
 
+struct CompactionMetric {
+    size_t input_rowsets_num;
+    int64_t input_segments_num;
+    size_t input_data_size;
+    int64_t start_time;
+};
+
 struct EditVersionInfo {
     EditVersion version;
     int64_t creation_time;
@@ -555,6 +562,12 @@ private:
     int64_t _last_compaction_time_ms = 0;
     std::atomic<int64_t> _last_compaction_success_millis{0};
     std::atomic<int64_t> _last_compaction_failure_millis{0};
+
+    std::atomic<int64_t> _last_compaction_cost_time{0};
+
+    // used for lock compaction metric info
+    mutable std::mutex _compaction_metric_lock;
+    std::shared_ptr<CompactionMetric> _current_compaction_task_info;
 
     mutable std::mutex _rowset_stats_lock;
     // maintain current version(applied version) rowsets' stats

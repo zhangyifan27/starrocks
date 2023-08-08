@@ -1957,6 +1957,12 @@ Status TabletUpdates::_do_compaction(std::unique_ptr<CompactionInfo>* pinfo) {
     vector<RowsetSharedPtr> input_rowsets(info->inputs.size());
     {
         std::lock_guard<std::mutex> lg(_rowsets_lock);
+        std::lock_guard<std::mutex> rl(_compaction_metric_lock);
+        // metric compaction info
+        _current_compaction_task_info = std::make_unique<CompactionMetric>();
+        _current_compaction_task_info->start_time = UnixMillis();
+        _current_compaction_task_info->input_rowsets_num = info->inputs.size();
+
         for (size_t i = 0; i < info->inputs.size(); i++) {
             auto itr = _rowsets.find(info->inputs[i]);
             if (itr == _rowsets.end()) {
@@ -1970,8 +1976,10 @@ Status TabletUpdates::_do_compaction(std::unique_ptr<CompactionInfo>* pinfo) {
                 input_rowsets_size += input_rowsets[i]->data_disk_size();
                 input_row_num += input_rowsets[i]->num_rows();
                 num_segments += input_rowsets[i]->num_segments();
+                _current_compaction_task_info->input_segments_num += input_rowsets[i]->num_segments();
             }
         }
+        _current_compaction_task_info->input_data_size = input_rowsets_size;
     }
 
     auto cur_tablet_schema = CompactionUtils::rowset_with_max_schema_version(input_rowsets)->schema();
@@ -2944,14 +2952,20 @@ Status TabletUpdates::compaction(MemTracker* mem_tracker) {
             << PrettyPrinter::print(total_bytes_after_compaction, TUnit::BYTES) << "(estimate)";
 
     MemTracker* prev_tracker = tls_thread_status.set_mem_tracker(mem_tracker);
-    DeferOp op([&] { tls_thread_status.set_mem_tracker(prev_tracker); });
+    DeferOp op([&] {
+        std::lock_guard<std::mutex> rl(_compaction_metric_lock);
+        tls_thread_status.set_mem_tracker(prev_tracker);
+        _current_compaction_task_info = nullptr;
+    });
 
     Status st = _do_compaction(&info);
     if (!st.ok()) {
         _compaction_running = false;
         _last_compaction_failure_millis = UnixMillis();
+        _last_compaction_cost_time = 0;
     } else {
         _last_compaction_success_millis = UnixMillis();
+        _last_compaction_cost_time = UnixMillis() - _current_compaction_task_info->start_time;
     }
     return st;
 }
@@ -3244,14 +3258,20 @@ Status TabletUpdates::compaction(MemTracker* mem_tracker, const vector<uint32_t>
               << "->" << PrettyPrinter::print(total_bytes_after_compaction, TUnit::BYTES) << "(estimate)";
 
     MemTracker* prev_tracker = tls_thread_status.set_mem_tracker(mem_tracker);
-    DeferOp op([&] { tls_thread_status.set_mem_tracker(prev_tracker); });
+    DeferOp op([&] {
+        std::lock_guard<std::mutex> rl(_compaction_metric_lock);
+        tls_thread_status.set_mem_tracker(prev_tracker);
+        _current_compaction_task_info = nullptr;
+    });
 
     Status st = _do_compaction(&info);
     if (!st.ok()) {
         _compaction_running = false;
         _last_compaction_failure_millis = UnixMillis();
+        _last_compaction_cost_time = 0;
     } else {
         _last_compaction_success_millis = UnixMillis();
+        _last_compaction_cost_time = UnixMillis() - _current_compaction_task_info->start_time;
     }
     return st;
 }
@@ -3346,6 +3366,34 @@ void TabletUpdates::get_compaction_status(std::string* json_result) {
     format_str = ToStringFromUnixMillis(_last_compaction_failure_millis.load());
     last_compaction_failure_time.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
     root.AddMember("last compaction failure time", last_compaction_failure_time, root.GetAllocator());
+
+    rapidjson::Value last_compaction_cost_time;
+    format_str = std::to_string(_last_compaction_cost_time.load() / 1000.0) + "s";
+    last_compaction_cost_time.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
+    root.AddMember("last compaction cost time", last_compaction_cost_time, root.GetAllocator());
+    float divided = 1024 * 1024;
+
+    // print current task
+    {
+        std::lock_guard<std::mutex> rl(_compaction_metric_lock);
+        rapidjson::Value current_task(rapidjson::kObjectType);
+        current_task.SetObject();
+        if (_current_compaction_task_info) {
+            current_task.AddMember("input_rowset_num", _current_compaction_task_info->input_rowsets_num,
+                                   root.GetAllocator());
+            current_task.AddMember("input_segment_num", _current_compaction_task_info->input_segments_num,
+                                   root.GetAllocator());
+            rapidjson::Value input_data_size;
+            format_str = std::to_string(_current_compaction_task_info->input_data_size / divided) + "MB";
+            input_data_size.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
+            current_task.AddMember("input_data_size", input_data_size, root.GetAllocator());
+            rapidjson::Value start_time;
+            format_str = ToStringFromUnixMillis(_current_compaction_task_info->start_time);
+            start_time.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
+            current_task.AddMember("start_time", start_time, root.GetAllocator());
+        }
+        root.AddMember("current task", current_task, root.GetAllocator());
+    }
 
     rapidjson::Value rowsets_count;
     rowsets_count.SetUint64(rowsets.size());

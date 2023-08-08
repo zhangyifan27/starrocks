@@ -154,11 +154,13 @@ void CompactionTask::_success_callback() {
     if (_task_info.compaction_type == CUMULATIVE_COMPACTION) {
         _tablet->set_last_cumu_compaction_success_time(UnixMillis());
         _tablet->set_last_cumu_compaction_failure_status(TStatusCode::OK);
+        _tablet->set_last_cumu_compaction_cost_time(cost_time);
         if (_tablet->cumulative_layer_point() == _input_rowsets.front()->start_version()) {
             _tablet->set_cumulative_layer_point(_input_rowsets.back()->end_version() + 1);
         }
     } else {
         _tablet->set_last_base_compaction_success_time(UnixMillis());
+        _tablet->set_last_base_compaction_cost_time(cost_time);
     }
 
     // for compatible
@@ -191,9 +193,11 @@ void CompactionTask::_failure_callback(const Status& st) {
     if (_task_info.compaction_type == CUMULATIVE_COMPACTION) {
         _tablet->set_last_cumu_compaction_failure_time(UnixMillis());
         _tablet->set_last_cumu_compaction_failure_status(st.code());
+        _tablet->set_last_cumu_compaction_cost_time(0);
         StarRocksMetrics::instance()->cumulative_compaction_request_failed.increment(1);
     } else {
         _tablet->set_last_base_compaction_failure_time(UnixMillis());
+        _tablet->set_last_base_compaction_cost_time(0);
         StarRocksMetrics::instance()->base_compaction_request_failed.increment(1);
     }
 }

@@ -1296,6 +1296,23 @@ void Tablet::get_compaction_status(std::string* json_result) {
             compaction_rowsets_count.SetUint64(compaction_rowsets.size());
             task.AddMember("rowsets_count", compaction_rowsets_count, root.GetAllocator());
 
+            rapidjson::Value compaction_segments_count;
+            compaction_segments_count.SetUint64(compaction_task->input_segments_num());
+            task.AddMember("segments_count", compaction_segments_count, root.GetAllocator());
+
+            rapidjson::Value compaction_rows_count;
+            compaction_rows_count.SetUint64(compaction_task->input_rows_num());
+            task.AddMember("rows_count", compaction_rows_count, root.GetAllocator());
+
+            rapidjson::Value compaction_data_size;
+            compaction_data_size.SetUint64(compaction_task->input_rowsets_size());
+            task.AddMember("data_size", compaction_data_size, root.GetAllocator());
+
+            rapidjson::Value compaction_progress;
+            std::string progress = std::to_string(compaction_task->get_progress()) + "%";
+            compaction_progress.SetString(progress.c_str(), progress.length(), root.GetAllocator());
+            task.AddMember("progress", compaction_progress, root.GetAllocator());
+
             rapidjson::Document input_rowset_details;
             input_rowset_details.SetArray();
             for (auto& compaction_rowset : compaction_rowsets) {
@@ -1339,6 +1356,15 @@ void Tablet::get_compaction_status(std::string* json_result) {
     base_success_value.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
     root.AddMember("last_base_success_time", base_success_value, root.GetAllocator());
 
+    rapidjson::Value last_base_cost_value;
+    format_str = std::to_string(_last_base_compaction_cost_time.load() / 1000.0) + "s";
+    last_base_cost_value.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
+    root.AddMember("last_base_cost_time", last_base_cost_value, root.GetAllocator());
+    rapidjson::Value last_cumu_cost_value;
+    format_str = std::to_string(_last_cumu_compaction_cost_time.load() / 1000.0) + "s";
+    last_cumu_cost_value.SetString(format_str.c_str(), format_str.length(), root.GetAllocator());
+    root.AddMember("last_cumulative_cost_time", last_cumu_cost_value, root.GetAllocator());
+
     rapidjson::Value rowsets_count;
     rowsets_count.SetUint64(rowsets.size());
     root.AddMember("rowsets_count", rowsets_count, root.GetAllocator());
@@ -1377,6 +1403,10 @@ void Tablet::get_compaction_status(std::string* json_result) {
         rapidjson::Value rowset_size;
         rowset_size.SetInt64(rowsets[i]->data_disk_size());
         value.AddMember("rowset_size", rowset_size, root.GetAllocator());
+
+        rapidjson::Value rowset_level;
+        rowset_level.SetInt64(rowsets[i]->get_level());
+        value.AddMember("rowset_level", rowset_level, root.GetAllocator());
 
         rowset_details.PushBack(value, root.GetAllocator());
     }
