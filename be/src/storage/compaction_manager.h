@@ -42,6 +42,29 @@ public:
 
     void stop();
 
+    struct RunningCompactionMetric {
+        uint64_t task_id = 0;
+        std::string type;
+        int64_t partition_id = 0;
+        int64_t tablet_id = 0;
+        std::string start_time;
+        std::string algorithm;
+        size_t input_rowset_num;
+        size_t input_segment_num;
+        std::string input_data_size;
+        size_t compaction_score;
+        std::string progress;
+        std::vector<std::string> input_rowsets;
+    };
+
+    struct WaitingCompactionMetric {
+        std::string type;
+        int64_t partition_id = 0;
+        int64_t tablet_id = 0;
+        std::string start_time;
+        size_t compaction_score;
+    };
+
     void init_max_task_num(int32_t num);
 
     size_t candidates_size() {
@@ -142,6 +165,13 @@ public:
     void disable_table_compaction(int64_t table_id, int64_t deadline);
 
     ThreadPool* TEST_get_compaction_thread_pool() { return _compaction_pool.get(); }
+
+    Status get_running_task_status(std::vector<RunningCompactionMetric>& base_metric,
+                                   std::vector<RunningCompactionMetric>& cumu_metric,
+                                   std::vector<RunningCompactionMetric>& update_metric);
+
+    Status get_waiting_tasks_status(std::vector<WaitingCompactionMetric>& base_metric,
+                                    std::vector<WaitingCompactionMetric>& cumu_metric);
 
 private:
     CompactionManager(const CompactionManager& compaction_manager) = delete;
