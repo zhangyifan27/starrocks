@@ -1955,8 +1955,7 @@ Status TabletUpdates::_do_compaction(std::unique_ptr<CompactionInfo>* pinfo) {
     size_t num_segments = 0;
     auto info = (*pinfo).get();
     vector<RowsetSharedPtr> input_rowsets(info->inputs.size());
-    CompactionAlgorithm algorithm = CompactionUtils::choose_compaction_algorithm(
-            _tablet.num_columns(), config::vertical_compaction_max_columns_per_group, input_rowsets.size());
+
     {
         std::lock_guard<std::mutex> lg(_rowsets_lock);
         std::lock_guard<std::mutex> rl(_compaction_metric_lock);
@@ -1965,7 +1964,6 @@ Status TabletUpdates::_do_compaction(std::unique_ptr<CompactionInfo>* pinfo) {
         _current_compaction_task_info->start_time = UnixMillis();
         _current_compaction_task_info->input_rowsets_num = info->inputs.size();
         _current_compaction_task_info->input_rowset_ids = info->inputs;
-        _current_compaction_task_info->algorithm = algorithm;
 
         for (size_t i = 0; i < info->inputs.size(); i++) {
             auto itr = _rowsets.find(info->inputs[i]);
@@ -1989,6 +1987,10 @@ Status TabletUpdates::_do_compaction(std::unique_ptr<CompactionInfo>* pinfo) {
     auto cur_tablet_schema = CompactionUtils::rowset_with_max_schema_version(input_rowsets)->schema();
     CompactionAlgorithm algorithm = CompactionUtils::choose_compaction_algorithm(
             cur_tablet_schema->num_columns(), config::vertical_compaction_max_columns_per_group, num_segments);
+    {
+        std::lock_guard<std::mutex> rl(_compaction_metric_lock);
+        _current_compaction_task_info->algorithm = algorithm;
+    }
 
     RowsetWriterContext context;
     context.rowset_id = StorageEngine::instance()->next_rowset_id();
@@ -3130,7 +3132,11 @@ Status TabletUpdates::compaction_for_size_tiered(MemTracker* mem_tracker) {
             << PrettyPrinter::print(stat.byte_size, TUnit::BYTES) << "(estimate)";
 
     MemTracker* prev_tracker = tls_thread_status.set_mem_tracker(mem_tracker);
-    DeferOp op([&] { tls_thread_status.set_mem_tracker(prev_tracker); });
+    DeferOp op([&] {
+        std::lock_guard<std::mutex> rl(_compaction_metric_lock);
+        tls_thread_status.set_mem_tracker(prev_tracker);
+        _current_compaction_task_info = nullptr;
+    });
 
     Status st = _do_compaction(&info);
     if (!st.ok()) {
@@ -3316,6 +3322,11 @@ StatusOr<std::vector<std::pair<uint32_t, uint32_t>>> TabletUpdates::list_rowsets
         }
     }
     return ret;
+}
+
+bool TabletUpdates::has_running_task() {
+    std::lock_guard<std::mutex> rl(_compaction_metric_lock);
+    return _current_compaction_task_info != nullptr;
 }
 
 bool TabletUpdates::get_running_task_status(CompactionManager::RunningCompactionMetric& update_metric) {

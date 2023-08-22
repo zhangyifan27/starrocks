@@ -74,7 +74,8 @@ public final class ProcService {
         root.register("warehouses", new WarehouseProcDir());
         root.register("meta_recovery", new MetaRecoveryProdDir());
         root.register("replications", new ReplicationsProcNode());
-        root.register("compaction_details", new CompactionProcDir(GlobalStateMgr.getCurrentSystemInfo()));
+        root.register("compaction_details", new CompactionProcDir(
+                GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo()));
     }
 
     // Get the corresponding PROC Node by the specified path

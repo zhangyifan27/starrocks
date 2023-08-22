@@ -195,16 +195,20 @@ void add_waiting_compaction_output(std::vector<CompactionManager::WaitingCompact
 
 void running_compaction_handler(const WebPageHandler::ArgumentMap& args, std::stringstream* output) {
     if (!config::enable_event_based_compaction_framework) {
-        (*output) << "The overall compaction status is not supported for old compaction framework yet. Please use size "
-                     "tiered compaction framework instead.\n";
+        (*output) << "The overall compaction status is not supported for old compaction framework yet. Please use new event "
+                     "base compaction framework instead.\n";
         return;
     }
 
     std::vector<CompactionManager::RunningCompactionMetric> base_metrics;
     std::vector<CompactionManager::RunningCompactionMetric> cumu_metrics;
     std::vector<CompactionManager::RunningCompactionMetric> update_metrics;
-    StorageEngine::instance()->compaction_manager()->get_running_task_status(base_metrics, cumu_metrics,
-                                                                             update_metrics);
+    auto st = StorageEngine::instance()->compaction_manager()->get_running_task_status(base_metrics, cumu_metrics,
+                                                                                       update_metrics);
+    if (!st.ok()) {
+        (*output) << "Failed to get running compaction task status: " << st.message() << "\n";
+        return;
+    }
     add_running_compaction_output(base_metrics, output, BASE_COMPACTION);
     add_running_compaction_output(cumu_metrics, output, CUMULATIVE_COMPACTION);
     add_running_compaction_output(update_metrics, output, UPDATE_COMPACTION);
@@ -212,14 +216,18 @@ void running_compaction_handler(const WebPageHandler::ArgumentMap& args, std::st
 
 void waiting_compaction_handler(const WebPageHandler::ArgumentMap& args, std::stringstream* output) {
     if (!config::enable_event_based_compaction_framework) {
-        (*output) << "The overall compaction status is not supported for old compaction framework yet. Please use size "
-                     "tiered compaction framework instead.\n";
+        (*output) << "The overall compaction status is not supported for old compaction framework yet. Please use new event "
+                     "base compaction framework instead.\n";
         return;
     }
 
     std::vector<CompactionManager::WaitingCompactionMetric> base_metrics;
     std::vector<CompactionManager::WaitingCompactionMetric> cumu_metrics;
-    StorageEngine::instance()->compaction_manager()->get_waiting_tasks_status(base_metrics, cumu_metrics);
+    auto st = StorageEngine::instance()->compaction_manager()->get_waiting_tasks_status(base_metrics, cumu_metrics);
+    if (!st.ok()) {
+        (*output) << "Failed to get waiting compaction task status: " << st.message() << "\n";
+        return;
+    }
     add_waiting_compaction_output(base_metrics, output, BASE_COMPACTION);
     add_waiting_compaction_output(cumu_metrics, output, CUMULATIVE_COMPACTION);
 }
