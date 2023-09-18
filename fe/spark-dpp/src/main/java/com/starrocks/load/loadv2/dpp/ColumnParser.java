@@ -70,6 +70,8 @@ public abstract class ColumnParser implements Serializable {
             return new DecimalParser(etlColumn);
         } else if (columnType.equalsIgnoreCase("LARGEINT")) {
             return new LargeIntParser();
+        } else if (columnType.startsWith("ARRAY<")) {
+            return new ArrayParser();
         } else {
             throw new SparkDppException("unsupported type:" + columnType);
         }
@@ -264,5 +266,12 @@ class LargeIntParser extends ColumnParser {
         } catch (Exception e) {
             throw new RuntimeException("large int parse failed:" + value, e);
         }
+    }
+}
+
+class ArrayParser extends ColumnParser {
+    @Override
+    public boolean parse(String value) {
+        return true;
     }
 }
