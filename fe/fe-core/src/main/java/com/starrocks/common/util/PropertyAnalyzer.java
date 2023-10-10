@@ -1317,7 +1317,8 @@ public class PropertyAnalyzer {
     }
 
     public static DataCacheInfo analyzeDataCacheInfo(Map<String, String> properties) throws AnalysisException {
-        boolean enableDataCache = analyzeBooleanProp(properties, PropertyAnalyzer.PROPERTIES_DATACACHE_ENABLE, true);
+        boolean enableDataCache = analyzeBooleanProp(properties, PropertyAnalyzer.PROPERTIES_DATACACHE_ENABLE,
+                Config.enable_datacache);
 
         boolean enableAsyncWriteBack =
                 analyzeBooleanProp(properties, PropertyAnalyzer.PROPERTIES_ENABLE_ASYNC_WRITE_BACK, false);

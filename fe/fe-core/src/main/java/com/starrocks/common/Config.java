@@ -3166,6 +3166,9 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean mv_auto_analyze_async = true;
 
+    @ConfField(mutable = true)
+    public static boolean enable_datacache = true;
+
     /**
      * To prevent the external catalog from displaying too many entries in the grantsTo system table,
      * you can use this variable to ignore the entries in the external catalog
