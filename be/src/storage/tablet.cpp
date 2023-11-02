@@ -1502,6 +1502,27 @@ void Tablet::build_tablet_report_info(TTabletInfo* tablet_info) {
     if (_tablet_meta->get_binlog_config() != nullptr) {
         tablet_info->__set_binlog_config_version(_tablet_meta->get_binlog_config()->version);
     }
+
+    // tablet data might be deleted by accident, but BE can not recognize and recover it automatically
+    // do this check if config::check_tablet_path_when_report_tablet is set to true
+    if (config::check_tablet_path_when_report_tablet) {
+        std::string tablet_path = schema_hash_path();
+        if (!tablet_path.empty()) {
+            auto res = FileSystem::CreateSharedFromString(tablet_path);
+            if (res.ok()) {
+                auto fs = std::move(res).value();
+                if (fs->path_exists(tablet_path).is_not_found()) {
+                    LOG(WARNING)
+                            << "set bad to tablet: " << tablet_id() << ", because tablet_path: " << tablet_path
+                            << " doesn't exist. This tablet will be recovered from other replicas(is exists) later.";
+                    tablet_info->__set_used(false);
+                }
+            }
+        } else {
+            LOG(WARNING) << "no tablet_path info for tablet: " << tablet_id();
+        }
+    }
+
     if (_updates) {
         _updates->get_tablet_info_extra(tablet_info);
     } else {
