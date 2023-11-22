@@ -148,6 +148,15 @@ public:
               _blocking_put_time(blocking_put_time),
               _received_rows(received_rows),
               _received_bytes(received_bytes) {}
+    explicit RoutineLoadTaskStatistics(int64_t consume_time, int64_t blocking_get_time, int64_t blocking_put_time,
+                                       int64_t received_rows, int64_t received_bytes,
+                                       std::map<std::string, int64_t> consume_lags)
+            : _consume_time(consume_time),
+              _blocking_get_time(blocking_get_time),
+              _blocking_put_time(blocking_put_time),
+              _received_rows(received_rows),
+              _received_bytes(received_bytes),
+              _consume_lags(consume_lags) {}
 
     int64_t get_consume_time() {
         return _consume_time;
@@ -169,12 +178,15 @@ public:
         return _received_bytes;
     }
 
+    std::map<std::string, int64_t> get_consume_lags() { return _consume_lags; }
+
 private:
     int64_t _consume_time;
     int64_t _blocking_get_time;
     int64_t _blocking_put_time;
     int64_t _received_rows;
     int64_t _received_bytes;
+    std::map<std::string, int64_t> _consume_lags;
 };
 
 class MessageBodySink;

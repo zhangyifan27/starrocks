@@ -144,6 +144,8 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
     public static final boolean DEFAULT_SKIP_UTF8_CHECK = false; // default is false
 
     protected static final String STAR_STRING = "*";
+    private Map<String, Long> timeConsumeLags = Maps.newHashMap();
+    private Map<String, Long> rowNumConsumeLags = Maps.newHashMap();
 
     /*
                      +-----------------+
@@ -737,6 +739,14 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         return warehouseId;
     }
 
+    public Map<String, Long> getTimeConsumeLags() {
+        return timeConsumeLags;
+    }
+
+    public Map<String, Long> getRowNumConsumeLags() {
+        return rowNumConsumeLags;
+    }
+
     // RoutineLoadScheduler will run this method at fixed interval, and renew the timeout tasks
     public void processTimeoutTasks() {
         writeLock();
@@ -1149,7 +1159,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
                     (RLTaskTxnCommitAttachment) txnState.getTxnCommitAttachment();
             // isProgressKeepUp returns false means there is too much data in kafka/pulsar stream,
             // we set timeToExecuteMs to now, so that data not accumulated in kafka/pulsar
-            if (!routineLoadTaskInfo.isProgressKeepUp(rlTaskTxnCommitAttachment.getProgress())) {
+            if (!routineLoadTaskInfo.isProgressKeepUp(rlTaskTxnCommitAttachment.getProgress(), rowNumConsumeLags)) {
                 timeToExecuteMs = System.currentTimeMillis();
             } else {
                 timeToExecuteMs = System.currentTimeMillis() + taskSchedIntervalS * 1000;
@@ -1267,6 +1277,10 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         LOG.debug("replay on aborted: {}, has attachment: {}", txnState, txnState.getTxnCommitAttachment() == null);
     }
 
+    protected void updateTimeConsumeLags(Map<String, Long> timeConsumeLags) {
+        this.timeConsumeLags.putAll(timeConsumeLags);
+    }
+
     // check task exists or not before call method
     private void executeTaskOnTxnStatusChanged(RoutineLoadTaskInfo routineLoadTaskInfo, TransactionState txnState,
                                                TransactionStatus txnStatus, String txnStatusChangeReasonStr)
@@ -1288,6 +1302,10 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
             // step2: update job progress
             updateProgress(rlTaskTxnCommitAttachment);
             routineLoadTaskInfo.setStatistics(rlTaskTxnCommitAttachment.getStatistics());
+            if (rlTaskTxnCommitAttachment.getStatistics() != null &&
+                    rlTaskTxnCommitAttachment.getStatistics().getConsumeLags() != null) {
+                updateTimeConsumeLags(rlTaskTxnCommitAttachment.getStatistics().getConsumeLags());
+            }
         }
 
         if (rlTaskTxnCommitAttachment != null && !Strings.isNullOrEmpty(rlTaskTxnCommitAttachment.getErrorLogUrl())) {

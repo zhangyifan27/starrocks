@@ -983,6 +983,7 @@ struct TRLTaskStatistics {
     3: required i64 blockingPutTime
     4: required i64 receivedRows
     5: required i64 receivedBytes
+    6: optional map<string, i64> consumeLags
 }
 
 struct TRLTaskTxnCommitAttachment {

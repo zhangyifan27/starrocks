@@ -60,6 +60,7 @@ import java.util.Map;
 import java.util.UUID;
 
 import static com.starrocks.common.ErrorCode.ERR_ROUTINE_LOAD_OFFSET_INVALID;
+import static java.lang.Math.max;
 
 public class KafkaTaskInfo extends RoutineLoadTaskInfo {
     private static final Logger LOG = LogManager.getLogger(KafkaTaskInfo.class);
@@ -144,7 +145,7 @@ public class KafkaTaskInfo extends RoutineLoadTaskInfo {
     }
 
     @Override
-    public boolean isProgressKeepUp(RoutineLoadProgress progress) {
+    public boolean isProgressKeepUp(RoutineLoadProgress progress, Map<String, Long> rowNumConsumeLags) {
         KafkaProgress kProgress = (KafkaProgress) progress;
         if (latestPartOffset == null) {
             return true;
@@ -154,8 +155,11 @@ public class KafkaTaskInfo extends RoutineLoadTaskInfo {
             int part = entry.getKey();
             Long latestOffset = entry.getValue();
             Long consumedOffset = kProgress.getOffsetByPartition(part);
-            if (consumedOffset != null && consumedOffset < latestOffset - 1) {
-                return false;
+            if (consumedOffset != null) {
+                rowNumConsumeLags.put(String.valueOf(part), max(0, latestOffset - 1 - consumedOffset));
+                if (consumedOffset < latestOffset - 1) {
+                    return false;
+                }
             }
         }
         return true;
