@@ -85,8 +85,6 @@ public class SparkEtlJobHandler {
     private static final String JOB_CONFIG_DIR = "configs";
     private static final String ETL_JOB_NAME = "starrocks__%s";
     private static final String LAUNCHER_LOG = "spark_launcher_%s_%s.log";
-    // 5min
-    private static final long GET_APPID_TIMEOUT_MS = 300000L;
     // 30s
     private static final long EXEC_CMD_TIMEOUT_MS = 30000L;
     // yarn command
@@ -174,7 +172,7 @@ public class SparkEtlJobHandler {
             handle.setProcess(process);
             if (!FeConstants.runningUnitTest) {
                 SparkLauncherMonitor.LogMonitor logMonitor = SparkLauncherMonitor.createLogMonitor(handle);
-                logMonitor.setSubmitTimeoutMs(sparkLoadSubmitTimeout);
+                logMonitor.setSubmitTimeoutMs(Config.spark_load_default_submit_timeout_ms);
                 logMonitor.setRedirectLogPath(logFilePath);
                 logMonitor.start();
                 try {
