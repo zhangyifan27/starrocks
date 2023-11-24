@@ -15,10 +15,10 @@
 package com.starrocks.load.routineload;
 
 import com.google.common.collect.Maps;
+import org.apache.pulsar.client.api.MessageId;
 import org.junit.Assert;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 
@@ -28,15 +28,15 @@ public class PulsarTaskInfoTest {
     public void testRenew() {
         PulsarRoutineLoadJob routineLoadJob = new PulsarRoutineLoadJob(1L, "test", 1L, 1L, "host:port", "topic", "subscription");
 
-        Map<String, Long> offsets1 = Maps.newHashMap();
-        offsets1.put("0", 101L);
-        offsets1.put("1", 102L);
+        Map<String, MessageId> offsets1 = Maps.newHashMap();
+        offsets1.put("0", MessageId.latest);
+        offsets1.put("1", MessageId.latest);
         PulsarTaskInfo task1 = new PulsarTaskInfo(UUID.randomUUID(), routineLoadJob, 1000,
-                2000, Arrays.asList("0", "1"), offsets1, 3000);
+                2000, offsets1, 3000);
 
-        Map<String, Long> offsets2 = Maps.newHashMap();
-        offsets2.put("0", 103L);
-        offsets2.put("1", 104L);
+        Map<String, MessageId> offsets2 = Maps.newHashMap();
+        offsets2.put("0", MessageId.latest);
+        offsets2.put("1", MessageId.latest);
         PulsarTaskInfo task2 = new PulsarTaskInfo(2001, task1, offsets2);
 
         Assert.assertEquals(task1.getBeId(), task2.getBeId());

@@ -56,6 +56,7 @@ import com.starrocks.transaction.TransactionState;
 import com.starrocks.transaction.TransactionStatus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.pulsar.client.api.MessageId;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -91,12 +92,10 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
     private Map<String, String> customProperties = Maps.newHashMap();
     private final Map<String, String> convertedCustomProperties = Maps.newHashMap();
 
-    public static final String POSITION_EARLIEST = "POSITION_EARLIEST"; // 1
     public static final String POSITION_LATEST = "POSITION_LATEST"; // 0
-    public static final long POSITION_LATEST_VAL = 0;
-    public static final long POSITION_EARLIEST_VAL = 1;
+    public static final String POSITION_EARLIEST = "POSITION_EARLIEST"; // 1
 
-    private Long defaultInitialPosition = null;
+    private MessageId defaultInitialPosition = null;
 
     public PulsarRoutineLoadJob() {
         // for serialization, id is dummy
@@ -188,22 +187,17 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
             if (state == JobState.NEED_SCHEDULE) {
                 // divide pulsarPartitions into tasks
                 for (int i = 0; i < currentConcurrentTaskNum; i++) {
-                    List<String> partitions = Lists.newArrayList();
-                    Map<String, Long> initialPositions = Maps.newHashMap();
+                    Map<String, MessageId> initialPositions = Maps.newHashMap();
                     for (int j = 0; j < currentPulsarPartitions.size(); j++) {
                         if (j % currentConcurrentTaskNum == i) {
                             String partition = currentPulsarPartitions.get(j);
-                            partitions.add(partition);
-                            // initial position was set, need to be added into PulsarTaskInfo
-                            Long initialPosition = ((PulsarProgress) progress).getInitialPosition(partition);
-                            if (initialPosition != -1L) {
-                                initialPositions.put(partition, initialPosition);
-                            }
+                            initialPositions.put(partition,
+                                    ((PulsarProgress) progress).getInitialPositionByPartition(partition));
                         }
                     }
                     long timeToExecuteMs = System.currentTimeMillis() + taskSchedIntervalS * 1000;
                     PulsarTaskInfo pulsarTaskInfo = new PulsarTaskInfo(UUID.randomUUID(), this,
-                            taskSchedIntervalS * 1000, timeToExecuteMs, partitions,
+                            taskSchedIntervalS * 1000, timeToExecuteMs,
                             initialPositions, getTaskTimeoutSecond() * 1000);
                     pulsarTaskInfo.setWarehouseId(warehouseId);
                     LOG.debug("pulsar routine load task created: " + pulsarTaskInfo);
@@ -329,7 +323,21 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
 
     @Override
     protected void unprotectUpdateProgress() {
-        ((PulsarProgress) progress).unprotectUpdate(currentPulsarPartitions, defaultInitialPosition);
+        // update the progress of new partitions
+        for (String pulsarPartition : currentPulsarPartitions) {
+            if (!((PulsarProgress) progress).containsPartition(pulsarPartition)) {
+                MessageId initialPosition =
+                        defaultInitialPosition == null ? MessageId.latest : defaultInitialPosition;
+                ((PulsarProgress) progress).addPartitionToInitialPosition(
+                        Pair.create(pulsarPartition, initialPosition));
+                if (LOG.isDebugEnabled()) {
+                    LOG.debug(new LogBuilder(LogKey.ROUTINE_LOAD_JOB, id)
+                            .add("pulsar_partition", pulsarPartition)
+                            .add("initial_position", initialPosition)
+                            .add("msg", "The new partition has been added in job"));
+                }
+            }
+        }
     }
 
     // if customPulsarPartition is not null, then return false immediately
@@ -501,8 +509,8 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
         this.customPulsarPartitions = pulsarPartitions;
     }
 
-    private void setPulsarPatitionInitialPositions(List<Pair<String, Long>> patitionToInitialPositions) {
-        for (Pair<String, Long> entry : patitionToInitialPositions) {
+    private void setPulsarPatitionInitialPositions(List<Pair<String, MessageId>> patitionToInitialPositions) {
+        for (Pair<String, MessageId> entry : patitionToInitialPositions) {
             ((PulsarProgress) progress).addPartitionToInitialPosition(entry);
         }
     }
@@ -571,7 +579,7 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
 
     @Override
     public void modifyDataSourceProperties(RoutineLoadDataSourceProperties dataSourceProperties) throws DdlException {
-        List<Pair<String, Long>> partitionInitialPositions = Lists.newArrayList();
+        List<Pair<String, MessageId>> partitionInitialPositions = Lists.newArrayList();
         Map<String, String> customPulsarProperties = Maps.newHashMap();
 
         if (dataSourceProperties.hasAnalyzedProperties()) {
@@ -579,31 +587,14 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
             customPulsarProperties = dataSourceProperties.getCustomPulsarProperties();
         }
 
+        // modify partition positions
+        if (!partitionInitialPositions.isEmpty()) {
+            ((PulsarProgress) progress).modifyInitialPositions(partitionInitialPositions);
+        }
+
         if (!customPulsarProperties.isEmpty()) {
             this.customProperties.putAll(customPulsarProperties);
             convertCustomProperties(true);
-
-            if (customPulsarProperties.containsKey(CreateRoutineLoadStmt.PULSAR_DEFAULT_INITIAL_POSITION)) {
-                // defaultInitialPosition should be updated by convertCustomProperties()
-                List<Pair<String, Long>> initialPositions = new ArrayList<>();
-                // defaultInitialPosition can only update currentPulsarPartitions
-                currentPulsarPartitions.forEach(
-                        entry -> initialPositions.add(Pair.create(entry, this.defaultInitialPosition)));
-                ((PulsarProgress) progress).modifyInitialPositions(initialPositions);
-            }
-        }
-
-        // modify partition positions
-        if (!partitionInitialPositions.isEmpty()) {
-            // we can only modify the partition if it's specified in the create statement
-            for (Pair<String, Long> pair : partitionInitialPositions) {
-                if (!customPulsarPartitions.contains(pair.first)) {
-                    throw new DdlException("The partition " +
-                            pair.first + " is not specified in the create statement");
-                }
-            }
-
-            ((PulsarProgress) progress).modifyInitialPositions(partitionInitialPositions);
         }
 
         LOG.info("modify the data source properties of pulsar routine load job: {}, datasource properties: {}",

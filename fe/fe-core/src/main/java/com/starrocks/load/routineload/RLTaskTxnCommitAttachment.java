@@ -35,6 +35,7 @@
 package com.starrocks.load.routineload;
 
 import com.google.gson.annotations.SerializedName;
+import com.starrocks.common.UserException;
 import com.starrocks.thrift.TRLTaskTxnCommitAttachment;
 import com.starrocks.thrift.TUniqueId;
 import com.starrocks.transaction.TransactionState;
@@ -72,7 +73,7 @@ public class RLTaskTxnCommitAttachment extends TxnCommitAttachment {
         super(TransactionState.LoadJobSourceType.ROUTINE_LOAD_TASK);
     }
 
-    public RLTaskTxnCommitAttachment(TRLTaskTxnCommitAttachment rlTaskTxnCommitAttachment) {
+    public RLTaskTxnCommitAttachment(TRLTaskTxnCommitAttachment rlTaskTxnCommitAttachment) throws UserException {
         super(TransactionState.LoadJobSourceType.ROUTINE_LOAD_TASK);
         this.jobId = rlTaskTxnCommitAttachment.getJobId();
         this.taskId = rlTaskTxnCommitAttachment.getId();

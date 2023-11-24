@@ -35,6 +35,7 @@
 package com.starrocks.transaction;
 
 import com.google.gson.annotations.SerializedName;
+import com.starrocks.common.UserException;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.lake.compaction.CompactionTxnCommitAttachment;
@@ -65,7 +66,7 @@ public abstract class TxnCommitAttachment implements Writable {
         this.isTypeRead = isTypeRead;
     }
 
-    public static TxnCommitAttachment fromThrift(TTxnCommitAttachment txnCommitAttachment) {
+    public static TxnCommitAttachment fromThrift(TTxnCommitAttachment txnCommitAttachment) throws UserException {
         if (txnCommitAttachment != null) {
             switch (txnCommitAttachment.getLoadType()) {
                 case ROUTINE_LOAD:

@@ -116,8 +116,7 @@ private:
     // start a single consumer
     void actual_consume(const std::shared_ptr<DataConsumer>& consumer, TimedBlockingQueue<pulsar::Message*>* queue,
                         int64_t max_running_time_ms, const ConsumeFinishCallback& cb);
-
-    void get_backlog_nums(StreamLoadContext* ctx);
+    void update_ctx_info(StreamLoadContext* ctx);
 
 private:
     // blocking queue to receive msgs from all consumers

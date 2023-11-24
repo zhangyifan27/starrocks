@@ -436,7 +436,7 @@ public class RoutineLoadManagerTest {
     }
 
     @Test
-    public void testSetRoutineLoadJobOtherMsg() {
+    public void testSetRoutineLoadJobOtherMsg() throws UserException {
         RoutineLoadMgr routineLoadManager = new RoutineLoadMgr();
         KafkaRoutineLoadJob routineLoadJob = new KafkaRoutineLoadJob(1L, "test", 1L, 1L, "host:port",
                 "topic");

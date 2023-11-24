@@ -1103,6 +1103,12 @@ under the License.
             <version>2.3.2</version>
         </dependency>
 
+        <!-- https://mvnrepository.com/artifact/org.apache.pulsar/pulsar-client -->
+        <dependency>
+            <groupId>org.apache.pulsar</groupId>
+            <artifactId>pulsar-client</artifactId>
+            <version>3.0.0</version>
+        </dependency>
     </dependencies>
 
     <build>

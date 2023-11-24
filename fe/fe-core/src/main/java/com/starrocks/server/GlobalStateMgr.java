@@ -1677,7 +1677,7 @@ public class GlobalStateMgr {
             starrocksMetaVersion = flag;
         }
 
-        if (starrocksMetaVersion != FeConstants.STARROCKS_META_VERSION) {
+        if (!MetaVersion.isCompatible(starrocksMetaVersion, FeConstants.STARROCKS_META_VERSION)) {
             LOG.error("Not compatible with meta version {}, current version is {}",
                         starrocksMetaVersion, FeConstants.STARROCKS_META_VERSION);
             System.exit(-1);

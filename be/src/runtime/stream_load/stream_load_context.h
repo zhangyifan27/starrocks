@@ -110,29 +110,27 @@ public:
             : service_url(t_info.service_url),
               topic(t_info.topic),
               subscription(t_info.subscription),
-              partitions(t_info.partitions),
               properties(t_info.properties) {
         if (t_info.__isset.initial_positions) {
             initial_positions = t_info.initial_positions;
+            current_positions = t_info.initial_positions;
         }
     }
 
-    void clear_backlog() {
-        // clear the backlog
-        partition_backlog.clear();
+    void reset_position() {
+        current_positions.clear();
+        ack_offset.clear();
     }
 
 public:
     std::string service_url;
     std::string topic;
     std::string subscription;
-    std::vector<std::string> partitions;
-    std::map<std::string, int64_t> initial_positions;
+    std::map<std::string, std::string> initial_positions;
+    std::map<std::string, std::string> current_positions;
 
     // partition -> acknowledge offset, inclusive.
     std::map<std::string, pulsar::MessageId> ack_offset;
-    // partition -> backlog num, inclusive.
-    std::map<std::string, int64_t> partition_backlog;
 
     // custom kafka property key -> value
     std::map<std::string, std::string> properties;

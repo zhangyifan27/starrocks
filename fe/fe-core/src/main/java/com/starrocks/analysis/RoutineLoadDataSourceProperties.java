@@ -43,6 +43,7 @@ import com.starrocks.common.Pair;
 import com.starrocks.load.routineload.LoadDataSourceType;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
 import com.starrocks.sql.parser.NodePosition;
+import org.apache.pulsar.client.api.MessageId;
 
 import java.util.List;
 import java.util.Map;
@@ -72,7 +73,7 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
     private Map<String, String> customKafkaProperties = Maps.newHashMap();
 
     @SerializedName(value = "pulsarPartitionInitialPositions")
-    private List<Pair<String, Long>> pulsarPartitionInitialPositions = Lists.newArrayList();
+    private List<Pair<String, MessageId>> pulsarPartitionInitialPositions = Lists.newArrayList();
     @SerializedName(value = "customPulsarProperties")
     private Map<String, String> customPulsarProperties = Maps.newHashMap();
     @SerializedName(value = "confluentSchemaRegistryUrl")
@@ -125,7 +126,7 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
         return customKafkaProperties;
     }
 
-    public List<Pair<String, Long>> getPulsarPartitionInitialPositions() {
+    public List<Pair<String, MessageId>> getPulsarPartitionInitialPositions() {
         return pulsarPartitionInitialPositions;
     }
 
@@ -201,7 +202,6 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
         CreateRoutineLoadStmt.analyzePulsarCustomProperties(properties, customPulsarProperties);
 
         // check partitions
-        List<String> pulsarPartitions = Lists.newArrayList();
         final String pulsarPartitionsString = properties.get(CreateRoutineLoadStmt.PULSAR_PARTITIONS_PROPERTY);
         if (pulsarPartitionsString != null) {
             if (!properties.containsKey(CreateRoutineLoadStmt.PULSAR_INITIAL_POSITIONS_PROPERTY) &&
@@ -209,7 +209,7 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
                 throw new AnalysisException("Partition and [default]position must be specified at the same time");
             }
             CreateRoutineLoadStmt.analyzePulsarPartitionProperty(pulsarPartitionsString,
-                    customPulsarProperties, pulsarPartitions, pulsarPartitionInitialPositions);
+                    customPulsarProperties, pulsarPartitionInitialPositions);
         } else {
             if (properties.containsKey(CreateRoutineLoadStmt.PULSAR_INITIAL_POSITIONS_PROPERTY)) {
                 throw new AnalysisException("Missing pulsar partition info");
@@ -219,8 +219,7 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
         // check position
         String pulsarPositionsString = properties.get(CreateRoutineLoadStmt.PULSAR_INITIAL_POSITIONS_PROPERTY);
         if (pulsarPositionsString != null) {
-            CreateRoutineLoadStmt.analyzePulsarPositionProperty(pulsarPositionsString,
-                    pulsarPartitions, pulsarPartitionInitialPositions);
+            CreateRoutineLoadStmt.analyzePulsarPositionProperty(pulsarPositionsString, pulsarPartitionInitialPositions);
         }
     }
 

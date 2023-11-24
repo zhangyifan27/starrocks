@@ -123,7 +123,7 @@ Status StreamLoadExecutor::execute_plan_fragment(StreamLoadContext* ctx) {
                         ctx->kafka_info->reset_offset();
                         break;
                     case TLoadSourceType::PULSAR:
-                        ctx->pulsar_info->clear_backlog();
+                        ctx->pulsar_info->reset_position();
                         break;
                     default:
                         break;
@@ -500,7 +500,7 @@ bool StreamLoadExecutor::collect_load_stat(StreamLoadContext* ctx, TTxnCommitAtt
         rl_attach.loadSourceType = TLoadSourceType::PULSAR;
 
         TPulsarRLTaskProgress pulsar_progress;
-        pulsar_progress.partitionBacklogNum = ctx->pulsar_info->partition_backlog;
+        pulsar_progress.partitionInitialPositions = ctx->pulsar_info->current_positions;
 
         rl_attach.pulsarRLTaskProgress = pulsar_progress;
         rl_attach.__isset.pulsarRLTaskProgress = true;
