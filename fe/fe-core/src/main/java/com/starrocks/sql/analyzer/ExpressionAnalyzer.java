@@ -83,6 +83,7 @@ import com.starrocks.catalog.TableFunction;
 import com.starrocks.catalog.Type;
 import com.starrocks.cluster.ClusterNamespace;
 import com.starrocks.common.AnalysisException;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.privilege.AuthorizationMgr;
 import com.starrocks.privilege.PrivilegeException;
@@ -809,10 +810,28 @@ public class ExpressionAnalyzer {
 
         @Override
         public Void visitTimestampArithmeticExpr(TimestampArithmeticExpr node, Scope scope) {
+            Type[] argumentTypes = node.getChildren().stream().map(Expr::getType).toArray(Type[]::new);
+            Function fn = null;
+
+            if (session.getSessionVariable().isEnableThiveFunction() &&
+                    session.getSessionVariable().isPreferThiveFunctions()) {
+                String fnName = node.getFnName().getFunction();
+                // Prefer to find the corresponding thive udf
+                for (String thiveFnName : Config.prefer_thive_function_names) {
+                    if (fnName.equals(thiveFnName)) {
+                        fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                    }
+                }
+                if (fn != null) {
+                    node.setType(fn.getReturnType());
+                    node.setFn(fn);
+                    return null;
+                }
+                // Fail to find the corresponding thive udf, fall back to starrocks builtin function
+            }
             if (node.getFnName() != null && node.getFnName().isThiveFunction()) {
-                Type[] argumentTypes = node.getChildren().stream().map(Expr::getType)
-                        .toArray(Type[]::new);
-                Function fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+
                 if (fn == null) {
                     String msg = String.format("No matching function in thive udf with signature: %s(%s)",
                             node.getFnName().getFunction(),
@@ -840,10 +859,13 @@ public class ExpressionAnalyzer {
                         (node.getOp() == ArithmeticExpr.Operator.ADD) ? "add" : "sub");
             }
 
-            Type[] argumentTypes = node.getChildren().stream().map(Expr::getType)
-                    .toArray(Type[]::new);
-            Function fn = Expr.getBuiltinFunction(funcOpName.toLowerCase(), argumentTypes,
+            fn = Expr.getBuiltinFunction(funcOpName.toLowerCase(), argumentTypes,
                     Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
+
+            if (fn == null && session.getSessionVariable().isEnableThiveFunction()) {
+                fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+            }
+
             if (fn == null) {
                 String msg = String.format("No matching function with signature: %s(%s)", funcOpName, Joiner.on(", ")
                         .join(Arrays.stream(argumentTypes).map(Type::toSql).collect(Collectors.toList())));
@@ -1045,6 +1067,24 @@ public class ExpressionAnalyzer {
 
             // throw exception direct
             checkFunction(fnName, node, argumentTypes);
+
+            if (session.getSessionVariable().isEnableThiveFunction() &&
+                    session.getSessionVariable().isPreferThiveFunctions()) {
+                // Prefer to find the corresponding thive udf
+                for (String thiveFnName : Config.prefer_thive_function_names) {
+                    if (fnName.equals(thiveFnName)) {
+                        fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                    }
+                }
+                if (fn != null) {
+                    node.setFn(fn);
+                    node.setType(fn.getReturnType());
+                    FunctionAnalyzer.analyze(node);
+                    return null;
+                }
+                // Fail to find the corresponding thive udf, fall back to starrocks builtin function
+            }
+
             if (node.getFnName().isThiveFunction()) {
                 fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
                 if (fn == null) {

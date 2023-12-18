@@ -1329,6 +1329,12 @@ public class Config extends ConfigBase {
     @ConfField
     public static String thive_udf_wrapper_url = "";
 
+    /**
+     * A list of thive function names that should override the builtin functions.
+     */
+    @ConfField(mutable = true)
+    public static String[] prefer_thive_function_names = {};
+
     @ConfField(mutable = true)
     public static boolean enable_decimal_v3 = true;
 

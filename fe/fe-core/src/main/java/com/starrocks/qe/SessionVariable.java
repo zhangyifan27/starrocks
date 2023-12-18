@@ -3881,6 +3881,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.enableThiveFunction = val;
     }
 
+    @VarAttr(name = PREFER_THIVE_FUNCTIONS, flag = VariableMgr.INVISIBLE)
+    private boolean preferThiveFunctions = false;
+
+    public boolean isPreferThiveFunctions() {
+        return preferThiveFunctions;
+    }
+
+    public void setPreferThiveFunctions(boolean preferThiveFunctions) {
+        this.preferThiveFunctions = preferThiveFunctions;
+    }
+
     public boolean getEnablePlanValidation() {
         return this.enablePlanValidation;
     }
