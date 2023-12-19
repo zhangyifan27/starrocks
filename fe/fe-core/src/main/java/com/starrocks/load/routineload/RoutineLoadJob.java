@@ -757,6 +757,14 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         return rowNumConsumeLags;
     }
 
+    public long getcommittedTaskNum() {
+        return committedTaskNum;
+    }
+
+    public long getAbortedTaskNum() {
+        return abortedTaskNum;
+    }
+
     // RoutineLoadScheduler will run this method at fixed interval, and renew the timeout tasks
     public void processTimeoutTasks() {
         writeLock();

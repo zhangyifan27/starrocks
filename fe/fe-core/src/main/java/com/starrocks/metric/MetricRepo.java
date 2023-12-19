@@ -50,6 +50,7 @@ import com.starrocks.catalog.TabletInvertedIndex;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
+import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.ThreadPoolManager;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.KafkaUtil;
@@ -1019,6 +1020,8 @@ public final class MetricRepo {
         if (Config.enable_routine_load_lag_metrics) {
             collectRoutineLoadProcessMetrics(visitor);
         }
+
+        collectRoutineLoadIngestMetrics(visitor);
         collectRoutineLoadRowNumLagMetrics(visitor);
         collectRoutineLoadTimeLagMetrics(visitor);
 
@@ -1166,7 +1169,6 @@ public final class MetricRepo {
         }
     }
 
-
     private static void collectRoutineLoadRowNumLagMetrics(MetricVisitor visitor) {
         for (GaugeMetricImpl<Long> metric : GAUGE_ROUTINE_LOAD_ROW_NUM_LAGS) {
             visitor.visit(metric);
@@ -1177,6 +1179,38 @@ public final class MetricRepo {
         for (GaugeMetricImpl<Long> metric : GAUGE_ROUTINE_LOAD_TIME_LAGS) {
             visitor.visit(metric);
         }
+    }
+
+    private static void collectRoutineLoadIngestMetrics(MetricVisitor visitor) {
+        List<RoutineLoadJob> jobs = GlobalStateMgr.getCurrentState().getRoutineLoadMgr()
+                .getRoutineLoadJobByState(
+                        Sets.newHashSet(RoutineLoadJob.JobState.RUNNING, RoutineLoadJob.JobState.PAUSED));
+
+        for (RoutineLoadJob job : jobs) {
+            try {
+                CounterMetric<Long> committedMetric =
+                        new LongCounterMetric("routine_load_committed_tasks", MetricUnit.NOUNIT,
+                                "routine load committed tasks");
+                buildTaskMetricForRoutineLoad(visitor, job, committedMetric, job.getcommittedTaskNum());
+
+                CounterMetric<Long> abortedMetric =
+                        new LongCounterMetric("routine_load_aborted_tasks", MetricUnit.NOUNIT,
+                                "routine load aborted tasks");
+                buildTaskMetricForRoutineLoad(visitor, job, abortedMetric, job.getAbortedTaskNum());
+            } catch (MetaNotFoundException ignored) {
+            }
+        }
+    }
+
+    private static void buildTaskMetricForRoutineLoad(MetricVisitor visitor, RoutineLoadJob job,
+                                                      CounterMetric<Long> committedMetric, long taskNum)
+            throws MetaNotFoundException {
+        committedMetric.addLabel(new MetricLabel("job_name", job.getName()));
+        committedMetric.addLabel(new MetricLabel("db_name", job.getDbFullName()));
+        committedMetric.addLabel(new MetricLabel("tbl_name", job.getTableName()));
+        committedMetric.addLabel(new MetricLabel("tbl_id", String.valueOf(job.getId())));
+        committedMetric.increase(taskNum);
+        visitor.visit(committedMetric);
     }
 
     public static synchronized List<Metric> getMetricsByName(String name) {
