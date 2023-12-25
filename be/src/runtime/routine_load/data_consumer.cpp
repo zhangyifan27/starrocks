@@ -620,6 +620,9 @@ Status PulsarDataConsumer::assign_partition(StreamLoadContext* ctx,
 
     pulsar::Result result;
     pulsar::ReaderConfiguration config;
+    if (!_subscription.empty()) {
+        config.setSubscriptionRolePrefix(_subscription);
+    }
     result = _p_client->createReader(initial_position.first, p_initial_position, config, _p_reader);
     if (result != pulsar::ResultOk) {
         LOG(WARNING) << "PAUSE: failed to create pulsar reader: " << ctx->brief(true) << ", err: " << result;
@@ -638,6 +641,9 @@ Status PulsarDataConsumer::tmp_assign_partition(StreamLoadContext* ctx, const st
 
     pulsar::Result result;
     pulsar::ReaderConfiguration config;
+    if (!_subscription.empty()) {
+        config.setSubscriptionRolePrefix(_subscription);
+    }
     result = _p_client->createReader(partition, pulsar::MessageId::latest(), config, _p_reader);
     if (result != pulsar::ResultOk) {
         LOG(WARNING) << "PAUSE: failed to create pulsar reader: " << ctx->brief(true) << ", err: " << result;

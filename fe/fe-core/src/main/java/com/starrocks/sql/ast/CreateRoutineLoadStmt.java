@@ -143,6 +143,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     public static final String PULSAR_PARTITIONS_PROPERTY = "pulsar_partitions";
     public static final String PULSAR_INITIAL_POSITIONS_PROPERTY = "pulsar_initial_positions";
     public static final String PULSAR_DEFAULT_INITIAL_POSITION = "pulsar_default_initial_position";
+    public static final String PULSAR_AUTH_TOKEN = "auth.token";
 
     private static final String NAME_TYPE = "ROUTINE LOAD NAME";
     // from: https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/common/utils/Utils.java#L97
