@@ -319,6 +319,11 @@ public class Load {
         Set<String> importColumnNames = Sets.newTreeSet(String.CASE_INSENSITIVE_ORDER);
         Set<String> mappingColumnNames = Sets.newTreeSet(String.CASE_INSENSITIVE_ORDER);
         Set<String> mappingColumnRef = Sets.newTreeSet(String.CASE_INSENSITIVE_ORDER);
+
+        // We make a copy of the columnExprs so that our subsequent changes
+        // to the columnExprs will not affect the original columnExprs.
+        List<ImportColumnDesc> copiedColumnExprs = Lists.newArrayListWithExpectedSize(columnExprs.size());
+
         for (ImportColumnDesc importColumnDesc : columnExprs) {
             String columnName = importColumnDesc.getColumnName();
 
@@ -331,6 +336,7 @@ public class Load {
                 if (importColumnNames.contains(columnName)) {
                     throw new DdlException("Duplicate column: " + columnName);
                 }
+                copiedColumnExprs.add(importColumnDesc);
                 importColumnNames.add(columnName);
                 continue;
             } else {
@@ -342,6 +348,19 @@ public class Load {
                 }
             }
 
+            if (importColumnDesc.getExpr() instanceof SlotRef) {
+                // like id=id
+                SlotRef ref = ((SlotRef) importColumnDesc.getExpr());
+                if (importColumnDesc.getColumnName().equals(ref.getColumnName())) {
+                    if (importColumnNames.contains(columnName)) {
+                        continue;
+                    }
+                    copiedColumnExprs.add(new ImportColumnDesc(columnName));
+                    importColumnNames.add(columnName);
+                    continue;
+                }
+            }
+
             if (mappingColumnNames.contains(columnName)) {
                 throw new DdlException("Duplicate column mapping: " + columnName);
             }
@@ -349,6 +368,7 @@ public class Load {
             if (tbl.getColumn(columnName) == null && !columnName.equals(Load.LOAD_OP_COLUMN)) {
                 throw new DdlException("Mapping column is not in table. column: " + columnName);
             }
+            copiedColumnExprs.add(importColumnDesc);
             mappingColumnNames.add(columnName);
         }
 
@@ -362,10 +382,6 @@ public class Load {
                 throw new DdlException("Mapping column can not ref generated column: " + refName);
             }
         }
-
-        // We make a copy of the columnExprs so that our subsequent changes
-        // to the columnExprs will not affect the original columnExprs.
-        List<ImportColumnDesc> copiedColumnExprs = Lists.newArrayList(columnExprs);
 
         // If user does not specify the file field names, generate it by using base schema of table.
         // So that the following process can be unified
