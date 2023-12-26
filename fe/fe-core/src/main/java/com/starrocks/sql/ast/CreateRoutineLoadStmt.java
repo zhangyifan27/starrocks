@@ -108,6 +108,9 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     public static final int TASK_TIMEOUT_SECOND_TASK_CONSUME_SECOND_RATIO = 4;
     public static final String LOG_REJECTED_RECORD_NUM_PROPERTY = "log_rejected_record_num";
 
+    public static final String RECOVER_OFFSETS_FROM_LAST_JOB = "recover_offsets_from_last_job";
+    public static final String JOB_THAT_RECOVER_OFFSETS_FROM = "job_that_recover_offsets_from";
+
     // the value is csv or json, default is csv
     public static final String FORMAT = "format";
     public static final String STRIP_OUTER_ARRAY = "strip_outer_array";
@@ -154,6 +157,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(JSONPATHS)
             .add(STRIP_OUTER_ARRAY)
             .add(JSONROOT)
+            .add(RECOVER_OFFSETS_FROM_LAST_JOB)
+            .add(JOB_THAT_RECOVER_OFFSETS_FROM)
             .add(LoadStmt.STRICT_MODE)
             .add(LoadStmt.IGNORE_TAIL_COLUMNS)
             .add(LoadStmt.SKIP_UTF8_CHECK)
@@ -214,6 +219,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     private boolean taskNumExceedBeNum = false;
     private String timezone = TimeUtils.DEFAULT_TIME_ZONE;
     private boolean partialUpdate = false;
+    private boolean recoverOffsetsFromLastJob = false;
+    private String jobThatRecoverOffsetsFrom;
     private String mergeConditionStr;
     private String partialUpdateMode = "row";
     /**
@@ -396,6 +403,14 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     public String getPartialUpdateMode() {
         return partialUpdateMode;
+    }
+
+    public boolean isRecoverOffsetsFromLastJob() {
+        return recoverOffsetsFromLastJob;
+    }
+
+    public String getJobThatRecoverOffsetsFrom() {
+        return jobThatRecoverOffsetsFrom;
     }
 
     public String getMergeConditionStr() {
@@ -602,6 +617,12 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         partialUpdate = Util.getBooleanPropertyOrDefault(jobProperties.get(LoadStmt.PARTIAL_UPDATE),
                 false,
                 LoadStmt.PARTIAL_UPDATE + " should be a boolean");
+
+        recoverOffsetsFromLastJob = Util.getBooleanPropertyOrDefault(jobProperties.get(RECOVER_OFFSETS_FROM_LAST_JOB),
+                false,
+                LoadStmt.PARTIAL_UPDATE + " should be a boolean");
+
+        jobThatRecoverOffsetsFrom = jobProperties.get(JOB_THAT_RECOVER_OFFSETS_FROM);
 
         mergeConditionStr = jobProperties.get(LoadStmt.MERGE_CONDITION);
 
