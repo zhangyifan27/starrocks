@@ -164,6 +164,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(TASK_CONSUME_SECOND)
             .add(TASK_TIMEOUT_SECOND)
             .add(PropertyAnalyzer.PROPERTIES_WAREHOUSE)
+            .add(SessionVariable.EXEC_MEM_LIMIT)
             .build();
 
     private static final ImmutableSet<String> KAFKA_PROPERTIES_SET = new ImmutableSet.Builder<String>()

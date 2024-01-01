@@ -373,6 +373,10 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         if (stmt.getMaxBatchRows() != -1) {
             this.maxBatchRows = stmt.getMaxBatchRows();
         }
+        if (stmt.getJobProperties().containsKey(SessionVariable.EXEC_MEM_LIMIT)) {
+            jobProperties.put(SessionVariable.EXEC_MEM_LIMIT,
+                    stmt.getJobProperties().get(SessionVariable.EXEC_MEM_LIMIT));
+        }
         jobProperties.put(LoadStmt.LOG_REJECTED_RECORD_NUM, String.valueOf(stmt.getLogRejectedRecordNum()));
         jobProperties.put(LoadStmt.PARTIAL_UPDATE, String.valueOf(stmt.isPartialUpdate()));
         jobProperties.put(LoadStmt.PARTIAL_UPDATE_MODE, String.valueOf(stmt.getPartialUpdateMode()));
@@ -1635,6 +1639,10 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
 
     public Map<String, String> getSessionVariables() {
         return sessionVariables;
+    }
+
+    public Map<String, String> getJobProperties() {
+        return jobProperties;
     }
 
     private String jobPropertiesToJsonString() {

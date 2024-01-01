@@ -25,6 +25,7 @@ import com.starrocks.common.UserException;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.Util;
 import com.starrocks.load.RoutineLoadDesc;
+import com.starrocks.qe.SessionVariable;
 import com.starrocks.sql.parser.NodePosition;
 
 import java.util.List;
@@ -58,6 +59,7 @@ public class AlterRoutineLoadStmt extends DdlStmt {
             .add(CreateRoutineLoadStmt.TASK_CONSUME_SECOND)
             .add(LoadStmt.STRICT_MODE)
             .add(LoadStmt.TIMEZONE)
+            .add(SessionVariable.EXEC_MEM_LIMIT)
             .build();
 
     private LabelName labelName;
@@ -280,6 +282,10 @@ public class AlterRoutineLoadStmt extends DdlStmt {
         if (jobProperties.containsKey(CreateRoutineLoadStmt.STRIP_OUTER_ARRAY)) {
             boolean stripOuterArray = Boolean.valueOf(jobProperties.get(CreateRoutineLoadStmt.STRIP_OUTER_ARRAY));
             analyzedJobProperties.put(CreateRoutineLoadStmt.STRIP_OUTER_ARRAY, String.valueOf(stripOuterArray));
+        }
+
+        if (jobProperties.containsKey(SessionVariable.EXEC_MEM_LIMIT)) {
+            analyzedJobProperties.put(SessionVariable.EXEC_MEM_LIMIT, jobProperties.get(SessionVariable.EXEC_MEM_LIMIT));
         }
     }
 
