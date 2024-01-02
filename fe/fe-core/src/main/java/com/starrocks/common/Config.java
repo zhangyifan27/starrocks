@@ -2513,6 +2513,12 @@ public class Config extends ConfigBase {
     public static long min_routine_load_lag_for_metrics = 10000;
 
     /**
+     * Specify the max number of table metrics in table metrics cache.
+     */
+    @ConfField(mutable = true)
+    public static long max_table_metrics_num = 5000;
+
+    /**
      * The heartbeat timeout of be/broker/fe.
      * the default is 5 seconds
      */
