@@ -32,6 +32,8 @@ import com.starrocks.thrift.TLoadSourceType;
 import com.starrocks.thrift.TPulsarLoadInfo;
 import com.starrocks.thrift.TRoutineLoadTask;
 import com.starrocks.thrift.TUniqueId;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.apache.pulsar.client.api.MessageId;
 
 import java.io.IOException;
@@ -42,6 +44,7 @@ import java.util.Map;
 import java.util.UUID;
 
 public class PulsarTaskInfo extends RoutineLoadTaskInfo {
+    private static final Logger LOG = LogManager.getLogger(PulsarTaskInfo.class);
     private RoutineLoadMgr routineLoadManager = GlobalStateMgr.getCurrentState().getRoutineLoadMgr();
 
     private Map<String, MessageId> initialPositions = Maps.newHashMap();
@@ -171,6 +174,10 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
         if (Math.abs(routineLoadJob.getMaxFilterRatio() - 1) > 0.001) {
             tRoutineLoadTask.setMax_filter_ratio(routineLoadJob.getMaxFilterRatio());
         }
+
+        String partitionIdToOffsetInfo = "partitionIdToOffset="
+                + Joiner.on("|").withKeyValueSeparator("_").join(initialPositions) + "]";
+        LOG.info("Pulsar routine load task created, label: {}, {}.", label, partitionIdToOffsetInfo);
         return tRoutineLoadTask;
     }
 

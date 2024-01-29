@@ -1728,6 +1728,24 @@ public class Config extends ConfigBase {
     public static boolean enable_schedule_insert_query_by_row_count = true;
 
     /**
+     * a task taken from queue and submitted to thread pool
+     */
+    @ConfField(mutable = true)
+    public static int routine_load_task_schedule_time_threshold = 20000;
+
+    /**
+     * pre-check time threshold
+     */
+    @ConfField(mutable = true)
+    public static int routine_load_task_precheck_time_threshold = 20000;
+
+    /**
+     * submit time threshold
+     */
+    @ConfField(mutable = true)
+    public static int routine_load_task_submit_time_threshold = 2000;
+
+    /**
      * the max concurrent routine load task num of a single routine load job
      */
     @ConfField(mutable = true)

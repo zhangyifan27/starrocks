@@ -91,6 +91,9 @@ public abstract class RoutineLoadTaskInfo {
 
     protected RoutineLoadTaskStatistics statistics;
 
+    // time this task ready to be scheduled by RoutineLoadTaskScheduler
+    protected long readyToScheduleTime = -1;
+
     // last time this task being scheduled by RoutineLoadTaskScheduler
     protected long lastScheduledTime = -1;
 
@@ -165,6 +168,18 @@ public abstract class RoutineLoadTaskInfo {
 
     public boolean isRunning() {
         return executeStartTimeMs > 0;
+    }
+
+    public long getCreateTimeMs() {
+        return createTimeMs;
+    }
+
+    public long getReadyToScheduleTime() {
+        return readyToScheduleTime;
+    }
+
+    public void setReadyToScheduleTime(long readyToScheduleTime) {
+        this.readyToScheduleTime = readyToScheduleTime;
     }
 
     public long getLastScheduledTime() {
@@ -286,6 +301,11 @@ public abstract class RoutineLoadTaskInfo {
         row.add(txnStatus.name());
         row.add(String.valueOf(job.getId()));
         row.add(TimeUtils.longToTimeString(createTimeMs));
+        if (readyToScheduleTime != -1L) {
+            row.add(TimeUtils.longToTimeString(readyToScheduleTime));
+        } else {
+            row.add("NULL");
+        }
         if (lastScheduledTime != -1L) {
             row.add(TimeUtils.longToTimeString(lastScheduledTime));
         } else {

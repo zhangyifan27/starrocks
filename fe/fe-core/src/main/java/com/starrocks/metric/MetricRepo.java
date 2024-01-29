@@ -195,8 +195,20 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_SHORTCIRCUIT_QUERY;
     public static LongCounterMetric COUNTER_SHORTCIRCUIT_RPC;
     public static LongCounterMetric COUNTER_LOST_TQ_METADATA_NUM;
+    public static LongCounterMetric COUNTER_ROUTINE_LOAD_TASK_SCHEDULE_TOO_LONG;
+    public static LongCounterMetric COUNTER_ROUTINE_LOAD_FAILED_TO_SUBMIT_TASK_NUM;
+    public static LongCounterMetric COUNTER_ROUTINE_LOAD_TASK_PRECHECK_TOO_LONG;
+    public static LongCounterMetric COUNTER_ROUTINE_LOAD_TASK_SUBMIT_TOO_LONG;
 
     public static Histogram HISTO_QUERY_LATENCY;
+
+    public static Histogram HISTO_KAFKA_GET_PARTITIONS_LATENCY;
+    public static Histogram HISTO_KAFKA_GET_OFFSETS_LATENCY;
+    public static Histogram HISTO_KAFKA_GET_BATCH_OFFSETS_LATENCY;
+    public static Histogram HISTO_ROUTINE_LOAD_TASK_SCHEDULE_LATENCY_MS;
+    public static Histogram HISTO_ROUTINE_LOAD_TASK_PRECHECK_LATENCY_MS;
+    public static Histogram HISTO_ROUTINE_LOAD_TASK_SUBMIT_LATENCY_MS;
+
     public static Histogram HISTO_INSERT_LATENCY;
 
     public static Histogram HISTO_EDIT_LOG_WRITE_LATENCY;
@@ -227,6 +239,8 @@ public final class MetricRepo {
     public static GaugeMetricImpl<Long> GAUGE_ENCRYPTION_KEY_NUM;
 
     public static GaugeMetricImpl<Long> GAUGE_ROUTINE_LOAD_IDLE_SLOT_NUM;
+    public static GaugeMetricImpl<Long> GAUGE_ROUTINE_LOAD_PENDING_TASK_NUM;
+    public static GaugeMetricImpl<Long> GAUGE_ROUTINE_LOAD_SCHEDULER_THREAD_POOL_SIZE;
     public static List<GaugeMetricImpl<Long>> GAUGE_ROUTINE_LOAD_LAGS;
     public static List<GaugeMetricImpl<Long>> GAUGE_ROUTINE_LOAD_TIME_LAGS;
     public static List<GaugeMetricImpl<Long>> GAUGE_ROUTINE_LOAD_ROW_NUM_LAGS;
@@ -411,6 +425,16 @@ public final class MetricRepo {
                 "idle slot num for routine load");
         GAUGE_ROUTINE_LOAD_IDLE_SLOT_NUM.setValue(0L);
         STARROCKS_METRIC_REGISTER.addMetric(GAUGE_ROUTINE_LOAD_IDLE_SLOT_NUM);
+
+        GAUGE_ROUTINE_LOAD_PENDING_TASK_NUM = new GaugeMetricImpl<>("routine_load_pending_task_num",
+                MetricUnit.OPERATIONS, "idle slot num for routine load");
+        GAUGE_ROUTINE_LOAD_PENDING_TASK_NUM.setValue(0L);
+        STARROCKS_METRIC_REGISTER.addMetric(GAUGE_ROUTINE_LOAD_PENDING_TASK_NUM);
+
+        GAUGE_ROUTINE_LOAD_SCHEDULER_THREAD_POOL_SIZE = new GaugeMetricImpl<>("routine_load_scheduler_thread_pool_size",
+                MetricUnit.OPERATIONS, "scheduler thread pool size");
+        GAUGE_ROUTINE_LOAD_SCHEDULER_THREAD_POOL_SIZE.setValue(0L);
+        STARROCKS_METRIC_REGISTER.addMetric(GAUGE_ROUTINE_LOAD_SCHEDULER_THREAD_POOL_SIZE);
 
         GAUGE_QUERY_LATENCY_MEAN =
                 new GaugeMetricImpl<>("query_latency", MetricUnit.MILLISECONDS, "mean of query latency");
@@ -641,6 +665,22 @@ public final class MetricRepo {
         COUNTER_MAX_ROUTINE_LOAD_TASK_PER_BE.increase((long) Config.max_routine_load_task_num_per_be);
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_MAX_ROUTINE_LOAD_TASK_PER_BE);
 
+        COUNTER_ROUTINE_LOAD_TASK_SCHEDULE_TOO_LONG =
+                new LongCounterMetric("routine_load_task_schedule_too_long", MetricUnit.NOUNIT,
+                        "routine load task schedule too long");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_TASK_SCHEDULE_TOO_LONG);
+        COUNTER_ROUTINE_LOAD_TASK_PRECHECK_TOO_LONG =
+                new LongCounterMetric("routine_load_task_precheck_too_long", MetricUnit.NOUNIT,
+                        "routine load task precheck too long");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_TASK_PRECHECK_TOO_LONG);
+        COUNTER_ROUTINE_LOAD_TASK_SUBMIT_TOO_LONG =
+                new LongCounterMetric("routine_load_task_submit_too_long", MetricUnit.NOUNIT,
+                        "routine load task submit too long");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_TASK_SUBMIT_TOO_LONG);
+        COUNTER_ROUTINE_LOAD_FAILED_TO_SUBMIT_TASK_NUM = new LongCounterMetric("failed_to_submit_task_num",
+                MetricUnit.NOUNIT, "failed to submit task number");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_FAILED_TO_SUBMIT_TASK_NUM);
+
         COUNTER_UNFINISHED_BACKUP_JOB = new LongCounterMetric("unfinished_backup_job", MetricUnit.REQUESTS,
                 "current unfinished backup job");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_UNFINISHED_BACKUP_JOB);
@@ -681,6 +721,20 @@ public final class MetricRepo {
         HISTO_JOURNAL_WRITE_BYTES =
                 METRIC_REGISTER.histogram(MetricRegistry.name("journal", "write", "bytes"));
         HISTO_SHORTCIRCUIT_RPC_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("shortcircuit", "latency", "ms"));
+
+        HISTO_KAFKA_GET_PARTITIONS_LATENCY =
+                METRIC_REGISTER.histogram(MetricRegistry.name("kafka", "get", "partitions", "latency", "ms"));
+        HISTO_KAFKA_GET_OFFSETS_LATENCY =
+                METRIC_REGISTER.histogram(MetricRegistry.name("kafka", "get", "offsets", "latency", "ms"));
+        HISTO_KAFKA_GET_BATCH_OFFSETS_LATENCY =
+                METRIC_REGISTER.histogram(MetricRegistry.name("kafka", "get", "batch", "offsets", "latency", "ms"));
+
+        HISTO_ROUTINE_LOAD_TASK_SCHEDULE_LATENCY_MS =
+                METRIC_REGISTER.histogram(MetricRegistry.name("routine", "load", "task", "schedule", "latency", "ms"));
+        HISTO_ROUTINE_LOAD_TASK_PRECHECK_LATENCY_MS =
+                METRIC_REGISTER.histogram(MetricRegistry.name("routine", "load", "task", "precheck", "latency", "ms"));
+        HISTO_ROUTINE_LOAD_TASK_SUBMIT_LATENCY_MS =
+                METRIC_REGISTER.histogram(MetricRegistry.name("routine", "load", "task", "submit", "latency", "ms"));
 
         // init system metrics
         initSystemMetrics();

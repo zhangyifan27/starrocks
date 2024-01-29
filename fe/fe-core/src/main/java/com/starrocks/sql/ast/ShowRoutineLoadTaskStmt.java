@@ -49,6 +49,7 @@ public class ShowRoutineLoadTaskStmt extends ShowStmt {
                 .add("TxnStatus")
                 .add("JobId")
                 .add("CreateTime")
+                .add("ReadyToScheduleTime")
                 .add("LastScheduledTime")
                 .add("ExecuteStartTime")
                 .add("Timeout")

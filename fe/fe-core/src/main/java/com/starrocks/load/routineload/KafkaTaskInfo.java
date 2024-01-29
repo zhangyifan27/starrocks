@@ -34,6 +34,7 @@
 
 package com.starrocks.load.routineload;
 
+import com.google.common.base.Joiner;
 import com.google.common.collect.ImmutableMap;
 import com.google.gson.Gson;
 import com.starrocks.catalog.Database;
@@ -219,6 +220,10 @@ public class KafkaTaskInfo extends RoutineLoadTaskInfo {
         if (Math.abs(routineLoadJob.getMaxFilterRatio() - 1) > 0.001) {
             tRoutineLoadTask.setMax_filter_ratio(routineLoadJob.getMaxFilterRatio());
         }
+
+        String partitionIdToOffsetInfo = "partitionIdToOffset="
+                + Joiner.on("|").withKeyValueSeparator("_").join(partitionIdToOffset) + "]";
+        LOG.info("Kafka routine load task created, label: {}, {}.", label, partitionIdToOffsetInfo);
 
         return tRoutineLoadTask;
     }

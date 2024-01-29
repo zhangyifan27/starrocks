@@ -41,6 +41,7 @@ import com.starrocks.common.Config;
 import com.starrocks.common.ErrorReportException;
 import com.starrocks.common.LoadException;
 import com.starrocks.common.UserException;
+import com.starrocks.metric.MetricRepo;
 import com.starrocks.proto.PKafkaLoadInfo;
 import com.starrocks.proto.PKafkaMetaProxyRequest;
 import com.starrocks.proto.PKafkaOffsetBatchProxyRequest;
@@ -128,7 +129,9 @@ public class KafkaUtil {
             PProxyRequest request = new PProxyRequest();
             request.kafkaMetaRequest = metaRequest;
 
+            long startTime = System.currentTimeMillis();
             PProxyResult result = sendProxyRequest(request);
+            MetricRepo.HISTO_KAFKA_GET_PARTITIONS_LATENCY.update(System.currentTimeMillis() - startTime);
             return result.kafkaMetaResult.partitionIds;
         }
 
@@ -158,7 +161,9 @@ public class KafkaUtil {
             request.kafkaOffsetRequest = offsetRequest;
 
             // send request
+            long startTime = System.currentTimeMillis();
             PProxyResult result = sendProxyRequest(request);
+            MetricRepo.HISTO_KAFKA_GET_OFFSETS_LATENCY.update(System.currentTimeMillis() - startTime);
 
             // assembly result
             Map<Integer, Long> partitionOffsets = Maps.newHashMapWithExpectedSize(partitions.size());
@@ -183,7 +188,9 @@ public class KafkaUtil {
             pProxyRequest.kafkaOffsetBatchRequest = pKafkaOffsetBatchProxyRequest;
 
             // send request
+            long startTime = System.currentTimeMillis();
             PProxyResult result = sendProxyRequest(pProxyRequest);
+            MetricRepo.HISTO_KAFKA_GET_BATCH_OFFSETS_LATENCY.update(System.currentTimeMillis() - startTime);
 
             return result.kafkaOffsetBatchResult.results;
         }

@@ -64,6 +64,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -124,6 +125,7 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
         }
 
         try {
+            MetricRepo.GAUGE_ROUTINE_LOAD_PENDING_TASK_NUM.setValue((long) needScheduleTasksQueue.size());
             // This step will be blocked until timeout when queue is empty
             RoutineLoadTaskInfo routineLoadTaskInfo = needScheduleTasksQueue.poll(POLL_TIMEOUT_SEC, TimeUnit.SECONDS);
             if (routineLoadTaskInfo == null) {
@@ -144,6 +146,7 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
                 return;
             }
 
+            routineLoadTaskInfo.setReadyToScheduleTime(System.currentTimeMillis());
             submitToSchedule(routineLoadTaskInfo);
         } catch (Exception e) {
             LOG.warn("Taking routine load task from queue has been interrupted", e);
@@ -172,10 +175,21 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
                 LOG.warn("schedule routine load task failed", e);
             }
         });
+        MetricRepo.GAUGE_ROUTINE_LOAD_SCHEDULER_THREAD_POOL_SIZE.setValue(
+                (long) ((ThreadPoolExecutor) threadPool).getActiveCount());
     }
 
     void scheduleOneTask(RoutineLoadTaskInfo routineLoadTaskInfo) throws Exception {
-        routineLoadTaskInfo.setLastScheduledTime(System.currentTimeMillis());
+        long lastScheduledTime = System.currentTimeMillis();
+        routineLoadTaskInfo.setLastScheduledTime(lastScheduledTime);
+        long timeCost = lastScheduledTime - routineLoadTaskInfo.getReadyToScheduleTime();
+        MetricRepo.HISTO_ROUTINE_LOAD_TASK_SCHEDULE_LATENCY_MS.update(timeCost);
+        if (timeCost > Config.routine_load_task_schedule_time_threshold) {
+            MetricRepo.COUNTER_ROUTINE_LOAD_TASK_SCHEDULE_TOO_LONG.increase(1L);
+            LOG.warn("Schedule task too long, job: " + routineLoadTaskInfo.getJobId() + ", task: " +
+                    routineLoadTaskInfo.id + ". Cost: " + timeCost);
+        }
+
         // check if task has been abandoned
         if (!routineLoadManager.checkTaskInJob(routineLoadTaskInfo.getJobId(), routineLoadTaskInfo.getId())) {
             // task has been abandoned while renew task has been added in queue
@@ -275,11 +289,18 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
             throw e;
         }
 
+        long submitStartTime = System.currentTimeMillis();
+        long preCheckCostTime = submitStartTime - lastScheduledTime;
+        MetricRepo.HISTO_ROUTINE_LOAD_TASK_PRECHECK_LATENCY_MS.update(preCheckCostTime);
+        if (preCheckCostTime > Config.routine_load_task_precheck_time_threshold) {
+            MetricRepo.COUNTER_ROUTINE_LOAD_TASK_PRECHECK_TOO_LONG.increase(1L);
+            LOG.warn("Task pre-check too long, job: " + routineLoadTaskInfo.getJobId() + ", task: " +
+                    routineLoadTaskInfo.id + ". Cost: " + preCheckCostTime);
+        }
         try {
-            long startTime = System.currentTimeMillis();
             submitTask(routineLoadTaskInfo.getBeId(), tRoutineLoadTask);
             LOG.debug("send routine load task cost(ms): {}, job id: {}",
-                    (System.currentTimeMillis() - startTime), routineLoadTaskInfo.getJobId());
+                    (System.currentTimeMillis() - submitStartTime), routineLoadTaskInfo.getJobId());
             if (tRoutineLoadTask.isSetKafka_load_info()) {
                 LOG.debug("send kafka routine load task {} with partition offset: {}, job: {}",
                         tRoutineLoadTask.label, tRoutineLoadTask.kafka_load_info.partition_begin_offset,
@@ -303,9 +324,17 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
             // fall through to set ExecuteStartTime
         }
 
+        long executeStartTime = System.currentTimeMillis();
         // set the executeStartTimeMs of task
         routineLoadTaskInfo.setExecuteStartTimeMs(System.currentTimeMillis());
         routineLoadTaskInfo.setMsg("task submitted to execute", false);
+        long submitCostTime = executeStartTime - submitStartTime;
+        MetricRepo.HISTO_ROUTINE_LOAD_TASK_SUBMIT_LATENCY_MS.update(submitCostTime);
+        if (submitCostTime > Config.routine_load_task_submit_time_threshold) {
+            MetricRepo.COUNTER_ROUTINE_LOAD_TASK_SUBMIT_TOO_LONG.increase(1L);
+            LOG.warn("Submit task too long, job: " + routineLoadTaskInfo.getJobId() + ", task: " +
+                    routineLoadTaskInfo.id + ". Cost: " + submitCostTime);
+        }
     }
 
     private void releaseBeSlot(RoutineLoadTaskInfo routineLoadTaskInfo) {
@@ -353,6 +382,7 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
                     client -> client.submit_routine_load_task(Lists.newArrayList(tTask)));
 
             if (tStatus.getStatus_code() != TStatusCode.OK) {
+                MetricRepo.COUNTER_ROUTINE_LOAD_FAILED_TO_SUBMIT_TASK_NUM.increase(1L);
                 throw new LoadException("failed to submit task. error code: " + tStatus.getStatus_code()
                         + ", msg: " + (tStatus.getError_msgsSize() > 0 ? tStatus.getError_msgs().get(0) : "NaN"));
             }
