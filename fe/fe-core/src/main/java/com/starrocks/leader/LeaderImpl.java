@@ -84,6 +84,7 @@ import com.starrocks.load.DeleteJob;
 import com.starrocks.load.OlapDeleteJob;
 import com.starrocks.load.loadv2.SparkLoadJob;
 import com.starrocks.memory.MemoryUsageTracker;
+import com.starrocks.metric.MetricRepo;
 import com.starrocks.rpc.ThriftConnectionPool;
 import com.starrocks.rpc.ThriftRPCRequestExecutor;
 import com.starrocks.server.GlobalStateMgr;
@@ -1304,6 +1305,7 @@ public class LeaderImpl {
                 TStatus status = new TStatus(TStatusCode.TIMEOUT);
                 status.setError_msgs(Lists.newArrayList("commit and publish txn timeout"));
                 response.setStatus(status);
+                MetricRepo.COUNTER_LOAD_PUBLISH_TIMEOUT.increase(1L);
                 return response;
             }
         } catch (UserException e) {

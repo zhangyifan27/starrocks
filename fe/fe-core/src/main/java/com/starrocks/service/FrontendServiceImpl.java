@@ -1353,7 +1353,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
                 timeoutInfo = timeoutInfo.substring(0, 240) + "...";
             }
             status.addToError_msgs("Publish timeout. The data will be visible after a while, " + timeoutInfo);
-            return;
+            MetricRepo.COUNTER_LOAD_PUBLISH_TIMEOUT.increase(1L);
         }
         // if commit and publish is success, load can be regarded as success
         MetricRepo.COUNTER_LOAD_FINISHED.increase(1L);

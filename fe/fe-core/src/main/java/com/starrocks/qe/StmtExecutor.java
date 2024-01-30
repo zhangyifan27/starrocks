@@ -2472,6 +2472,7 @@ public class StmtExecutor {
                     entity.counterInsertLoadRowsTotal.increase(loadedRows);
                     entity.counterInsertLoadBytesTotal.increase(loadedBytes);
                 } else {
+                    MetricRepo.COUNTER_LOAD_PUBLISH_TIMEOUT.increase(1L);
                     txnStatus = TransactionStatus.COMMITTED;
                 }
             }

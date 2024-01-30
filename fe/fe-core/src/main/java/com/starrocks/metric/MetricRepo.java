@@ -146,6 +146,7 @@ public final class MetricRepo {
 
     public static LongCounterMetric COUNTER_LOAD_ADD;
     public static LongCounterMetric COUNTER_LOAD_FINISHED;
+    public static LongCounterMetric COUNTER_LOAD_PUBLISH_TIMEOUT;
     public static LongCounterMetric COUNTER_EDIT_LOG_WRITE;
     public static LongCounterMetric COUNTER_EDIT_LOG_READ;
     public static LongCounterMetric COUNTER_EDIT_LOG_SIZE_BYTES;
@@ -456,6 +457,9 @@ public final class MetricRepo {
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_PAUSED);
         COUNTER_LOAD_FINISHED = new LongCounterMetric("load_finished", MetricUnit.REQUESTS, "total load finished");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_LOAD_FINISHED);
+        COUNTER_LOAD_PUBLISH_TIMEOUT =
+                new LongCounterMetric("load_publish_timeout", MetricUnit.REQUESTS, "counter of publish timeout load task");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_LOAD_PUBLISH_TIMEOUT);
         COUNTER_EDIT_LOG_WRITE =
                 new LongCounterMetric("edit_log_write", MetricUnit.OPERATIONS, "counter of edit log write into bdbje");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_EDIT_LOG_WRITE);
