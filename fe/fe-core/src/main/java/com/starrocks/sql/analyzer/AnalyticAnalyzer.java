@@ -148,12 +148,14 @@ public class AnalyticAnalyzer {
     }
 
     private static void verifyWindowFrame(AnalyticExpr analyticExpr) {
-        if (analyticExpr.getOrderByElements().isEmpty()) {
+        AnalyticWindow windowFrame = analyticExpr.getWindow();
+        if (analyticExpr.getOrderByElements().isEmpty()
+                &&  windowFrame.getLeftBoundary().getType() != AnalyticWindow.BoundaryType.UNBOUNDED_PRECEDING
+                &&  windowFrame.getRightBoundary().getType() != AnalyticWindow.BoundaryType.UNBOUNDED_FOLLOWING) {
             throw new SemanticException("Windowing clause requires ORDER BY clause: " + analyticExpr.toSql(),
                     analyticExpr.getPos());
         }
 
-        AnalyticWindow windowFrame = analyticExpr.getWindow();
         AnalyticWindow.Boundary leftBoundary = windowFrame.getLeftBoundary();
         Preconditions.checkArgument(leftBoundary != null);
         if (windowFrame.getRightBoundary() == null) {

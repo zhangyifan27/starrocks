@@ -78,6 +78,17 @@ public class AnalyzeAnalyticTest {    // use a unique dir so that it won't be co
         analyzeSuccess("select sum(v1) " +
                 "over(partition by v2 order by v3 range between unbounded preceding and current row) from t0");
         analyzeSuccess("select sum(v1) over(partition by v2 order by v3 range unbounded preceding) from t0");
+
+        //no order by in windows
+        analyzeSuccess("select sum(v1) " +
+                "over(range between unbounded preceding and unbounded following) from t0");
+        analyzeSuccess("select sum(v1) " +
+                "over(range between unbounded preceding and current row) from t0");
+        analyzeSuccess("select sum(v1) " +
+                "over(range between current row and unbounded following) from t0");
+        analyzeSuccess("select sum(v1) " +
+                "over(range unbounded preceding) from t0");
+        analyzeSuccess("select sum(v1) over() from t0");
     }
 
     @Test

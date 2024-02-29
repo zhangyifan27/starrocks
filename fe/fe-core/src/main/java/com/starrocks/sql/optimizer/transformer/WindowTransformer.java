@@ -196,8 +196,11 @@ public class WindowTransformer {
 
         // Check if range window has order by clause
         if (windowFrame != null
-                && AnalyticWindow.Type.RANGE.equals(windowFrame.getType())) {
-            Preconditions.checkState(!orderByElements.isEmpty(), "Range window frame requires order by columns");
+                && AnalyticWindow.Type.RANGE.equals(windowFrame.getType())
+                &&  windowFrame.getLeftBoundary().getType() != AnalyticWindow.BoundaryType.UNBOUNDED_PRECEDING
+                &&  windowFrame.getRightBoundary().getType() != AnalyticWindow.BoundaryType.UNBOUNDED_FOLLOWING) {
+            Preconditions.checkState(!orderByElements.isEmpty(),
+                    "Range window frame requires order by columns");
         }
 
         // Change first_value/last_value RANGE windows to ROWS
