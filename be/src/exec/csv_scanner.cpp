@@ -353,7 +353,7 @@ Status CSVScanner::_parse_csv_v2(Chunk* chunk) {
         const char* data = _curr_reader->buffBasePtr() + row.parsed_start;
         CSVReader::Record record(data, row.parsed_end - row.parsed_start);
         if (row.columns.size() != _num_fields_in_csv && !_scan_range.params.flexible_column_mapping) {
-            if (status.is_end_of_file()) {
+            if (status.is_end_of_file() || _ignore_tail_columns) {
                 break;
             }
             if (_counter->num_rows_filtered++ < REPORT_ERROR_MAX_NUMBER) {
@@ -368,7 +368,7 @@ Status CSVScanner::_parse_csv_v2(Chunk* chunk) {
             }
             continue;
         }
-        if (!validate_utf8(record.data, record.size)) {
+        if (!_skip_utf8_check && !validate_utf8(record.data, record.size)) {
             if (_counter->num_rows_filtered++ < REPORT_ERROR_MAX_NUMBER) {
                 _report_error(record, "Invalid UTF-8 row");
             }
@@ -475,19 +475,23 @@ Status CSVScanner::_parse_csv(Chunk* chunk) {
         _curr_reader->split_record(record, &fields);
 
         if (fields.size() != _num_fields_in_csv && !_scan_range.params.flexible_column_mapping) {
-            if (_counter->num_rows_filtered++ < REPORT_ERROR_MAX_NUMBER) {
-                std::string error_msg =
-                        make_column_count_not_matched_error_message(_num_fields_in_csv, fields.size(), _parse_options);
-                _report_error(record, error_msg);
+            if (_ignore_tail_columns) {
+                fields.resize(_num_fields_in_csv);
+            } else {
+                if (_counter->num_rows_filtered++ < REPORT_ERROR_MAX_NUMBER) {
+                    std::string error_msg = make_column_count_not_matched_error_message(_num_fields_in_csv,
+                                                                                        fields.size(), _parse_options);
+                    _report_error(record, error_msg);
+                }
+                if (_state->enable_log_rejected_record()) {
+                    std::string error_msg = make_column_count_not_matched_error_message(_num_fields_in_csv,
+                                                                                        fields.size(), _parse_options);
+                    _report_rejected_record(record, error_msg);
+                }
+                continue;
             }
-            if (_state->enable_log_rejected_record()) {
-                std::string error_msg =
-                        make_column_count_not_matched_error_message(_num_fields_in_csv, fields.size(), _parse_options);
-                _report_rejected_record(record, error_msg);
-            }
-            continue;
         }
-        if (!validate_utf8(record.data, record.size)) {
+        if (!_skip_utf8_check && !validate_utf8(record.data, record.size)) {
             if (_counter->num_rows_filtered++ < REPORT_ERROR_MAX_NUMBER) {
                 _report_error(record, "Invalid UTF-8 row");
             }

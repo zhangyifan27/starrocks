@@ -233,6 +233,8 @@ public class StreamLoadScanNode extends LoadScanNode {
         if (streamLoadInfo.getConfluentSchemaRegistryUrl() != null) {
             params.setConfluent_schema_registry_url(streamLoadInfo.getConfluentSchemaRegistryUrl());
         }
+        params.setIgnore_tail_columns(streamLoadInfo.isIgnoreTailColumns());
+        params.setSkip_utf8_check(streamLoadInfo.isSkipUtf8Check());
         initColumns();
         initWhereExpr(streamLoadInfo.getWhereExpr(), analyzer);
     }

@@ -145,6 +145,15 @@ Status FileScanner::open() {
             std::istringstream(iter->second) >> std::boolalpha >> _case_sensitive;
         }
     }
+
+    if (_params.__isset.ignore_tail_columns) {
+        _ignore_tail_columns = _params.ignore_tail_columns;
+    }
+
+    if (_params.__isset.skip_utf8_check) {
+        _skip_utf8_check = _params.skip_utf8_check;
+    }
+
     return Status::OK();
 }
 

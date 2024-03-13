@@ -140,6 +140,8 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
 
     public static final long DEFAULT_TASK_SCHED_INTERVAL_SECOND = 10;
     public static final boolean DEFAULT_STRICT_MODE = false; // default is false
+    public static final boolean DEFAULT_IGNORE_TAIL_COLUMNS = false; // default is false
+    public static final boolean DEFAULT_SKIP_UTF8_CHECK = false; // default is false
 
     protected static final String STAR_STRING = "*";
 
@@ -385,6 +387,8 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         if (stmt.getMergeConditionStr() != null) {
             jobProperties.put(LoadStmt.MERGE_CONDITION, stmt.getMergeConditionStr());
         }
+        jobProperties.put(LoadStmt.IGNORE_TAIL_COLUMNS, String.valueOf(stmt.isIgnoreTailColumns()));
+        jobProperties.put(LoadStmt.SKIP_UTF8_CHECK, String.valueOf(stmt.isSkipUtf8Check()));
         if (Strings.isNullOrEmpty(stmt.getFormat()) || stmt.getFormat().equals("csv")) {
             jobProperties.put(CreateRoutineLoadStmt.FORMAT, "csv");
             jobProperties.put(CreateRoutineLoadStmt.STRIP_OUTER_ARRAY, "false");
@@ -612,6 +616,22 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         String value = jobProperties.get(LoadStmt.STRICT_MODE);
         if (value == null) {
             return DEFAULT_STRICT_MODE;
+        }
+        return Boolean.valueOf(value);
+    }
+
+    public boolean isIgnoreTailColumns() {
+        String value = jobProperties.get(LoadStmt.IGNORE_TAIL_COLUMNS);
+        if (value == null) {
+            return DEFAULT_IGNORE_TAIL_COLUMNS;
+        }
+        return Boolean.valueOf(value);
+    }
+
+    public boolean isSkipUtf8Check() {
+        String value = jobProperties.get(LoadStmt.SKIP_UTF8_CHECK);
+        if (value == null) {
+            return DEFAULT_SKIP_UTF8_CHECK;
         }
         return Boolean.valueOf(value);
     }
