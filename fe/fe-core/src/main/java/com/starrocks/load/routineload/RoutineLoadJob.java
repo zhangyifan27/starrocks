@@ -142,6 +142,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
     public static final boolean DEFAULT_STRICT_MODE = false; // default is false
     public static final boolean DEFAULT_IGNORE_TAIL_COLUMNS = false; // default is false
     public static final boolean DEFAULT_SKIP_UTF8_CHECK = false; // default is false
+    public static final boolean DEFAULT_TASK_NUM_EXCEED_BE_NUM = false; // default is false
 
     protected static final String STAR_STRING = "*";
     private Map<String, Long> timeConsumeLags = Maps.newHashMap();
@@ -391,6 +392,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         }
         jobProperties.put(LoadStmt.IGNORE_TAIL_COLUMNS, String.valueOf(stmt.isIgnoreTailColumns()));
         jobProperties.put(LoadStmt.SKIP_UTF8_CHECK, String.valueOf(stmt.isSkipUtf8Check()));
+        jobProperties.put(LoadStmt.TASK_NUM_EXCEED_BE_NUM, String.valueOf(stmt.isTaskNumExceedBeNum()));
         if (Strings.isNullOrEmpty(stmt.getFormat()) || stmt.getFormat().equals("csv")) {
             jobProperties.put(CreateRoutineLoadStmt.FORMAT, "csv");
             jobProperties.put(CreateRoutineLoadStmt.STRIP_OUTER_ARRAY, "false");
@@ -634,6 +636,14 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         String value = jobProperties.get(LoadStmt.SKIP_UTF8_CHECK);
         if (value == null) {
             return DEFAULT_SKIP_UTF8_CHECK;
+        }
+        return Boolean.valueOf(value);
+    }
+
+    public boolean isTaskNumExceedBeNum() {
+        String value = jobProperties.get(LoadStmt.TASK_NUM_EXCEED_BE_NUM);
+        if (value == null) {
+            return DEFAULT_TASK_NUM_EXCEED_BE_NUM;
         }
         return Boolean.valueOf(value);
     }
