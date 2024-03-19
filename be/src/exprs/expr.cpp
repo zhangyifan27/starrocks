@@ -526,6 +526,10 @@ Status Expr::open(RuntimeState* state, ExprContext* context, FunctionContext::Fu
     for (auto& i : _children) {
         RETURN_IF_ERROR(i->open(state, context, scope));
     }
+
+    if (state != nullptr) {
+        _enable_hive_mode = state->query_options().enable_hive_mode;
+    }
     return Status::OK();
 }
 

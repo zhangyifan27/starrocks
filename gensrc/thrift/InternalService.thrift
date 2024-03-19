@@ -253,6 +253,7 @@ struct TQueryOptions {
   85: optional TSpillMode spill_mode;
 
   82: optional TSpillOptions spill_options;
+  83: optional bool enable_hive_mode = false;
 
   86: optional i32 io_tasks_per_scan_operator = 4;
   87: optional i32 connector_io_tasks_per_scan_operator = 16;

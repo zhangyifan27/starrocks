@@ -366,6 +366,8 @@ protected:
 
     Status prepare_jit_expr(RuntimeState* state, ExprContext* context);
 
+    bool _enable_hive_mode = false;
+
 private:
     // Create a new vectorized expr
     [[nodiscard]] static Status create_vectorized_expr(ObjectPool* pool, const TExprNode& texpr_node, Expr** expr,

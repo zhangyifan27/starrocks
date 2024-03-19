@@ -715,6 +715,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String EXCLUDE_THIVE_DEFAULT_PARTITION = "exclude_thive_default_partition";
 
+    public static final String ENABLE_HIVE_MODE = "enable_hive_mode";
+
     public static final String EXPERIMENTAL_ENABLE_CAST_TO_INT_ROUND = "experimental_enable_cast_to_int_round";
 
     public static final String ENABLE_COLLECT_TABLE_LEVEL_SCAN_STATS = "enable_collect_table_level_scan_stats";
@@ -2426,6 +2428,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean isEnableQueryTabletAffinity() {
         return enableQueryTabletAffinity;
+    }
+
+    @VariableMgr.VarAttr(name = ENABLE_HIVE_MODE)
+    private boolean enableHiveMode = false;
+
+    public boolean isEnableHiveMode() {
+        return enableHiveMode;
+    }
+
+    public void setHiveMode(boolean enableHiveMode) {
+        this.enableHiveMode = enableHiveMode;
     }
 
     public int getStatisticCollectParallelism() {
@@ -4289,6 +4302,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         tResult.setConnector_io_tasks_per_scan_operator(connectorIoTasksPerScanOperator);
         tResult.setEnable_dynamic_prune_scan_range(enableDynamicPruneScanRange);
         tResult.setUse_page_cache(usePageCache);
+        tResult.setEnable_hive_mode(enableHiveMode);
 
         tResult.setEnable_connector_adaptive_io_tasks(enableConnectorAdaptiveIoTasks);
         tResult.setEnable_connector_split_io_tasks(enableConnectorSplitIoTasks);

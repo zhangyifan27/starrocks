@@ -104,6 +104,7 @@ import com.starrocks.common.profile.Tracers;
 import com.starrocks.common.util.DateUtils;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.mysql.MysqlPassword;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SqlModeHelper;
 import com.starrocks.scheduler.persist.TaskSchedule;
 import com.starrocks.server.WarehouseManager;
@@ -6274,19 +6275,26 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         }
 
         if (DATE_FUNCTIONS.contains(functionName)) {
-            if (context.expression().size() != 2) {
+            if (context.expression().size() == 2) {
+                Expr e1 = (Expr) visit(context.expression(0));
+                Expr e2 = (Expr) visit(context.expression(1));
+                if (!(e2 instanceof IntervalLiteral)) {
+                    e2 = new IntervalLiteral(e2, new UnitIdentifier("DAY"));
+                }
+                IntervalLiteral intervalLiteral = (IntervalLiteral) e2;
+
+                return new TimestampArithmeticExpr(functionName, e1, intervalLiteral.getValue(),
+                        intervalLiteral.getUnitIdentifier().getDescription(), pos);
+            } else if (context.expression().size() == 3) {
+                Expr e1 = (Expr) visit(context.expression(0));
+                Expr e2 = (Expr) visit(context.expression(1));
+                Expr e3 = (Expr) visit(context.expression(2));
+                IntervalLiteral intervalLiteral = new IntervalLiteral(e2, new UnitIdentifier(((SlotRef) e1).getColumnName()));
+                return new TimestampArithmeticExpr(functionName, e3, intervalLiteral.getValue(),
+                        intervalLiteral.getUnitIdentifier().getDescription());
+            } else {
                 throw new ParsingException(PARSER_ERROR_MSG.wrongNumOfArgs(functionName), pos);
             }
-
-            Expr e1 = (Expr) visit(context.expression(0));
-            Expr e2 = (Expr) visit(context.expression(1));
-            if (!(e2 instanceof IntervalLiteral)) {
-                e2 = new IntervalLiteral(e2, new UnitIdentifier("DAY"));
-            }
-            IntervalLiteral intervalLiteral = (IntervalLiteral) e2;
-
-            return new TimestampArithmeticExpr(functionName, e1, intervalLiteral.getValue(),
-                    intervalLiteral.getUnitIdentifier().getDescription(), pos);
         }
 
         if (functionName.equals(FunctionSet.ELEMENT_AT)) {
@@ -6406,6 +6414,16 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         if (functionName.equals(FunctionSet.DICT_MAPPING)) {
             List<Expr> params = visit(context.expression(), Expr.class);
             return new DictQueryExpr(params);
+        }
+
+        if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableHiveMode()) {
+            if (functionName.equals(FunctionSet.LENGTH)) {
+                fnName = FunctionName.createFnName(FunctionSet.CHAR_LENGTH);
+            }
+
+            if (functionName.equals(FunctionSet.NVL)) {
+                fnName = FunctionName.createFnName(FunctionSet.IFNULL);
+            }
         }
 
         FunctionCallExpr functionCallExpr = new FunctionCallExpr(fnName,
