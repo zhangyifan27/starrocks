@@ -14,6 +14,7 @@
 
 package com.starrocks.sql.optimizer.operator.scalar;
 
+import com.google.common.base.Preconditions;
 import com.starrocks.analysis.DecimalLiteral;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.ScalarType;
@@ -35,6 +36,7 @@ import java.math.RoundingMode;
 import java.text.DecimalFormat;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Objects;
@@ -340,6 +342,10 @@ public final class ConstantOperator extends ScalarOperator implements Comparable
         return (LocalDateTime) Optional.ofNullable(value).orElse(LocalDateTime.MIN);
     }
 
+    public org.joda.time.LocalDateTime getJodaDatetime() {
+        return (org.joda.time.LocalDateTime) Optional.ofNullable(value).orElse(LocalDateTime.MIN);
+    }
+
     public double getTime() {
         return (double) Optional.ofNullable(value).orElse(0);
     }
@@ -396,6 +402,13 @@ public final class ConstantOperator extends ScalarOperator implements Comparable
         }
 
         return String.valueOf(value);
+    }
+
+    public String dateToString(String format) throws AnalysisException {
+        Preconditions.checkState(type.matchesType(Type.DATE) || type.matchesType(Type.DATETIME));
+        LocalDateTime time = (LocalDateTime) Optional.ofNullable(value).orElse(LocalDateTime.MIN);
+        DateTimeFormatter formatter = DateUtils.probeFormat(format);
+        return time.format(formatter);
     }
 
     @Override
@@ -589,6 +602,23 @@ public final class ConstantOperator extends ScalarOperator implements Comparable
         }
         
         return Optional.ofNullable(res);
+    }
+
+    public ConstantOperator castDateTo(String format, Type targetType) throws Exception {
+        String childString = dateToString(format);
+        if (targetType.isStringType()) {
+            return ConstantOperator.createChar(childString, targetType);
+        } else if (targetType.isBigint()) {
+            return ConstantOperator.createBigint(Integer.parseInt(childString));
+        } else if (targetType.isInt()) {
+            return ConstantOperator.createInt(Integer.parseInt(childString));
+        } else if (targetType.isSmallint()) {
+            return ConstantOperator.createSmallInt(Short.parseShort(childString));
+        } else if (targetType.isTinyint()) {
+            return ConstantOperator.createTinyInt(Byte.parseByte(childString));
+        } else {
+            return castTo(targetType).orElse(null);
+        }
     }
 
     public Optional<ConstantOperator> successor() {

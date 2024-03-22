@@ -44,6 +44,7 @@ import com.starrocks.sql.optimizer.rule.mv.MaterializedViewRule;
 import com.starrocks.sql.optimizer.rule.transformation.ApplyExceptionRule;
 import com.starrocks.sql.optimizer.rule.transformation.ArrayDistinctAfterAggRule;
 import com.starrocks.sql.optimizer.rule.transformation.CTEProduceAddProjectionRule;
+import com.starrocks.sql.optimizer.rule.transformation.CastColForUnionRule;
 import com.starrocks.sql.optimizer.rule.transformation.ConvertToEqualForNullRule;
 import com.starrocks.sql.optimizer.rule.transformation.DeriveRangeJoinPredicateRule;
 import com.starrocks.sql.optimizer.rule.transformation.EliminateAggRule;
@@ -75,6 +76,7 @@ import com.starrocks.sql.optimizer.rule.transformation.RewriteUnnestBitmapRule;
 import com.starrocks.sql.optimizer.rule.transformation.SchemaTableEvaluateRule;
 import com.starrocks.sql.optimizer.rule.transformation.SeparateProjectRule;
 import com.starrocks.sql.optimizer.rule.transformation.SkewJoinOptimizeRule;
+import com.starrocks.sql.optimizer.rule.transformation.SplitOlapScanIntoHybridScanRule;
 import com.starrocks.sql.optimizer.rule.transformation.SplitScanORToUnionRule;
 import com.starrocks.sql.optimizer.rule.transformation.UnionToValuesRule;
 import com.starrocks.sql.optimizer.rule.transformation.materialization.MvRewriteStrategy;
@@ -605,6 +607,10 @@ public class Optimizer {
         ruleRewriteIterative(tree, rootTaskContext, RuleSetType.PUSH_DOWN_PREDICATE);
 
         ruleRewriteIterative(tree, rootTaskContext, new PartitionColumnMinMaxRewriteRule());
+        if (context.getSessionVariable().isEnableHotColdQuery()) {
+            ruleRewriteOnlyOnce(tree, rootTaskContext, new SplitOlapScanIntoHybridScanRule());
+        }
+
         ruleRewriteOnlyOnce(tree, rootTaskContext, RuleSetType.PARTITION_PRUNE);
         ruleRewriteIterative(tree, rootTaskContext, new RewriteMultiDistinctRule());
         ruleRewriteIterative(tree, rootTaskContext, RuleSetType.PUSH_DOWN_PREDICATE);
@@ -640,6 +646,13 @@ public class Optimizer {
         ruleRewriteOnlyOnce(tree, rootTaskContext, new PushDownTopNBelowOuterJoinRule());
         ruleRewriteOnlyOnce(tree, rootTaskContext, RuleSetType.INTERSECT_REWRITE);
         ruleRewriteIterative(tree, rootTaskContext, new RemoveAggregationFromAggTable());
+        if (context.getSessionVariable().isEnablePushDownAggToUnion()) {
+            ruleRewriteOnlyOnce(tree, rootTaskContext, RuleSetType.PUSH_DOWN_AGG_TO_UNION);
+        }
+
+        if (context.getSessionVariable().isEnableHotColdQuery()) {
+            ruleRewriteOnlyOnce(tree, rootTaskContext, new CastColForUnionRule());
+        }
 
         ruleRewriteOnlyOnce(tree, rootTaskContext, SplitScanORToUnionRule.getInstance());
         ruleRewriteOnlyOnce(tree, rootTaskContext, new PushDownTopNBelowUnionRule());

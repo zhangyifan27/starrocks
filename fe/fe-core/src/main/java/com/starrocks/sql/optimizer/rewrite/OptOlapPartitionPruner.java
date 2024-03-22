@@ -264,7 +264,7 @@ public class OptOlapPartitionPruner {
         partitionValueToIds.put(value, partitionIdSet);
     }
 
-    private static List<Long> listPartitionPrune(OlapTable olapTable, ListPartitionInfo listPartitionInfo,
+    public static List<Long> listPartitionPrune(OlapTable olapTable, ListPartitionInfo listPartitionInfo,
                                                  LogicalOlapScanOperator operator) {
 
         Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap =
@@ -365,7 +365,7 @@ public class OptOlapPartitionPruner {
         return specifyPartitionIds;
     }
 
-    private static List<Long> rangePartitionPrune(OlapTable olapTable, RangePartitionInfo partitionInfo,
+    public static List<Long> rangePartitionPrune(OlapTable olapTable, RangePartitionInfo partitionInfo,
                                                   LogicalOlapScanOperator operator) {
         Map<Long, Range<PartitionKey>> keyRangeById;
         if (operator.getPartitionNames() != null && operator.getPartitionNames().getPartitionNames() != null) {

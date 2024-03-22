@@ -328,6 +328,10 @@ public class AlterTableClauseAnalyzer implements AstVisitor<Void, ConnectContext
             } catch (DateTimeParseException e) {
                 ErrorReport.reportSemanticException(ErrorCode.ERR_COMMON_ERROR, e.getMessage());
             }
+        } else if (properties.containsKey(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO) ||
+                properties.containsKey(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP) ||
+                properties.containsKey(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT)) {
+            // do nothing for now
         } else {
             ErrorReport.reportSemanticException(ErrorCode.ERR_COMMON_ERROR, "Unknown properties: " + properties);
         }

@@ -73,6 +73,8 @@ import org.threeten.extra.PeriodDuration;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -805,6 +807,10 @@ public class TableProperty implements Writable, GsonPostProcessable {
         properties.put(key, value);
     }
 
+    public void removeTableProperty(String key) {
+        properties.remove(key);
+    }
+
     public Map<String, String> getProperties() {
         return properties;
     }
@@ -995,6 +1001,37 @@ public class TableProperty implements Writable, GsonPostProcessable {
 
     public void setHasForbiddenGlobalDict(boolean hasForbiddenGlobalDict) {
         this.hasForbiddenGlobalDict = hasForbiddenGlobalDict;
+    }
+
+    public List<String> getColdTableInfo() {
+        List<String> coldTableInfo = new ArrayList<>();
+        String coldTableInfoStr = properties.getOrDefault(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO, "");
+        if (!coldTableInfoStr.isEmpty() && coldTableInfoStr.split("\\.").length ==
+                PropertyAnalyzer.PROPERTIE_COLD_TABLE_INFO_LENGTH) {
+            coldTableInfo = Arrays.asList(coldTableInfoStr.split("\\."));
+        }
+        return coldTableInfo;
+    }
+
+    public Map<String, String> getHotColdColumnMap() {
+        List<String> colMaps;
+        Map<String, String> hotColdColMaps = new HashMap<>();
+        String hotColdColumnMapStr = properties.getOrDefault(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP, "");
+        if (!hotColdColumnMapStr.isEmpty()) {
+            colMaps = Arrays.asList(hotColdColumnMapStr.split(","));
+            for (String colMap : colMaps) {
+                if (colMap.trim().split(":").length == 2) {
+                    String[] splits = colMap.trim().split(":");
+                    hotColdColMaps.put(splits[0].trim(), splits[1].trim());
+                }
+            }
+        }
+        return hotColdColMaps;
+    }
+
+    public String getColdTablePartitionFormat() {
+        return properties.getOrDefault(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT,
+                PropertyAnalyzer.DEFAULT_COLD_TABLE_PARTITION_FORMAT);
     }
 
     public void setStorageInfo(StorageInfo storageInfo) {

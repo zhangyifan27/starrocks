@@ -14,6 +14,7 @@
 
 package com.starrocks.sql.optimizer.operator.physical;
 
+import com.starrocks.catalog.Table;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
@@ -24,6 +25,8 @@ import com.starrocks.sql.optimizer.operator.logical.LogicalIcebergScanOperator;
 
 public class PhysicalIcebergScanOperator extends PhysicalScanOperator {
     private ScanOperatorPredicates predicates;
+
+    private Table hybridScanTable = null;
 
     public PhysicalIcebergScanOperator(LogicalIcebergScanOperator scanOperator) {
         super(OperatorType.PHYSICAL_ICEBERG_SCAN, scanOperator);
@@ -58,5 +61,12 @@ public class PhysicalIcebergScanOperator extends PhysicalScanOperator {
         predicates.getMinMaxConjuncts().forEach(d -> refs.union(d.getUsedColumns()));
         predicates.getMinMaxColumnRefMap().keySet().forEach(refs::union);
         return refs;
+    }
+    public void setHybridScanTable(Table hybridScanTable) {
+        this.hybridScanTable = hybridScanTable;
+    }
+
+    public Table getHybridScanTable() {
+        return hybridScanTable;
     }
 }

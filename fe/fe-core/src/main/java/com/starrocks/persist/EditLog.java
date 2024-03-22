@@ -819,6 +819,7 @@ public class EditLog {
                 case OperationType.OP_MODIFY_IN_MEMORY:
                 case OperationType.OP_SET_FORBIDDEN_GLOBAL_DICT:
                 case OperationType.OP_MODIFY_REPLICATION_NUM:
+                case OperationType.OP_MODIFY_TABLE_PROPERTY:
                 case OperationType.OP_MODIFY_WRITE_QUORUM:
                 case OperationType.OP_MODIFY_REPLICATED_STORAGE:
                 case OperationType.OP_MODIFY_BUCKET_SIZE:
@@ -1817,6 +1818,10 @@ public class EditLog {
         } else {
             logEdit(OperationType.OP_REMOVE_EXTERNAL_ANALYZER_JOB, (ExternalAnalyzeJob) job);
         }
+    }
+
+    public void logModifyTableProperty(ModifyTablePropertyOperationLog info) {
+        logEdit(OperationType.OP_MODIFY_TABLE_PROPERTY, info);
     }
 
     public void logAddAnalyzeStatus(AnalyzeStatus status) {

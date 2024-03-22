@@ -340,6 +340,41 @@ public class OlapTableFactory implements AbstractTableFactory {
             // analyze location property
             PropertyAnalyzer.analyzeLocation(table, properties);
 
+            // analyze hot cold query info
+            boolean isColdTableSet =
+                    properties != null && properties.containsKey(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO);
+            if (isColdTableSet) {
+                String coldTableInfo = PropertyAnalyzer.analyzeColdTableInfo(properties);
+                Preconditions.checkState(
+                        coldTableInfo.split("\\.").length == PropertyAnalyzer.PROPERTIE_COLD_TABLE_INFO_LENGTH);
+                table.setColdTableInfo(coldTableInfo);
+            }
+
+            // analyze hot cold column map info
+            try {
+                boolean isColMapSet =
+                        properties != null && properties.containsKey(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP);
+                if (isColMapSet) {
+                    String colMapInfo = PropertyAnalyzer.analyzeHotColdColumnMap(properties);
+                    table.setHotColdColumnMap(colMapInfo);
+                }
+            } catch (AnalysisException e) {
+                throw new DdlException(e.getMessage());
+            }
+
+            // analyze cold partition format info
+            try {
+                boolean isPartitionFormatSet =
+                        properties != null &&
+                                properties.containsKey(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT);
+                if (isPartitionFormatSet) {
+                    String partitionFormat = PropertyAnalyzer.analyzeColdTablePartitionFormat(properties);
+                    table.setColdTablePartitionFormat(partitionFormat);
+                }
+            } catch (AnalysisException e) {
+                throw new DdlException(e.getMessage());
+            }
+
             // set in memory
             boolean isInMemory =
                     PropertyAnalyzer.analyzeBooleanProp(properties, PropertyAnalyzer.PROPERTIES_INMEMORY, false);

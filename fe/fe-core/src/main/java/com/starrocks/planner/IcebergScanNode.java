@@ -41,6 +41,8 @@ import com.starrocks.connector.iceberg.IcebergRemoteFileDesc;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.credential.CloudConfigurationFactory;
 import com.starrocks.credential.CloudType;
+import com.starrocks.metric.TableMetricsEntity;
+import com.starrocks.metric.TableMetricsRegistry;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
@@ -92,6 +94,8 @@ public class IcebergScanNode extends ScanNode {
     private final List<Integer> deleteColumnSlotIds = new ArrayList<>();
     private final TupleDescriptor equalityDeleteTupleDesc;
 
+    private Table hybridScanTable = null;
+
     public IcebergScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName, TupleDescriptor equalityDeleteTupleDesc) {
         super(id, desc, planNodeName);
         this.icebergTable = (IcebergTable) desc.getTable();
@@ -126,6 +130,10 @@ public class IcebergScanNode extends ScanNode {
 
     public void preProcessIcebergPredicate(ScalarOperator predicate) {
         this.predicate = predicate;
+    }
+
+    public void setHybridScanTable(Table hybridScanTable) {
+        this.hybridScanTable = hybridScanTable;
     }
 
     @Override
@@ -308,6 +316,11 @@ public class IcebergScanNode extends ScanNode {
 
         if (!currentEqualityIds.isEmpty()) {
             icebergTable.setIdentifierFieldIds(ImmutableSet.copyOf(currentEqualityIds));
+        }
+        if (hybridScanTable != null) {
+            TableMetricsEntity entity =
+                     TableMetricsRegistry.getInstance().getMetricsEntity(hybridScanTable.getId());
+            entity.counterColdScanPartitionsTotal.increase((long) partitionKeyToId.size());
         }
 
         scanNodePredicates.setSelectedPartitionIds(partitionKeyToId.values());

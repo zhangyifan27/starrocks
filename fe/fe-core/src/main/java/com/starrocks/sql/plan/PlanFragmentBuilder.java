@@ -1385,6 +1385,10 @@ public class PlanFragmentBuilder {
             icebergScanNode.setScanOptimzeOption(node.getScanOptimzeOption());
             currentExecGroup.add(icebergScanNode, true);
             try {
+                if (node.getHybridScanTable() != null) {
+                    icebergScanNode.setHybridScanTable(node.getHybridScanTable());
+                }
+
                 // set predicate
                 ScalarOperatorToExpr.FormatterContext formatterContext =
                         new ScalarOperatorToExpr.FormatterContext(context.getColRefToExpr());

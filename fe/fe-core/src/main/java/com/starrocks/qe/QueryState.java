@@ -94,6 +94,7 @@ public class QueryState {
     private RequestType requestType = RequestType.UNKNOWN;
     private long affectedRows = 0;
     private int warningRows = 0;
+    private boolean isHotColdQuery = false;
     // make it public for easy to use
     public int serverStatus = 0;
     private boolean isFinished = false;

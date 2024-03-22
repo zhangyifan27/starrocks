@@ -527,6 +527,11 @@ public class OlapTable extends Table {
                 && tableProperty.getDynamicPartitionProperty().isExists();
     }
 
+    public boolean coldTableInfoExists() {
+        return tableProperty != null
+                && tableProperty.getColdTableInfo().size() == PropertyAnalyzer.PROPERTIE_COLD_TABLE_INFO_LENGTH;
+    }
+
     public void setBaseIndexId(long baseIndexId) {
         this.baseIndexId = baseIndexId;
     }
@@ -2671,6 +2676,48 @@ public class OlapTable extends Table {
         tableProperty.buildWriteQuorum();
     }
 
+    public void setColdTableInfo(String coldTableInfo) {
+        if (tableProperty == null) {
+            tableProperty = new TableProperty(new HashMap<>());
+        }
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO, coldTableInfo);
+    }
+
+    public List<String> getColdTableInfo() {
+        if (tableProperty != null) {
+            return tableProperty.getColdTableInfo();
+        }
+        return Collections.emptyList();
+    }
+
+    public void setHotColdColumnMap(String hotColdColumnMap) {
+        if (tableProperty == null) {
+            tableProperty = new TableProperty(new HashMap<>());
+        }
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP, hotColdColumnMap);
+    }
+
+    public Map<String, String> getHotColdColumnMap() {
+        if (tableProperty != null) {
+            return tableProperty.getHotColdColumnMap();
+        }
+        return Collections.emptyMap();
+    }
+
+    public void setColdTablePartitionFormat(String partitionFormat) {
+        if (tableProperty == null) {
+            tableProperty = new TableProperty(new HashMap<>());
+        }
+        tableProperty.modifyTableProperties(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT, partitionFormat);
+    }
+
+    public String getColdTablePartitionFormat() {
+        if (tableProperty != null) {
+            return tableProperty.getColdTablePartitionFormat();
+        }
+        return PropertyAnalyzer.DEFAULT_COLD_TABLE_PARTITION_FORMAT;
+    }
+
     public void setStorageMedium(TStorageMedium storageMedium) {
         if (tableProperty == null) {
             tableProperty = new TableProperty(new HashMap<>());
@@ -3413,6 +3460,24 @@ public class OlapTable extends Table {
         }
 
         Map<String, String> tableProperties = tableProperty != null ? tableProperty.getProperties() : Maps.newLinkedHashMap();
+        // hot cold query info
+        String coldTable = tableProperties.get(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO);
+        if (coldTable != null) {
+            properties.put(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO, coldTable);
+        }
+
+        // hot cold column map info
+        String hotColdColumnMap = tableProperties.get(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP);
+        if (hotColdColumnMap != null) {
+            properties.put(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP, hotColdColumnMap);
+        }
+
+        // cold table partition format
+        String coldTablePartitionFormat = tableProperties.get(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT);
+        if (coldTablePartitionFormat != null) {
+            properties.put(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT, coldTablePartitionFormat);
+        }
+
         // partition live number
         String partitionLiveNumber = tableProperties.get(PropertyAnalyzer.PROPERTIES_PARTITION_LIVE_NUMBER);
         if (partitionLiveNumber != null) {

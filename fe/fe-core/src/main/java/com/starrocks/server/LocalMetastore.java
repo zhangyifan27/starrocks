@@ -115,6 +115,7 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.Status;
 import com.starrocks.common.TimeoutException;
 import com.starrocks.common.UserException;
+import com.starrocks.common.util.DateUtils;
 import com.starrocks.common.util.DynamicPartitionUtil;
 import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.common.util.TimeUtils;
@@ -196,6 +197,7 @@ import com.starrocks.scheduler.TaskManager;
 import com.starrocks.scheduler.TaskRun;
 import com.starrocks.sql.analyzer.AnalyzerUtils;
 import com.starrocks.sql.analyzer.Authorizer;
+import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.AddPartitionClause;
 import com.starrocks.sql.ast.AdminCheckTabletsStmt;
 import com.starrocks.sql.ast.AdminSetPartitionVersionStmt;
@@ -4197,6 +4199,88 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         GlobalStateMgr.getCurrentState().getEditLog().logModifyEnablePersistentIndex(info);
 
     }
+
+    public void modifyColdTableInfoProperty(Database db, OlapTable table, Map<String, String> properties)
+            throws DdlException {
+        // user can remove cold table info by setting an empty string
+        if (properties != null && properties.containsKey(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO) &&
+                properties.get(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO).isEmpty()) {
+            TableProperty tableProperty = table.getTableProperty();
+            if (tableProperty != null) {
+                tableProperty.removeTableProperty(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO);
+            }
+            return;
+        }
+
+        String coldTableInfoStr = PropertyAnalyzer.analyzeColdTableInfo(properties);
+        if (coldTableInfoStr != null) {
+            Preconditions.checkState(
+                    coldTableInfoStr.split("\\.").length == PropertyAnalyzer.PROPERTIE_COLD_TABLE_INFO_LENGTH);
+            // cold table info was removed in analyzeColdTableInfo(), put it back
+            properties.put(PropertyAnalyzer.PROPERTIES_COLD_TABLE_INFO, coldTableInfoStr);
+            TableProperty tableProperty = table.getTableProperty();
+            if (tableProperty == null) {
+                tableProperty = new TableProperty(properties);
+                table.setTableProperty(tableProperty);
+            } else {
+                tableProperty.modifyTableProperties(properties);
+            }
+
+            // log
+            ModifyTablePropertyOperationLog info =
+                    new ModifyTablePropertyOperationLog(db.getId(), table.getId(), properties);
+            GlobalStateMgr.getCurrentState().getEditLog().logModifyTableProperty(info);
+        } else {
+            throw new DdlException("No cold table info found in properties: " + properties);
+        }
+    }
+
+    public void modifyHotColdColumnMapProperty(Database db, OlapTable table, Map<String, String> properties)
+            throws DdlException {
+        String colMapInfo = properties.getOrDefault(PropertyAnalyzer.PROPERTIES_HOT_COLD_COLUMN_MAP, "");
+        if (!colMapInfo.isEmpty() && colMapInfo.matches(PropertyAnalyzer.HOT_COLD_COLUMN_MAP_REGEX)) {
+            TableProperty tableProperty = table.getTableProperty();
+            if (tableProperty == null) {
+                tableProperty = new TableProperty(properties);
+                table.setTableProperty(tableProperty);
+            } else {
+                tableProperty.modifyTableProperties(properties);
+            }
+
+            // log
+            ModifyTablePropertyOperationLog info =
+                    new ModifyTablePropertyOperationLog(db.getId(), table.getId(), properties);
+            GlobalStateMgr.getCurrentState().getEditLog().logModifyTableProperty(info);
+        } else {
+            throw new DdlException("Invalid hot_cold_column_map: " + colMapInfo);
+        }
+    }
+
+    public void modifyColdTablePartitionFormat(Database db, OlapTable table, Map<String, String> properties)
+            throws DdlException {
+        String partitionFormat =
+                properties.getOrDefault(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT, "").toLowerCase();
+        try {
+            DateUtils.probeFormat(partitionFormat);
+            properties.put(PropertyAnalyzer.PROPERTIES_COLD_TABLE_PARTITION_FORMAT, partitionFormat);
+
+            TableProperty tableProperty = table.getTableProperty();
+            if (tableProperty == null) {
+                tableProperty = new TableProperty(properties);
+                table.setTableProperty(tableProperty);
+            } else {
+                tableProperty.modifyTableProperties(properties);
+            }
+
+            // log
+            ModifyTablePropertyOperationLog info =
+                    new ModifyTablePropertyOperationLog(db.getId(), table.getId(), properties);
+            GlobalStateMgr.getCurrentState().getEditLog().logModifyTableProperty(info);
+        } catch (SemanticException e) {
+            throw new DdlException("Invalid cold table partition format: " + partitionFormat);
+        }
+    }
+
 
     public void modifyBinlogMeta(Database db, OlapTable table, BinlogConfig binlogConfig) {
         Locker locker = new Locker();

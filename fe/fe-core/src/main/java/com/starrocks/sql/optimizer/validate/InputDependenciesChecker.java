@@ -14,6 +14,7 @@
 
 package com.starrocks.sql.optimizer.validate;
 
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.common.ErrorType;
 import com.starrocks.sql.common.StarRocksPlannerException;
 import com.starrocks.sql.optimizer.OptExpression;
@@ -206,7 +207,8 @@ public class InputDependenciesChecker implements PlanValidator.Checker {
         }
 
         private void checkInputType(ColumnRefOperator inputCol, ColumnRefOperator outputCol, OptExpression optExpression) {
-            if (!outputCol.getType().isFullyCompatible(inputCol.getType())) {
+            if (!ConnectContext.get().getSessionVariable().isEnableHotColdQuery() &&
+                    !outputCol.getType().isFullyCompatible(inputCol.getType())) {
                 String message = String.format("Invalid plan:%s%s%s Type of output col %s is not fully compatible with " +
                                 "type of input col %s.",
                         System.lineSeparator(), optExpression.debugString(), PREFIX, outputCol, inputCol);

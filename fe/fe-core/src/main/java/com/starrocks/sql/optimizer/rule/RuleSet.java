@@ -114,6 +114,7 @@ import com.starrocks.sql.optimizer.rule.transformation.PruneUnionColumnsRule;
 import com.starrocks.sql.optimizer.rule.transformation.PruneValuesColumnsRule;
 import com.starrocks.sql.optimizer.rule.transformation.PruneWindowColumnsRule;
 import com.starrocks.sql.optimizer.rule.transformation.PushDownAggToMetaScanRule;
+import com.starrocks.sql.optimizer.rule.transformation.PushDownAggToUnionRule;
 import com.starrocks.sql.optimizer.rule.transformation.PushDownApplyAggFilterRule;
 import com.starrocks.sql.optimizer.rule.transformation.PushDownApplyAggProjectFilterRule;
 import com.starrocks.sql.optimizer.rule.transformation.PushDownApplyFilterRule;
@@ -413,6 +414,11 @@ public class RuleSet {
                 AggregateJoinRule.getInstance(),
                 OnlyJoinRule.getInstance(),
                 AggregateJoinPushDownRule.getInstance()
+        ));
+
+        REWRITE_RULES.put(RuleSetType.PUSH_DOWN_AGG_TO_UNION, ImmutableList.of(
+                PushDownAggToUnionRule.HIVE_SCAN,
+                PushDownAggToUnionRule.ICEBERG_SCAN
         ));
 
         REWRITE_RULES.put(RuleSetType.ALL_MV_REWRITE, Stream.concat(

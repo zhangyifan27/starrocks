@@ -832,6 +832,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String TQ_TAUTH_PLATFORM_TOKEN = "tq_tauth_platform_token";
 
+    public static final String ENABLE_HOT_COLD_QUERY = "enable_hot_cold_query";
+
+    public static final String ENABLE_PUSH_DOWN_AGG_TO_UNION = "enable_push_down_agg_to_union";
+
     // --------  tq session variables end --------
 
     @VariableMgr.VarAttr(name = ENABLE_PIPELINE, alias = ENABLE_PIPELINE_ENGINE, show = ENABLE_PIPELINE_ENGINE)
@@ -1375,9 +1379,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_GLOBAL_RUNTIME_FILTER)
     private boolean enableGlobalRuntimeFilter = true;
-
     @VariableMgr.VarAttr(name = ENABLE_TOPN_RUNTIME_FILTER)
     private boolean enableTopNRuntimeFilter = true;
+
+    @VariableMgr.VarAttr(name = ENABLE_HOT_COLD_QUERY)
+    private boolean enableHotColdQuery = false;
+
+    @VariableMgr.VarAttr(name = ENABLE_PUSH_DOWN_AGG_TO_UNION)
+    private boolean enablePushDownAggToUnion = false;
 
     // Parameters to determine the usage of runtime filter
     // Either the build_max or probe_min equal to 0 would force use the filter,
@@ -3411,6 +3420,22 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean isSingleNodeExecPlan() {
         return singleNodeExecPlan;
+    }
+
+    public boolean isEnableHotColdQuery() {
+        return enableHotColdQuery;
+    }
+
+    public void setEnableHotColdQuery(boolean enableHotColdQuery) {
+        this.enableHotColdQuery = enableHotColdQuery;
+    }
+
+    public boolean isEnablePushDownAggToUnion() {
+        return enablePushDownAggToUnion;
+    }
+
+    public void setEnablePushDownAggToUnion(boolean enablePushDownAggToUnion) {
+        this.enablePushDownAggToUnion = enablePushDownAggToUnion;
     }
 
     // -1 (< 0): disable cte, force inline. 0: force cte; other (> 0): compute by costs * ratio

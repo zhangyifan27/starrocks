@@ -316,7 +316,7 @@ public class OptExternalPartitionPruner {
         return partitionValues;
     }
 
-    private static void initPartitionInfo(LogicalScanOperator operator, OptimizerContext context,
+    public static void initPartitionInfo(LogicalScanOperator operator, OptimizerContext context,
             Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
             Map<ColumnRefOperator, Set<Long>> columnToNullPartitions) throws AnalysisException {
         Table table = operator.getTable();
@@ -418,7 +418,7 @@ public class OptExternalPartitionPruner {
                 columnToPartitionValuesMap, columnToNullPartitions);
     }
 
-    private static void classifyConjuncts(LogicalScanOperator operator,
+    public static void classifyConjuncts(LogicalScanOperator operator,
             Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap)
             throws AnalysisException {
         for (ScalarOperator scalarOperator : Utils.extractConjuncts(operator.getPredicate())) {

@@ -901,6 +901,10 @@ public class OperationType {
     @IgnorableOnReplayFailed
     public static final short OP_MODIFY_PRIMARY_INDEX_CACHE_EXPIRE_SEC = 13200;
 
+    // hot cold query
+    @IgnorableOnReplayFailed
+    public static final short OP_MODIFY_TABLE_PROPERTY = 13220;
+
     // alter catalog
     @IgnorableOnReplayFailed
     public static final short OP_ALTER_CATALOG = 13300;

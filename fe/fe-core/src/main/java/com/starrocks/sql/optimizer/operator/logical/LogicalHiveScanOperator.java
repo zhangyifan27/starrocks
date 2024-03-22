@@ -20,6 +20,7 @@ import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.OperatorVisitor;
+import com.starrocks.sql.optimizer.operator.Projection;
 import com.starrocks.sql.optimizer.operator.ScanOperatorPredicates;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
@@ -49,6 +50,23 @@ public class LogicalHiveScanOperator extends LogicalScanOperator {
 
     private LogicalHiveScanOperator() {
         super(OperatorType.LOGICAL_HIVE_SCAN);
+    }
+
+    public LogicalHiveScanOperator(Table table,
+                                   Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
+                                   Map<Column, ColumnRefOperator> columnMetaToColRefMap,
+                                   long limit,
+                                   ScalarOperator predicate, Projection projection) {
+        super(OperatorType.LOGICAL_HIVE_SCAN,
+                table,
+                colRefToColumnMetaMap,
+                columnMetaToColRefMap,
+                limit,
+                predicate, projection);
+
+        Preconditions.checkState(table instanceof HiveTable);
+        HiveTable hiveTable = (HiveTable) table;
+        partitionColumns.addAll(hiveTable.getPartitionColumnNames());
     }
 
     @Override

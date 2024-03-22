@@ -20,6 +20,7 @@ import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.OperatorVisitor;
+import com.starrocks.sql.optimizer.operator.Projection;
 import com.starrocks.sql.optimizer.operator.ScanOperatorPredicates;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
@@ -31,6 +32,7 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
     private ScanOperatorPredicates predicates = new ScanOperatorPredicates();
 
     private boolean hasUnknownColumn = true;
+    private Table hybridScanTable = null;
 
     public LogicalIcebergScanOperator(Table table,
                                       Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
@@ -51,6 +53,22 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
 
     private LogicalIcebergScanOperator() {
         super(OperatorType.LOGICAL_ICEBERG_SCAN);
+    }
+
+    public LogicalIcebergScanOperator(Table table,
+                                      Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
+                                      Map<Column, ColumnRefOperator> columnMetaToColRefMap,
+                                      long limit,
+                                      ScalarOperator predicate,
+                                      Projection projection) {
+        super(OperatorType.LOGICAL_ICEBERG_SCAN,
+                table,
+                colRefToColumnMetaMap,
+                columnMetaToColRefMap,
+                limit,
+                predicate, projection);
+
+        Preconditions.checkState(table instanceof IcebergTable);
     }
 
     @Override
@@ -76,6 +94,14 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
 
     public void setHasUnknownColumn(boolean hasUnknownColumn) {
         this.hasUnknownColumn = hasUnknownColumn;
+    }
+
+    public void setHybridScanTable(Table hybridScanTable) {
+        this.hybridScanTable = hybridScanTable;
+    }
+
+    public Table getHybridScanTable() {
+        return hybridScanTable;
     }
 
     @Override
