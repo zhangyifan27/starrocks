@@ -612,7 +612,7 @@ public class JournalEntity implements Writable {
                 break;
             }
             case OperationType.OP_CREATE_STREAM_LOAD_TASK_V2: {
-                data = GsonUtils.GSON.fromJson(Text.readString(in), StreamLoadTask.class);
+                data = StreamLoadTask.readV2(in);
                 break;
             }
             case OperationType.OP_CREATE_LOAD_JOB: {

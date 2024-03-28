@@ -1497,6 +1497,13 @@ public class StreamLoadTask extends AbstractTxnStateChangeCallback
         return task;
     }
 
+    public static StreamLoadTask readV2(DataInput in) throws IOException {
+        String json = Text.readString(in);
+        StreamLoadTask task = GsonUtils.GSON.fromJson(json, StreamLoadTask.class);
+        task.init();
+        return task;
+    }
+
     @Override
     public void gsonPostProcess() throws IOException {
         loadId = new TUniqueId(loadIdHi, loadIdLo);
