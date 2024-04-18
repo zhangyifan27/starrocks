@@ -1548,7 +1548,9 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
             row.add(customPropertiesJsonToString());
             row.add(getStatistic());
             row.add(getProgress().toJsonString());
-            row.add(getTimestampProgress().toJsonString());
+            if (getTimestampProgress() != null) {
+                row.add(getTimestampProgress().toJsonString());
+            }
             switch (state) {
                 case PAUSED:
                     row.add(pauseReason == null ? "" : pauseReason.toString());
@@ -1846,6 +1848,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
             }
             case PULSAR: {
                 progress = new PulsarProgress();
+                timestampProgress = new PulsarProgress();
                 progress.readFields(in);
                 break;
             }
