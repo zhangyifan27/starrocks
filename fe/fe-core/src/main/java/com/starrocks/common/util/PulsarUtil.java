@@ -20,6 +20,7 @@ import com.google.common.collect.Maps;
 import com.starrocks.common.Config;
 import com.starrocks.common.LoadException;
 import com.starrocks.common.UserException;
+import com.starrocks.metric.MetricRepo;
 import com.starrocks.proto.PPulsarBacklogProxyRequest;
 import com.starrocks.proto.PPulsarLoadInfo;
 import com.starrocks.proto.PPulsarMetaProxyRequest;
@@ -93,7 +94,9 @@ public class PulsarUtil {
             PPulsarProxyRequest request = new PPulsarProxyRequest();
             request.pulsarMetaRequest = metaRequest;
 
+            long startTime = System.currentTimeMillis();
             PPulsarProxyResult result = sendProxyRequest(request);
+            MetricRepo.HISTO_PULSAR_GET_PARTITIONS_LATENCY.update(System.currentTimeMillis() - startTime);
             return result.pulsarMetaResult.partitions;
         }
 
@@ -109,7 +112,9 @@ public class PulsarUtil {
             request.pulsarPositionRequest = positionRequest;
 
             // send request
+            long startTime = System.currentTimeMillis();
             PPulsarProxyResult result = sendProxyRequest(request);
+            MetricRepo.HISTO_PULSAR_GET_POSITIONS_LATENCY.update(System.currentTimeMillis() - startTime);
 
             // assembly result
             Map<String, byte[]> partitionPositions = Maps.newHashMapWithExpectedSize(partitions.size());

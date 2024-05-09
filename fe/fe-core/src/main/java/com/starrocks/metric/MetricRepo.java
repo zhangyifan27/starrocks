@@ -205,9 +205,16 @@ public final class MetricRepo {
     public static Histogram HISTO_KAFKA_GET_PARTITIONS_LATENCY;
     public static Histogram HISTO_KAFKA_GET_OFFSETS_LATENCY;
     public static Histogram HISTO_KAFKA_GET_BATCH_OFFSETS_LATENCY;
+    public static Histogram HISTO_PULSAR_GET_PARTITIONS_LATENCY;
+    public static Histogram HISTO_PULSAR_GET_POSITIONS_LATENCY;
     public static Histogram HISTO_ROUTINE_LOAD_TASK_SCHEDULE_LATENCY_MS;
     public static Histogram HISTO_ROUTINE_LOAD_TASK_PRECHECK_LATENCY_MS;
     public static Histogram HISTO_ROUTINE_LOAD_TASK_SUBMIT_LATENCY_MS;
+    public static Histogram HISTO_ROUTINE_LOAD_TASK_ALLOCATE_BE_LATENCY_MS;
+    public static Histogram HISTO_ROUTINE_LOAD_TASK_CHECK_IN_JOB_LATENCY_MS;
+    public static Histogram HISTO_ROUTINE_LOAD_TASK_CHECK_READY_LATENCY_MS;
+    public static Histogram HISTO_ROUTINE_LOAD_TASK_BEGIN_TXN_LATENCY_MS;
+    public static Histogram HISTO_ROUTINE_LOAD_TASK_CREATE_LATENCY_MS;
 
     public static Histogram HISTO_INSERT_LATENCY;
 
@@ -728,6 +735,10 @@ public final class MetricRepo {
                 METRIC_REGISTER.histogram(MetricRegistry.name("kafka", "get", "offsets", "latency", "ms"));
         HISTO_KAFKA_GET_BATCH_OFFSETS_LATENCY =
                 METRIC_REGISTER.histogram(MetricRegistry.name("kafka", "get", "batch", "offsets", "latency", "ms"));
+        HISTO_PULSAR_GET_PARTITIONS_LATENCY =
+                METRIC_REGISTER.histogram(MetricRegistry.name("pulsar", "get", "partitions", "latency", "ms"));
+        HISTO_PULSAR_GET_POSITIONS_LATENCY =
+                METRIC_REGISTER.histogram(MetricRegistry.name("pulsar", "get", "positions", "latency", "ms"));
 
         HISTO_ROUTINE_LOAD_TASK_SCHEDULE_LATENCY_MS =
                 METRIC_REGISTER.histogram(MetricRegistry.name("routine", "load", "task", "schedule", "latency", "ms"));
@@ -735,6 +746,17 @@ public final class MetricRepo {
                 METRIC_REGISTER.histogram(MetricRegistry.name("routine", "load", "task", "precheck", "latency", "ms"));
         HISTO_ROUTINE_LOAD_TASK_SUBMIT_LATENCY_MS =
                 METRIC_REGISTER.histogram(MetricRegistry.name("routine", "load", "task", "submit", "latency", "ms"));
+        HISTO_ROUTINE_LOAD_TASK_ALLOCATE_BE_LATENCY_MS =
+                METRIC_REGISTER.histogram(
+                        MetricRegistry.name("routine", "load", "task", "allocate", "be", "latency", "ms"));
+        HISTO_ROUTINE_LOAD_TASK_CHECK_IN_JOB_LATENCY_MS = METRIC_REGISTER.histogram(
+                MetricRegistry.name("routine", "load", "task", "check", "check", "in", "job", "latency", "ms"));
+        HISTO_ROUTINE_LOAD_TASK_BEGIN_TXN_LATENCY_MS = METRIC_REGISTER.histogram(
+                MetricRegistry.name("routine", "load", "task", "begin", "txn", "latency", "ms"));
+        HISTO_ROUTINE_LOAD_TASK_CREATE_LATENCY_MS =
+                METRIC_REGISTER.histogram(MetricRegistry.name("routine", "load", "task", "create", "latency", "ms"));
+        HISTO_ROUTINE_LOAD_TASK_CHECK_READY_LATENCY_MS = METRIC_REGISTER.histogram(
+                MetricRegistry.name("routine", "load", "task", "check", "ready", "latency", "ms"));
 
         // init system metrics
         initSystemMetrics();
@@ -980,7 +1002,7 @@ public final class MetricRepo {
                 .filter(job -> (!job.getTimeConsumeLags().isEmpty()))
                 .collect(Collectors.toList());
 
-        if (targetJobs.size() <= 0) {
+        if (targetJobs.isEmpty()) {
             return;
         }
 

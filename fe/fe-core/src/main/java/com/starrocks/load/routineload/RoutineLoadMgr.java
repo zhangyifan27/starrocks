@@ -53,6 +53,7 @@ import com.starrocks.common.util.LogBuilder;
 import com.starrocks.common.util.LogKey;
 import com.starrocks.load.RoutineLoadDesc;
 import com.starrocks.memory.MemoryTrackable;
+import com.starrocks.metric.MetricRepo;
 import com.starrocks.persist.AlterRoutineLoadJobOperationLog;
 import com.starrocks.persist.ImageWriter;
 import com.starrocks.persist.RoutineLoadOperation;
@@ -587,6 +588,7 @@ public class RoutineLoadMgr implements Writable, MemoryTrackable {
     }
 
     public boolean checkTaskInJob(long jobId, UUID taskId) {
+        long startTime = System.currentTimeMillis();
         readLock();
         try {
             if (!idToRoutineLoadJob.containsKey(jobId)) {
@@ -595,6 +597,7 @@ public class RoutineLoadMgr implements Writable, MemoryTrackable {
             return idToRoutineLoadJob.get(jobId).containsTask(taskId);
         } finally {
             readUnlock();
+            MetricRepo.HISTO_ROUTINE_LOAD_TASK_CHECK_IN_JOB_LATENCY_MS.update(System.currentTimeMillis() - startTime);
         }
     }
 

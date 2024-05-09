@@ -48,6 +48,7 @@ import com.starrocks.common.LoadException;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.UserException;
 import com.starrocks.common.jmockit.Deencapsulation;
+import com.starrocks.metric.MetricRepo;
 import com.starrocks.persist.EditLog;
 import com.starrocks.persist.RoutineLoadOperation;
 import com.starrocks.persist.metablock.SRMetaBlockReader;
@@ -79,8 +80,10 @@ import mockit.Mocked;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.After;
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -101,6 +104,15 @@ public class RoutineLoadManagerTest {
 
     @Mocked
     private SystemInfoService systemInfoService;
+
+    @BeforeClass
+    public static void beforeClass() throws Exception {
+        MetricRepo.init();
+    }
+
+    @AfterClass
+    public static void teardown() throws Exception {
+    }
 
     @Before
     public void setUp() {

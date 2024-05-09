@@ -248,6 +248,11 @@ public class KafkaTaskInfo extends RoutineLoadTaskInfo {
         return latestPartOffset;
     }
 
+    @Override
+    public String toString() {
+        return "Task id: " + getId() + "[" + Joiner.on("|").withKeyValueSeparator("_").join(partitionIdToOffset) + "]";
+    }
+
     private TExecPlanFragmentParams plan(RoutineLoadJob routineLoadJob) throws UserException {
         TUniqueId loadId = new TUniqueId(id.getMostSignificantBits(), id.getLeastSignificantBits());
         // plan for each task, in case table has change(rollup or schema change)

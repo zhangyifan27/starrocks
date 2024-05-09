@@ -99,7 +99,7 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
             }
             if (initialPositions.get(partition).compareTo(MessageId.latest) == 0) {
                 initialPositions.put(partition, latestPosition);
-            } else if (initialPositions.get(partition).compareTo(latestPosition) == -1) {
+            } else if (initialPositions.get(partition).compareTo(latestPosition) < 0) {
                 ready = true;
                 latestPartPositions.put(partition, latestPosition);
             }
@@ -121,7 +121,7 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
             MessageId latestPosition = entry.getValue();
             MessageId consumedPosition = pProgress.getInitialPositionByPartition(part);
             if (consumedPosition != null) {
-                if (consumedPosition.compareTo(latestPosition) == -1) {
+                if (consumedPosition.compareTo(latestPosition) < 0) {
                     return false;
                 }
             }

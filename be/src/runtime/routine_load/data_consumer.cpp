@@ -378,35 +378,16 @@ Status KafkaDataConsumer::get_partition_offset(std::vector<int32_t>* partition_i
         if (left_ms <= 0) {
             return Status::TimedOut("get kafka partition offset timeout");
         }
-        // query_watermark_offsets() get offsets from local cache by default,
-        // but the cache might be expired when new partitions added, which will return ERR__UNKNOWN_PARTITION,
-        // add retry mechanism here to avoid the glitch.
-        int i = 0;
-        while (true) {
-            RdKafka::ErrorCode err =
-                    _k_consumer->query_watermark_offsets(_topic, p_id, &beginning_offset, &latest_offset, left_ms);
-            if (err != RdKafka::ERR_NO_ERROR) {
-                // add 200ms per iteration(200ms, 400ms, 600ms, 800ms)
-                // the interval between 1st and 4th retry will be longer than 2s. Enough for retry mechanism.
-                if (err == RdKafka::ERR__UNKNOWN_PARTITION && i < 4) {
-                    int sleep_time_ms = (i + 1) * 200;
-                    LOG(WARNING) << "failed to query watermark offset of topic: " << _topic << " partition: " << p_id
-                                 << ", err: " << RdKafka::err2str(err) << ". will sleep " << sleep_time_ms
-                                 << "(ms) and retry.";
-                    SleepFor(MonoDelta::FromMilliseconds(sleep_time_ms));
-                    i++;
-                } else {
-                    LOG(WARNING) << "failed to get offset of partition: " << p_id << " in topic: " << _topic
-                                 << ", err: " << RdKafka::err2str(err);
-                    return Status::InternalError(fmt::format("failed to get offset of partition: {} in topic: {}, err: {}, {}",
-                                                             p_id, _topic, RdKafka::err2str(err), _k_event_cb.get_error_msg()));
-                }
-            } else {
-                beginning_offsets->push_back(beginning_offset);
-                latest_offsets->push_back(latest_offset);
-                break;
-            }
+        RdKafka::ErrorCode err =
+                _k_consumer->query_watermark_offsets(_topic, p_id, &beginning_offset, &latest_offset, left_ms);
+        if (err != RdKafka::ERR_NO_ERROR) {
+            LOG(WARNING) << "failed to get offset of partition: " << p_id << " in topic: " << _topic
+                         << ", err: " << RdKafka::err2str(err);
+            return Status::InternalError(fmt::format("failed to get offset of partition: {} in topic: {}, err: {}, {}",
+                                                     p_id, _topic, RdKafka::err2str(err), _k_event_cb.get_error_msg()));
         }
+        beginning_offsets->push_back(beginning_offset);
+        latest_offsets->push_back(latest_offset);
     }
 
     return Status::OK();
@@ -434,6 +415,7 @@ Status KafkaDataConsumer::get_partition_meta(std::vector<int32_t>* partition_ids
 
     // get topic metadata
     RdKafka::Metadata* metadata = nullptr;
+    int64_t start_time = UnixMillis();
     RdKafka::ErrorCode err = _k_consumer->metadata(false /* all_topics */, topic, &metadata, timeout);
     if (err != RdKafka::ERR_NO_ERROR) {
         if (_k_event_cb.get_error_msg().empty()) {
@@ -446,6 +428,7 @@ Status KafkaDataConsumer::get_partition_meta(std::vector<int32_t>* partition_ids
         LOG(WARNING) << ss.str();
         return Status::InternalError(ss.str());
     }
+    StarRocksMetrics::instance()->get_kafka_partition_meta_cost_time_ms.set_value(UnixMillis() - start_time);
     auto meta_deleter = [metadata]() { delete metadata; };
     DeferOp delete_meta([meta_deleter] { return meta_deleter(); });
 
@@ -621,6 +604,7 @@ Status PulsarDataConsumer::assign_partition(StreamLoadContext* ctx,
 
     pulsar::Result result;
     pulsar::ReaderConfiguration config;
+    config.setReceiverQueueSize(config::routine_load_pulsar_reader_receiver_queue_size);
     if (!_subscription.empty()) {
         config.setSubscriptionRolePrefix(_subscription);
     }
@@ -733,23 +717,27 @@ const std::string& PulsarDataConsumer::get_partition() {
 
 Status PulsarDataConsumer::get_last_message_id(pulsar::MessageId& msg_id) {
     _last_visit_time = time(nullptr);
+    int64_t start_time = UnixMillis();
     pulsar::Result result = _p_reader.getLastMessageId(msg_id);
     if (result != pulsar::ResultOk) {
         LOG(WARNING) << "Failed to get broker consumer stats: "
                      << ", err: " << result;
         return Status::InternalError("Failed to get broker consumer stats: " + std::string(pulsar::strResult(result)));
     }
+    StarRocksMetrics::instance()->get_pulsar_last_message_id_cost_time_ms.set_value(UnixMillis() - start_time);
 
     return Status::OK();
 }
 
 Status PulsarDataConsumer::get_topic_partition(std::vector<std::string>* partitions) {
     _last_visit_time = time(nullptr);
+    int64_t start_time = UnixMillis();
     pulsar::Result result = _p_client->getPartitionsForTopic(_topic, *partitions);
     if (result != pulsar::ResultOk) {
         LOG(WARNING) << "Failed to get partitions for topic: " << _topic << ", err: " << result;
         return Status::InternalError("Failed to get partitions for topic: " + std::string(pulsar::strResult(result)));
     }
+    StarRocksMetrics::instance()->get_pulsar_partitions_cost_time_ms.set_value(UnixMillis() - start_time);
 
     return Status::OK();
 }

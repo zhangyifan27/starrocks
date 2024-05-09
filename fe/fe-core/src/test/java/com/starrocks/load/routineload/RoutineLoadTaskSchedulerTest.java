@@ -40,6 +40,7 @@ import com.starrocks.common.Config;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.UserException;
 import com.starrocks.common.jmockit.Deencapsulation;
+import com.starrocks.metric.MetricRepo;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.thrift.TRoutineLoadTask;
 import mockit.Expectations;
@@ -47,7 +48,9 @@ import mockit.Injectable;
 import mockit.Mock;
 import mockit.MockUp;
 import mockit.Mocked;
+import org.junit.AfterClass;
 import org.junit.Assert;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.Map;
@@ -60,6 +63,15 @@ public class RoutineLoadTaskSchedulerTest {
     private RoutineLoadMgr routineLoadManager;
     @Mocked
     private GlobalStateMgr globalStateMgr;
+
+    @BeforeClass
+    public static void beforeClass() throws Exception {
+        MetricRepo.init();
+    }
+
+    @AfterClass
+    public static void teardown() throws Exception {
+    }
 
     @Test
     public void testRunOneCycle(@Injectable KafkaRoutineLoadJob kafkaRoutineLoadJob1,

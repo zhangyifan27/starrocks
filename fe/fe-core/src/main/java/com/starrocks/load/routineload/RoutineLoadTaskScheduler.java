@@ -200,6 +200,7 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
             return;
         }
 
+        long checkTaskReadyStartTime = System.currentTimeMillis();
         try {
             // for kafka/pulsar routine load, readyToExecute means there is new data in kafka/pulsar stream
             if (!routineLoadTaskInfo.readyToExecute()) {
@@ -225,6 +226,9 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
             LOG.warn("failed to check task ready to execute", e);
             delayPutToQueue(routineLoadTaskInfo, "failed to check task ready to execute, err: " + e.getMessage());
             return;
+        } finally {
+            MetricRepo.HISTO_ROUTINE_LOAD_TASK_CHECK_READY_LATENCY_MS.update(
+                    System.currentTimeMillis() - checkTaskReadyStartTime);
         }
 
         // allocate BE slot for this task.
@@ -266,6 +270,7 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
         }
 
         // create thrift object
+        long createTaskStartTime = System.currentTimeMillis();
         TRoutineLoadTask tRoutineLoadTask = null;
         try {
             long startTime = System.currentTimeMillis();
@@ -288,6 +293,8 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
                             false);
             throw e;
         }
+        long createTaskCostTime = System.currentTimeMillis() - createTaskStartTime;
+        MetricRepo.HISTO_ROUTINE_LOAD_TASK_CREATE_LATENCY_MS.update(createTaskCostTime);
 
         long submitStartTime = System.currentTimeMillis();
         long preCheckCostTime = submitStartTime - lastScheduledTime;
@@ -398,6 +405,7 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
     // return true if allocate successfully. return false if failed.
     // throw exception if unrecoverable errors happen.
     private boolean allocateTaskToBe(RoutineLoadTaskInfo routineLoadTaskInfo) {
+        long startTime = System.currentTimeMillis();
         if (routineLoadTaskInfo.getPreviousBeId() != -1L) {
             if (routineLoadManager.takeNodeById(routineLoadTaskInfo.getWarehouseId(),
                     routineLoadTaskInfo.getJobId(), routineLoadTaskInfo.getPreviousBeId()) != -1L) {
@@ -409,6 +417,8 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
                             .build());
                 }
                 routineLoadTaskInfo.setBeId(routineLoadTaskInfo.getPreviousBeId());
+                MetricRepo.HISTO_ROUTINE_LOAD_TASK_ALLOCATE_BE_LATENCY_MS.update(
+                        System.currentTimeMillis() - startTime);
                 return true;
             }
         }
@@ -427,6 +437,7 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
                     .add("msg", "task has been allocated to be")
                     .build());
         }
+        MetricRepo.HISTO_ROUTINE_LOAD_TASK_ALLOCATE_BE_LATENCY_MS.update(System.currentTimeMillis() - startTime);
         return true;
     }
 }

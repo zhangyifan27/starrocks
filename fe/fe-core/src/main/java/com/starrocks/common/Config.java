@@ -1791,6 +1791,36 @@ public class Config extends ConfigBase {
     public static long routine_load_pulsar_timeout_second = 12;
 
     /**
+     * check pulsar token format
+     */
+    @ConfField(mutable = true)
+    public static boolean routine_load_check_pulsar_token_format = false;
+
+    /**
+     * iceberg routine load job check split interval
+     */
+    @ConfField(mutable = true)
+    public static long routine_load_iceberg_split_check_interval_second = 10;
+
+    /**
+     * the max concurrent routine load task num of a single iceberg routine load job per be
+     */
+    @ConfField(mutable = true)
+    public static int max_iceberg_routine_load_task_num_per_be_per_job = 4;
+
+    /**
+     * the max concurrent routine load task num of a single iceberg routine load job
+     */
+    @ConfField(mutable = true)
+    public static int max_iceberg_routine_load_task_concurrent_num = 20;
+
+    /**
+     * the max iceberg routine load renew task schedule delay round
+     */
+    @ConfField(mutable = true)
+    public static int max_iceberg_routine_load_renew_task_schedule_delay_round = 6;
+
+    /**
      * it can't auto-resume routine load job as long as one of the backends is down
      */
     @ConfField(mutable = true)

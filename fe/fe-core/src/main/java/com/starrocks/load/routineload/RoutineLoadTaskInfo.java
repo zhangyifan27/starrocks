@@ -257,6 +257,7 @@ public abstract class RoutineLoadTaskInfo {
     // throw exception if unrecoverable errors happen.
     public void beginTxn() throws Exception {
         // begin a txn for task
+        long startTime = System.currentTimeMillis();
         MetricRepo.COUNTER_LOAD_ADD.increase(1L);
 
         //  label = job_name+job_id+task_id
@@ -267,6 +268,7 @@ public abstract class RoutineLoadTaskInfo {
                 new TxnCoordinator(TxnSourceType.FE, FrontendOptions.getLocalHostAddress()),
                 TransactionState.LoadJobSourceType.ROUTINE_LOAD_TASK, job.getId(),
                 timeoutMs / 1000, warehouseId);
+        MetricRepo.HISTO_ROUTINE_LOAD_TASK_BEGIN_TXN_LATENCY_MS.update(System.currentTimeMillis() - startTime);
     }
 
     public void afterCommitted(TransactionState txnState, boolean txnOperated) throws UserException {
@@ -360,5 +362,10 @@ public abstract class RoutineLoadTaskInfo {
         } else {
             return false;
         }
+    }
+
+    @Override
+    public String toString() {
+        return "Task id: " + getId();
     }
 }

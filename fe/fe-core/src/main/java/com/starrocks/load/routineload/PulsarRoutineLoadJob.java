@@ -15,6 +15,9 @@
 
 package com.starrocks.load.routineload;
 
+import com.auth0.jwt.JWT;
+import com.auth0.jwt.exceptions.JWTDecodeException;
+import com.auth0.jwt.interfaces.DecodedJWT;
 import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
@@ -141,10 +144,6 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
     }
 
     private void startConsumers() {
-        if (subscription.isEmpty()) {
-            return;
-        }
-
         clearConsumers();
         try {
             ClientBuilder builder = PulsarClient.builder().serviceUrl(serviceUrl);
@@ -172,10 +171,6 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
     }
 
     private void clearConsumers() {
-        if (subscription.isEmpty()) {
-            return;
-        }
-
         pulsarConsumers.entrySet().forEach(entry -> {
             try {
                 entry.getValue().close();
@@ -270,6 +265,30 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
 
         if (convertedCustomProperties.containsKey(CreateRoutineLoadStmt.PULSAR_AUTH_TOKEN)) {
             this.authToken = convertedCustomProperties.get(CreateRoutineLoadStmt.PULSAR_AUTH_TOKEN);
+
+            if (Config.routine_load_check_pulsar_token_format) {
+                DecodedJWT decodedJWT;
+                try {
+                    decodedJWT = JWT.decode(authToken);
+                } catch (JWTDecodeException e) {
+                    throw new DdlException("Pulsar auth token should be a valid JWT token");
+                }
+                String subject = decodedJWT.getSubject();
+                if (subject == null) {
+                    throw new DdlException("Can't parse subject info from auth token");
+                }
+                String[] subscriptionInfos = subscription.split("-");
+                if (subscriptionInfos.length < 2) {
+                    throw new DdlException(
+                            "Invalid pulsar subscription format, it should be like {role}-{subscription_name}");
+                }
+                if (!subject.equals(subscriptionInfos[0])) {
+                    throw new DdlException(
+                            "The subject info from token: " + subject + " does not match the subscription prefix: " +
+                                    subscriptionInfos[0]);
+                }
+            }
+
         }
     }
 
@@ -393,7 +412,7 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
         this.progress.update(attachment.getProgress());
         this.timestampProgress.update(attachment.getTimestampProgress());
 
-        if (!subscription.isEmpty()) {
+        {
             // Pulsar reader can't subscribe user defined subscription, so here ack this subscription to update progress.
             Map<String, MessageId> ackPositions =
                     ((PulsarProgress) attachment.getProgress()).getPartitionToInitialPosition();
@@ -703,11 +722,7 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
 
         // modify subscription
         if (!pulsarSubscription.isEmpty()) {
-            if (pulsarSubscription.equals("empty")) {
-                subscription = "";
-            } else {
-                subscription = pulsarSubscription;
-            }
+            subscription = pulsarSubscription;
         }
 
         // modify partition positions

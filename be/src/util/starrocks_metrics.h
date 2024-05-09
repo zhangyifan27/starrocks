@@ -290,6 +290,10 @@ public:
     METRIC_DEFINE_INT_GAUGE(assign_failed_kafka_consumer_num, MetricUnit::NOUNIT);
     METRIC_DEFINE_INT_GAUGE(assign_failed_pulsar_consumer_num, MetricUnit::NOUNIT);
     METRIC_DEFINE_INT_GAUGE(assign_failed_tube_consumer_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(get_kafka_partition_meta_cost_time_ms, MetricUnit::MILLISECONDS);
+    METRIC_DEFINE_INT_GAUGE(get_kafka_watermark_offsets_cost_time_ms, MetricUnit::MILLISECONDS);
+    METRIC_DEFINE_INT_GAUGE(get_pulsar_partitions_cost_time_ms, MetricUnit::MILLISECONDS);
+    METRIC_DEFINE_INT_GAUGE(get_pulsar_last_message_id_cost_time_ms, MetricUnit::MILLISECONDS);
 
     IntGaugeMetricsMap disks_total_capacity;
     IntGaugeMetricsMap disks_avail_capacity;

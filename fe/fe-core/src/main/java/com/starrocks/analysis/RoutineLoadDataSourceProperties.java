@@ -34,6 +34,7 @@
 
 package com.starrocks.analysis;
 
+import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -210,10 +211,8 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
         CreateRoutineLoadStmt.analyzePulsarCustomProperties(properties, customPulsarProperties);
 
         // check subscription
-        final String subscription = properties.get(CreateRoutineLoadStmt.PULSAR_SUBSCRIPTION_PROPERTY);
-        if (subscription != null) {
-            pulsarSubscription = subscription;
-        }
+        pulsarSubscription = Strings.nullToEmpty(properties.get(CreateRoutineLoadStmt.PULSAR_SUBSCRIPTION_PROPERTY))
+                .replaceAll(" ", "");
 
         // check partitions
         final String pulsarPartitionsString = properties.get(CreateRoutineLoadStmt.PULSAR_PARTITIONS_PROPERTY);
@@ -249,9 +248,7 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
             sb.append(", kafka partition offsets: ").append(kafkaPartitionOffsets);
             sb.append(", custom properties: ").append(customKafkaProperties);
         } else if (type.equals("PULSAR")) {
-            if (!pulsarSubscription.isEmpty()) {
-                sb.append(", pulsar subscription: ").append(pulsarSubscription);
-            }
+            sb.append(", pulsar subscription: ").append(pulsarSubscription);
             if (!pulsarPartitionInitialPositions.isEmpty()) {
                 sb.append(", pulsar partition initial positions: ").append(pulsarPartitionInitialPositions);
             }
