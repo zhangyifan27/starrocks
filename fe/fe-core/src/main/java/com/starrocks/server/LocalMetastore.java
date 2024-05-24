@@ -1129,7 +1129,8 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         if (partitionLen == 1) {
             Partition partition = partitionList.get(0);
             if (existPartitionNameSet.contains(partition.getName())) {
-                LOG.info("add partition[{}] which already exists", partition.getName());
+                LOG.info("add partition[{}] which already exists in table {}.{}", partition.getName(), db.getFullName(),
+                        olapTable.getName());
                 return;
             }
             PartitionPersistInfoV2 info = new RangePartitionPersistInfo(db.getId(), olapTable.getId(), partition,
@@ -1142,8 +1143,8 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
             AddPartitionsInfoV2 infos = new AddPartitionsInfoV2(partitionInfoV2List);
             GlobalStateMgr.getCurrentState().getEditLog().logAddPartitions(infos);
 
-            LOG.info("succeed in creating partition[{}], name: {}, temp: {}", partition.getId(),
-                    partition.getName(), isTempPartition);
+            LOG.info("succeed in creating partition[{}], name: {}, temp: {}, for table {}.{}", partition.getId(),
+                    partition.getName(), isTempPartition, db.getFullName(), olapTable.getName());
         } else {
             for (int i = 0; i < partitionLen; i++) {
                 Partition partition = partitionList.get(i);
@@ -1163,8 +1164,9 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
             GlobalStateMgr.getCurrentState().getEditLog().logAddPartitions(infos);
 
             for (PartitionPersistInfoV2 infoV2 : partitionInfoV2List) {
-                LOG.info("succeed in creating partition[{}], name: {}, temp: {}", infoV2.getPartition().getId(),
-                        infoV2.getPartition().getName(), isTempPartition);
+                LOG.info("succeed in creating partitions[{}], name: {}, temp: {}, for table {}.{}",
+                        infoV2.getPartition().getId(), infoV2.getPartition().getName(), isTempPartition,
+                        db.getFullName(), olapTable.getName());
             }
         }
     }
@@ -1184,7 +1186,8 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         int i = 0;
         for (Partition partition : partitionList) {
             if (existPartitionNameSet.contains(partition.getName())) {
-                LOG.info("add partition[{}] which already exists", partition.getName());
+                LOG.info("add partition[{}] which already exists in table {}.{}", partition.getName(), db.getFullName(),
+                        olapTable.getName());
                 continue;
             }
             long partitionId = partition.getId();
@@ -1197,8 +1200,8 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
                     ((ListPartitionInfo) partitionInfo).getIdToMultiValues().get(partitionId),
                     partitionDescs.get(i).getDataCacheInfo());
             GlobalStateMgr.getCurrentState().getEditLog().logAddPartition(info);
-            LOG.info("succeed in creating list partition[{}], name: {}, temp: {}", partitionId,
-                    partition.getName(), isTempPartition);
+            LOG.info("succeed in creating list partition[{}], name: {}, temp: {}, for table {}.{}", partitionId,
+                    partition.getName(), isTempPartition, db.getFullName(), olapTable.getName());
             i++;
         }
     }
@@ -1325,7 +1328,8 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
                         partitionDescs);
                 if (existPartitionNameSet.size() > 0) {
                     for (String partitionName : existPartitionNameSet) {
-                        LOG.info("add partition[{}] which already exists", partitionName);
+                        LOG.info("add partition[{}] which already exists in table {}.{}", partitionName,
+                                db.getFullName(), olapTable.getName());
                     }
                 }
 
@@ -1480,7 +1484,8 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
 
         if (!olapTable.checkPartitionNameExist(partitionName, isTempPartition)) {
             if (clause.isSetIfExists()) {
-                LOG.info("drop partition[{}] which does not exist", partitionName);
+                LOG.info("drop partition[{}] which does not exist in table {}.{}", partitionName, db.getFullName(),
+                        olapTable.getName());
                 return;
             } else {
                 ErrorReport.reportDdlException(ErrorCode.ERR_DROP_PARTITION_NON_EXISTENT, partitionName);
@@ -1541,8 +1546,8 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
                 clause.isForceDrop());
         GlobalStateMgr.getCurrentState().getEditLog().logDropPartition(info);
 
-        LOG.info("succeed in droping partition[{}], is temp : {}, is force : {}", partitionName, isTempPartition,
-                clause.isForceDrop());
+        LOG.info("succeed in dropping partition[{}], is temp : {}, is force : {}, from table {}.{}", partitionName,
+                isTempPartition, clause.isForceDrop(), db.getFullName(), olapTable.getName());
     }
 
     public void replayDropPartition(DropPartitionInfo info) {
@@ -3788,7 +3793,8 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         TableInfo tableInfo = TableInfo.createForPartitionRename(db.getId(), olapTable.getId(), partition.getId(),
                 newPartitionName);
         GlobalStateMgr.getCurrentState().getEditLog().logPartitionRename(tableInfo);
-        LOG.info("rename partition[{}] to {}", partitionName, newPartitionName);
+        LOG.info("rename partition[{}] to {} for table {}.{}", partitionName, newPartitionName, db.getFullName(),
+                olapTable.getName());
     }
 
     public void replayRenamePartition(TableInfo tableInfo) {
@@ -3804,7 +3810,8 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
             OlapTable table = (OlapTable) db.getTable(tableId);
             Partition partition = table.getPartition(partitionId);
             table.renamePartition(partition.getName(), newPartitionName);
-            LOG.info("replay rename partition[{}] to {}", partition.getName(), newPartitionName);
+            LOG.info("replay rename partition[{}] to {} for table {}.{}", partition.getName(), newPartitionName,
+                    db.getFullName(), table.getName());
         } finally {
             locker.unLockDatabase(db, LockType.WRITE);
         }
@@ -3842,7 +3849,7 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         // log
         TableInfo tableInfo = TableInfo.createForRollupRename(db.getId(), table.getId(), indexId, newRollupName);
         GlobalStateMgr.getCurrentState().getEditLog().logRollupRename(tableInfo);
-        LOG.info("rename rollup[{}] to {}", rollupName, newRollupName);
+        LOG.info("rename rollup[{}] to {} for table {}.{}", rollupName, newRollupName, db.getFullName(), table.getName());
     }
 
     public void replayRenameRollup(TableInfo tableInfo) {
@@ -3861,7 +3868,8 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
             indexNameToIdMap.remove(rollupName);
             indexNameToIdMap.put(newRollupName, indexId);
 
-            LOG.info("replay rename rollup[{}] to {}", rollupName, newRollupName);
+            LOG.info("replay rename rollup[{}] to {} for table {}.{}", rollupName, newRollupName, db.getFullName(),
+                    table.getName());
         } finally {
             locker.unLockDatabase(db, LockType.WRITE);
         }
@@ -5290,7 +5298,7 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
             for (Long tabletId : tabletIdSet) {
                 GlobalStateMgr.getCurrentState().getTabletInvertedIndex().deleteTablet(tabletId);
             }
-            LOG.warn("create partitions from partitions failed.", e);
+            LOG.warn("create partitions from partitions failed for table " + olapTable.getName(), e);
             throw new RuntimeException("create partitions failed: " + e.getMessage(), e);
         }
         return newPartitions;
