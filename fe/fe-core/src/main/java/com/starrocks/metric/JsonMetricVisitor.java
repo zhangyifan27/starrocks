@@ -89,6 +89,10 @@ public class JsonMetricVisitor extends MetricVisitor {
                 addGcMetric("jvm_young_gc", gc);
             } else if (gc.getName().equalsIgnoreCase(GcNames.OLD)) {
                 addGcMetric("jvm_old_gc", gc);
+            } else if (gc.getName().equalsIgnoreCase(GcNames.ZGC_CYCLES)) {
+                addGcMetric("jvm_zgc_cycles", gc);
+            } else if (gc.getName().equalsIgnoreCase(GcNames.ZGC_PAUSES)) {
+                addGcMetric("jvm_zgc_pauses", gc);
             }
         }
 

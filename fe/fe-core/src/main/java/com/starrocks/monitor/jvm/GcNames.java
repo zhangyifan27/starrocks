@@ -43,6 +43,8 @@ public class GcNames {
     public static final String OLD = "old";
     public static final String SURVIVOR = "survivor";
     public static final String PERM = "perm";
+    public static final String ZGC_CYCLES = "ZGC Cycles";
+    public static final String ZGC_PAUSES = "ZGC Pauses";
 
     /**
      * Resolves the GC type by its memory pool name ({@link java.lang.management.MemoryPoolMXBean#getName()}.
@@ -63,6 +65,7 @@ public class GcNames {
         if ("Perm Gen".equals(poolName) || "Metaspace".equals(poolName)) {
             return PERM;
         }
+        // ignore ZHeap now
         return defaultName;
     }
 
@@ -75,6 +78,7 @@ public class GcNames {
                 || "ConcurrentMarkSweep".equals(gcName) || "G1 Old Generation".equals(gcName)) {
             return OLD;
         }
+        // return ZGC default gc name
         return defaultName;
     }
 }

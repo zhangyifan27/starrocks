@@ -68,6 +68,8 @@ public class PrometheusMetricVisitor extends MetricVisitor {
     private static final String JVM_YOUNG_GC = "jvm_young_gc";
     private static final String JVM_OLD_GC = "jvm_old_gc";
     private static final String JVM_THREAD = "jvm_thread";
+    private static final String JVM_ZGC_CYCLES = "jvm_zgc_cycles";
+    private static final String JVM_ZGC_PAUSES = "jvm_zgc_pauses";
 
     private static final String HELP = "# HELP ";
     private static final String TYPE = "# TYPE ";
@@ -129,6 +131,10 @@ public class PrometheusMetricVisitor extends MetricVisitor {
                 addGcMetrics(gc, JVM_YOUNG_GC, "jvm young gc stat\n");
             } else if (gc.getName().equalsIgnoreCase("old")) {
                 addGcMetrics(gc, JVM_OLD_GC, "jvm old gc stat\n");
+            } else if (gc.getName().equalsIgnoreCase("ZGC Cycles")) {
+                addGcMetrics(gc, JVM_ZGC_CYCLES, "jvm zgc cycles stat\n");
+            } else if (gc.getName().equalsIgnoreCase("ZGC Pauses")) {
+                addGcMetrics(gc, JVM_ZGC_PAUSES, "jvm zgc pauses stat\n");
             }
         }
 
