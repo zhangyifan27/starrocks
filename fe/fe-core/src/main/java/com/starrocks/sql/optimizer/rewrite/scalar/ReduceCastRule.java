@@ -108,6 +108,12 @@ public class ReduceCastRule extends TopDownScalarOperatorRewriteRule {
         if (!(castChild.getType().isNumericType() && child2.getType().isNumericType())) {
             return operator;
         }
+        // operator = CAST(process_time / 100 AS BIGINT) >= 20240602
+        // can not rewrite to (process_time / 100.0 ) >= 2.0240602E7(double)
+        if (((castChild.getType().isFloatingPointType() || castChild.getType().isDecimalOfAnyVersion()) &&
+                child1.getType().isFixedPointType())) {
+            return operator;
+        }
 
         Optional<ScalarOperator> resultChild2 = Utils.tryCastConstant(child2, castChild.getType());
         return resultChild2
