@@ -52,6 +52,7 @@ import com.starrocks.persist.metablock.SRMetaBlockWriter;
 import com.starrocks.plugin.PluginInfo.PluginType;
 import com.starrocks.plugin.PluginLoader.PluginStatus;
 import com.starrocks.qe.AuditLogBuilder;
+import com.starrocks.qe.ProfileLogBuilder;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.InstallPluginStmt;
 import org.apache.logging.log4j.LogManager;
@@ -124,6 +125,12 @@ public class PluginMgr implements Writable {
         AuditLogBuilder auditLogBuilder = new AuditLogBuilder();
         if (!registerBuiltinPlugin(auditLogBuilder.getPluginInfo(), auditLogBuilder)) {
             LOG.warn("failed to register audit log builder");
+        }
+
+        // ProfileLog
+        ProfileLogBuilder profileLogBuilder = new ProfileLogBuilder();
+        if (!registerBuiltinPlugin(profileLogBuilder.getPluginInfo(), profileLogBuilder)) {
+            LOG.warn("failed to register profile log builder");
         }
 
         // other builtin plugins

@@ -69,7 +69,8 @@ public class PluginInfo implements Writable {
         AUDIT,
         IMPORT,
         STORAGE,
-        EDITLOG;
+        EDITLOG,
+        PROFILE;
 
         public static int MAX_PLUGIN_TYPE_SIZE = PluginType.values().length;
     }

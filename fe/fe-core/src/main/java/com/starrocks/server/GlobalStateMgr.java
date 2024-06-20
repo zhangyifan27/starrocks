@@ -185,6 +185,7 @@ import com.starrocks.qe.AuditEventProcessor;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.DDLStmtExecutor;
 import com.starrocks.qe.JournalObservable;
+import com.starrocks.qe.ProfileEventProcessor;
 import com.starrocks.qe.QueryStatisticsInfo;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.qe.ShowExecutor;
@@ -414,6 +415,7 @@ public class GlobalStateMgr {
     private final PluginMgr pluginMgr;
 
     private final AuditEventProcessor auditEventProcessor;
+    private ProfileEventProcessor profileEventProcessor;
 
     private final StatisticsMetaManager statisticsMetaManager;
 
@@ -722,6 +724,7 @@ public class GlobalStateMgr {
         this.pluginMgr = new PluginMgr();
         this.auditEventProcessor = new AuditEventProcessor(this.pluginMgr);
         this.editLogProcessor = new EditLogProcessor(this.pluginMgr);
+        this.profileEventProcessor = new ProfileEventProcessor(this.pluginMgr);
         this.analyzeMgr = new AnalyzeMgr();
         this.localMetastore = new LocalMetastore(this, recycleBin, colocateTableIndex);
         this.temporaryTableMgr = new TemporaryTableMgr();
@@ -907,6 +910,10 @@ public class GlobalStateMgr {
 
     public EditLogProcessor getEditLogProcessor() {
         return editLogProcessor;
+    }
+
+    public ProfileEventProcessor getProfileEventProcessor() {
+        return profileEventProcessor;
     }
 
     public static int getCurrentStateStarRocksMetaVersion() {
@@ -1136,6 +1143,7 @@ public class GlobalStateMgr {
             // init plugin manager
             pluginMgr.init();
             auditEventProcessor.start();
+            profileEventProcessor.start();
 
             // 2. get cluster id and role (Observer or Follower)
             nodeMgr.getClusterIdAndRoleOnStartup();

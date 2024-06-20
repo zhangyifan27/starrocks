@@ -41,6 +41,8 @@ import com.google.common.collect.Maps;
 import com.starrocks.common.Config;
 import com.starrocks.common.Pair;
 import com.starrocks.memory.MemoryTrackable;
+import com.starrocks.plugin.ProfileEvent;
+import com.starrocks.server.GlobalStateMgr;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -83,6 +85,8 @@ public class ProfileManager implements MemoryTrackable {
 
     public static final String LOAD_TYPE_STREAM_LOAD = "STREAM_LOAD";
     public static final String LOAD_TYPE_ROUTINE_LOAD = "ROUTINE_LOAD";
+
+    public static final String SUPERSQL_TRACE_ID = "Supersql Trace ID";
 
     private static final int MEMORY_PROFILE_SAMPLES = 10;
 
@@ -179,6 +183,10 @@ public class ProfileManager implements MemoryTrackable {
             LOG.warn("the key or value of Map is null, "
                     + "may be forget to insert 'QUERY_ID' column into infoStrings");
         }
+        String supersqlTraceId = element.infoStrings.get(ProfileManager.SUPERSQL_TRACE_ID);
+        ProfileEvent profileEvent =
+                new ProfileEvent(ProfileEvent.EventType.QUERY, queryId, supersqlTraceId, profileString);
+        GlobalStateMgr.getCurrentState().getProfileEventProcessor().handleProfileElement(profileEvent);
 
         writeLock.lock();
         try {
@@ -260,11 +268,9 @@ public class ProfileManager implements MemoryTrackable {
         readLock.lock();
         try {
             element = profileMap.get(queryId) == null ? loadProfileMap.get(queryId) : profileMap.get(queryId);
-            if (element == null) {
-                return null;
+            if (element != null) {
+                return CompressionUtils.gzipDecompressString(element.profileContent);
             }
-
-            return CompressionUtils.gzipDecompressString(element.profileContent);
         } catch (IOException e) {
             LOG.warn("Decompress profile content failed, length: {}, reason: {}",
                     element.profileContent.length, e.getMessage());
@@ -272,6 +278,11 @@ public class ProfileManager implements MemoryTrackable {
         } finally {
             readLock.unlock();
         }
+        ProfileEvent event = ProfileLogReader.getProfile(queryId);
+        if (event != null) {
+            return event.getProfile();
+        }
+        return null;
     }
 
     public ProfileElement getProfileElement(String queryId) {

@@ -120,7 +120,7 @@ public class Config extends ConfigBase {
     @ConfField
     public static boolean sys_log_size_based_rollover = true;
     @ConfField
-    public static int sys_log_size_based_roll_num = 10;
+    public static int sys_log_size_based_roll_num = 30;
 
     /**
      * audit_log_dir:
