@@ -24,6 +24,7 @@ import com.google.gson.Gson;
 import com.starrocks.common.PartitionType;
 import com.starrocks.common.SparkDppException;
 import com.starrocks.load.loadv2.etl.EtlJobConfig;
+import com.starrocks.types.BitmapValue;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.hadoop.conf.Configuration;
@@ -45,6 +46,7 @@ import org.apache.spark.api.java.function.FlatMapFunction;
 import org.apache.spark.api.java.function.ForeachPartitionFunction;
 import org.apache.spark.api.java.function.Function;
 import org.apache.spark.api.java.function.PairFlatMapFunction;
+import org.apache.spark.api.java.function.VoidFunction;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.Dataset;
 import org.apache.spark.sql.Row;
@@ -57,6 +59,7 @@ import org.apache.spark.sql.execution.datasources.parquet.ParquetWriteSupport;
 import org.apache.spark.sql.functions;
 import org.apache.spark.sql.types.DataTypes;
 import org.apache.spark.sql.types.Metadata;
+import org.apache.spark.sql.types.ObjectType;
 import org.apache.spark.sql.types.StructField;
 import org.apache.spark.sql.types.StructType;
 import org.apache.spark.storage.StorageLevel;
@@ -224,7 +227,7 @@ public final class SparkDpp implements java.io.Serializable {
     }
 
     // write data to parquet file by using writing the parquet scheme of spark.
-    private void writeRepartitionAndSortedRDDToParquet(JavaPairRDD<List<Object>, Object[]> resultRDD,
+    private void writeRepartitionAndSortedRDDToParquetV2(JavaPairRDD<List<Object>, Object[]> resultRDD,
                                                        String pathPattern,
                                                        long tableId,
                                                        EtlJobConfig.EtlIndex indexMeta,
@@ -254,8 +257,12 @@ public final class SparkDpp implements java.io.Serializable {
         fields.addAll(keyColumnsSchema);
         for (int i = 0; i < valueColumnsSchema.size(); i++) {
             StructField curField = valueColumnsSchema.get(i);
-            if (sparkRDDAggregators[i] instanceof BitmapUnionAggregator || sparkRDDAggregators[i] instanceof HllUnionAggregator) {
-                fields.add(new StructField(curField.name(), DataTypes.BinaryType, curField.nullable(), Metadata.empty()));
+            if (sparkRDDAggregators[i] instanceof BitmapUnionAggregator) {
+                fields.add(new StructField(curField.name(), ObjectType.apply(BitmapValue.class),
+                        curField.nullable(), Metadata.empty()));
+            } else if (sparkRDDAggregators[i] instanceof HllUnionAggregator) {
+                fields.add(new StructField(curField.name(), ObjectType.apply(Hll.class),
+                        curField.nullable(), Metadata.empty()));
             } else {
                 fields.add(curField);
             }
@@ -300,6 +307,7 @@ public final class SparkDpp implements java.io.Serializable {
                         conf.setBoolean("spark.sql.parquet.fieldId.write.enabled", true);
                         conf.setBoolean("spark.sql.parquet.writeLegacyFormat", false);
                         conf.setBoolean("spark.sql.caseSensitive", false);
+                        conf.setBoolean("spark.hadoop.spark.sql.legacy.parquet.nanosAsLong", false);
                         FileSystem fs = FileSystem.get(URI.create(etlJobConfig.outputPath), conf);
                         int lastBucketId = -1;
                         long lastPartitionId = -1;
@@ -380,6 +388,118 @@ public final class SparkDpp implements java.io.Serializable {
                 });
     }
 
+
+    // write data to parquet file by using writing the parquet scheme of spark.
+    private void writeRepartitionAndSortedRDDToParquet(JavaPairRDD<List<Object>, Object[]> resultRDD,
+                                                       String pathPattern,
+                                                       long tableId,
+                                                       EtlJobConfig.EtlIndex indexMeta,
+                                                       SparkRDDAggregator[] sparkRDDAggregators)
+            throws SparkDppException {
+        // TODO(wb) should deal largint as BigInteger instead of string when using biginteger as key,
+        // data type may affect sorting logic
+        StructType dstSchema = DppUtils.createDstTableSchema(indexMeta.columns, false, true);
+        ExpressionEncoder.Serializer<Row> serializer = RowEncoder.apply(dstSchema).createSerializer();
+
+        resultRDD.repartitionAndSortWithinPartitions(new BucketPartitioner(bucketKeyMap), new BucketComparator())
+                .foreachPartition(new VoidFunction<Iterator<Tuple2<List<Object>, Object[]>>>() {
+                    @Override
+                    public void call(Iterator<Tuple2<List<Object>, Object[]>> t) throws Exception {
+                        // write the data to dst file
+                        Configuration conf = new Configuration(serializableHadoopConf.value());
+                        FileSystem fs = FileSystem.get(URI.create(etlJobConfig.outputPath), conf);
+                        String lastBucketKey = null;
+                        ParquetWriter<InternalRow> parquetWriter = null;
+                        TaskContext taskContext = TaskContext.get();
+                        long taskAttemptId = taskContext.taskAttemptId();
+                        String dstPath = "";
+                        String tmpPath = "";
+
+                        while (t.hasNext()) {
+                            Tuple2<List<Object>, Object[]> pair = t.next();
+                            List<Object> keyColumns = pair._1();
+                            Object[] valueColumns = pair._2();
+                            if ((keyColumns.size() + valueColumns.length) <= 1) {
+                                LOG.warn("invalid row:" + pair);
+                                continue;
+                            }
+
+                            String curBucketKey = keyColumns.get(0).toString();
+                            List<Object> columnObjects = new ArrayList<>();
+                            for (int i = 1; i < keyColumns.size(); ++i) {
+                                columnObjects.add(keyColumns.get(i));
+                            }
+                            for (int i = 0; i < valueColumns.length; ++i) {
+                                columnObjects.add(sparkRDDAggregators[i].finish(valueColumns[i]));
+                            }
+
+                            Row rowWithoutBucketKey = RowFactory.create(columnObjects.toArray());
+                            // if the bucket key is new, it will belong to a new tablet
+                            if (lastBucketKey == null || !curBucketKey.equals(lastBucketKey)) {
+                                if (parquetWriter != null) {
+                                    parquetWriter.close();
+                                    // rename tmpPath to path
+                                    try {
+                                        fs.rename(new Path(tmpPath), new Path(dstPath));
+                                    } catch (IOException ioe) {
+                                        LOG.warn("rename from tmpPath" + tmpPath + " to dstPath:" + dstPath +
+                                                " failed. exception:" + ioe);
+                                        throw ioe;
+                                    }
+                                }
+                                // flush current writer and create a new writer
+                                String[] bucketKey = curBucketKey.split("_");
+                                if (bucketKey.length != 2) {
+                                    LOG.warn("invalid bucket key:" + curBucketKey);
+                                    continue;
+                                }
+                                int partitionId = Integer.parseInt(bucketKey[0]);
+                                int bucketId = Integer.parseInt(bucketKey[1]);
+                                dstPath = String.format(pathPattern, tableId, partitionId, indexMeta.indexId,
+                                        bucketId, indexMeta.schemaHash);
+                                tmpPath = dstPath + "." + taskAttemptId;
+                                conf.set("dfs.client.block.write.locateFollowingBlock.retries", "6");
+                                conf.setBoolean("spark.sql.parquet.writeLegacyFormat", false);
+                                conf.setBoolean("spark.sql.parquet.int64AsTimestampMillis", false);
+                                conf.setBoolean("spark.sql.parquet.int96AsTimestamp", true);
+                                conf.setBoolean("spark.sql.parquet.binaryAsString", false);
+                                conf.set("spark.sql.parquet.outputTimestampType", "INT96");
+                                conf.setBoolean("spark.sql.parquet.fieldId.write.enabled", true);
+                                conf.setBoolean("spark.sql.parquet.writeLegacyFormat", false);
+                                conf.setBoolean("spark.sql.caseSensitive", false);
+                                conf.setBoolean("spark.hadoop.spark.sql.legacy.parquet.nanosAsLong", false);
+                                ParquetWriteSupport.setSchema(dstSchema, conf);
+                                ParquetWriteSupport parquetWriteSupport = new ParquetWriteSupport();
+                                parquetWriter = new ParquetWriter<InternalRow>(new Path(tmpPath), parquetWriteSupport,
+                                        CompressionCodecName.SNAPPY,
+                                        256 * 1024 * 1024, 16 * 1024,
+                                        1024 * 1024,
+                                        true, false,
+                                        ParquetProperties.WriterVersion.PARQUET_1_0,
+                                        conf);
+                                if (parquetWriter != null) {
+                                    LOG.info("[HdfsOperate]>> initialize writer succeed! path:" + tmpPath);
+                                }
+                                lastBucketKey = curBucketKey;
+                            }
+                            InternalRow internalRow = serializer.apply(rowWithoutBucketKey);
+                            parquetWriter.write(internalRow);
+                        }
+                        if (parquetWriter != null) {
+                            parquetWriter.close();
+                            try {
+                                fs.rename(new Path(tmpPath), new Path(dstPath));
+                            } catch (IOException ioe) {
+                                LOG.warn("rename from tmpPath" + tmpPath + " to dstPath:" + dstPath +
+                                        " failed. exception:" + ioe);
+                                throw ioe;
+                            }
+                        }
+
+                    }
+                });
+    }
+
     // TODO(wb) one shuffle to calculate the rollup in the same level
     private void processRollupTree(RollupTreeNode rootNode,
                                    JavaPairRDD<List<Object>, Object[]> rootRDD,
@@ -430,7 +550,19 @@ public final class SparkDpp implements java.io.Serializable {
                 curRDD.persist(StorageLevel.MEMORY_AND_DISK());
             }
             // repartition and write to hdfs
-            writeRepartitionAndSortedRDDToParquet(curRDD, pathPattern, tableId, curNode.indexMeta, sparkRDDAggregators);
+            boolean hasComplexType = false;
+            List<String> udts = Lists.newArrayList("BITMAP", "HLL", "PERCENTILE", "UNKNOWN_TYPE");
+            for (EtlJobConfig.EtlColumn column : curNode.indexMeta.columns) {
+                if (udts.contains(column.columnType)) {
+                    hasComplexType = true;
+                    break;
+                }
+            }
+            if (hasComplexType) {
+                writeRepartitionAndSortedRDDToParquet(curRDD, pathPattern, tableId, curNode.indexMeta, sparkRDDAggregators);
+            } else {
+                writeRepartitionAndSortedRDDToParquetV2(curRDD, pathPattern, tableId, curNode.indexMeta, sparkRDDAggregators);
+            }
         }
     }
 
