@@ -20,6 +20,7 @@ import com.starrocks.catalog.Database;
 import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AnalysisException;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ExceptionChecker;
 import com.starrocks.common.UserException;
@@ -50,6 +51,7 @@ public class CreateLakeTableTest {
 
     @BeforeClass
     public static void beforeClass() throws Exception {
+        Config.disable_persistent_index_in_shared_data_cluster = false;
         UtFrameUtils.createMinStarRocksCluster(RunMode.SHARED_DATA);
         // create connect context
         connectContext = UtFrameUtils.createDefaultCtx();

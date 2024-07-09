@@ -3095,6 +3095,12 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean enable_cloud_native_persistent_index_by_default = false;
 
+    /*
+     * Disable persistent_index in shared-data model to prevent 100% local disk usage.
+     */
+    @ConfField(mutable = true)
+    public static boolean disable_persistent_index_in_shared_data_cluster = true;
+
     /**
      * timeout for external table commit
      */

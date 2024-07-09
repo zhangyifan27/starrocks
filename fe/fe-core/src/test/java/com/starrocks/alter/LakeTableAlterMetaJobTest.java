@@ -68,6 +68,7 @@ public class LakeTableAlterMetaJobTest {
 
     @BeforeClass
     public static void beforeClass() throws Exception {
+        Config.disable_persistent_index_in_shared_data_cluster = false;
         UtFrameUtils.createMinStarRocksCluster(RunMode.SHARED_DATA);
         connectContext = UtFrameUtils.createDefaultCtx();
     }

@@ -2089,6 +2089,12 @@ public class SchemaChangeHandler extends AlterHandler {
                             olapTable.getName(), persistentIndexType));
                     return null;
                 }
+                if (enablePersistentIndex) {
+                    if (Config.disable_persistent_index_in_shared_data_cluster) {
+                        throw new DdlException("does not support set enable_persistent_index to true in shared_data mode " +
+                                               "when disable_persistent_index_in_shared_data_cluster is true");
+                    }
+                }
             } else {
                 throw new DdlException("does not support alter " + properties.entrySet().iterator().next().getKey() +
                         " in shared_data mode");
