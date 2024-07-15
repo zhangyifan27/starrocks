@@ -94,10 +94,10 @@ public interface ConnectorMetadata {
      *
      * @param databaseName the name of the database
      * @param tableName the name of the table
-     * @param snapshotId table snapshot id, default value is -1
+     * @param tableVersionRange table version range in the query
      * @return a list of partition names
      */
-    default List<String> listPartitionNames(String databaseName, String tableName, long snapshotId) {
+    default List<String> listPartitionNames(String databaseName, String tableName, TableVersionRange tableVersionRange) {
         return Lists.newArrayList();
     }
 
@@ -125,6 +125,11 @@ public interface ConnectorMetadata {
         return null;
     }
 
+    // TODO: add connector table version params in the next patch
+    default TableVersionRange getTableVersionRange(Table table) {
+        return TableVersionRange.empty();
+    }
+
     default boolean tableExists(String dbName, String tblName) {
         return listTableNames(dbName).contains(tblName);
     }
@@ -148,7 +153,7 @@ public interface ConnectorMetadata {
      *
      * @param table
      * @param partitionKeys selected partition columns
-     * @param snapshotId selected snapshot id
+     * @param tableVersionRange table version range in the query
      * @param predicate used to filter metadata for iceberg, etc
      * @param fieldNames all selected columns (including partition columns)
      * @param limit scan limit nums if needed
@@ -156,7 +161,7 @@ public interface ConnectorMetadata {
      * @return the remote file information of the query to scan.
      */
     default List<RemoteFileInfo> getRemoteFileInfos(Table table, List<PartitionKey> partitionKeys,
-                                                    long snapshotId, ScalarOperator predicate,
+                                                    TableVersionRange tableVersionRange, ScalarOperator predicate,
                                                     List<String> fieldNames, long limit) {
         return Lists.newArrayList();
     }
@@ -188,6 +193,7 @@ public interface ConnectorMetadata {
      * @param partitionKeys selected partition keys
      * @param predicate used to filter metadata for iceberg, etc
      * @param limit scan limit if needed, default value is -1
+     * @param tableVersionRange table version range in the query
      *
      * @return the table statistics for the table.
      */
@@ -196,7 +202,8 @@ public interface ConnectorMetadata {
                                           Map<ColumnRefOperator, Column> columns,
                                           List<PartitionKey> partitionKeys,
                                           ScalarOperator predicate,
-                                          long limit) {
+                                          long limit,
+                                          TableVersionRange tableVersionRange) {
         return Statistics.builder().build();
     }
 
@@ -204,7 +211,8 @@ public interface ConnectorMetadata {
         return true;
     }
 
-    default List<PartitionKey> getPrunedPartitions(Table table, ScalarOperator predicate, long limit) {
+    default List<PartitionKey> getPrunedPartitions(Table table, ScalarOperator predicate,
+                                                   long limit, TableVersionRange version) {
         throw new StarRocksConnectorException("This connector doesn't support pruning partitions");
     }
 

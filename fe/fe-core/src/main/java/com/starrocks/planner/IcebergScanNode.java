@@ -36,6 +36,7 @@ import com.starrocks.common.util.TimeUtils;
 import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.PartitionUtil;
 import com.starrocks.connector.RemoteFileInfo;
+import com.starrocks.connector.TableVersionRange;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.iceberg.ExpressionConverter;
 import com.starrocks.connector.iceberg.IcebergApiConverter;
@@ -98,6 +99,7 @@ public class IcebergScanNode extends ScanNode {
     private CloudConfiguration cloudConfiguration = null;
     private final List<Integer> deleteColumnSlotIds = new ArrayList<>();
     private final TupleDescriptor equalityDeleteTupleDesc;
+    private Optional<Long> snapshotId;
 
     private Table hybridScanTable = null;
 
@@ -164,6 +166,10 @@ public class IcebergScanNode extends ScanNode {
         return result;
     }
 
+    public void setSnapshotId(Optional<Long> snapshotId) {
+        this.snapshotId = snapshotId;
+    }
+
     public static BiMap<Integer, PartitionField> getIdentityPartitions(PartitionSpec partitionSpec) {
         // TODO: expose transform information in Iceberg library
         BiMap<Integer, PartitionField> columns = HashBiMap.create();
@@ -207,17 +213,16 @@ public class IcebergScanNode extends ScanNode {
     }
 
     public void setupScanRangeLocations(DescriptorTable descTbl) throws UserException {
-        Optional<Snapshot> snapshot = icebergTable.getSnapshot();
-        if (snapshot.isEmpty()) {
+        Preconditions.checkNotNull(snapshotId, "snapshot id is null");
+        if (snapshotId.isEmpty()) {
             LOG.warn(String.format("Table %s has no snapshot!", icebergTable.getRemoteTableName()));
             return;
         }
 
         String catalogName = icebergTable.getCatalogName();
-        long snapshotId = snapshot.get().snapshotId();
 
         List<RemoteFileInfo> splits = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(
-                catalogName, icebergTable, null, snapshotId, predicate, null, -1);
+                catalogName, icebergTable, null, TableVersionRange.withEnd(snapshotId), predicate, null, -1);
 
         if (splits.isEmpty()) {
             LOG.warn("There is no scan tasks after planFies on {}.{} and predicate: [{}]",
@@ -423,10 +428,9 @@ public class IcebergScanNode extends ScanNode {
         }
 
         if (detailLevel == TExplainLevel.VERBOSE && !isResourceMappingCatalog(icebergTable.getCatalogName())) {
-            long snapshotId = icebergTable.getSnapshot().isPresent() ? icebergTable.getSnapshot().get().snapshotId() : -1;
             List<String> partitionNames = GlobalStateMgr.getCurrentState().getMetadataMgr().listPartitionNames(
                     icebergTable.getCatalogName(), icebergTable.getRemoteDbName(),
-                    icebergTable.getRemoteTableName(), snapshotId);
+                    icebergTable.getRemoteTableName(), TableVersionRange.withEnd(snapshotId));
 
             output.append(prefix).append(
                     String.format("partitions=%s/%s", scanNodePredicates.getSelectedPartitionIds().size(),
