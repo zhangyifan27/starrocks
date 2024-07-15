@@ -742,6 +742,10 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
         return false;
     }
 
+    public boolean isTemporal() {
+        return false;
+    }
+
     public boolean hasUniqueConstraints() {
         List<UniqueConstraint> uniqueConstraint = getUniqueConstraints();
         return uniqueConstraint != null;
