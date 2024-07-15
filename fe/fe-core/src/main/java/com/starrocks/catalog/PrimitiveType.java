@@ -39,6 +39,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableSetMultimap;
 import com.google.common.collect.ImmutableSortedSet;
 import com.google.common.collect.Lists;
+import com.starrocks.common.Config;
 import com.starrocks.mysql.MysqlColType;
 import com.starrocks.thrift.TPrimitiveType;
 
@@ -534,6 +535,12 @@ public enum PrimitiveType {
                 return MysqlColType.MYSQL_TYPE_LONG;
             case BIGINT:
                 return MysqlColType.MYSQL_TYPE_LONGLONG;
+            case LARGEINT:
+                if (Config.use_mysql_bigint_for_largeint) {
+                    return MysqlColType.MYSQL_TYPE_LONGLONG;
+                } else {
+                    return MysqlColType.MYSQL_TYPE_STRING;
+                }
             case FLOAT:
                 return MysqlColType.MYSQL_TYPE_FLOAT;
             case DOUBLE:
