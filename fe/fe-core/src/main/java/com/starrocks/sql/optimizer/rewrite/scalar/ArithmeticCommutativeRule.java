@@ -64,7 +64,8 @@ public class ArithmeticCommutativeRule extends BottomUpScalarOperatorRewriteRule
         // Only handle expression like `Variable * Constant = Constant`
         CallOperator call = (CallOperator) predicate.getChild(0);
         if (call.getChildren().size() != 2 || null == call.getFunction() ||
-                call.getFunction().getReturnType().isDecimalOfAnyVersion()) {
+                call.getFunction().getReturnType().isDecimalOfAnyVersion() ||
+                call.getFunction().getReturnType().isFloatingPointType()) {
             return predicate;
         }
 
