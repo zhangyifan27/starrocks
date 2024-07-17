@@ -2567,6 +2567,8 @@ static Status url_decode_slice(const char* value, size_t len, std::string* to) {
             ch = (ch << 4) + ((r - 'A' + 10) & (~mask)) + ((r - '0') & mask);
             to->push_back(ch);
             i = i + 2;
+        } else if (value[i] == '+') {
+            to->push_back(' ');
         } else {
             to->push_back(value[i]);
         }
