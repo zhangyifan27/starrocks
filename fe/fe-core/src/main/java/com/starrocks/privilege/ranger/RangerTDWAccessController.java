@@ -20,6 +20,7 @@ import com.starrocks.authentication.AuthenticationMgr;
 import com.starrocks.common.Config;
 import com.starrocks.common.util.Util;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.mysql.security.TdwAuthenticate;
 import com.starrocks.privilege.AccessController;
 import com.starrocks.privilege.AccessDeniedException;
 import com.starrocks.privilege.PrivilegeType;
@@ -107,6 +108,23 @@ public class RangerTDWAccessController implements AccessController, AccessTypeCo
                     }
             );
         } catch (Throwable e) {
+            String platformUser = TdwAuthenticate.getPlatformUser();
+            if (StringUtils.isNotEmpty(platformUser)) {
+                UserGroupInformation platformUgi =
+                        UserGroupInformation.createUserForTesting(platformUser, new String[0]);
+                try {
+                    platformUgi.doAs((PrivilegedExceptionAction<Boolean>) () -> {
+                        authorizer.checkPrivileges(Lists.newArrayList(privilege));
+                        return true;
+                    });
+                } catch (Throwable e2) {
+                    String message = String.format(
+                            "An exception was encountered while checking privileges, user: %s, platformUser:%s, table: %s",
+                            currentUser.getUser(), platformUser, tableName);
+                    LOG.warn(message, e);
+                    throw new StarRocksConnectorException(message + ", " + e.getMessage());
+                }
+            }
             if (e instanceof UndeclaredThrowableException) {
                 throw new StarRocksConnectorException(Util.getRealMessage(e));
             } else {

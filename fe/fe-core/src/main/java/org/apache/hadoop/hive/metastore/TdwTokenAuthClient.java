@@ -18,6 +18,7 @@ package org.apache.hadoop.hive.metastore;
 
 import com.starrocks.authentication.AuthenticationMgr;
 import com.starrocks.common.Config;
+import com.starrocks.mysql.security.TdwAuthenticate;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.utils.TAuthUtils;
 import com.starrocks.utils.TdwUtil;
@@ -79,6 +80,19 @@ public class TdwTokenAuthClient implements InvocationHandler {
         if (!"setMetaConf".equals(method.getName()) && !"set_ugi".equals(method.getName())) {
             preRun(method);
         }
-        return method.invoke(iface, args);
+        try {
+            return method.invoke(iface, args);
+        } catch (Throwable throwable) {
+            String platformUser = TdwAuthenticate.getPlatformUser();
+            if (StringUtils.isNotEmpty(platformUser) && !"setMetaConf".equals(method.getName()) &&
+                    !"set_ugi".equals(method.getName())) {
+                String token = TAuthUtils.getEncodedAuthentication(platformUser, Config.tdw_metadata_service_target);
+                LOG.debug("platformUser -> {} , proxy user -> {}", TAuthUtils.getTauthPlatformUser(), platformUser);
+                this.iface.setMetaConf("secure-authentication", token);
+                return method.invoke(iface, args);
+            } else {
+                throw throwable;
+            }
+        }
     }
 }

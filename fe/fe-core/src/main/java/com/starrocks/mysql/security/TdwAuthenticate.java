@@ -195,4 +195,27 @@ public class TdwAuthenticate {
             }
         }
     }
+
+    public static String getPlatformUser() throws RuntimeException {
+        ConnectContext currContext = ConnectContext.get();
+        if (currContext == null) {
+            return "";
+        }
+        if (StringUtils.isNotEmpty(currContext.getPlatformUser())) {
+            return currContext.getPlatformUser();
+        }
+        String tqTauthPlatformToken = currContext.getSessionVariable().getTqTauthPlatformToken();
+        if (StringUtils.isNotEmpty(tqTauthPlatformToken)) {
+            try {
+                String platformUser = authenticateAndGetUser(tqTauthPlatformToken).getUser();
+                currContext.setPlatformUser(platformUser);
+                return platformUser;
+            } catch (Throwable e) {
+                LOG.warn("authenticate tqTauthPlatformToken error", e);
+                String error = "authenticate tqTauthPlatformToken error " + e.getMessage();
+                throw new RuntimeException(error);
+            }
+        }
+        return "";
+    }
 }

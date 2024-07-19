@@ -248,6 +248,10 @@ public class ConnectContext {
     // lifecycle instead of per materialized view.
     private QueryMaterializationContext queryMVContext;
 
+    // first use qualifiedUser to verify privileges, if qualifiedUser do not pass through check privileges
+    // then use platformUser to check privileges.
+    protected String platformUser;
+
     public StmtExecutor getExecutor() {
         return executor;
     }
@@ -1038,6 +1042,14 @@ public class ConnectContext {
 
     public boolean supportSSL() {
         return sslContext != null;
+    }
+
+    public String getPlatformUser() {
+        return platformUser;
+    }
+
+    public void setPlatformUser(String platformUser) {
+        this.platformUser = platformUser;
     }
 
     public boolean enableSSL() throws IOException {

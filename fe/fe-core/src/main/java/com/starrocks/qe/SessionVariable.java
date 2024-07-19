@@ -827,6 +827,12 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     // query timeout cannot greater than one month
     public static final int MAX_QUERY_TIMEOUT = 259200;
 
+    // --------  tq session variables start --------
+
+    public static final String TQ_TAUTH_PLATFORM_TOKEN = "tq_tauth_platform_token";
+
+    // --------  tq session variables end --------
+
     @VariableMgr.VarAttr(name = ENABLE_PIPELINE, alias = ENABLE_PIPELINE_ENGINE, show = ENABLE_PIPELINE_ENGINE)
     private boolean enablePipelineEngine = true;
 
@@ -4248,6 +4254,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setEnableRelationAliasCaseInsensitive(boolean enableRelationAliasCaseInsensitive) {
         this.enableRelationAliasCaseInsensitive = enableRelationAliasCaseInsensitive;
+    }
+
+    @VarAttr(name = TQ_TAUTH_PLATFORM_TOKEN, flag = VariableMgr.INVISIBLE)
+    private String tqTauthPlatformToken = "";
+
+    public String getTqTauthPlatformToken() {
+        return tqTauthPlatformToken;
+    }
+
+    public void setTqTauthPlatformToken(String tqTauthPlatformToken) {
+        this.tqTauthPlatformToken = tqTauthPlatformToken;
     }
 
     // Serialize to thrift object
