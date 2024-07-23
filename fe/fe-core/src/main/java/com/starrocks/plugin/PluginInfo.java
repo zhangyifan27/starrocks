@@ -70,7 +70,8 @@ public class PluginInfo implements Writable {
         IMPORT,
         STORAGE,
         EDITLOG,
-        PROFILE;
+        PROFILE,
+        NODE;
 
         public static int MAX_PLUGIN_TYPE_SIZE = PluginType.values().length;
     }
@@ -205,6 +206,10 @@ public class PluginInfo implements Writable {
         return name;
     }
 
+    public void setName(String name) {
+        this.name = name;
+    }
+
     public PluginType getType() {
         return type;
     }
@@ -235,6 +240,10 @@ public class PluginInfo implements Writable {
 
     public String getSource() {
         return source;
+    }
+
+    public void setSource(String source) {
+        this.source = source;
     }
 
     public void setProperties(Map<String, String> properties) {

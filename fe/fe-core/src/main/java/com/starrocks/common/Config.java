@@ -335,6 +335,12 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean plugin_enable = true;
 
+    @ConfField(mutable = true)
+    public static boolean enable_init_dynamic_plugins = true;
+
+    @ConfField
+    public static String init_dynamic_plugins = "NodeInfoToPulsar:https://mirrors.tencent.com/repository/generic/tianqiong_mirrors/starrocks/auditloader/release/auditloader-cluster.zip,AuditLoaderToPulsar:https://mirrors.tencent.com/repository/generic/tianqiong_mirrors/starrocks/auditloader/release/auditloader-pulsar.zip";
+
     /**
      * Labels of finished or cancelled load jobs will be removed
      * 1. after *label_keep_max_second*

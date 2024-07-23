@@ -55,6 +55,8 @@ import com.starrocks.qe.AuditLogBuilder;
 import com.starrocks.qe.ProfileLogBuilder;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.InstallPluginStmt;
+import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -63,11 +65,17 @@ import java.io.DataOutput;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.FileSystems;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
+
+import static com.starrocks.plugin.BuiltinDynamicPluginLoader.CLUSTER_NAME;
 
 public class PluginMgr implements Writable {
     private static final Logger LOG = LogManager.getLogger(PluginMgr.class);
@@ -229,6 +237,12 @@ public class PluginMgr implements Writable {
         return checkLoader == null;
     }
 
+    public boolean registerBuiltinDynamicPlugin() {
+
+
+        return true;
+    }
+
     /*
      * replay load plugin.
      * It must add the plugin to the "plugins" and "dynamicPluginNames", even if the plugin
@@ -383,5 +397,64 @@ public class PluginMgr implements Writable {
 
     public void load(SRMetaBlockReader reader) throws IOException, SRMetaBlockException, SRMetaBlockEOFException {
         reader.readCollection(PluginInfo.class, this::replayLoadDynamicPlugin);
+    }
+
+    public void initBuiltinDynamicPlugins() {
+        try {
+            if (Config.enable_init_dynamic_plugins) {
+                clearUnusedBuiltinDynamicPlugins();
+                if (StringUtils.isNotBlank(Config.init_dynamic_plugins)) {
+                    String clusterName = "";
+                    List<PluginInfo> pluginInfos = getAllDynamicPluginInfo();
+                    for (PluginInfo info : pluginInfos) {
+                        if (info.getProperties().containsKey(CLUSTER_NAME)) {
+                            clusterName = info.getProperties().get(CLUSTER_NAME);
+                            break;
+                        }
+                    }
+                    for (String plugin : Config.init_dynamic_plugins.split(",")) {
+                        try {
+                            String[] pluginInfo = plugin.split(":", 2);
+                            String pluginName = pluginInfo[0];
+                            String pluginSource = pluginInfo[1];
+                            if (pluginInfos.stream().map(p -> p.getName()).anyMatch(p -> p.equals(pluginName))) {
+                                continue;
+                            }
+                            LOG.info("Initialize builtin dynamic plugin: {}", pluginName);
+                            PluginLoader loader = new BuiltinDynamicPluginLoader(
+                                    Config.plugin_dir, pluginName, pluginSource, clusterName);
+                            loader.install();
+                            loader.setStatus(PluginLoader.PluginStatus.INSTALLED);
+                            this.plugins[loader.getPluginInfo().getTypeId()]
+                                    .putIfAbsent(loader.getPluginInfo().getName(), loader);
+                            LOG.info("Initialize builtin dynamic plugin: {} successfully", pluginName);
+                        } catch (NullPointerException e) {
+                            LOG.warn("failed to register builtin dynamic plugin {}, " +
+                                    "the format of pluginSource is wrong: pulginname:pluginsource", plugin);
+                        } catch (Throwable e) {
+                            LOG.warn("failed to register builtin dynamic plugin {}, error: {}", plugin, e.getMessage());
+                        }
+                    }
+                }
+            }
+        } catch (Throwable e) {
+            LOG.warn("failed to register builtin dynamic plugin error: {}", e.getMessage());
+        }
+    }
+
+    private void clearUnusedBuiltinDynamicPlugins() {
+        List<String> pluginNames = getAllDynamicPluginInfo().stream().map(PluginInfo::getName).collect(Collectors.toList());
+        Path targetPath = FileSystems.getDefault().getPath(Config.plugin_dir);
+        if (Files.exists(targetPath, new java.nio.file.LinkOption[0])) {
+            File[] tempList = targetPath.toFile().listFiles();
+            for (File temp : tempList) {
+                if (temp.isDirectory()) {
+                    String pluginName = temp.getName();
+                    if (!(pluginNames.contains(pluginName) || pluginName.contains("__builtin_" + pluginName))) {
+                        FileUtils.deleteQuietly(temp);
+                    }
+                }
+            }
+        }
     }
 }

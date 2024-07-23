@@ -179,6 +179,9 @@ public class StarRocksFE {
             //thive udf init
             ThiveUdfUtils.init();
 
+            // init builtin dynamic plugins
+            GlobalStateMgr.getCurrentState().getPluginMgr().initBuiltinDynamicPlugins();
+
             LOG.info("FE started successfully");
 
             while (!stopped) {

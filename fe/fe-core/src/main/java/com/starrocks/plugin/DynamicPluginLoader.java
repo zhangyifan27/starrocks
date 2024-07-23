@@ -40,6 +40,8 @@ import org.apache.commons.io.FileUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.lang.reflect.Constructor;
 import java.net.URL;
@@ -105,6 +107,12 @@ public class DynamicPluginLoader extends PluginLoader {
                 // for now, installPath point to the temp dir which contains
                 // all files extracted from zip or copied from user specified dir.
                 installPath = zip.extract(tmpTarget);
+                try (BufferedWriter bufferedWriter = new BufferedWriter(
+                        new FileWriter(this.installPath.resolve(MD5SUM_KEY).toFile()))) {
+                    bufferedWriter.write(zip.getExpectedChecksum());
+                    bufferedWriter.close();
+                } catch (Throwable ignored) {
+                }
             }
             pluginInfo = PluginInfo.readFromProperties(installPath, source);
         } catch (Exception e) {

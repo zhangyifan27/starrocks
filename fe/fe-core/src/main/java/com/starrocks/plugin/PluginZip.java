@@ -212,7 +212,11 @@ class PluginZip {
         return targetPath;
     }
 
-    InputStream getInputStreamFromUrl(String url) throws IOException {
+    public static InputStream getInputStreamFromUrl(String url) throws IOException {
         return Util.getInputStreamFromUrl(url, null, HTTP_TIMEOUT_MS, HTTP_TIMEOUT_MS);
+    }
+
+    public String getExpectedChecksum() {
+        return expectedChecksum;
     }
 }
