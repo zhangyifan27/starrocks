@@ -1463,7 +1463,7 @@ public class PlanFragmentBuilder {
 
             IcebergMetadataScanNode metadataScanNode =
                     new IcebergMetadataScanNode(context.getNextNodeId(), tupleDescriptor,
-                            "IcebergMetadataScanNode", node.getTemporalClause());
+                            "IcebergMetadataScanNode", node.getTableVersionRange());
             try {
                 ScalarOperatorToExpr.FormatterContext formatterContext =
                         new ScalarOperatorToExpr.FormatterContext(context.getColRefToExpr());
