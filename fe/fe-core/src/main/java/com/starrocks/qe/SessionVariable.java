@@ -152,6 +152,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
      */
     public static final String SQL_MODE_STORAGE_NAME = "sql_mode_v2";
     public static final String RESOURCE_GROUP = "resource_group";
+    public static final String CLUSTER_DEFAULT_RESOURCE_GROUP = "cluster_default_resource_group";
     public static final String AUTO_COMMIT = "autocommit";
     public static final String TX_ISOLATION = "tx_isolation";
     public static final String TX_READ_ONLY = "tx_read_only";

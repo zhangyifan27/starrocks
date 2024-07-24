@@ -16,6 +16,7 @@ package com.starrocks.qe;
 
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
+import com.google.common.base.Strings;
 import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.catalog.ResourceGroupClassifier;
 import com.starrocks.catalog.ResourceGroupMgr;
@@ -293,7 +294,8 @@ public class CoordinatorPreprocessor {
         return null;
     }
 
-    public static TWorkGroup prepareResourceGroup(ConnectContext connect, ResourceGroupClassifier.QueryType queryType) {
+    public static TWorkGroup prepareResourceGroup(ConnectContext connect,
+                                                  ResourceGroupClassifier.QueryType queryType) {
         if (connect == null || !connect.getSessionVariable().isEnableResourceGroup()) {
             return null;
         }
@@ -318,6 +320,14 @@ public class CoordinatorPreprocessor {
         if (resourceGroup == null) {
             Set<Long> dbIds = connect.getCurrentSqlDbIds();
             resourceGroup = resourceGroupMgr.chooseResourceGroup(connect, queryType, dbIds);
+        }
+
+        if (!Strings.isNullOrEmpty(Config.cluster_default_resource_group)) {
+            resourceGroup = resourceGroupMgr.chooseResourceGroupByName(Config.cluster_default_resource_group);
+            if (resourceGroup == null) {
+                LOG.warn("Resource group [" + Config.cluster_default_resource_group
+                        + "] specified in cluster_default_resource_group does not exist!");
+            }
         }
 
         if (resourceGroup == null) {

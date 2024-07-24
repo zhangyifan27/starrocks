@@ -3393,4 +3393,11 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean enable_decommission_replica_relocating = true;
+
+    // Differs from DEFAULT_RESOURCE_GROUP_NAME, since DEFAULT_RESOURCE_GROUP_NAME refer to resource group default_wg,
+    // which has fixed resource limit (e.g., cpu_limit/mem_limit), that cannot be altered.
+    // And we can specify a customized resource group with CLUSTER_DEFAULT_RESOURCE_GROUP, allowing to define and modify
+    // resource limit.
+    @ConfField(mutable = true)
+    public static String cluster_default_resource_group = "";
 }
