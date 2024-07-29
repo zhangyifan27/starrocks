@@ -182,7 +182,7 @@ public class MockedBase {
         when(globalStateMgr.getMetadataMgr()).thenReturn(metadataMgr);
         when(globalStateMgr.getVariableMgr()).thenReturn(variableMgr);
         when(connectorMgr.getConnector(anyString())).thenReturn(new CatalogConnector(
-                odpsConnector, new InformationSchemaConnector("catalog"), new TableMetaConnector("catalog")));
+                odpsConnector, new InformationSchemaConnector("catalog"), new TableMetaConnector("catalog", "odps")));
         when(odpsMetadata.getCloudConfiguration()).thenReturn(new AliyunCloudConfiguration(aliyunCloudCredential));
 
         RemoteFileInfo fileInfo = new RemoteFileInfo();

@@ -83,6 +83,11 @@ public class IcebergMetadataScanNodeTest extends TableTestBase {
             org.apache.iceberg.Table getTable(String dbName, String tableName) throws StarRocksConnectorException {
                 return mockedNativeTableC;
             }
+
+            @Mock
+            boolean tableExists(String dbName, String tableName) {
+                return true;
+            }
         };
 
         long snapshotId = mockedNativeTableC.currentSnapshot().snapshotId();
@@ -116,6 +121,11 @@ public class IcebergMetadataScanNodeTest extends TableTestBase {
             org.apache.iceberg.Table getTable(String dbName, String tableName) throws StarRocksConnectorException {
                 return mockedNativeTableC;
             }
+
+            @Mock
+            boolean tableExists(String dbName, String tableName) {
+                return true;
+            }
         };
 
         String sql = "explain select file_path from iceberg_catalog.db.tc$logical_iceberg_metadata " +
@@ -139,6 +149,11 @@ public class IcebergMetadataScanNodeTest extends TableTestBase {
             @Mock
             org.apache.iceberg.Table getTable(String dbName, String tableName) throws StarRocksConnectorException {
                 return mockedNativeTableC;
+            }
+
+            @Mock
+            boolean tableExists(String dbName, String tableName) {
+                return true;
             }
         };
 
@@ -165,6 +180,11 @@ public class IcebergMetadataScanNodeTest extends TableTestBase {
             @Mock
             org.apache.iceberg.Table getTable(String dbName, String tableName) throws StarRocksConnectorException {
                 return mockedNativeTableC;
+            }
+
+            @Mock
+            boolean tableExists(String dbName, String tableName) {
+                return true;
             }
         };
 
