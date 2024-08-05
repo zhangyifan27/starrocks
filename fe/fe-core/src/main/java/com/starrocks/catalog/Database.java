@@ -220,7 +220,7 @@ public class Database extends MetaObject implements Writable {
         locker.lockDatabase(this, LockType.READ);
         try {
             for (Table table : this.idToTable.values()) {
-                if (!table.isOlapTableOrMaterializedView()) {
+                if (!table.isNativeTableOrMaterializedView()) {
                     continue;
                 }
 
