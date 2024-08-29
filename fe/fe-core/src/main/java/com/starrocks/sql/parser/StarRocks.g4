@@ -2676,7 +2676,7 @@ decimalType
     ;
 
 qualifiedName
-    : identifier (DOT_IDENTIFIER | '.' identifier)*
+    : identifier (DOT_IDENTIFIER | '.' identifier | '::' identifier)*
     ;
 
 identifier

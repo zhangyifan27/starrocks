@@ -48,6 +48,12 @@ public class AnalyzeSingleTest {
     }
 
     @Test
+    public void testDbTableDelimiter() {
+        analyzeSuccess("select v1 from test::t0");
+        analyzeSuccess("desc test::t0");
+    }
+
+    @Test
     public void testSingle() {
         analyzeSuccess("select v1 from t0");
         analyzeSuccess("select v1 as k from t0");
