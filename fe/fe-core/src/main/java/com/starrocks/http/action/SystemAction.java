@@ -56,6 +56,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.owasp.encoder.Encode;
 
+import java.net.URI;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -154,6 +155,7 @@ public class SystemAction extends WebBaseAction {
     private void appendSystemTableBody(StringBuilder buffer, List<List<String>> rows, boolean isDir, String path) {
         UrlValidator validator = new UrlValidator();
         for (List<String> strList : rows) {
+            replaceWebURL(path, strList);
             buffer.append("<tr>");
             int columnIndex = 1;
             for (String str : strList) {
@@ -165,7 +167,7 @@ public class SystemAction extends WebBaseAction {
                     buffer.append("</a>");
                 } else if (validator.isValid(str)) {
                     buffer.append("<a href=\"" + str + "\">");
-                    buffer.append("URL");
+                    buffer.append(URI.create(str).getHost());
                     buffer.append("</a>");
                 } else {
                     buffer.append(str != null ? str.replaceAll("\\n", "<br/>") : "");
@@ -174,6 +176,18 @@ public class SystemAction extends WebBaseAction {
                 ++columnIndex;
             }
             buffer.append("</tr>");
+        }
+    }
+
+    private void replaceWebURL(String path, List<String> row) {
+        try {
+            if (path.endsWith("frontends")) {
+                row.set(1, "http://" + row.get(1) + ":" + row.get(3));
+            } else if (path.endsWith("backends") || path.endsWith("compute_nodes")) {
+                row.set(1, "http://" + row.get(1) + ":" + row.get(4));
+            }
+        } catch (Throwable e) {
+            LOG.debug("Fail to replace web url. ", e);
         }
     }
 
