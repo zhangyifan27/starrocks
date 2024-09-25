@@ -43,6 +43,10 @@ public final class TableMetricsEntity {
     private static final String TABLE_LOAD_COMMITTED_TASKS_COMMENT = "total committed tasks of this table";
     public static final String TABLE_LOAD_ABORTED_TASKS = "table_load_aborted_tasks";
     private static final String TABLE_LOAD_ABORTED_TASKS_COMMENT = "total aborted tasks of this table";
+    public static final String TABLE_LOAD_TOTAL = "table_load_total";
+    public static final String TABLE_LOAD_TOTAL_COMMENT = "total loaded times of this table";
+    public static final String TABLE_LOAD_ABORTED = "table_load_aborted";
+    public static final String TABLE_LOAD_ABORTED_COMMENT = "total aborted loaded times of this table";
 
     private List<Metric> metrics;
 
@@ -52,7 +56,11 @@ public final class TableMetricsEntity {
 
     public LongCounterMetric counterStreamLoadBytesTotal;
     public LongCounterMetric counterStreamLoadRowsTotal;
+    public LongCounterMetric counterStreamLoadErrorRowsTotal;
+    public LongCounterMetric counterStreamLoadUnselectedRowsTotal;
     public LongCounterMetric counterStreamLoadFinishedTotal;
+    public LongCounterMetric counterStreamLoadBegunTotal;
+    public LongCounterMetric counterStreamLoadAbortedTotal;
 
     public LongCounterMetric counterRoutineLoadBytesTotal;
     public LongCounterMetric counterRoutineLoadRowsTotal;
@@ -107,6 +115,22 @@ public final class TableMetricsEntity {
                 new LongCounterMetric(TABLE_LOAD_FINISHED, MetricUnit.REQUESTS, TABLE_LOAD_FINISHED_COMMENT);
         counterStreamLoadFinishedTotal.addLabel(new MetricLabel("type", "stream_load"));
         metrics.add(counterStreamLoadFinishedTotal);
+        counterStreamLoadBegunTotal =
+                new LongCounterMetric(TABLE_LOAD_TOTAL, MetricUnit.REQUESTS, TABLE_LOAD_TOTAL_COMMENT);
+        counterStreamLoadBegunTotal.addLabel(new MetricLabel("type", "stream_load"));
+        metrics.add(counterStreamLoadBegunTotal);
+        counterStreamLoadAbortedTotal =
+                new LongCounterMetric(TABLE_LOAD_ABORTED, MetricUnit.REQUESTS, TABLE_LOAD_ABORTED_COMMENT);
+        counterStreamLoadAbortedTotal.addLabel(new MetricLabel("type", "stream_load"));
+        metrics.add(counterStreamLoadAbortedTotal);
+        counterStreamLoadErrorRowsTotal =
+                new LongCounterMetric(TABLE_LOAD_ERROR_ROWS, MetricUnit.ROWS,  TABLE_LOAD_ERROR_COMMENT);
+        counterStreamLoadErrorRowsTotal.addLabel(new MetricLabel("type", "stream_load"));
+        metrics.add(counterStreamLoadErrorRowsTotal);
+        counterStreamLoadUnselectedRowsTotal =
+                new LongCounterMetric(TABLE_LOAD_UNSELECTED_ROWS, MetricUnit.ROWS, TABLE_LOAD_UNSELECTED_COMMENT);
+        counterStreamLoadUnselectedRowsTotal.addLabel(new MetricLabel("type", "stream_load"));
+        metrics.add(counterStreamLoadUnselectedRowsTotal);
 
         counterRoutineLoadBytesTotal =
                 new LongCounterMetric(TABLE_LOAD_BYTES, MetricUnit.BYTES, TABLE_LOAD_BYTES_COMMENT);

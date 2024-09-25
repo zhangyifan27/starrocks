@@ -85,6 +85,8 @@ METRIC_DEFINE_INT_COUNTER(streaming_load_requests_total, MetricUnit::REQUESTS);
 METRIC_DEFINE_INT_COUNTER(streaming_load_bytes, MetricUnit::BYTES);
 METRIC_DEFINE_INT_COUNTER(streaming_load_duration_ms, MetricUnit::MILLISECONDS);
 METRIC_DEFINE_INT_GAUGE(streaming_load_current_processing, MetricUnit::REQUESTS);
+METRIC_DEFINE_INT_GAUGE(streaming_load_finished, MetricUnit::REQUESTS);
+METRIC_DEFINE_INT_GAUGE(streaming_load_aborted, MetricUnit::REQUESTS);
 
 #ifdef BE_TEST
 TStreamLoadPutResult k_stream_load_put_result;
@@ -135,6 +137,10 @@ StreamLoadAction::StreamLoadAction(ExecEnv* exec_env, ConcurrentLimiter* limiter
     StarRocksMetrics::instance()->metrics()->register_metric("streaming_load_duration_ms", &streaming_load_duration_ms);
     StarRocksMetrics::instance()->metrics()->register_metric("streaming_load_current_processing",
                                                              &streaming_load_current_processing);
+    StarRocksMetrics::instance()->metrics()->register_metric("streaming_load_finished",
+                                                             &streaming_load_finished);
+    StarRocksMetrics::instance()->metrics()->register_metric("streaming_load_aborted",
+                                                             &streaming_load_aborted);
 }
 
 StreamLoadAction::~StreamLoadAction() = default;
@@ -163,6 +169,7 @@ void StreamLoadAction::handle(HttpRequest* req) {
     ctx->load_cost_nanos = MonotonicNanos() - ctx->start_nanos;
 
     if (!ctx->status.ok() && !ctx->status.is_publish_timeout()) {
+        streaming_load_aborted.increment(1);
         if (ctx->need_rollback) {
             (void)_exec_env->stream_load_executor()->rollback_txn(ctx);
             ctx->need_rollback = false;
@@ -170,13 +177,14 @@ void StreamLoadAction::handle(HttpRequest* req) {
         if (ctx->body_sink != nullptr) {
             ctx->body_sink->cancel(ctx->status);
         }
+    }else{
+        streaming_load_finished.increment(1);
     }
 
     auto str = ctx->to_json();
     _send_reply(req, str);
 
     // update statstics
-    streaming_load_requests_total.increment(1);
     streaming_load_duration_ms.increment(ctx->load_cost_nanos / 1000000);
     streaming_load_bytes.increment(ctx->receive_bytes);
     streaming_load_current_processing.increment(-1);
@@ -214,7 +222,6 @@ Status StreamLoadAction::_handle(StreamLoadContext* ctx) {
 }
 
 int StreamLoadAction::on_header(HttpRequest* req) {
-    streaming_load_current_processing.increment(1);
 
     auto* ctx = new StreamLoadContext(_exec_env);
     ctx->ref();
@@ -260,7 +267,6 @@ int StreamLoadAction::on_header(HttpRequest* req) {
         }
         auto str = ctx->to_json();
         _send_reply(req, str);
-        streaming_load_current_processing.increment(-1);
         return -1;
     }
     return 0;
@@ -336,8 +342,16 @@ Status StreamLoadAction::_on_header(HttpRequest* http_req, StreamLoadContext* ct
     int64_t begin_txn_start_time = MonotonicNanos();
     RETURN_IF_ERROR(_exec_env->stream_load_executor()->begin_txn(ctx));
     ctx->begin_txn_cost_nanos = MonotonicNanos() - begin_txn_start_time;
+
+    streaming_load_current_processing.increment(1);
+    streaming_load_requests_total.increment(1);
+
     // process put file
-    return _process_put(http_req, ctx);
+    auto st = _process_put(http_req, ctx);
+    if (!st.ok()) {
+        streaming_load_current_processing.increment(-1);
+    }
+    return st;
 }
 
 void StreamLoadAction::on_chunk_data(HttpRequest* req) {

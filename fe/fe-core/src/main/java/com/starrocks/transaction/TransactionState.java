@@ -384,7 +384,6 @@ public class TransactionState implements Writable {
         this.requestId = requestId;
         this.idToTableCommitInfos = Maps.newHashMap();
         this.txnCoordinator = txnCoordinator;
-        this.transactionStatus = TransactionStatus.PREPARE;
         this.sourceType = sourceType;
         this.prepareTime = -1;
         this.commitTime = -1;
@@ -400,6 +399,7 @@ public class TransactionState implements Writable {
         txnSpan.setAttribute("txn_id", transactionId);
         txnSpan.setAttribute("label", label);
         this.traceParent = TraceManager.toTraceParent(txnSpan.getSpanContext());
+        setTransactionStatus(TransactionStatus.PREPARE);
     }
 
     public void setCallbackId(long callbackId) {
@@ -560,24 +560,114 @@ public class TransactionState implements Writable {
     }
 
     public void setTransactionStatus(TransactionStatus transactionStatus) {
+        TransactionStatus oldStatus = this.transactionStatus == null ?
+                null : TransactionStatus.valueOf(this.transactionStatus.getFlag());
+
         // status changed
         this.transactionStatus = transactionStatus;
 
         // after status changed
+        updateMetrics(oldStatus, transactionStatus);
         if (transactionStatus == TransactionStatus.VISIBLE) {
-            if (MetricRepo.hasInit) {
-                MetricRepo.COUNTER_TXN_SUCCESS.increase(1L);
-            }
             txnSpan.addEvent("set_visible");
             txnSpan.end();
         } else if (transactionStatus == TransactionStatus.ABORTED) {
-            if (MetricRepo.hasInit) {
-                MetricRepo.COUNTER_TXN_FAILED.increase(1L);
-            }
             txnSpan.setAttribute("state", "aborted");
             txnSpan.end();
         } else if (transactionStatus == TransactionStatus.COMMITTED) {
             txnSpan.addEvent("set_committed");
+        }
+    }
+
+    private void updateMetrics(TransactionStatus oldTransactionStatus, TransactionStatus newTransactionStatus) {
+        if (!MetricRepo.hasInit) {
+            return;
+        }
+        boolean isStreamLoad = sourceType == LoadJobSourceType.BACKEND_STREAMING
+                || sourceType == LoadJobSourceType.FRONTEND_STREAMING;
+
+        switch (newTransactionStatus) {
+            case PREPARE:
+                if (oldTransactionStatus == null) {
+                    // begin transaction
+                    if (isStreamLoad) {
+                        MetricRepo.COUNTER_STREAM_LOAD_TOTAL.increase(1L);
+                        MetricRepo.COUNTER_STREAM_LOAD_PREPARE.increase(1L);
+                    }
+                }
+                break;
+            case PREPARED:
+                // prepare transaction
+                if (isStreamLoad) {
+                    MetricRepo.COUNTER_STREAM_LOAD_PREPARED.increase(1L);
+                    if (oldTransactionStatus == TransactionStatus.PREPARE) {
+                        MetricRepo.COUNTER_STREAM_LOAD_PREPARE.increase(-1L);
+                    }
+                }
+                break;
+            case COMMITTED:
+                // commit transaction and publish version
+                if (isStreamLoad) {
+                    MetricRepo.COUNTER_STREAM_LOAD_COMMITTED.increase(1L);
+                    if (oldTransactionStatus == TransactionStatus.PREPARE) {
+                        MetricRepo.COUNTER_STREAM_LOAD_PREPARE.increase(-1L);
+
+                    } else if (oldTransactionStatus == TransactionStatus.PREPARED) {
+                        MetricRepo.COUNTER_STREAM_LOAD_PREPARED.increase(-1L);
+                    }
+                }
+                break;
+            case VISIBLE:
+                // finish transaction
+                MetricRepo.COUNTER_TXN_SUCCESS.increase(1L);
+                if (isStreamLoad) {
+                    MetricRepo.COUNTER_STREAM_LOAD_FINISHED.increase(1L);
+                    if (oldTransactionStatus == TransactionStatus.COMMITTED) {
+                        // publish version successfully
+                        MetricRepo.COUNTER_STREAM_LOAD_COMMITTED.increase(-1L);
+                    }
+                }
+                break;
+            case ABORTED:
+                // rollback transaction
+                MetricRepo.COUNTER_TXN_FAILED.increase(1L);
+                if (isStreamLoad) {
+                    MetricRepo.COUNTER_STREAM_LOAD_ABORTED.increase(1L);
+                    if (oldTransactionStatus == TransactionStatus.PREPARE) {
+                        MetricRepo.COUNTER_STREAM_LOAD_PREPARE.increase(-1L);
+                    } else if (oldTransactionStatus == TransactionStatus.PREPARED) {
+                        MetricRepo.COUNTER_STREAM_LOAD_PREPARED.increase(-1L);
+                    } else if (oldTransactionStatus == TransactionStatus.COMMITTED) {
+                        MetricRepo.COUNTER_STREAM_LOAD_COMMITTED.increase(-1L);
+                    }
+                }
+                break;
+            default:
+                break;
+        }
+    }
+
+    public void updateMetrics() {
+        switch (sourceType) {
+            case BACKEND_STREAMING:
+            case FRONTEND_STREAMING:
+                MetricRepo.COUNTER_STREAM_LOAD_TOTAL_DURATION_MS.increase(finishTime - prepareTime);
+                MetricRepo.COUNTER_STREAM_LOAD_WRITE_DURATION_MS.increase(commitTime - prepareTime);
+                MetricRepo.COUNTER_STREAM_LOAD_WAIT_PUBLISH_DURATION_MS.increase(publishVersionTime - commitTime);
+                MetricRepo.COUNTER_STREAM_LOAD_PUBLISH_DURATION_MS.increase(publishVersionFinishTime - publishVersionTime);
+                MetricRepo.COUNTER_STREAM_LOAD_FINISH_TXN_DURATION_MS.increase(finishTime - publishVersionFinishTime);
+                MetricRepo.COUNTER_STREAM_LOAD_PUBLISH_TOTAL_DURATION_MS.increase(finishTime - commitTime);
+                break;
+            case ROUTINE_LOAD_TASK:
+                MetricRepo.COUNTER_ROUTINE_LOAD_TOTAL_DURATION_MS.increase(finishTime - prepareTime);
+                MetricRepo.COUNTER_ROUTINE_LOAD_WRITE_DURATION_MS.increase(commitTime - prepareTime);
+                MetricRepo.COUNTER_ROUTINE_LOAD_WAIT_PUBLISH_DURATION_MS.increase(publishVersionTime - commitTime);
+                MetricRepo.COUNTER_ROUTINE_LOAD_PUBLISH_DURATION_MS.increase(publishVersionFinishTime - publishVersionTime);
+                MetricRepo.COUNTER_ROUTINE_LOAD_FINISH_TXN_DURATION_MS.increase(finishTime - publishVersionFinishTime);
+                MetricRepo.COUNTER_ROUTINE_LOAD_PUBLISH_TOTAL_DURATION_MS.increase(finishTime - commitTime);
+                break;
+            default:
+                break;
         }
     }
 

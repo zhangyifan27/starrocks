@@ -1269,6 +1269,8 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         if (task == null || task.getTxnId() == -1) {
             throw new UserException(String.format("Load label: {} begin transacton failed", request.getLabel()));
         }
+        TableMetricsEntity entity = TableMetricsRegistry.getInstance().getMetricsEntity(table.getId());
+        entity.counterStreamLoadBegunTotal.increase(1L);
         return task.getTxnId();
     }
 
@@ -1394,6 +1396,8 @@ public class FrontendServiceImpl implements FrontendService.Iface {
                 entity.counterStreamLoadFinishedTotal.increase(1L);
                 entity.counterStreamLoadBytesTotal.increase(streamAttachment.getReceivedBytes());
                 entity.counterStreamLoadRowsTotal.increase(streamAttachment.getLoadedRows());
+                entity.counterStreamLoadErrorRowsTotal.increase(streamAttachment.getFilteredRows());
+                entity.counterStreamLoadUnselectedRowsTotal.increase(streamAttachment.getUnselectedRows());
 
                 if (streamLoadtask != null) {
                     streamLoadtask.setLoadState(streamAttachment, "");
@@ -1551,13 +1555,15 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             throw new MetaNotFoundException("db " + dbName + " does not exist");
         }
         long dbId = db.getId();
+        TxnCommitAttachment attachment = TxnCommitAttachment.fromThrift(request.txnCommitAttachment);
         GlobalStateMgr.getCurrentState().getGlobalTransactionMgr().abortTransaction(dbId, request.getTxnId(),
                 request.isSetReason() ? request.getReason() : "system cancel",
                 TabletCommitInfo.fromThrift(request.getCommitInfos()),
                 TabletFailInfo.fromThrift(request.getFailInfos()),
-                TxnCommitAttachment.fromThrift(request.getTxnCommitAttachment()));
+                attachment);
 
-        TxnCommitAttachment attachment = TxnCommitAttachment.fromThrift(request.txnCommitAttachment);
+        long tableId = db.getTable(request.tbl).getId();
+        TableMetricsEntity entity = TableMetricsRegistry.getInstance().getMetricsEntity(tableId);
         StreamLoadTask streamLoadtask = GlobalStateMgr.getCurrentState().getStreamLoadMgr().
                 getSyncSteamLoadTaskByTxnId(request.getTxnId());
 
@@ -1579,6 +1585,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
                     break;
                 }
                 ManualLoadTxnCommitAttachment streamAttachment = (ManualLoadTxnCommitAttachment) attachment;
+                entity.counterStreamLoadAbortedTotal.increase(1L);
 
                 if (streamLoadtask != null) {
                     streamLoadtask.setLoadState(streamAttachment, request.getReason());

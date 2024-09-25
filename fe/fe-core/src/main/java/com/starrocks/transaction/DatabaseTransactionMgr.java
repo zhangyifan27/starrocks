@@ -1222,6 +1222,7 @@ public class DatabaseTransactionMgr {
 
         resetTransactionStateTabletCommitInfos(transactionState);
         transactionState.notifyVisible();
+        transactionState.updateMetrics();
         // do after transaction finish
         GlobalStateMgr.getCurrentState().getOperationListenerBus().onStreamJobTransactionFinish(transactionState);
         GlobalStateMgr.getCurrentState().getLocalMetastore().handleMVRepair(transactionState);
@@ -1308,7 +1309,7 @@ public class DatabaseTransactionMgr {
                     // update data version
                     partitionCommitInfo.setDataVersion(partition.getNextDataVersion());
                     if (transactionState.getSourceType() != TransactionState.LoadJobSourceType.LAKE_COMPACTION &&
-                            partition.getVersionTxnType() == TransactionType.TXN_REPLICATION) { 
+                            partition.getVersionTxnType() == TransactionType.TXN_REPLICATION) {
                         partitionCommitInfo.setVersionEpoch(partition.nextVersionEpoch());
                     }
                     LOG.debug("set partition {} version to {} in transaction {}",
@@ -1919,6 +1920,7 @@ public class DatabaseTransactionMgr {
 
         resetTransactionStateTabletCommitInfos(transactionState);
         // do after transaction finish
+        transactionState.updateMetrics();
         GlobalStateMgr.getCurrentState().getOperationListenerBus().onStreamJobTransactionFinish(transactionState);
         GlobalStateMgr.getCurrentState().getLocalMetastore().handleMVRepair(transactionState);
         LOG.info("finish transaction {} successfully", transactionState);

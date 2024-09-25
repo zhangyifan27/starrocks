@@ -66,6 +66,8 @@ METRIC_DEFINE_INT_COUNTER(transaction_streaming_load_requests_total, MetricUnit:
 METRIC_DEFINE_INT_COUNTER(transaction_streaming_load_bytes, MetricUnit::BYTES);
 METRIC_DEFINE_INT_COUNTER(transaction_streaming_load_duration_ms, MetricUnit::MILLISECONDS);
 METRIC_DEFINE_INT_GAUGE(transaction_streaming_load_current_processing, MetricUnit::REQUESTS);
+METRIC_DEFINE_INT_GAUGE(transaction_streaming_load_finished, MetricUnit::REQUESTS);
+METRIC_DEFINE_INT_GAUGE(transaction_streaming_load_aborted, MetricUnit::REQUESTS);
 
 #ifndef BE_TEST
 static uint32_t interval = 30;
@@ -82,6 +84,10 @@ TransactionMgr::TransactionMgr(ExecEnv* exec_env) : _exec_env(exec_env) {
                                                              &transaction_streaming_load_duration_ms);
     StarRocksMetrics::instance()->metrics()->register_metric("transaction_streaming_load_current_processing",
                                                              &transaction_streaming_load_current_processing);
+    StarRocksMetrics::instance()->metrics()->register_metric("transaction_streaming_load_finished",
+                                                             &transaction_streaming_load_finished);
+    StarRocksMetrics::instance()->metrics()->register_metric("transaction_streaming_load_aborted",
+                                                             &transaction_streaming_load_aborted);
     _transaction_clean_thread = std::thread([this] {
 #ifdef GOOGLE_PROFILER
         ProfilerRegisterThread();
@@ -360,6 +366,7 @@ Status TransactionMgr::_commit_transaction(StreamLoadContext* ctx, bool prepare)
     transaction_streaming_load_duration_ms.increment(ctx->load_cost_nanos / 1000000);
     transaction_streaming_load_bytes.increment(ctx->receive_bytes);
     transaction_streaming_load_current_processing.increment(-1);
+    transaction_streaming_load_finished.increment(1);
 
     return Status::OK();
 }
@@ -386,6 +393,7 @@ Status TransactionMgr::_rollback_transaction(StreamLoadContext* ctx) {
     _exec_env->stream_context_mgr()->remove(ctx->label);
 
     transaction_streaming_load_current_processing.increment(-1);
+    transaction_streaming_load_aborted.increment(1);
 
     return Status::OK();
 }

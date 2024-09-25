@@ -154,6 +154,29 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_LOAD_ADD;
     public static LongCounterMetric COUNTER_LOAD_FINISHED;
     public static LongCounterMetric COUNTER_LOAD_PUBLISH_TIMEOUT;
+
+    // counter group by different kinds of load
+    public static LongCounterMetric COUNTER_STREAM_LOAD_TOTAL;
+    public static LongCounterMetric COUNTER_STREAM_LOAD_FINISHED;
+    public static LongCounterMetric COUNTER_STREAM_LOAD_ABORTED;
+    public static LongCounterMetric COUNTER_STREAM_LOAD_PREPARE;
+    public static LongCounterMetric COUNTER_STREAM_LOAD_PREPARED;
+    public static LongCounterMetric COUNTER_STREAM_LOAD_COMMITTED;
+
+    public static LongCounterMetric COUNTER_STREAM_LOAD_TOTAL_DURATION_MS;
+    public static LongCounterMetric COUNTER_STREAM_LOAD_WRITE_DURATION_MS;
+    public static LongCounterMetric COUNTER_STREAM_LOAD_WAIT_PUBLISH_DURATION_MS;
+    public static LongCounterMetric COUNTER_STREAM_LOAD_PUBLISH_DURATION_MS;
+    public static LongCounterMetric COUNTER_STREAM_LOAD_FINISH_TXN_DURATION_MS;
+    public static LongCounterMetric COUNTER_STREAM_LOAD_PUBLISH_TOTAL_DURATION_MS;
+
+    public static LongCounterMetric COUNTER_ROUTINE_LOAD_TOTAL_DURATION_MS;
+    public static LongCounterMetric COUNTER_ROUTINE_LOAD_WRITE_DURATION_MS;
+    public static LongCounterMetric COUNTER_ROUTINE_LOAD_WAIT_PUBLISH_DURATION_MS;
+    public static LongCounterMetric COUNTER_ROUTINE_LOAD_PUBLISH_DURATION_MS;
+    public static LongCounterMetric COUNTER_ROUTINE_LOAD_FINISH_TXN_DURATION_MS;
+    public static LongCounterMetric COUNTER_ROUTINE_LOAD_PUBLISH_TOTAL_DURATION_MS;
+
     public static LongCounterMetric COUNTER_EDIT_LOG_WRITE;
     public static LongCounterMetric COUNTER_EDIT_LOG_READ;
     public static LongCounterMetric COUNTER_EDIT_LOG_SIZE_BYTES;
@@ -481,8 +504,84 @@ public final class MetricRepo {
         COUNTER_LOAD_FINISHED = new LongCounterMetric("load_finished", MetricUnit.REQUESTS, "total load finished");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_LOAD_FINISHED);
         COUNTER_LOAD_PUBLISH_TIMEOUT =
-                new LongCounterMetric("load_publish_timeout", MetricUnit.REQUESTS, "counter of publish timeout load task");
+                new LongCounterMetric("load_publish_timeout", MetricUnit.REQUESTS,
+                        "counter of publish timeout load task");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_LOAD_PUBLISH_TIMEOUT);
+        COUNTER_STREAM_LOAD_TOTAL =
+                new LongCounterMetric("loads_total", MetricUnit.REQUESTS, "total stream load begun");
+        COUNTER_STREAM_LOAD_TOTAL.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_TOTAL);
+        COUNTER_STREAM_LOAD_FINISHED =
+                new LongCounterMetric("loads_finished", MetricUnit.REQUESTS, "total stream load finished");
+        COUNTER_STREAM_LOAD_FINISHED.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_FINISHED);
+        COUNTER_STREAM_LOAD_ABORTED =
+                new LongCounterMetric("loads_aborted", MetricUnit.REQUESTS, "total stream load aborted");
+        COUNTER_STREAM_LOAD_ABORTED.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_ABORTED);
+        COUNTER_STREAM_LOAD_PREPARE =
+                new LongCounterMetric("loads_prepare", MetricUnit.REQUESTS, "total stream load prepare");
+        COUNTER_STREAM_LOAD_PREPARE.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_PREPARE);
+        COUNTER_STREAM_LOAD_PREPARED =
+                new LongCounterMetric("loads_prepared", MetricUnit.REQUESTS, "total stream load prepared");
+        COUNTER_STREAM_LOAD_PREPARED.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_PREPARED);
+        COUNTER_STREAM_LOAD_COMMITTED =
+                new LongCounterMetric("loads_committed", MetricUnit.REQUESTS, "total stream load committed");
+        COUNTER_STREAM_LOAD_COMMITTED.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_COMMITTED);
+
+        COUNTER_STREAM_LOAD_TOTAL_DURATION_MS =
+                new LongCounterMetric("load_total_duration_ms", MetricUnit.REQUESTS, "total stream load committed");
+        COUNTER_STREAM_LOAD_TOTAL_DURATION_MS.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_TOTAL_DURATION_MS);
+        COUNTER_STREAM_LOAD_WRITE_DURATION_MS =
+                new LongCounterMetric("load_write_duration_ms", MetricUnit.REQUESTS, "total stream load committed");
+        COUNTER_STREAM_LOAD_WRITE_DURATION_MS.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_WRITE_DURATION_MS);
+        COUNTER_STREAM_LOAD_WAIT_PUBLISH_DURATION_MS =
+                new LongCounterMetric("load_wait_publish_duration_ms", MetricUnit.REQUESTS, "total stream load committed");
+        COUNTER_STREAM_LOAD_WAIT_PUBLISH_DURATION_MS.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_WAIT_PUBLISH_DURATION_MS);
+        COUNTER_STREAM_LOAD_PUBLISH_DURATION_MS =
+                new LongCounterMetric("load_publish_duration_ms", MetricUnit.REQUESTS, "total stream load committed");
+        COUNTER_STREAM_LOAD_PUBLISH_DURATION_MS.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_PUBLISH_DURATION_MS);
+        COUNTER_STREAM_LOAD_FINISH_TXN_DURATION_MS =
+                new LongCounterMetric("load_finish_txn_duration_ms", MetricUnit.REQUESTS, "total stream load committed");
+        COUNTER_STREAM_LOAD_FINISH_TXN_DURATION_MS.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_FINISH_TXN_DURATION_MS);
+        COUNTER_STREAM_LOAD_PUBLISH_TOTAL_DURATION_MS =
+                new LongCounterMetric("load_publish_total_duration_ms", MetricUnit.REQUESTS, "total stream load committed");
+        COUNTER_STREAM_LOAD_PUBLISH_TOTAL_DURATION_MS.addLabel(new MetricLabel("type", "stream_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_STREAM_LOAD_PUBLISH_TOTAL_DURATION_MS);
+
+        COUNTER_ROUTINE_LOAD_TOTAL_DURATION_MS =
+                new LongCounterMetric("load_total_duration_ms", MetricUnit.REQUESTS, "total routine load committed");
+        COUNTER_ROUTINE_LOAD_TOTAL_DURATION_MS.addLabel(new MetricLabel("type", "routine_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_TOTAL_DURATION_MS);
+        COUNTER_ROUTINE_LOAD_WRITE_DURATION_MS =
+                new LongCounterMetric("load_write_duration_ms", MetricUnit.REQUESTS, "total routine load committed");
+        COUNTER_ROUTINE_LOAD_WRITE_DURATION_MS.addLabel(new MetricLabel("type", "routine_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_WRITE_DURATION_MS);
+        COUNTER_ROUTINE_LOAD_WAIT_PUBLISH_DURATION_MS =
+                new LongCounterMetric("load_wait_publish_duration_ms", MetricUnit.REQUESTS, "total routine load committed");
+        COUNTER_ROUTINE_LOAD_WAIT_PUBLISH_DURATION_MS.addLabel(new MetricLabel("type", "routine_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_WAIT_PUBLISH_DURATION_MS);
+        COUNTER_ROUTINE_LOAD_PUBLISH_DURATION_MS =
+                new LongCounterMetric("load_publish_duration_ms", MetricUnit.REQUESTS, "total routine load committed");
+        COUNTER_ROUTINE_LOAD_PUBLISH_DURATION_MS.addLabel(new MetricLabel("type", "routine_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_PUBLISH_DURATION_MS);
+        COUNTER_ROUTINE_LOAD_FINISH_TXN_DURATION_MS =
+                new LongCounterMetric("load_finish_txn_duration_ms", MetricUnit.REQUESTS, "total routine load committed");
+        COUNTER_ROUTINE_LOAD_FINISH_TXN_DURATION_MS.addLabel(new MetricLabel("type", "routine_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_FINISH_TXN_DURATION_MS);
+        COUNTER_ROUTINE_LOAD_PUBLISH_TOTAL_DURATION_MS =
+                new LongCounterMetric("load_publish_total_duration_ms", MetricUnit.REQUESTS, "total routine load committed");
+        COUNTER_ROUTINE_LOAD_PUBLISH_TOTAL_DURATION_MS.addLabel(new MetricLabel("type", "routine_load"));
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_PUBLISH_TOTAL_DURATION_MS);
+
         COUNTER_EDIT_LOG_WRITE =
                 new LongCounterMetric("edit_log_write", MetricUnit.OPERATIONS, "counter of edit log write into bdbje");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_EDIT_LOG_WRITE);
@@ -514,7 +613,8 @@ public final class MetricRepo {
         COUNTER_TXN_REJECT =
                 new LongCounterMetric("txn_reject", MetricUnit.REQUESTS, "counter of rejected transactions");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_TXN_REJECT);
-        COUNTER_TXN_BEGIN = new LongCounterMetric("txn_begin", MetricUnit.REQUESTS, "counter of beginning transactions");
+        COUNTER_TXN_BEGIN =
+                new LongCounterMetric("txn_begin", MetricUnit.REQUESTS, "counter of beginning transactions");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_TXN_BEGIN);
         COUNTER_TXN_SUCCESS =
                 new LongCounterMetric("txn_success", MetricUnit.REQUESTS, "counter of success transactions");
