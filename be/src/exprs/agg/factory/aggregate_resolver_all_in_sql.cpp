@@ -78,23 +78,27 @@ void AggregateFuncResolver::register_all_in_sql() {
             std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE}, false,
             std::make_shared<Ttest2SampAggregateFunction>());
 
-    // expression, side, treatment, data, [cuped, alpha]
+    // expression, alternative, treatment, data[, cuped[, alpha[, pse_index, pse_data]]]
     // register for ttest 2 samp
     add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
-            std::string(AllInSqlFunctions::ttests_2samp), std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_INT, TYPE_ARRAY},
+            std::string(AllInSqlFunctions::ttests_2samp),
+            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY}, false,
+            std::make_shared<Ttests2SampAggregateFunction>());
+
+    add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
+            std::string(AllInSqlFunctions::ttests_2samp),
+            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR}, false,
+            std::make_shared<Ttests2SampAggregateFunction>());
+
+    add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
+            std::string(AllInSqlFunctions::ttests_2samp),
+            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE}, false,
+            std::make_shared<Ttests2SampAggregateFunction>());
+
+    add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
+            std::string(AllInSqlFunctions::ttests_2samp),
+            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_ARRAY},
             false, std::make_shared<Ttests2SampAggregateFunction>());
-
-    // register for ttest 2 samp
-    add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
-            std::string(AllInSqlFunctions::ttests_2samp),
-            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_INT, TYPE_ARRAY, TYPE_VARCHAR}, false,
-            std::make_shared<Ttests2SampAggregateFunction>());
-
-    // register for ttest 2 samp
-    add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
-            std::string(AllInSqlFunctions::ttests_2samp),
-            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_INT, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE}, false,
-            std::make_shared<Ttests2SampAggregateFunction>());
 
     add_aggregate_mapping<TYPE_VARCHAR, XexptTtest2SampAggregateState<std::string>>(
             std::string(AllInSqlFunctions::xexpt_ttest_2samp), std::vector{TYPE_BIGINT, TYPE_VARCHAR, TYPE_ARRAY},

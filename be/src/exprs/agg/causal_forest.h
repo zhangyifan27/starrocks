@@ -2078,7 +2078,9 @@ struct CausalForestData {
         return trainer.add(y, treatment, weight, data);
     }
 
-    Status merge(const CausalForestData& other) { return trainer.merge(other.trainer); }
+    Status merge(const CausalForestData& other) {
+        return trainer.merge(other.trainer);
+    }
 
     bool is_uninitialized() const { return trainer.is_init(); }
 
@@ -2146,7 +2148,7 @@ public:
         }
 
         if (this->data(state).is_uninitialized()) {
-            auto datum = down_cast<const JsonColumn*>(columns[0])->get(row_num);
+            auto datum = columns[0]->get(row_num);
             if (datum.is_null()) {
                 ctx->set_error("Internal Error: fail to get model json.");
                 return;
@@ -2191,7 +2193,7 @@ public:
         }
         CausalForestData other(serialized_data);
         DCHECK_EQ(serialized_data, reinterpret_cast<const uint8_t*>(data_slice.data) + data_size);
-        this->data(state).merge(other);
+        static_cast<void>(this->data(state).merge(other));
     }
 
     void serialize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {

@@ -1424,6 +1424,10 @@ public class FunctionSet {
                         Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true,
                 false));
 
+        addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR, 
+                        Type.DOUBLE, Type.ARRAY_VARCHAR), Type.VARCHAR, Type.VARBINARY, false, true, false));
+
         // expression, side, treatment, data, [cuped, alpha]
         addBuiltin(AggregateFunction.createBuiltin(TTESTS_2SAMP,
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.INT,

@@ -134,7 +134,7 @@ public:
                                 size_t count, ublas::vector<double> const& means,
                                 ublas::matrix<double> const& cov_matrix, double& var_y, ublas::matrix<double>& cov_XY,
                                 ublas::matrix<double>& cov_XX, ublas::matrix<double>& theta) {
-        CHECK(!cuped_expression.empty());
+        DCHECK(!cuped_expression.empty());
         std::vector<std::pair<std::string, ExprTree<double>>> expressions;
         std::vector<std::string> cuped_elements;
         boost::split(cuped_elements, cuped_expression, boost::is_any_of("+"));
