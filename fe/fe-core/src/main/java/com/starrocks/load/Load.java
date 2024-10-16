@@ -324,10 +324,11 @@ public class Load {
         // to the columnExprs will not affect the original columnExprs.
         List<ImportColumnDesc> copiedColumnExprs = Lists.newArrayListWithExpectedSize(columnExprs.size());
 
+        int columnNum = tbl.getFullSchema().size();
         for (ImportColumnDesc importColumnDesc : columnExprs) {
             String columnName = importColumnDesc.getColumnName();
 
-            if (tbl.getColumns().size() != 0 && tbl.getColumn(columnName) != null
+            if (columnNum != 0 && tbl.getColumn(columnName) != null
                     && tbl.getColumn(columnName).isGeneratedColumn()) {
                 throw new DdlException("generated column: " + columnName + " can not be specified");
             }

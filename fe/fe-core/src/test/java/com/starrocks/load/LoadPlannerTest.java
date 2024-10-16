@@ -822,13 +822,6 @@ public class LoadPlannerTest {
         columns.add(new Column("v2", ScalarType.createVarchar(50), false, null, true,
                 new ColumnDef.DefaultValueDef(true, new StringLiteral("asdf")), ""));
 
-        Function f1 = new Function(new FunctionName("casttobigint"), new Type[] {Type.VARCHAR},
-                Type.BIGINT, true);
-        Function f2 = new Function(new FunctionName("casttoint"), new Type[] {Type.VARCHAR},
-                Type.INT, true);
-        Function f3 = new Function(new FunctionName("casttotinyint"), new Type[] {Type.VARCHAR},
-                Type.TINYINT, true);
-
         new Expectations() {
             {
                 GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo();
@@ -852,7 +845,6 @@ public class LoadPlannerTest {
                 result = columns.get(2);
                 table.getColumn(Load.LOAD_OP_COLUMN);
                 result = null;
-                returns(f1, f2, f3);
 
                 globalStateMgr.getSqlParser();
                 result = new SqlParser(AstBuilder.getInstance());
