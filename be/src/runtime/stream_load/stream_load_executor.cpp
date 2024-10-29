@@ -70,6 +70,11 @@ static bool wait_txn_visible_until(const AuthInfo& auth, std::string_view db, st
 
 Status StreamLoadExecutor::execute_plan_fragment(StreamLoadContext* ctx) {
     StarRocksMetrics::instance()->txn_exec_plan_total.increment(1);
+    if (ctx->load_type == TLoadType::MANUAL_LOAD) {
+        StarRocksMetrics::instance()->streaming_load_current_processing.increment(1);
+    } else if (ctx->load_type == TLoadType::ROUTINE_LOAD) {
+        StarRocksMetrics::instance()->routine_load_current_processing.increment(1);
+    }
 // submit this params
 #ifndef BE_TEST
     ctx->ref();
@@ -131,6 +136,12 @@ Status StreamLoadExecutor::execute_plan_fragment(StreamLoadContext* ctx) {
                 }
                 ctx->write_data_cost_nanos = MonotonicNanos() - ctx->start_write_data_nanos;
                 ctx->promise.set_value(status);
+
+                if (ctx->load_type == TLoadType::MANUAL_LOAD) {
+                    StarRocksMetrics::instance()->streaming_load_current_processing.increment(-1);
+                } else if (ctx->load_type == TLoadType::ROUTINE_LOAD) {
+                    StarRocksMetrics::instance()->routine_load_current_processing.increment(-1);
+                }
 
                 if (!executor->runtime_state()->get_error_log_file_path().empty()) {
                     ctx->error_url = to_load_error_http_path(executor->runtime_state()->get_error_log_file_path());

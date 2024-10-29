@@ -360,6 +360,8 @@ public:
     METRIC_DEFINE_UINT_GAUGE(stream_load_pipe_count, MetricUnit::NOUNIT);
     METRIC_DEFINE_UINT_GAUGE(brpc_endpoint_stub_count, MetricUnit::NOUNIT);
     METRIC_DEFINE_UINT_GAUGE(tablet_writer_count, MetricUnit::NOUNIT);
+    METRIC_DEFINE_UINT_GAUGE(streaming_load_current_processing, MetricUnit::NOUNIT);
+    METRIC_DEFINE_UINT_GAUGE(routine_load_current_processing, MetricUnit::NOUNIT);
 
     // thread pool metrics
     METRICS_DEFINE_THREAD_POOL(publish_version);

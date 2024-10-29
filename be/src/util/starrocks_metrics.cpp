@@ -108,6 +108,8 @@ StarRocksMetrics::StarRocksMetrics() : _metrics(_s_registry_name) {
     REGISTER_STARROCKS_METRIC(get_kafka_watermark_offsets_cost_time_ms);
     REGISTER_STARROCKS_METRIC(get_pulsar_partitions_cost_time_ms);
     REGISTER_STARROCKS_METRIC(get_pulsar_last_message_id_cost_time_ms);
+    REGISTER_STARROCKS_METRIC(streaming_load_current_processing);
+    REGISTER_STARROCKS_METRIC(routine_load_current_processing);
 
     // push request
     _metrics.register_metric("push_requests_total", MetricLabels().add("status", "SUCCESS"),

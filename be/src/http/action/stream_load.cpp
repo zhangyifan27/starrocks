@@ -84,7 +84,6 @@ namespace starrocks {
 METRIC_DEFINE_INT_COUNTER(streaming_load_requests_total, MetricUnit::REQUESTS);
 METRIC_DEFINE_INT_COUNTER(streaming_load_bytes, MetricUnit::BYTES);
 METRIC_DEFINE_INT_COUNTER(streaming_load_duration_ms, MetricUnit::MILLISECONDS);
-METRIC_DEFINE_INT_GAUGE(streaming_load_current_processing, MetricUnit::REQUESTS);
 METRIC_DEFINE_INT_GAUGE(streaming_load_finished, MetricUnit::REQUESTS);
 METRIC_DEFINE_INT_GAUGE(streaming_load_aborted, MetricUnit::REQUESTS);
 
@@ -135,8 +134,6 @@ StreamLoadAction::StreamLoadAction(ExecEnv* exec_env, ConcurrentLimiter* limiter
                                                              &streaming_load_requests_total);
     StarRocksMetrics::instance()->metrics()->register_metric("streaming_load_bytes", &streaming_load_bytes);
     StarRocksMetrics::instance()->metrics()->register_metric("streaming_load_duration_ms", &streaming_load_duration_ms);
-    StarRocksMetrics::instance()->metrics()->register_metric("streaming_load_current_processing",
-                                                             &streaming_load_current_processing);
     StarRocksMetrics::instance()->metrics()->register_metric("streaming_load_finished",
                                                              &streaming_load_finished);
     StarRocksMetrics::instance()->metrics()->register_metric("streaming_load_aborted",
@@ -187,7 +184,6 @@ void StreamLoadAction::handle(HttpRequest* req) {
     // update statstics
     streaming_load_duration_ms.increment(ctx->load_cost_nanos / 1000000);
     streaming_load_bytes.increment(ctx->receive_bytes);
-    streaming_load_current_processing.increment(-1);
 }
 
 Status StreamLoadAction::_handle(StreamLoadContext* ctx) {
@@ -343,15 +339,10 @@ Status StreamLoadAction::_on_header(HttpRequest* http_req, StreamLoadContext* ct
     RETURN_IF_ERROR(_exec_env->stream_load_executor()->begin_txn(ctx));
     ctx->begin_txn_cost_nanos = MonotonicNanos() - begin_txn_start_time;
 
-    streaming_load_current_processing.increment(1);
     streaming_load_requests_total.increment(1);
 
     // process put file
-    auto st = _process_put(http_req, ctx);
-    if (!st.ok()) {
-        streaming_load_current_processing.increment(-1);
-    }
-    return st;
+    return _process_put(http_req, ctx);
 }
 
 void StreamLoadAction::on_chunk_data(HttpRequest* req) {
