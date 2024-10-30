@@ -122,7 +122,7 @@ public class ScanTest extends PlanTestBase {
         String plan = getFragmentPlan(sql);
         Assert.assertTrue(plan.contains("  1:Project\n"
                 + "  |  <slot 4> : 4: COLUMN_NAME\n"
-                + "  |  <slot 25> : upper(8: DATA_TYPE)\n"
+                + "  |  <slot 26> : upper(8: DATA_TYPE)\n"
                 + "  |  \n"
                 + "  0:SCAN SCHEMA\n"));
     }

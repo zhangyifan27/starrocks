@@ -49,6 +49,7 @@ SchemaScanner::ColumnDesc SchemaColumnsScanner::_s_col_columns[] = {
         {"DECIMAL_DIGITS", TypeDescriptor::from_logical_type(TYPE_BIGINT), sizeof(int64_t), true},
         {"GENERATION_EXPRESSION", TypeDescriptor::create_varchar_type(sizeof(StringValue)), sizeof(StringValue), true},
         {"SRS_ID", TypeDescriptor::from_logical_type(TYPE_BIGINT), sizeof(int64_t), true},
+        {"AGG_TYPE", TypeDescriptor::create_varchar_type(sizeof(StringValue)), sizeof(StringValue), true},
 };
 
 SchemaColumnsScanner::SchemaColumnsScanner()
@@ -508,6 +509,16 @@ Status SchemaColumnsScanner::fill_chunk(ChunkPtr* chunk) {
             {
                 ColumnPtr column = (*chunk)->get_column_by_slot_id(24);
                 fill_data_column_with_null(column.get());
+            }
+            break;
+        }
+        case 25: {
+            // SUM, MAX, MIN, REPLACE, HLL_UNION, NONE, BITMAP_UNION, REPLACE_IF_NOT_NULL, PERCENTILE_UNION
+            {
+                ColumnPtr column = (*chunk)->get_column_by_slot_id(25);
+                std::string* str = &_desc_result.columns[_column_index].columnDesc.aggregationType;
+                Slice value(str->c_str(), str->length());
+                fill_column_with_slot<TYPE_VARCHAR>(column.get(), (void*)&value);
             }
             break;
         }

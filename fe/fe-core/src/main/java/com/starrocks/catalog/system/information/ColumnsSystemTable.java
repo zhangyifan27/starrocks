@@ -58,6 +58,7 @@ public class ColumnsSystemTable {
                         .column("DECIMAL_DIGITS", ScalarType.createType(PrimitiveType.BIGINT))
                         .column("GENERATION_EXPRESSION", ScalarType.createVarchar(64))
                         .column("SRS_ID", ScalarType.createType(PrimitiveType.BIGINT))
+                        .column("AGG_TYPE", ScalarType.createVarchar(255))
                         .build(), TSchemaTableType.SCH_COLUMNS);
     }
 }

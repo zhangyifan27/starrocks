@@ -1015,6 +1015,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             } else {
                 desc.setColumnKey("");
             }
+            desc.setAggregationType(column.isAggregated() ? column.getAggregationType().toString() : "");
             desc.setDataType(column.getType().toMysqlDataTypeString());
             desc.setColumnTypeStr(column.getType().toMysqlColumnTypeString());
             String generatedColumnExprStr = column.generatedColumnExprToString();
