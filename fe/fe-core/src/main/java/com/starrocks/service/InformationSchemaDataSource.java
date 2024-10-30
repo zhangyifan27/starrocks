@@ -19,9 +19,11 @@ import com.google.common.collect.Lists;
 import com.google.gson.Gson;
 import com.starrocks.catalog.BasicTable;
 import com.starrocks.catalog.Column;
+import com.starrocks.catalog.ColumnId;
 import com.starrocks.catalog.DataProperty;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.DistributionInfo;
+import com.starrocks.catalog.Index;
 import com.starrocks.catalog.InternalCatalog;
 import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.MaterializedIndexMeta;
@@ -55,12 +57,15 @@ import com.starrocks.thrift.TGetPartitionsMetaRequest;
 import com.starrocks.thrift.TGetPartitionsMetaResponse;
 import com.starrocks.thrift.TGetTablesConfigRequest;
 import com.starrocks.thrift.TGetTablesConfigResponse;
+import com.starrocks.thrift.TGetTablesIndexRequest;
+import com.starrocks.thrift.TGetTablesIndexResponse;
 import com.starrocks.thrift.TGetTablesInfoRequest;
 import com.starrocks.thrift.TGetTablesInfoResponse;
 import com.starrocks.thrift.TGetTemporaryTablesInfoRequest;
 import com.starrocks.thrift.TGetTemporaryTablesInfoResponse;
 import com.starrocks.thrift.TPartitionMetaInfo;
 import com.starrocks.thrift.TTableConfigInfo;
+import com.starrocks.thrift.TTableIndexInfo;
 import com.starrocks.thrift.TTableInfo;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -613,5 +618,57 @@ public class InformationSchemaDataSource {
         info.setData_length(DEFAULT_EMPTY_NUM);
         info.setUpdate_time(DEFAULT_EMPTY_NUM);
         return info;
+    }
+
+    public static TGetTablesIndexResponse generateTablesIndexResponse(TGetTablesIndexRequest request)
+            throws TException {
+        TGetTablesIndexResponse response = new TGetTablesIndexResponse();
+        AuthDbRequestResult result = getAuthDbRequestResult(request.getAuth_info());
+
+        for (String dbName : result.authorizedDbs) {
+            Database db = GlobalStateMgr.getCurrentState().getDb(dbName);
+            if (db == null) {
+                continue;
+            }
+            List<Table> allTables = db.getTables();
+            for (Table table : allTables) {
+                try {
+                    Authorizer.checkAnyActionOnTableLikeObject(result.currentUser,
+                            null, dbName, table);
+                } catch (AccessDeniedException e) {
+                    continue;
+                }
+                if (!table.isNativeTableOrMaterializedView()) {
+                    continue;
+                }
+                Locker locker = new Locker();
+                locker.lockDatabase(db, LockType.READ);
+                try {
+                    OlapTable olapTable = (OlapTable) table;
+                    // fill index meta info
+                    for (Index index : olapTable.getIndexes()) {
+                        TTableIndexInfo tableIndexInfo = new TTableIndexInfo();
+                        tableIndexInfo.setDb_name(dbName);
+                        tableIndexInfo.setTable_name(olapTable.getName());
+                        tableIndexInfo.setIndex_name(index.getIndexName());
+                        tableIndexInfo.setIndex_type(index.getIndexType().name());
+                        tableIndexInfo.setComment(index.getComment());
+                        tableIndexInfo.setColumn_name(getIndexColumn(index));
+                        response.addToTables_index(tableIndexInfo);
+                    }
+                } finally {
+                    locker.unLockDatabase(db, LockType.READ);
+                }
+            }
+        }
+        return response;
+    }
+
+    private static String getIndexColumn(Index index) {
+        List<String> colNames = Lists.newArrayList();
+        for (ColumnId column : index.getColumns()) {
+            colNames.add(column.getId());
+        }
+        return Joiner.on(", ").join(colNames);
     }
 }

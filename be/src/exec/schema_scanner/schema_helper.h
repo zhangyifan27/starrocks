@@ -110,6 +110,10 @@ public:
     static Status get_partitions_meta(const SchemaScannerState& state, const TGetPartitionsMetaRequest& var_params,
                                       TGetPartitionsMetaResponse* var_result);
 
+    static Status get_tables_index(const std::string& ip, const int32_t port,
+                                   const TGetTablesIndexRequest& var_params,
+                                   TGetTablesIndexResponse* var_result, int timeout_ms);
+
 private:
     static Status _call_rpc(const SchemaScannerState& state,
                             std::function<void(ClientConnection<FrontendServiceClient>&)> callback);

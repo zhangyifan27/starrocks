@@ -64,6 +64,7 @@
 #include "exprs/literal.h"
 #include "gen_cpp/Descriptors_types.h"
 #include "gen_cpp/FrontendService_types.h"
+#include "exec/schema_scanner/schema_tables_index_scanner.h"
 
 namespace starrocks {
 
@@ -213,6 +214,8 @@ std::unique_ptr<SchemaScanner> SchemaScanner::create(TSchemaTableType::type type
         return std::make_unique<SysFeMemoryUsage>();
     case TSchemaTableType::SCH_TEMP_TABLES:
         return std::make_unique<SchemaTempTablesScanner>();
+    case TSchemaTableType::SCH_TABLES_INDEX:
+        return std::make_unique<SchemaTablesIndexScanner>();
     default:
         return std::make_unique<SchemaDummyScanner>();
     }

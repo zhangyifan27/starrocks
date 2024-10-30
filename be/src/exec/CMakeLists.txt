@@ -137,6 +137,7 @@ set(EXEC_FILES
     schema_scanner/schema_schema_privileges_scanner.cpp
     schema_scanner/schema_table_privileges_scanner.cpp
     schema_scanner/schema_tables_config_scanner.cpp
+    schema_scanner/schema_tables_index_scanner.cpp
     schema_scanner/schema_be_metrics_scanner.cpp
     schema_scanner/schema_be_tablets_scanner.cpp
     schema_scanner/schema_be_txns_scanner.cpp

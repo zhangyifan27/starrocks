@@ -224,6 +224,8 @@ import com.starrocks.thrift.TGetTablePrivsParams;
 import com.starrocks.thrift.TGetTablePrivsResult;
 import com.starrocks.thrift.TGetTablesConfigRequest;
 import com.starrocks.thrift.TGetTablesConfigResponse;
+import com.starrocks.thrift.TGetTablesIndexRequest;
+import com.starrocks.thrift.TGetTablesIndexResponse;
 import com.starrocks.thrift.TGetTablesInfoRequest;
 import com.starrocks.thrift.TGetTablesInfoResponse;
 import com.starrocks.thrift.TGetTablesParams;
@@ -2498,6 +2500,11 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     @Override
     public TGetTablesInfoResponse getTablesInfo(TGetTablesInfoRequest request) throws TException {
         return InformationSchemaDataSource.generateTablesInfoResponse(request);
+    }
+
+    @Override
+    public TGetTablesIndexResponse getTablesIndex(TGetTablesIndexRequest request) throws TException {
+        return InformationSchemaDataSource.generateTablesIndexResponse(request);
     }
 
     /**

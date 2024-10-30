@@ -118,4 +118,5 @@ public class SystemId {
     // Remain for other datacache manage table
 
     public static final long PARTITIONS_META_ID = 140L;
+    public static final long TABLES_INDEX_ID = 141L;
 }

@@ -1531,6 +1531,23 @@ struct TGetTemporaryTablesInfoResponse {
     1: optional list<TTableInfo> tables_infos
 }
 
+struct TTableIndexInfo {
+    1: optional string db_name
+    2: optional string table_name
+    3: optional string index_name
+    4: optional string column_name
+    5: optional string index_type
+    6: optional string comment
+}
+
+struct TGetTablesIndexRequest {
+    1: optional TAuthInfo auth_info
+}
+
+struct TGetTablesIndexResponse {
+    1: optional list<TTableIndexInfo> tables_index
+}
+
 struct TTabletSchedule {
     1: optional i64 table_id
     2: optional i64 partition_id
@@ -1899,6 +1916,8 @@ service FrontendService {
     TGetStreamLoadsResult getStreamLoads(1:TGetLoadsParams params)
 
     TGetProfileResponse getQueryProfile(1:TGetProfileRequest request)
+
+    TGetTablesIndexResponse getTablesIndex(1: TGetTablesIndexRequest request)
 
     TDescribeTableResult describeTable(1:TDescribeTableParams params)
     TShowVariableResult showVariables(1:TShowVariableRequest params)
