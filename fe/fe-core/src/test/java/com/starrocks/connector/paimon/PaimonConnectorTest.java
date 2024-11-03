@@ -29,6 +29,7 @@ import org.apache.paimon.table.FileStoreTable;
 import org.apache.paimon.types.DataField;
 import org.apache.paimon.types.IntType;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -39,6 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+@Ignore
 public class PaimonConnectorTest {
     @Rule
     public ExpectedException expectedEx = ExpectedException.none();

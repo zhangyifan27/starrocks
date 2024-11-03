@@ -22,10 +22,10 @@
 #####################################################
 
 # HADOOP
-HADOOP_DOWNLOAD="https://archive.apache.org/dist/hadoop/common/hadoop-3.4.0/hadoop-3.4.0.tar.gz"
-HADOOP_NAME="hadoop-3.4.0.tar.gz"
-HADOOP_SOURCE="hadoop-3.4.0"
-HADOOP_MD5SUM="2f9244ab73169cf7bc0811d932067f6b"
+HADOOP_DOWNLOAD="https://mirrors.tencent.com/repository/generic/tq-hadoop/hadoop-3.2.1-tq-1.2.3.tar.gz"
+HADOOP_NAME="hadoop-3.2.1-tq-1.2.3.tar.gz"
+HADOOP_SOURCE="hadoop-3.2.1-tq-1.2.3"
+HADOOP_MD5SUM="4abf55f58374f0939b0a4f673d8f0792"
 
 # OPEN JDK
 JDK_DOWNLOAD="https://cdn-thirdparty.starrocks.com/java-se-8u41-ri.tar.gz"

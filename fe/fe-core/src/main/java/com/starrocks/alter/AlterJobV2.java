@@ -34,6 +34,7 @@
 
 package com.starrocks.alter;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.catalog.Database;
@@ -55,7 +56,6 @@ import com.starrocks.server.WarehouseManager;
 import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.warehouse.WarehouseIdleChecker;
 import io.opentelemetry.api.trace.Span;
-import org.apache.hadoop.util.Lists;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

@@ -15,6 +15,7 @@
 package com.starrocks.sql.analyzer;
 
 import com.google.common.base.Joiner;
+import com.google.common.collect.Lists;
 import com.starrocks.alter.AlterJobMgr;
 import com.starrocks.analysis.SlotRef;
 import com.starrocks.catalog.BaseTableInfo;
@@ -39,7 +40,6 @@ import com.starrocks.utframe.StarRocksAssert;
 import com.starrocks.utframe.UtFrameUtils;
 import mockit.Expectations;
 import mockit.Mocked;
-import org.apache.hadoop.util.Lists;
 import org.junit.Assert;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Assertions;

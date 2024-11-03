@@ -351,8 +351,9 @@ public class FileSystemManager {
                 if (authentication.equals(AUTHENTICATION_KERBEROS)) {
                     conf.set(CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION,
                             AUTHENTICATION_KERBEROS);
-                    conf.set(CommonConfigurationKeysPublic.HADOOP_KERBEROS_KEYTAB_LOGIN_AUTORENEWAL_ENABLED,
-                            "true");
+                    //conf.set(CommonConfigurationKeysPublic.HADOOP_KERBEROS_KEYTAB_LOGIN_AUTORENEWAL_ENABLED,
+                    //        "true");
+                    conf.set("hadoop.kerberos.keytab.login.autorenewal.enabled", "true");
 
                     String principal = preparePrincipal(properties.get(KERBEROS_PRINCIPAL));
                     String keytab = "";
@@ -834,7 +835,8 @@ public class FileSystemManager {
                 UserGroupInformation ugi = null;
                 if (authentication.equalsIgnoreCase(AUTHENTICATION_KERBEROS)) {
                     conf.set(CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION, AUTHENTICATION_KERBEROS);
-                    conf.set(CommonConfigurationKeysPublic.HADOOP_KERBEROS_KEYTAB_LOGIN_AUTORENEWAL_ENABLED, "true");
+                    //conf.set(CommonConfigurationKeysPublic.HADOOP_KERBEROS_KEYTAB_LOGIN_AUTORENEWAL_ENABLED, "true");
+                    conf.set("hadoop.kerberos.keytab.login.autorenewal.enabled", "true");
                     conf.set(FS_ABSTRACTFILESYSTEM_COSN_IMPL, "org.apache.hadoop.fs.CosN");
                     conf.set(FS_COSN_TRSF_FS_ABSTRACTFILESYSTEM_OFS_IMPL, "com.qcloud.chdfs.fs.CHDFSDelegateFSAdapter");
                     conf.set(FS_COSN_TRSF_FS_OFS_IMPL, "com.qcloud.chdfs.fs.CHDFSHadoopFileSystemAdapter");

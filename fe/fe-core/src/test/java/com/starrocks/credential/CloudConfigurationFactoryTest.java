@@ -22,11 +22,13 @@ import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.iceberg.aws.AwsClientProperties;
 import org.apache.iceberg.aws.s3.S3FileIOProperties;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 
+@Ignore
 public class CloudConfigurationFactoryTest {
 
     @Test

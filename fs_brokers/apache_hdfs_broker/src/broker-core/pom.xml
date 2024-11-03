@@ -293,11 +293,11 @@ under the License.
                 <artifactId>maven-thrift-plugin</artifactId>
                 <version>0.1.11</version>
                 <configuration>
-                    <thriftExecutable>${env.STARROCKS_THIRDPARTY}/installed/bin/thrift</thriftExecutable>
+<!--                    <thriftExecutable>${env.STARROCKS_THIRDPARTY}/installed/bin/thrift</thriftExecutable>-->
                     <thriftSourceRoot>${basedir}/src/main/resources/thrift/</thriftSourceRoot>
                     <outputDirectory>${basedir}/src/main/thrift/</outputDirectory>
                     <generator>java</generator>
-                    <skip>${skip.plugin}</skip>
+<!--                    <skip>${skip.plugin}</skip>-->
                 </configuration>
                 <executions>
                     <execution>

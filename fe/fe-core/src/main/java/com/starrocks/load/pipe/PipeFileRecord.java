@@ -27,7 +27,6 @@ import io.netty.buffer.Unpooled;
 import org.apache.commons.collections4.ListUtils;
 import org.apache.commons.lang3.EnumUtils;
 import org.apache.commons.lang3.StringUtils;
-import org.apache.hadoop.fs.EtagSource;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.logging.log4j.util.Strings;
 
@@ -91,12 +90,7 @@ public class PipeFileRecord {
         PipeFileRecord record = new PipeFileRecord();
         record.fileName = file.getPath().toString();
         record.fileSize = file.getLen();
-        if (file instanceof EtagSource) {
-            EtagSource s3File = (EtagSource) file;
-            record.fileVersion = s3File.getEtag();
-        } else {
-            record.fileVersion = String.valueOf(file.getModificationTime());
-        }
+        record.fileVersion = String.valueOf(file.getModificationTime());
         record.lastModified = DateUtils.fromEpochMillis(file.getModificationTime(), ZoneOffset.UTC);
         record.stagedTime = LocalDateTime.now();
         record.loadState = FileListRepo.PipeFileState.UNLOADED;

@@ -37,14 +37,15 @@
 
 package com.starrocks.credential.provider;
 
+import com.google.common.annotations.VisibleForTesting;
+import com.google.common.collect.Sets;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.classification.InterfaceAudience;
 import org.apache.hadoop.classification.InterfaceStability;
-import org.apache.hadoop.classification.VisibleForTesting;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.PathIOException;
 import org.apache.hadoop.fs.s3a.AWSCredentialProviderList;
-import org.apache.hadoop.fs.s3a.CredentialInitializationException;
+//import org.apache.hadoop.fs.s3a.CredentialInitializationException;
 import org.apache.hadoop.fs.s3a.Invoker;
 import org.apache.hadoop.fs.s3a.Retries;
 import org.apache.hadoop.fs.s3a.S3ARetryPolicy;
@@ -52,13 +53,12 @@ import org.apache.hadoop.fs.s3a.S3AUtils;
 import org.apache.hadoop.fs.s3a.SimpleAWSCredentialsProvider;
 import org.apache.hadoop.fs.s3a.auth.STSClientFactory;
 import org.apache.hadoop.security.UserGroupInformation;
-import org.apache.hadoop.util.Sets;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsCredentials;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.auth.credentials.EnvironmentVariableCredentialsProvider;
-import software.amazon.awssdk.core.exception.SdkClientException;
+//import software.amazon.awssdk.core.exception.SdkClientException;
 import software.amazon.awssdk.services.sts.StsClient;
 import software.amazon.awssdk.services.sts.auth.StsAssumeRoleCredentialsProvider;
 import software.amazon.awssdk.services.sts.model.AssumeRoleRequest;
@@ -208,23 +208,24 @@ public final class AssumedRoleCredentialProvider implements AwsCredentialsProvid
     @Override
     @Retries.RetryRaw
     public AwsCredentials resolveCredentials() {
-        try {
-            return invoker.retryUntranslated("resolveCredentials",
-                    true,
-                    stsProvider::resolveCredentials);
-        } catch (IOException e) {
-            // this is in the signature of retryUntranslated;
-            // its hard to see how this could be raised, but for
-            // completeness, it is wrapped as an Amazon Client Exception
-            // and rethrown.
-            throw new CredentialInitializationException(
-                    "getCredentials failed: " + e,
-                    e);
-        } catch (SdkClientException e) {
-            LOG.error("Failed to resolve credentials for role {}",
-                    arn, e);
-            throw e;
-        }
+        //        try {
+        //            return invoker.retryUntranslated("resolveCredentials",
+        //                    true,
+        //                    stsProvider::resolveCredentials);
+        //        } catch (IOException e) {
+        //            // this is in the signature of retryUntranslated;
+        //            // its hard to see how this could be raised, but for
+        //            // completeness, it is wrapped as an Amazon Client Exception
+        //            // and rethrown.
+        //            throw new CredentialInitializationException(
+        //                    "getCredentials failed: " + e,
+        //                    e);
+        //        } catch (SdkClientException e) {
+        //            LOG.error("Failed to resolve credentials for role {}",
+        //                    arn, e);
+        //            throw e;
+        //        }
+        return null;
     }
 
     /**

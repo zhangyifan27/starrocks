@@ -14,6 +14,7 @@
 
 package com.starrocks.planner;
 
+import com.google.common.collect.Lists;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.analysis.TupleId;
 import com.starrocks.catalog.system.SystemTable;
@@ -28,7 +29,6 @@ import mockit.Expectations;
 import mockit.Mock;
 import mockit.MockUp;
 import mockit.Mocked;
-import org.apache.hadoop.util.Lists;
 import org.junit.Assert;
 import org.junit.Test;
 

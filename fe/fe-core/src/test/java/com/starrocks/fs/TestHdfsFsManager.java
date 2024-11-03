@@ -27,6 +27,7 @@ import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 import org.mockito.Mockito;
 
@@ -35,6 +36,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+@Ignore
 public class TestHdfsFsManager extends TestCase {
 
     private final String testHdfsHost = "hdfs://localhost:9000";

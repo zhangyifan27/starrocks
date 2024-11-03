@@ -15,9 +15,9 @@
 package com.starrocks.sql.util;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.operator.Operator;
-import org.apache.hadoop.util.Lists;
 
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;

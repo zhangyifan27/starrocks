@@ -17,9 +17,9 @@ package com.starrocks.sql.util;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
+import com.google.common.collect.Lists;
 import com.google.errorprone.annotations.CanIgnoreReturnValue;
 import com.google.errorprone.annotations.DoNotCall;
-import org.apache.hadoop.util.Lists;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;

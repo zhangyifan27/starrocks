@@ -88,3 +88,9 @@ be/tags
 build/
 cmake-build-debug/
 CMakeLists.txt
+
+# ignore broker
+fs_brokers/apache_hdfs_broker/src/broker-core/src/main/thrift
+fs_brokers/apache_hdfs_broker/src/broker-core/target
+fs_brokers/apache_hdfs_broker/src/hadoop-cos-shaded/target
+fs_brokers/apache_hdfs_broker/target

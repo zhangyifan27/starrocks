@@ -15,11 +15,11 @@
 package com.starrocks.catalog.constraint;
 
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.starrocks.catalog.BaseTableInfo;
 import com.starrocks.catalog.Table;
 import com.starrocks.sql.optimizer.rule.transformation.materialization.MvUtils;
 import org.apache.commons.collections.CollectionUtils;
-import org.apache.hadoop.util.Sets;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 

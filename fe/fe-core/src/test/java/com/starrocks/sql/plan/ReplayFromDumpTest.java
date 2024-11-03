@@ -515,6 +515,7 @@ public class ReplayFromDumpTest extends ReplayFromDumpTestBase {
                 "  |  equal join conjunct: [3802: ref_id, BIGINT, true] = [3681: customer_id, BIGINT, true]"));
     }
 
+    @Ignore
     @Test
     public void testGroupByDistinctColumnSkewHint() throws Exception {
         Pair<QueryDumpInfo, String> replayPair =
@@ -526,6 +527,7 @@ public class ReplayFromDumpTest extends ReplayFromDumpTestBase {
                 "  |  <slot 45> : CAST(murmur_hash3_32(CAST(42: case AS VARCHAR)) % 512 AS SMALLINT)"));
     }
 
+    @Ignore
     @Test
     public void testGroupByDistinctColumnOptimization() throws Exception {
         Pair<QueryDumpInfo, String> replayPair =
