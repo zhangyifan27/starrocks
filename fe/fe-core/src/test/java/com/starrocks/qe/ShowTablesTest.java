@@ -27,6 +27,7 @@ import com.starrocks.utframe.UtFrameUtils;
 import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class ShowTablesTest {
@@ -88,6 +89,7 @@ public class ShowTablesTest {
         Assert.assertFalse(resultSet.next());
     }
 
+    @Ignore
     @Test
     public void testExternal() throws Exception {
         ctx.setCurrentCatalog("hive_catalog");

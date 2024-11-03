@@ -41,6 +41,8 @@ import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
+import com.starrocks.mysql.security.TdwAuthenticate;
+import com.starrocks.privilege.AccessDeniedException;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.UserIdentity;
@@ -74,7 +76,19 @@ public class MysqlProto {
         AuthenticationMgr authenticationManager = context.getGlobalStateMgr().getAuthenticationMgr();
         UserIdentity currentUser = null;
         if (Config.enable_auth_check) {
-            currentUser = authenticationManager.checkPassword(user, remoteIp, scramble, randomString);
+            try {
+                if (TdwAuthenticate.useTAUTH(user)) {
+                    currentUser = TdwAuthenticate.tauthAuthenticate(authenticationManager, user);
+                } else if (TdwAuthenticate.useTdwAuthenticate(user)) {
+                    currentUser = TdwAuthenticate.authenticate(authenticationManager, user, scramble, randomString);
+                } else {
+                    currentUser = authenticationManager.checkPassword(user, remoteIp, scramble, randomString);
+                }
+            } catch (AccessDeniedException e) {
+                ErrorReport.report(ErrorCode.ERR_ACCESS_DENIED_WITH_REASON_ERROR, user, usePasswd, e.getMessage());
+                return false;
+            }
+
             if (currentUser == null) {
                 ErrorReport.report(ErrorCode.ERR_AUTHENTICATION_FAIL, user, usePasswd);
                 return false;
@@ -96,7 +110,7 @@ public class MysqlProto {
             context.setCurrentRoleIds(currentUser);
             context.setAuthDataSalt(randomString);
         }
-        context.setQualifiedUser(user);
+        context.setQualifiedUser(currentUser.getUser());
         return true;
     }
 

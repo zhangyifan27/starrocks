@@ -1150,9 +1150,9 @@ public class PrivilegeCheckerTest {
         // check refresh external table: ALTER
         verifyGrantRevoke(
                 "refresh external table db1.tbl1",
-                "grant ALTER on db1.tbl1 to test",
-                "revoke ALTER on db1.tbl1 from test",
-                "Access denied; you need (at least one of) the ALTER privilege(s) on TABLE tbl1 for this operation");
+                "grant SELECT on db1.tbl1 to test",
+                "revoke SELECT on db1.tbl1 from test",
+                "Access denied; you need (at least one of) the SELECT privilege(s) on TABLE tbl1 for this operation");
 
         // check alter table: ALTER
         verifyGrantRevoke(

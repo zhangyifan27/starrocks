@@ -45,6 +45,9 @@ public enum ErrorCode {
             "Can't drop database '%s'; database doesn't exist"),
     ERR_AUTHENTICATION_FAIL(1045, new byte[] {'2', '8', '0', '0', '0'},
             "Access denied for user '%s' (using password: %s)"),
+    ERR_ACCESS_DENIED_WITH_REASON_ERROR(1045, new byte[] {'2', '8', '0', '0', '0'},
+            "Access denied for user '%s' (using password: %s), reason is %s"),
+
     ERR_NO_DB_ERROR(1046, new byte[] {'3', 'D', '0', '0', '0'}, "No database selected"),
     ERR_UNKNOWN_COM_ERROR(1047, new byte[] {'0', '8', 'S', '0', '1'}, "Unknown command"),
     ERR_TABLE_EXISTS_ERROR(1050, new byte[] {'4', '2', 'S', '0', '1'}, "Table '%s' already exists"),

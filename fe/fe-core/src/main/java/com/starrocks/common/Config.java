@@ -1898,6 +1898,23 @@ public class Config extends ConfigBase {
      */
     @ConfField(mutable = true)
     public static String authentication_kerberos_service_key_tab = "";
+    /**
+     * If set to true, enable TDW Authentication
+     */
+    @ConfField
+    public static boolean enable_tdw_authentication = false;
+    @ConfField(mutable = true)
+    public static boolean tdw_authentication_skip_root = false;
+    @ConfField
+    public static long tdw_user_cache_ttl_s = 60L * 5L;
+    @ConfField
+    public static long tdw_user_cache_count = 100L;
+    @ConfField
+    public static int tdw_check_priv_timeout = 3000;
+    @ConfField(mutable = true)
+    public static boolean tdw_ups_tauth_api_enabled = false;
+    @ConfField
+    public static String tdw_privapi_service_target = "tdwprivapi";
 
     /**
      * When set to true, we cannot drop user named 'admin' or grant/revoke role to/from user named 'admin',

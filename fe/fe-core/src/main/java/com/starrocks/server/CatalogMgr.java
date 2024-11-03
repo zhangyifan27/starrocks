@@ -52,6 +52,8 @@ import com.starrocks.persist.metablock.SRMetaBlockID;
 import com.starrocks.persist.metablock.SRMetaBlockReader;
 import com.starrocks.persist.metablock.SRMetaBlockWriter;
 import com.starrocks.privilege.NativeAccessController;
+import com.starrocks.privilege.ranger.RangerEmptyAccessController;
+import com.starrocks.privilege.ranger.RangerTDWAccessController;
 import com.starrocks.privilege.ranger.hive.RangerHiveAccessController;
 import com.starrocks.privilege.ranger.starrocks.RangerStarRocksAccessController;
 import com.starrocks.sql.analyzer.Authorizer;
@@ -59,6 +61,7 @@ import com.starrocks.sql.ast.AlterCatalogStmt;
 import com.starrocks.sql.ast.CreateCatalogStmt;
 import com.starrocks.sql.ast.DropCatalogStmt;
 import com.starrocks.sql.ast.ModifyTablePropertiesClause;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -77,6 +80,7 @@ import java.util.stream.Collectors;
 
 import static com.starrocks.catalog.ResourceMgr.NEED_MAPPING_CATALOG_RESOURCES;
 import static com.starrocks.connector.hive.HiveConnector.HIVE_METASTORE_URIS;
+import static com.starrocks.connector.iceberg.IcebergCatalogProperties.ICEBERG_METASTORE_URIS;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.getResourceMappingCatalogName;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.isResourceMappingCatalog;
 
@@ -115,18 +119,6 @@ public class CatalogMgr {
             Preconditions.checkState(!catalogs.containsKey(catalogName), "Catalog '%s' already exists", catalogName);
 
             try {
-                Preconditions.checkState(!catalogs.containsKey(catalogName), "Catalog '%s' already exists", catalogName);
-                String serviceName = properties.get("ranger.plugin.hive.service.name");
-                if (serviceName == null || serviceName.isEmpty()) {
-                    if (Config.access_control.equals("ranger")) {
-                        Authorizer.getInstance().setAccessControl(catalogName, new RangerStarRocksAccessController());
-                    } else {
-                        Authorizer.getInstance().setAccessControl(catalogName, new NativeAccessController());
-                    }
-                } else {
-                    Authorizer.getInstance().setAccessControl(catalogName, new RangerHiveAccessController(serviceName));
-                }
-
                 connector = connectorMgr.createConnector(
                         new ConnectorContext(catalogName, type, properties), false);
                 if (null == connector) {
@@ -137,6 +129,9 @@ public class CatalogMgr {
                         ConnectorTableId.CONNECTOR_ID_GENERATOR.getNextId().asInt() :
                         GlobalStateMgr.getCurrentState().getNextId();
                 catalog = new ExternalCatalog(id, catalogName, comment, properties);
+                //set access control for every catalog
+                setAccessControl(catalogName, properties);
+
                 catalogs.put(catalogName, catalog);
 
                 if (!isResourceMappingCatalog(catalogName)) {
@@ -146,13 +141,15 @@ public class CatalogMgr {
                 LOG.error("connector create failed. catalog [{}] ", catalogName, e);
                 throw new DdlException(String.format("connector create failed {%s}", e.getMessage()));
             }
-        } catch (Exception e) {
-            if (connector != null && connectorMgr.connectorExists(catalogName)) {
-                connectorMgr.removeConnector(catalogName);
-            }
+        } catch (Throwable e) {
+            if (!(e instanceof IllegalStateException)) {
+                if (connector != null && connectorMgr.connectorExists(catalogName)) {
+                    connectorMgr.removeConnector(catalogName);
+                }
 
-            if (catalog != null) {
-                catalogs.remove(catalogName);
+                if (catalog != null) {
+                    catalogs.remove(catalogName);
+                }
             }
 
             throw e;
@@ -197,18 +194,13 @@ public class CatalogMgr {
                 Map<String, String> properties = ((ModifyTablePropertiesClause) stmt.getAlterClause()).getProperties();
                 String serviceName = properties.get("ranger.plugin.hive.service.name");
 
+                //set access control for every catalog
+                setAccessControl(catalogName, catalog.getConfig());
                 if (Strings.isNullOrEmpty(serviceName)) {
-                    if (Config.access_control.equals("ranger")) {
-                        Authorizer.getInstance().setAccessControl(catalogName, new RangerStarRocksAccessController());
-                    } else {
-                        Authorizer.getInstance().setAccessControl(catalogName, new NativeAccessController());
-                    }
+                    catalog.getConfig().remove("ranger.plugin.hive.service.name");
                 } else {
-                    Authorizer.getInstance().setAccessControl(catalogName, new RangerHiveAccessController(serviceName));
+                    catalog.getConfig().put("ranger.plugin.hive.service.name", serviceName);
                 }
-
-                catalog.getConfig().put("ranger.plugin.hive.service.name", serviceName);
-
                 AlterCatalogLog alterCatalogLog = new AlterCatalogLog(catalogName, properties);
                 GlobalStateMgr.getCurrentState().getEditLog().logAlterCatalog(alterCatalogLog);
             }
@@ -278,18 +270,6 @@ public class CatalogMgr {
                 readUnlock();
             }
 
-            Map<String, String> properties = catalog.getConfig();
-            String serviceName = properties.get("ranger.plugin.hive.service.name");
-            if (serviceName == null || serviceName.isEmpty()) {
-                if (Config.access_control.equals("ranger")) {
-                    Authorizer.getInstance().setAccessControl(catalogName, new RangerStarRocksAccessController());
-                } else {
-                    Authorizer.getInstance().setAccessControl(catalogName, new NativeAccessController());
-                }
-            } else {
-                Authorizer.getInstance().setAccessControl(catalogName, new RangerHiveAccessController(serviceName));
-            }
-
             try {
                 catalogConnector = connectorMgr.createConnector(
                         new ConnectorContext(catalogName, type, config), true);
@@ -301,6 +281,9 @@ public class CatalogMgr {
                 LOG.error("connector create failed [{}], reason {}", catalogName, e.getMessage());
                 throw new DdlException(String.format("connector create failed: %s", e.getMessage()));
             }
+
+            //set access control for every catalog
+            setAccessControl(catalogName, catalog.getConfig());
 
             writeLock();
             try {
@@ -346,6 +329,32 @@ public class CatalogMgr {
             String catalogName = log.getCatalogName();
             Map<String, String> properties = log.getProperties();
             String serviceName = properties.get("ranger.plugin.hive.service.name");
+            //set access control for every catalog
+            setAccessControl(catalogName, properties);
+
+            Catalog catalog = catalogs.get(catalogName);
+            if (Strings.isNullOrEmpty(serviceName)) {
+                catalog.getConfig().remove("ranger.plugin.hive.service.name");
+            } else {
+                catalog.getConfig().put("ranger.plugin.hive.service.name", serviceName);
+            }
+        } finally {
+            writeUnLock();
+        }
+    }
+
+    private void setAccessControl(String catalogName, Map<String, String> properties) {
+        String serviceName = properties.get("ranger.plugin.hive.service.name");
+        String serviceType = properties.get("ranger.plugin.service.type");
+        if (Config.enable_tdw_authentication) {
+            if (StringUtils.isEmpty(properties.get(HIVE_METASTORE_URIS))
+                    && StringUtils.isEmpty(properties.get(ICEBERG_METASTORE_URIS))) {
+                Authorizer.getInstance().setAccessControl(catalogName, new RangerEmptyAccessController());
+            } else {
+                Authorizer.getInstance().setAccessControl(catalogName,
+                        new RangerTDWAccessController(serviceType, serviceName));
+            }
+        } else {
             if (Strings.isNullOrEmpty(serviceName)) {
                 if (Config.access_control.equals("ranger")) {
                     Authorizer.getInstance().setAccessControl(catalogName, new RangerStarRocksAccessController());
@@ -355,11 +364,6 @@ public class CatalogMgr {
             } else {
                 Authorizer.getInstance().setAccessControl(catalogName, new RangerHiveAccessController(serviceName));
             }
-
-            Catalog catalog = catalogs.get(catalogName);
-            catalog.getConfig().put("ranger.plugin.hive.service.name", serviceName);
-        } finally {
-            writeUnLock();
         }
     }
 

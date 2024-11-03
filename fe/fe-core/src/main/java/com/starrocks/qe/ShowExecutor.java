@@ -503,7 +503,8 @@ public class ShowExecutor {
                         } else if (table.isMaterializedView()) {
                             Authorizer.checkAnyActionOnMaterializedView(context.getCurrentUserIdentity(),
                                     context.getCurrentRoleIds(), new TableName(db.getFullName(), table.getName()));
-                        } else {
+                        } else if (table.isNativeTableOrMaterializedView()) {
+                            // 与TDW保持一致，可以查看所有外表表名
                             Authorizer.checkAnyActionOnTable(context.getCurrentUserIdentity(),
                                     context.getCurrentRoleIds(),
                                     new TableName(catalogName, db.getFullName(), table.getName()));

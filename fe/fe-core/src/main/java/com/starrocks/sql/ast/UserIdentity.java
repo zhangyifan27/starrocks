@@ -113,6 +113,12 @@ public class UserIdentity implements ParseNode, Writable, GsonPostProcessable {
     }
 
     public static UserIdentity fromThrift(TUserIdentity tUserIdent) {
+        if (tUserIdent.isSetReal_user()) {
+            UserIdentity userIdentity =
+                    new UserIdentity(tUserIdent.getUsername(), tUserIdent.getHost(), tUserIdent.is_domain);
+            UserIdentity authUser = new TDWUserIdentity(userIdentity, tUserIdent.getReal_user());
+            return authUser;
+        }
         return new UserIdentity(tUserIdent.getUsername(), tUserIdent.getHost(), tUserIdent.is_domain);
     }
 

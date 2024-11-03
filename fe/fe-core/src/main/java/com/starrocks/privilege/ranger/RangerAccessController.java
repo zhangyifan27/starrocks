@@ -22,7 +22,6 @@ import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.sql.parser.SqlParser;
 import org.apache.commons.lang.StringUtils;
-import org.apache.ranger.authorization.hadoop.config.RangerPluginConfig;
 import org.apache.ranger.plugin.audit.RangerDefaultAuditHandler;
 import org.apache.ranger.plugin.model.RangerPolicy;
 import org.apache.ranger.plugin.model.RangerServiceDef;
@@ -42,19 +41,11 @@ public abstract class RangerAccessController extends ExternalAccessController im
     protected final RangerBasePlugin rangerPlugin;
 
     public RangerAccessController(String serviceType, String serviceName) {
-        RangerPluginConfig rangerPluginContext = buildRangerPluginContext(serviceType, serviceName);
-        rangerPlugin = new RangerBasePlugin(rangerPluginContext);
+        rangerPlugin = new RangerBasePlugin(serviceType, serviceName);
         rangerPlugin.init(); // this will initialize policy engine and policy refresher
         rangerPlugin.setResultProcessor(new RangerDefaultAuditHandler());
 
-        LOG.info("Start Ranger plugin ({} - {}) success",
-                rangerPluginContext.getServiceType(), rangerPluginContext.getServiceName());
-    }
-
-    protected RangerPluginConfig buildRangerPluginContext(String serviceType, String serviceName) {
-        LOG.info("Interacting with Ranger Admin Server using SIMPLE authentication");
-        return new RangerPluginConfig(serviceType, serviceName, serviceType,
-                null, null, null);
+        LOG.info("Start Ranger plugin ({} - {}) success", serviceType, serviceName);
     }
 
     public RangerBasePlugin getRangerPlugin() {
