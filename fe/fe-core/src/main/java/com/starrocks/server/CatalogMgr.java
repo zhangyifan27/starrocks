@@ -80,6 +80,7 @@ import java.util.stream.Collectors;
 
 import static com.starrocks.catalog.ResourceMgr.NEED_MAPPING_CATALOG_RESOURCES;
 import static com.starrocks.connector.hive.HiveConnector.HIVE_METASTORE_URIS;
+import static com.starrocks.connector.hive.HiveConnector.IS_OMS;
 import static com.starrocks.connector.iceberg.IcebergCatalogProperties.ICEBERG_METASTORE_URIS;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.getResourceMappingCatalogName;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.isResourceMappingCatalog;
@@ -347,12 +348,11 @@ public class CatalogMgr {
         String serviceName = properties.get("ranger.plugin.hive.service.name");
         String serviceType = properties.get("ranger.plugin.service.type");
         if (Config.enable_tdw_authentication) {
-            if (StringUtils.isEmpty(properties.get(HIVE_METASTORE_URIS))
-                    && StringUtils.isEmpty(properties.get(ICEBERG_METASTORE_URIS))) {
-                Authorizer.getInstance().setAccessControl(catalogName, new RangerEmptyAccessController());
-            } else {
+            if (isOMS(properties)) {
                 Authorizer.getInstance().setAccessControl(catalogName,
                         new RangerTDWAccessController(serviceType, serviceName));
+            } else {
+                Authorizer.getInstance().setAccessControl(catalogName, new RangerEmptyAccessController());
             }
         } else {
             if (Strings.isNullOrEmpty(serviceName)) {
@@ -364,6 +364,33 @@ public class CatalogMgr {
             } else {
                 Authorizer.getInstance().setAccessControl(catalogName, new RangerHiveAccessController(serviceName));
             }
+        }
+    }
+
+    public static boolean isOMS(Map<String, String> properties) {
+        return (StringUtils.isNotEmpty(properties.get(HIVE_METASTORE_URIS))
+                || StringUtils.isNotEmpty(properties.get(ICEBERG_METASTORE_URIS)))
+                && (StringUtils.isEmpty(properties.get(IS_OMS)) || Boolean.parseBoolean(properties.get(IS_OMS)));
+    }
+
+    public boolean isOMS(String catalogName) {
+
+        if (!Config.enable_tdw_authentication) {
+            return false;
+        }
+        if (catalogName.equalsIgnoreCase(InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME)) {
+            return false;
+        }
+
+        readLock();
+        try {
+            if (catalogs.containsKey(catalogName) && isOMS(catalogs.get(catalogName).getConfig())) {
+                return true;
+            }
+
+            return false;
+        } finally {
+            readUnlock();
         }
     }
 

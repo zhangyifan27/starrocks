@@ -22,6 +22,10 @@ import com.google.gson.annotations.SerializedName;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.proc.BaseProcResult;
 import com.starrocks.connector.iceberg.IcebergCatalogType;
+import com.starrocks.privilege.AccessDeniedException;
+import com.starrocks.privilege.PrivilegeType;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.sql.analyzer.Authorizer;
 import org.apache.commons.lang.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -114,7 +118,14 @@ public class IcebergResource extends Resource {
         String lowerCaseType = type.name().toLowerCase();
         switch (IcebergCatalogType.fromString(catalogType)) {
             case HIVE_CATALOG:
-                result.addRow(Lists.newArrayList(name, lowerCaseType, HIVE_METASTORE_URIS, metastoreURIs));
+                String newMetastoreURIs = metastoreURIs;
+                try {
+                    Authorizer.checkSystemAction(ConnectContext.get().getCurrentUserIdentity(),
+                            ConnectContext.get().getCurrentRoleIds(), PrivilegeType.NODE);
+                } catch (AccessDeniedException e) {
+                    newMetastoreURIs = "********";
+                }
+                result.addRow(Lists.newArrayList(name, lowerCaseType, HIVE_METASTORE_URIS, newMetastoreURIs));
                 break;
             case CUSTOM_CATALOG:
                 result.addRow(Lists.newArrayList(name, lowerCaseType, ICEBERG_IMPL, catalogImpl));

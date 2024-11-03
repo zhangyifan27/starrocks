@@ -18,6 +18,7 @@ package com.starrocks.catalog;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.ExceptionChecker;
 import com.starrocks.common.FeConstants;
+import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.ShowResultSet;
 import com.starrocks.server.GlobalStateMgr;
@@ -315,7 +316,7 @@ public class TemporaryTableTest {
                 starRocksAssert1.useCatalog("hive_catalog").useDatabase("t").show("show temporary tables");
             });
 
-        ExceptionChecker.expectThrowsWithMsg(AnalysisException.class, "", () -> {
+        ExceptionChecker.expectThrowsWithMsg(StarRocksConnectorException.class, "", () -> {
             starRocksAssert1.useCatalog("hive_catalog").useDatabase("t")
                     .withTemporaryTable("create temporary table t1(c1 int,c2 int, c3 int) " +
                     "engine=olap duplicate key(`c1`) distributed by hash(`c1`) " +

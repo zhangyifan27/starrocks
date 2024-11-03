@@ -14,12 +14,18 @@
 
 package com.starrocks.credential;
 
+import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.JDBCResource;
+import com.starrocks.common.Config;
 import com.starrocks.connector.iceberg.rest.IcebergRESTCatalog;
 import com.starrocks.connector.odps.OdpsProperties;
 import com.starrocks.connector.share.credential.CloudConfigurationConstants;
 import com.starrocks.credential.azure.AzureCloudConfigurationProvider;
 import com.starrocks.credential.azure.AzureStoragePath;
+import com.starrocks.privilege.AccessDeniedException;
+import com.starrocks.privilege.PrivilegeType;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.sql.analyzer.Authorizer;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -59,6 +65,16 @@ public class CredentialUtil {
         // Mask for odps catalog credential
         doMask(properties, OdpsProperties.ACCESS_ID);
         doMask(properties, OdpsProperties.ACCESS_KEY);
+
+        if (Config.enable_tdw_authentication) {
+            // Mask for oms catalog address
+            try {
+                Authorizer.checkSystemAction(ConnectContext.get().getCurrentUserIdentity(),
+                        ConnectContext.get().getCurrentRoleIds(), PrivilegeType.NODE);
+            } catch (AccessDeniedException ignored) {
+                CredentialUtil.doMask(properties, HiveTable.HIVE_METASTORE_URIS);
+            }
+        }
     }
 
     private static void doMask(Map<String, String> properties, String configKey) {

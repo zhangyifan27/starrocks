@@ -79,6 +79,7 @@ import com.starrocks.catalog.View;
 import com.starrocks.clone.DynamicPartitionScheduler;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.CaseSensibility;
+import com.starrocks.common.Config;
 import com.starrocks.common.ConfigBase;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
@@ -428,6 +429,13 @@ public class ShowExecutor {
                 } else {
                     catalogName = statement.getCatalogName();
                 }
+                if (Config.enable_supersql_proxy_authentication) {
+                    try {
+                        Authorizer.checkAnyActionOnCatalog(context.getCurrentUserIdentity(),
+                                context.getCurrentRoleIds(), catalogName);
+                    } catch (AccessDeniedException ignored) {
+                    }
+                }
                 dbNames = GlobalStateMgr.getCurrentState().getMetadataMgr().listDbNames(catalogName);
 
                 PatternMatcher matcher = null;
@@ -468,6 +476,15 @@ public class ShowExecutor {
             if (catalogName == null) {
                 catalogName = context.getCurrentCatalog();
             }
+
+            if (Config.enable_supersql_proxy_authentication) {
+                try {
+                    Authorizer.checkAnyActionOnCatalog(context.getCurrentUserIdentity(),
+                            context.getCurrentRoleIds(), catalogName);
+                } catch (AccessDeniedException ignored) {
+                }
+            }
+
             String dbName = statement.getDb();
             Database db = GlobalStateMgr.getCurrentState().getMetadataMgr().getDb(catalogName, dbName);
 

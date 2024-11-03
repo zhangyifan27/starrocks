@@ -18,6 +18,8 @@ import com.google.common.collect.Lists;
 import com.starrocks.analysis.TableName;
 import com.starrocks.authentication.AuthenticationMgr;
 import com.starrocks.common.Config;
+import com.starrocks.common.util.Util;
+import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.privilege.AccessController;
 import com.starrocks.privilege.AccessDeniedException;
 import com.starrocks.privilege.PrivilegeType;
@@ -87,8 +89,7 @@ public class RangerTDWAccessController implements AccessController, AccessTypeCo
         return hiveAccessType.name().toLowerCase(Locale.ENGLISH);
     }
 
-    public void hasPermission(UserIdentity currentUser, TableName tableName, PrivilegeType privilegeType)
-            throws AccessDeniedException {
+    public void hasPermission(UserIdentity currentUser, TableName tableName, PrivilegeType privilegeType) {
         if (currentUser == null || (Config.tdw_authentication_skip_root
                 && currentUser.getUser().equals(AuthenticationMgr.ROOT_USER))) {
             return;
@@ -107,19 +108,12 @@ public class RangerTDWAccessController implements AccessController, AccessTypeCo
             );
         } catch (Throwable e) {
             if (e instanceof UndeclaredThrowableException) {
-                String deniedMessage = ((UndeclaredThrowableException) e).getUndeclaredThrowable().getMessage();
-                LOG.warn(deniedMessage, e);
-                if (deniedMessage.length() >= 512) {
-                    throw new AccessDeniedException(deniedMessage.substring(0, 300) + " ... "
-                            + deniedMessage.substring(deniedMessage.length() - 200));
-                } else {
-                    throw new AccessDeniedException(deniedMessage);
-                }
+                throw new StarRocksConnectorException(Util.getRealMessage(e));
             } else {
                 String message = String.format("An exception was encountered while checking privileges, user: %s, table: %s",
                         currentUser.getUser(), tableName);
                 LOG.warn(message, e);
-                throw new AccessDeniedException(message + ", " + e.getMessage());
+                throw new StarRocksConnectorException(message + ", " + e.getMessage());
             }
         }
     }

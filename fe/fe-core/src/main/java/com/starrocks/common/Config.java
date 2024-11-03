@@ -1915,7 +1915,14 @@ public class Config extends ConfigBase {
     public static boolean tdw_ups_tauth_api_enabled = false;
     @ConfField
     public static String tdw_privapi_service_target = "tdwprivapi";
-
+    @ConfField(mutable = true)
+    public static boolean hive_metastore_tq_token_auth = false;
+    @ConfField
+    public static String tdw_metadata_service_target = "metadataservice";
+    @ConfField(mutable = true)
+    public static boolean enable_supersql_proxy_authentication = false;
+    @ConfField(mutable = true)
+    public static String tdw_supersql_platform_name = "";
     /**
      * When set to true, we cannot drop user named 'admin' or grant/revoke role to/from user named 'admin',
      * except that we're root user.
@@ -2234,7 +2241,7 @@ public class Config extends ConfigBase {
      * The maximum number of partitions to fetch from the metastore in one RPC.
      */
     @ConfField
-    public static int max_hive_partitions_per_rpc = 5000;
+    public static int max_hive_partitions_per_rpc = 1000;
 
     /**
      * The interval of lazy refreshing remote file's metadata cache

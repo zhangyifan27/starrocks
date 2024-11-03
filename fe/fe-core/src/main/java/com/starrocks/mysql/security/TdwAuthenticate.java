@@ -31,6 +31,7 @@ import com.starrocks.cluster.ClusterNamespace;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.util.UUIDUtil;
+import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.privilege.AccessDeniedException;
 import com.starrocks.privilege.PrivilegeBuiltinConstants;
 import com.starrocks.qe.ConnectContext;
@@ -166,5 +167,32 @@ public class TdwAuthenticate {
             }
         }
         return true;
+    }
+
+    public static boolean match(String whitelists, String user) {
+        String[] tdwTauthPlatformWhiteList = whitelists.split(",");
+        for (String candidate : tdwTauthPlatformWhiteList) {
+            if (candidate.trim().equalsIgnoreCase(user)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static void checkRequestSource(UserIdentity currentUser) {
+        if (Config.enable_supersql_proxy_authentication
+                && !currentUser.getUser().equalsIgnoreCase(AuthenticationMgr.ROOT_USER)) {
+            boolean isAccept;
+            if (currentUser instanceof TDWUserIdentity) {
+                isAccept = match(Config.tdw_supersql_platform_name,
+                        ((TDWUserIdentity) currentUser).getRealUser());
+            } else {
+                isAccept = false;
+            }
+
+            if (!isAccept) {
+                throw new StarRocksConnectorException("Access denied; only accept requests from SuperSQL to use tdw catalog");
+            }
+        }
     }
 }

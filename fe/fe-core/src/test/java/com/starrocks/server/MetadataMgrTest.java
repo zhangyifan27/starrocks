@@ -137,8 +137,13 @@ public class MetadataMgrTest {
         Assert.assertNotNull(database1);
         Assert.assertEquals("hive_catalog.db2", database1.getUUID());
 
-        com.starrocks.catalog.Database database2 = metadataMgr.getDb("hive_catalog", "db3");
-        Assert.assertNull(database2);
+        try {
+            com.starrocks.catalog.Database database2 = metadataMgr.getDb("hive_catalog", "db3");
+            Assert.assertNull(database2);
+        } catch (Exception e) {
+            Assert.assertTrue(e instanceof StarRocksConnectorException);
+            Assert.assertTrue(e.getMessage().contains("doesn't exist"));
+        }
 
         Assert.assertNull(metadataMgr.getDb("not_exist_catalog", "xxx"));
     }

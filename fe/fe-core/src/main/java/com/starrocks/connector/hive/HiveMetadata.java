@@ -28,6 +28,7 @@ import com.starrocks.common.DdlException;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
+import com.starrocks.common.util.Util;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.PartitionInfo;
@@ -129,7 +130,7 @@ public class HiveMetadata implements ConnectorMetadata {
             database = hmsOps.getDb(dbName);
         } catch (Exception e) {
             LOG.error("Failed to get hive database [{}.{}]", catalogName, dbName, e);
-            return null;
+            throw new StarRocksConnectorException(e.getMessage(), e);
         }
 
         return database;
@@ -197,7 +198,7 @@ public class HiveMetadata implements ConnectorMetadata {
             throw e;
         } catch (Exception e) {
             LOG.error("Failed to get hive table [{}.{}.{}]", catalogName, dbName, tblName, e);
-            return null;
+            throw new StarRocksConnectorException(Util.getRealMessage(e));
         }
 
         return table;

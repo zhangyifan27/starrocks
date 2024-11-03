@@ -45,6 +45,7 @@ import com.starrocks.http.WebUtils;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.SemanticException;
+import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -487,5 +488,18 @@ public class Util {
         ConnectContext ctx = new ConnectContext();
         ctx.setGlobalStateMgr(GlobalStateMgr.getCurrentState());
         return ctx;
+    }
+
+    public static String getRealMessage(Throwable e) {
+        String message = ExceptionUtils.getRootCauseMessage(e);
+        if (!Strings.isNullOrEmpty(message) && message.contains("matched policy id")) {
+            String realMessage = message.substring(message.indexOf(":") + 1).trim();
+            if (realMessage.length() >= 512) {
+                return realMessage.substring(0, 300) + " ... "
+                        + realMessage.substring(realMessage.length() - 200);
+            }
+            return realMessage;
+        }
+        return message;
     }
 }

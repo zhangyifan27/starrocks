@@ -35,7 +35,9 @@
 package org.apache.hadoop.hive.metastore;
 
 import com.google.common.collect.Lists;
+import com.starrocks.common.Config;
 import com.starrocks.connector.hadoop.HadoopExt;
+import com.starrocks.utils.TAuthUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.hive.common.ValidTxnList;
 import org.apache.hadoop.hive.common.ValidWriteIdList;
@@ -183,6 +185,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import javax.security.auth.login.LoginException;
 
+import static com.starrocks.connector.hive.HiveConnector.IS_OMS;
 import static org.apache.hadoop.hive.metastore.utils.MetaStoreUtils.getDefaultCatalog;
 
 /**
@@ -204,7 +207,7 @@ public class HiveMetaStoreClient implements IMetaStoreClient, AutoCloseable {
 
     private Map<String, String> currentMetaVars;
 
-    private static final AtomicInteger connCount = new AtomicInteger(0);
+    public static final AtomicInteger connCount = new AtomicInteger(0);
 
     // for thrift connects
     private int retries = 5;
@@ -225,6 +228,8 @@ public class HiveMetaStoreClient implements IMetaStoreClient, AutoCloseable {
 
     private final ClientCapabilities version;
 
+    private boolean isOms = true;
+
     public HiveMetaStoreClient(Configuration conf) throws MetaException {
         this(conf, null, true);
     }
@@ -242,6 +247,8 @@ public class HiveMetaStoreClient implements IMetaStoreClient, AutoCloseable {
         } else {
             this.conf = new Configuration(conf);
         }
+
+        isOms = this.conf.getBoolean(IS_OMS, true);
 
         HadoopExt.getInstance().rewriteConfiguration(this.conf);
 
@@ -534,7 +541,11 @@ public class HiveMetaStoreClient implements IMetaStoreClient, AutoCloseable {
                     } else {
                         protocol = new TBinaryProtocol(transport);
                     }
-                    client = new ThriftHiveMetastore.Client(protocol);
+                    if (Config.hive_metastore_tq_token_auth && isOms) {
+                        client = TdwTokenAuthClient.getProxy(conf, new ThriftHiveMetastore.Client(protocol));
+                    } else {
+                        client = new ThriftHiveMetastore.Client(protocol);
+                    }
                     try {
                         if (!transport.isOpen()) {
                             transport.open();
@@ -555,11 +566,16 @@ public class HiveMetaStoreClient implements IMetaStoreClient, AutoCloseable {
                     if (isConnected && !useSasl && MetastoreConf.getBoolVar(conf, ConfVars.EXECUTE_SET_UGI)) {
                         // Call set_ugi, only in unsecure mode.
                         try {
-                            UserGroupInformation ugi = HadoopExt.getInstance().getHMSUGI(conf);
-                            if (ugi == null) {
-                                ugi = SecurityUtils.getUGI();
+                            if (isOms && (Config.hive_metastore_tq_token_auth
+                                    || org.apache.commons.lang3.StringUtils.isEmpty(TAuthUtils.getDefaultTdwUser()))) {
+                                UserGroupInformation ugi = HadoopExt.getInstance().getHMSUGI(conf);
+                                if (ugi == null) {
+                                    ugi = SecurityUtils.getUGI();
+                                }
+                                client.set_ugi(ugi.getUserName(), Arrays.asList(ugi.getGroupNames()));
+                            } else {
+                                client.set_ugi(TAuthUtils.getDefaultTdwUser(), new ArrayList<>());
                             }
-                            client.set_ugi(ugi.getUserName(), Arrays.asList(ugi.getGroupNames()));
                         } catch (LoginException e) {
                             LOG.warn("Failed to do login. set_ugi() is not successful, " +
                                     "Continuing without it.", e);

@@ -18,11 +18,11 @@ import com.google.common.collect.Lists;
 import com.starrocks.common.Config;
 import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
+import com.starrocks.common.util.Util;
 import com.starrocks.connector.HdfsEnvironment;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.events.MetastoreNotificationFetchException;
 import com.starrocks.connector.hive.glue.AWSCatalogMetastoreClient;
-import org.apache.commons.lang.exception.ExceptionUtils;
 import org.apache.hadoop.hive.conf.HiveConf;
 import org.apache.hadoop.hive.metastore.HiveMetaHookLoader;
 import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
@@ -163,7 +163,7 @@ public class HiveMetaClient {
         } catch (Throwable e) {
             LOG.error(messageIfError, e);
             connectionException = new StarRocksConnectorException(messageIfError + ", msg: " +
-                    ExceptionUtils.getRootCauseMessage(e), e);
+                    Util.getRealMessage(e), e);
             throw connectionException;
         } finally {
             if (client == null && connectionException != null) {
@@ -316,7 +316,7 @@ public class HiveMetaClient {
             } catch (Exception e) {
                 LOG.error("Failed to get partitions on {}.{}", dbName, tblName, e);
                 connectionException = new StarRocksConnectorException("Failed to get partitions on [%s.%s] from meta store: %s",
-                        dbName, tblName, e.getMessage());
+                        dbName, tblName, Util.getRealMessage(e));
                 throw connectionException;
             } finally {
                 if (client == null && connectionException != null) {

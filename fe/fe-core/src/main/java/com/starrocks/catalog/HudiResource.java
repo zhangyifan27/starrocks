@@ -21,6 +21,10 @@ import com.google.common.collect.Maps;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.proc.BaseProcResult;
+import com.starrocks.privilege.AccessDeniedException;
+import com.starrocks.privilege.PrivilegeType;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.sql.analyzer.Authorizer;
 import org.apache.commons.lang.StringUtils;
 
 import java.util.Map;
@@ -67,7 +71,14 @@ public class HudiResource extends Resource {
     @Override
     protected void getProcNodeData(BaseProcResult result) {
         String lowerCaseType = type.name().toLowerCase();
-        result.addRow(Lists.newArrayList(name, lowerCaseType, HIVE_METASTORE_URIS, metastoreURIs));
+        String newMetastoreURIs = metastoreURIs;
+        try {
+            Authorizer.checkSystemAction(ConnectContext.get().getCurrentUserIdentity(),
+                    ConnectContext.get().getCurrentRoleIds(), PrivilegeType.NODE);
+        } catch (AccessDeniedException e) {
+            newMetastoreURIs = "********";
+        }
+        result.addRow(Lists.newArrayList(name, lowerCaseType, HIVE_METASTORE_URIS, newMetastoreURIs));
     }
 
     public String getHiveMetastoreURIs() {

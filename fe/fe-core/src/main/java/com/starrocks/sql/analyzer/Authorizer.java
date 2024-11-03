@@ -25,6 +25,7 @@ import com.starrocks.catalog.Function;
 import com.starrocks.catalog.InternalCatalog;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.Pair;
+import com.starrocks.mysql.security.TdwAuthenticate;
 import com.starrocks.privilege.AccessControlProvider;
 import com.starrocks.privilege.AccessController;
 import com.starrocks.privilege.AccessDeniedException;
@@ -81,11 +82,15 @@ public class Authorizer {
 
     public static void checkAnyActionOnCatalog(UserIdentity currentUser, Set<Long> roleIds, String catalogName)
             throws AccessDeniedException {
-        //Any user has an implicit usage permission on the internal catalog
-        if (!CatalogMgr.isInternalCatalog(catalogName)) {
+        if (GlobalStateMgr.getCurrentState().getCatalogMgr().isOMS(catalogName)) {
+            //check the request source
+            TdwAuthenticate.checkRequestSource(currentUser);
+        } else if (!CatalogMgr.isInternalCatalog(catalogName)) {
+            //Any user has an implicit usage permission on the internal catalog
             getInstance().getAccessControlOrDefault(InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME)
                     .checkAnyActionOnCatalog(currentUser, roleIds, catalogName);
         }
+
     }
 
     public static void checkDbAction(UserIdentity currentUser, Set<Long> roleIds, String catalogName, String db,

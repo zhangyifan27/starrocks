@@ -1409,7 +1409,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private boolean enableHiveMetadataCacheWithInsert = false;
 
     @VariableMgr.VarAttr(name = HIVE_PARTITION_STATS_SAMPLE_SIZE)
-    private int hivePartitionStatsSampleSize = 3000;
+    private int hivePartitionStatsSampleSize = 1000;
 
     @VarAttr(name = DEFAULT_TABLE_COMPRESSION)
     private String defaultTableCompressionAlgorithm = "lz4_frame";
