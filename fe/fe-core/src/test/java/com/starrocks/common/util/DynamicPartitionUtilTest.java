@@ -29,6 +29,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.Map;
 import java.util.TimeZone;
 
+import static com.starrocks.common.util.DynamicPartitionUtil.DATETIME_FORMAT;
+import static com.starrocks.common.util.DynamicPartitionUtil.TIMESTAMP_HOUR_FORMAT;
+
 public class DynamicPartitionUtilTest {
 
     private static final String FORMAT = "yyyy-MM-dd";
@@ -53,7 +56,11 @@ public class DynamicPartitionUtilTest {
     }
 
     private static ZonedDateTime getZonedDateTimeFromStr(String dateStr) throws DateTimeException {
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(FORMAT);
+        return getZonedDateTimeFromStr(dateStr, FORMAT);
+    }
+
+    private static ZonedDateTime getZonedDateTimeFromStr(String dateStr, String format) throws DateTimeException {
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(format);
         return LocalDate.parse(dateStr, formatter).atStartOfDay(
                 TimeUtils.getOrSystemTimeZone(TimeUtils.DEFAULT_TIME_ZONE).toZoneId());
     }
@@ -228,4 +235,67 @@ public class DynamicPartitionUtilTest {
         Assert.assertNull(res);
     }
 
+    @Test
+    public void testGetHourPartitionRangeString() throws DateTimeException {
+        // TimeUnit: HOUR
+        // 1. 2020-05-25 00:00:00, offset -7
+        DynamicPartitionProperty property = new DynamicPartitionProperty(getDynamProp("HOUR", -3, 3, -1, -1));
+        String res = DynamicPartitionUtil.getPartitionRangeString(property,
+                getZonedDateTimeFromStr("2020-05-25 00:00:00", DATETIME_FORMAT), -7,
+                DATETIME_FORMAT);
+        Assert.assertEquals("2020-05-24 17:00:00", res);
+        String partName = DynamicPartitionUtil.getFormattedPartitionName(getCTSTimeZone(), res, "HOUR");
+        Assert.assertEquals("2020052417", partName);
+        // 2. 2020-05-25 00:00:00, offset 0
+        res = DynamicPartitionUtil.getPartitionRangeString(property,
+                getZonedDateTimeFromStr("2020-05-25 00:00:00", DATETIME_FORMAT), 0,
+                DATETIME_FORMAT);
+        Assert.assertEquals("2020-05-25 00:00:00", res);
+        partName = DynamicPartitionUtil.getFormattedPartitionName(getCTSTimeZone(), res, "HOUR");
+        Assert.assertEquals("2020052500", partName);
+        // 3. 2020-05-25 00:00:00, offset 7
+        res = DynamicPartitionUtil.getPartitionRangeString(property,
+                getZonedDateTimeFromStr("2020-05-25 00:00:00", DATETIME_FORMAT), 7,
+                DATETIME_FORMAT);
+        Assert.assertEquals("2020-05-25 07:00:00", res);
+        partName = DynamicPartitionUtil.getFormattedPartitionName(getCTSTimeZone(), res, "HOUR");
+        Assert.assertEquals("2020052507", partName);
+        // 4. 2020-02-28 00:00:00, offset 3
+        res = DynamicPartitionUtil.getPartitionRangeString(property,
+                getZonedDateTimeFromStr("2020-02-28 00:00:00", DATETIME_FORMAT), 3,
+                DATETIME_FORMAT);
+        Assert.assertEquals("2020-02-28 03:00:00", res);
+        partName = DynamicPartitionUtil.getFormattedPartitionName(getCTSTimeZone(), res, "HOUR");
+        Assert.assertEquals("2020022803", partName);
+
+        // TimeUnit: HOUR
+        // 1. 2020052500, offset -7
+        res = DynamicPartitionUtil.getPartitionRangeString(property,
+                getZonedDateTimeFromStr("2020052500", TIMESTAMP_HOUR_FORMAT), -7,
+                TIMESTAMP_HOUR_FORMAT);
+        Assert.assertEquals("2020052417", res);
+        partName = DynamicPartitionUtil.getFormattedPartitionName(getCTSTimeZone(), res, "HOUR");
+        Assert.assertEquals("2020052417", partName);
+        // 2. 2020-05-25 00:00:00, offset 0
+        res = DynamicPartitionUtil.getPartitionRangeString(property,
+                getZonedDateTimeFromStr("2020052500", TIMESTAMP_HOUR_FORMAT), 0,
+                TIMESTAMP_HOUR_FORMAT);
+        Assert.assertEquals("2020052500", res);
+        partName = DynamicPartitionUtil.getFormattedPartitionName(getCTSTimeZone(), res, "HOUR");
+        Assert.assertEquals("2020052500", partName);
+        // 3. 2020-05-25 00:00:00, offset 7
+        res = DynamicPartitionUtil.getPartitionRangeString(property,
+                getZonedDateTimeFromStr("2020052500", TIMESTAMP_HOUR_FORMAT), 7,
+                TIMESTAMP_HOUR_FORMAT);
+        Assert.assertEquals("2020052507", res);
+        partName = DynamicPartitionUtil.getFormattedPartitionName(getCTSTimeZone(), res, "HOUR");
+        Assert.assertEquals("2020052507", partName);
+        // 4. 2020-02-28 00:00:00, offset 3
+        res = DynamicPartitionUtil.getPartitionRangeString(property,
+                getZonedDateTimeFromStr("2020022800", TIMESTAMP_HOUR_FORMAT), 3,
+                TIMESTAMP_HOUR_FORMAT);
+        Assert.assertEquals("2020022803", res);
+        partName = DynamicPartitionUtil.getFormattedPartitionName(getCTSTimeZone(), res, "HOUR");
+        Assert.assertEquals("2020022803", partName);
+    }
 }

@@ -383,7 +383,7 @@ public class DynamicPartitionScheduler extends FrontendDaemon {
         }
 
         ArrayList<AddPartitionClause> addPartitionClauses = new ArrayList<>();
-        ArrayList<DropPartitionClause> dropPartitionClauses;
+        ArrayList<DropPartitionClause> dropPartitionClauses = new ArrayList<>();
         String tableName;
         boolean skipAddPartition = false;
         OlapTable olapTable;
@@ -429,11 +429,22 @@ public class DynamicPartitionScheduler extends FrontendDaemon {
 
             try {
                 Column partitionColumn = rangePartitionInfo.getPartitionColumns(olapTable.getIdToColumn()).get(0);
-                String partitionFormat = DynamicPartitionUtil.getPartitionFormat(partitionColumn);
+                DynamicPartitionProperty property =
+                        olapTable.getTableProperty().getDynamicPartitionProperty();
+                String partitionFormat = DynamicPartitionUtil.getPartitionFormat(partitionColumn, property.getTimeUnit());
                 if (!skipAddPartition) {
-                    addPartitionClauses = getAddPartitionClause(db, olapTable, partitionColumn, partitionFormat);
+                    try {
+                        addPartitionClauses = getAddPartitionClause(db, olapTable, partitionColumn, partitionFormat);
+                    } catch (Exception e) {
+                        LOG.error("Failed to generate AddPartitionClause for {} due to ", olapTable.getName(), e);
+                    }
                 }
-                dropPartitionClauses = getDropPartitionClause(db, olapTable, partitionColumn, partitionFormat);
+
+                try {
+                    dropPartitionClauses = getDropPartitionClause(db, olapTable, partitionColumn, partitionFormat);
+                } catch (Exception e) {
+                    LOG.error("Failed to generate DropPartitionClause {} due to ", olapTable.getName(), e);
+                }
                 tableName = olapTable.getName();
             } catch (Exception e) {
                 LOG.warn("create or drop partition failed", e);

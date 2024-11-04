@@ -336,7 +336,7 @@ public class RangePartitionInfo extends PartitionInfo {
 
     public static void checkRangeColumnType(Column column) throws AnalysisException {
         PrimitiveType type = column.getPrimitiveType();
-        if (!type.isFixedPointType() && !type.isDateType()) {
+        if (!type.isFixedPointType() && !type.isDateType() && !type.isStringType()) {
             throw new AnalysisException("Column[" + column.getName() + "] type[" + type
                     + "] cannot be a range partition key.");
         }
@@ -344,7 +344,7 @@ public class RangePartitionInfo extends PartitionInfo {
 
     public static void checkExpressionRangeColumnType(Column column, Expr expr) throws AnalysisException {
         PrimitiveType type = column.getPrimitiveType();
-        if (!type.isFixedPointType() && !type.isDateType()) {
+        if (!type.isFixedPointType() && !type.isDateType() && !type.isStringType()) {
             throw new AnalysisException("Expr[" + expr.toSql() + "] type[" + type
                     + "] cannot be a range partition key.");
         }

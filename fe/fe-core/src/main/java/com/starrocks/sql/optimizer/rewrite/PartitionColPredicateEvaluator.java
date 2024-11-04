@@ -26,6 +26,7 @@ import com.starrocks.analysis.LargeIntLiteral;
 import com.starrocks.analysis.LiteralExpr;
 import com.starrocks.analysis.MaxLiteral;
 import com.starrocks.analysis.NullLiteral;
+import com.starrocks.analysis.StringLiteral;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.PartitionKeyDiscreteDomain;
@@ -344,6 +345,9 @@ public class PartitionColPredicateEvaluator {
                 case DATE:
                 case DATETIME:
                     return DateLiteral.createMinValue(type);
+                case CHAR:
+                case VARCHAR:
+                    return new StringLiteral("1900010100");
                 default:
                     throw new IllegalArgumentException("Invalid data type for creating infinity: " + type);
             }
