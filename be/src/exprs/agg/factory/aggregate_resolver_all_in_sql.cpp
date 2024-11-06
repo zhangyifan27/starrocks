@@ -78,6 +78,12 @@ void AggregateFuncResolver::register_all_in_sql() {
             std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE}, false,
             std::make_shared<Ttest2SampAggregateFunction>());
 
+    // register for ttest 2 samp
+    add_aggregate_mapping<TYPE_VARCHAR, Ttest2SampAggregateState>(
+            std::string(AllInSqlFunctions::ttest_2samp),
+            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_ARRAY},
+            false, std::make_shared<Ttest2SampAggregateFunction>());
+
     // expression, alternative, treatment, data[, cuped[, alpha[, pse_index, pse_data]]]
     // register for ttest 2 samp
     add_aggregate_mapping<TYPE_VARCHAR, Ttests2SampAggregateState>(
