@@ -219,7 +219,7 @@ public class ColumnRangePredicate extends RangePredicate {
             return BinaryPredicateOperator.ne(expression, range.lowerEndpoint());
         }
 
-        return toScalarOperatorImpl(columnRanges);
+        return toScalarOperatorImpl(TreeRangeSet.create(columnRanges));
     }
 
     private ScalarOperator toScalarOperatorImpl(TreeRangeSet<ConstantOperator> ranges) {
