@@ -27,11 +27,16 @@ import com.starrocks.connector.ReentrantExecutor;
 import com.starrocks.connector.RemoteFileIO;
 import com.starrocks.sql.analyzer.SemanticException;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import static com.starrocks.connector.CachingRemoteFileIO.NEVER_REFRESH;
 import static com.starrocks.connector.hive.HiveConnector.HIVE_METASTORE_TYPE;
@@ -50,13 +55,15 @@ public class HiveConnectorInternalMgr {
 
     private ExecutorService refreshHiveMetastoreExecutor;
     private ExecutorService refreshRemoteFileExecutor;
-    private ExecutorService pullRemoteFileExecutor;
+    private List<ExecutorService> pullRemoteFileExecutors;
     private ExecutorService updateRemoteFilesExecutor;
     private ExecutorService updateStatisticsExecutor;
 
     private final boolean isRecursive;
     private final int loadRemoteFileMetadataThreadNum;
+    private final int loadRemoteFileMetadataGroupNum;
     private final int updateRemoteFileMetadataThreadNum;
+    private final int loadRemoteFileMetadataQueueSize;
     private final boolean enableHmsEventsIncrementalSync;
 
     private final boolean enableBackgroundRefreshHiveMetadata;
@@ -75,8 +82,12 @@ public class HiveConnectorInternalMgr {
         this.isRecursive = Boolean.parseBoolean(properties.getOrDefault("enable_recursive_listing", "true"));
         this.loadRemoteFileMetadataThreadNum = Integer.parseInt(properties.getOrDefault("remote_file_load_thread_num",
                 String.valueOf(Config.remote_file_metadata_load_concurrency)));
+        this.loadRemoteFileMetadataGroupNum = Integer.parseInt(properties.getOrDefault("remote_file_load_group_num",
+                String.valueOf(Config.remote_file_metadata_load_group)));
         this.updateRemoteFileMetadataThreadNum = Integer.parseInt(properties.getOrDefault("remote_file_update_thread_num",
                 String.valueOf(Config.remote_file_metadata_load_concurrency / 4)));
+        this.loadRemoteFileMetadataQueueSize = Integer.parseInt(properties.getOrDefault("remote_file_load_queue_size",
+                String.valueOf(Config.remote_file_metadata_load_queue_size)));
         this.enableHmsEventsIncrementalSync = Boolean.parseBoolean(properties.getOrDefault("enable_hms_events_incremental_sync",
                 String.valueOf(Config.enable_hms_events_incremental_sync)));
 
@@ -103,8 +114,10 @@ public class HiveConnectorInternalMgr {
         if (enableRemoteFileCache && refreshRemoteFileExecutor != null) {
             refreshRemoteFileExecutor.shutdown();
         }
-        if (pullRemoteFileExecutor != null) {
-            pullRemoteFileExecutor.shutdown();
+        if (pullRemoteFileExecutors != null) {
+            for (ExecutorService executor : pullRemoteFileExecutors) {
+                executor.shutdown();
+            }
         }
     }
 
@@ -154,13 +167,22 @@ public class HiveConnectorInternalMgr {
         return baseRemoteFileIO;
     }
 
-    public ExecutorService getPullRemoteFileExecutor() {
-        if (pullRemoteFileExecutor == null) {
-            pullRemoteFileExecutor = Executors.newFixedThreadPool(loadRemoteFileMetadataThreadNum,
-                    new ThreadFactoryBuilder().setNameFormat("pull-hive-remote-files-%d").build());
+    public List<ExecutorService> getPullRemoteFileExecutor() {
+        if (pullRemoteFileExecutors == null) {
+            pullRemoteFileExecutors = new ArrayList<>(loadRemoteFileMetadataGroupNum);
+            for (int i = 0; i < loadRemoteFileMetadataGroupNum; i++) {
+                BlockingQueue<Runnable> workQueue = new LinkedBlockingQueue<>(loadRemoteFileMetadataQueueSize);
+                ExecutorService pullRemoteFileExecutor =
+                        new ThreadPoolExecutor(loadRemoteFileMetadataThreadNum, loadRemoteFileMetadataThreadNum, 0L,
+                                TimeUnit.MILLISECONDS, workQueue,
+                                new ThreadFactoryBuilder().setNameFormat("pull-hive-remote-files-" + i + "-%d")
+                                        .setDaemon(true)
+                                        .build());
+                pullRemoteFileExecutors.add(pullRemoteFileExecutor);
+            }
         }
 
-        return pullRemoteFileExecutor;
+        return pullRemoteFileExecutors;
     }
 
     public ExecutorService getupdateRemoteFilesExecutor() {

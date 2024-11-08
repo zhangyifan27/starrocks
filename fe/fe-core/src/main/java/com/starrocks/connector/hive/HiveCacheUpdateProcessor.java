@@ -32,10 +32,12 @@ import com.starrocks.connector.RemoteFileIO;
 import com.starrocks.connector.RemotePathKey;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.events.MetastoreNotificationFetchException;
+import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.metastore.api.NotificationEventResponse;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -59,7 +61,7 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
     private final String catalogName;
     private final IHiveMetastore metastore;
     private final Optional<CachingRemoteFileIO> remoteFileIO;
-    private final ExecutorService executor;
+    private final List<ExecutorService> executors;
     private final boolean isRecursive;
 
     // Record the latest synced event id when processing hive events
@@ -77,7 +79,26 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
         this.metastore = metastore;
         this.remoteFileIO = remoteFileIO instanceof CachingRemoteFileIO
                 ? Optional.of((CachingRemoteFileIO) remoteFileIO) : Optional.empty();
-        this.executor = executor;
+        this.executors = new ArrayList<>(1);
+        this.executors.add(executor);
+        this.isRecursive = isRecursive;
+        this.partitionUpdatedTimes = Maps.newHashMap();
+        if (enableHmsEventsIncrementalSync) {
+            trySyncEventId();
+        }
+    }
+
+    public HiveCacheUpdateProcessor(String catalogName,
+                                IHiveMetastore metastore,
+                                RemoteFileIO remoteFileIO,
+                                List<ExecutorService> executors,
+                                boolean isRecursive,
+                                boolean enableHmsEventsIncrementalSync) {
+        this.catalogName = catalogName;
+        this.metastore = metastore;
+        this.remoteFileIO = remoteFileIO instanceof CachingRemoteFileIO
+                ? Optional.of((CachingRemoteFileIO) remoteFileIO) : Optional.empty();
+        this.executors = executors;
         this.isRecursive = isRecursive;
         this.partitionUpdatedTimes = Maps.newHashMap();
         if (enableHmsEventsIncrementalSync) {
@@ -298,7 +319,16 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
                 }
             });
 
-            refreshRemoteFilesImpl(tableLocation, updateKeys, invalidateKeys, executor);
+            String authority = new Path(tableLocation).toUri().getAuthority();
+            int index = 0;
+            if (!Strings.isNullOrEmpty(authority) && (executors != null && executors.size() > 0)) {
+                index = Math.abs(authority.hashCode()) % executors.size();
+            }
+            if (executors != null && executors.size() > 0) {
+                refreshRemoteFilesImpl(tableLocation, updateKeys, invalidateKeys, executors.get(index));
+            } else {
+                refreshRemoteFilesImpl(tableLocation, updateKeys, invalidateKeys, null);
+            }
         }
     }
 

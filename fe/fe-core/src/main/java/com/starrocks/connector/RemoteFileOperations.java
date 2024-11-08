@@ -24,6 +24,7 @@ import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.HiveWriteUtils;
 import com.starrocks.connector.hive.Partition;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.utils.TdwUtil;
 import com.tencent.tdw.security.exceptions.SecureException;
 import jline.internal.Log;
@@ -49,6 +50,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -60,22 +63,38 @@ import static com.starrocks.fs.hdfs.HdfsFsManager.USER_NAME_KEY;
 
 public class RemoteFileOperations {
     private static final Logger LOG = LogManager.getLogger(RemoteFileOperations.class);
+
     public static final String HMS_PARTITIONS_REMOTE_FILES = "HMS.PARTITIONS.LIST_FS_PARTITIONS";
     protected CachingRemoteFileIO remoteFileIO;
-    private final ExecutorService pullRemoteFileExecutor;
+    private final List<ExecutorService> pullRemoteFileExecutors;
     private final Executor updateRemoteFilesExecutor;
     private final boolean isRecursive;
     private final boolean enableCatalogLevelCache;
     private final Configuration conf;
 
     public RemoteFileOperations(CachingRemoteFileIO remoteFileIO,
-                                ExecutorService pullRemoteFileExecutor,
+                                ExecutorService pullRemoteFileExecutors,
                                 Executor updateRemoteFilesExecutor,
                                 boolean isRecursive,
                                 boolean enableCatalogLevelCache,
                                 Configuration conf) {
         this.remoteFileIO = remoteFileIO;
-        this.pullRemoteFileExecutor = pullRemoteFileExecutor;
+        this.pullRemoteFileExecutors = new ArrayList<>(1);
+        this.pullRemoteFileExecutors.add(pullRemoteFileExecutors);
+        this.updateRemoteFilesExecutor = updateRemoteFilesExecutor;
+        this.isRecursive = isRecursive;
+        this.enableCatalogLevelCache = enableCatalogLevelCache;
+        this.conf = conf;
+    }
+
+    public RemoteFileOperations(CachingRemoteFileIO remoteFileIO,
+                                List<ExecutorService> pullRemoteFileExecutors,
+                                Executor updateRemoteFilesExecutor,
+                                boolean isRecursive,
+                                boolean enableCatalogLevelCache,
+                                Configuration conf) {
+        this.remoteFileIO = remoteFileIO;
+        this.pullRemoteFileExecutors = pullRemoteFileExecutors;
         this.updateRemoteFilesExecutor = updateRemoteFilesExecutor;
         this.isRecursive = isRecursive;
         this.enableCatalogLevelCache = enableCatalogLevelCache;
@@ -113,21 +132,55 @@ public class RemoteFileOperations {
 
         RemotePathKey.HudiContext hudiContext = new RemotePathKey.HudiContext();
 
+        long remoteFilePullTimeout = Long.MAX_VALUE;
+        if (ConnectContext.get() != null && (ConnectContext.get().getSessionVariable() != null)) {
+            remoteFilePullTimeout = ConnectContext.get().getSessionVariable().getRemoteFilePullTimeout();
+        }
         Tracers.count(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES, cacheMissSize);
         try (Timer ignored = Tracers.watchScope(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES)) {
             for (Partition partition : partitions) {
-                RemotePathKey pathKey =
-                        RemotePathKey.of(partition.getFullPath(), isRecursive, hudiTableLocation, getProperties());
-                pathKey.setHudiContext(hudiContext);
-                Future<Map<RemotePathKey, List<RemoteFileDesc>>> future = pullRemoteFileExecutor.submit(() ->
-                        remoteFileIO.getRemoteFiles(pathKey, useCache));
-                futures.add(future);
+                try {
+                    String authority = new Path(partition.getFullPath()).toUri().getAuthority();
+                    int index = 0;
+                    if (StringUtils.isNotEmpty(authority)) {
+                        index = Math.abs(authority.hashCode()) % pullRemoteFileExecutors.size();
+                    }
+                    RemotePathKey pathKey =
+                            RemotePathKey.of(partition.getFullPath(), isRecursive, hudiTableLocation, getProperties());
+                    pathKey.setHudiContext(hudiContext);
+                    Future<Map<RemotePathKey, List<RemoteFileDesc>>> future = pullRemoteFileExecutors.get(index).submit(() ->
+                            remoteFileIO.getRemoteFiles(pathKey, useCache));
+                    futures.add(future);
+                } catch (Throwable e) {
+                    try {
+                        for (Future<Map<RemotePathKey, List<RemoteFileDesc>>> entry : futures) {
+                            entry.cancel(true);
+                        }
+                    } catch (Throwable throwable) {
+                        LOG.warn("Failed to cancel future", throwable);
+                    }
+                    throw new StarRocksConnectorException("Add task to remoteFileExecutor error, msg: %s",
+                            e.getMessage());
+                }
             }
 
+            long startTime = System.currentTimeMillis();
             for (Future<Map<RemotePathKey, List<RemoteFileDesc>>> future : futures) {
                 try {
-                    result.add(future.get());
-                } catch (InterruptedException | ExecutionException e) {
+                    long timeout = remoteFilePullTimeout - (System.currentTimeMillis() - startTime);
+                    if (timeout > 0) {
+                        result.add(future.get(timeout, TimeUnit.MILLISECONDS));
+                    } else {
+                        result.add(future.get(1, TimeUnit.MILLISECONDS));
+                    }
+                } catch (InterruptedException | ExecutionException | TimeoutException e) {
+                    try {
+                        for (Future<Map<RemotePathKey, List<RemoteFileDesc>>> entry : futures) {
+                            entry.cancel(true);
+                        }
+                    } catch (Throwable throwable) {
+                        LOG.warn("Failed to cancel future", throwable);
+                    }
                     throw new StarRocksConnectorException("Failed to get remote files, msg: %s", e.getMessage());
                 }
             }

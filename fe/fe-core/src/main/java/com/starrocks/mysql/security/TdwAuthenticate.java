@@ -191,6 +191,10 @@ public class TdwAuthenticate {
             }
 
             if (!isAccept) {
+                String realUserName = currentUser instanceof TDWUserIdentity ?
+                        ((TDWUserIdentity) currentUser).getRealUser() : currentUser.getUser();
+                LOG.info("Access denied; only accept requests from SuperSQL to use tdw catalog," +
+                        " user = {}, real user = {}", currentUser.getUser(), realUserName);
                 throw new StarRocksConnectorException("Access denied; only accept requests from SuperSQL to use tdw catalog");
             }
         }

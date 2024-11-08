@@ -2351,6 +2351,12 @@ public class Config extends ConfigBase {
     @ConfField
     public static int remote_file_metadata_load_concurrency = 32;
 
+    @ConfField
+    public static int remote_file_metadata_load_queue_size = Integer.MAX_VALUE;
+
+    @ConfField
+    public static int remote_file_metadata_load_group = 1;
+
     /**
      * Hive MetaStore Client socket timeout in seconds.
      */
@@ -3457,4 +3463,7 @@ public class Config extends ConfigBase {
 
     @ConfField
     public static int max_queue_size_for_report_metadata = 100000;
+
+    @ConfField(mutable = true)
+    public static long remote_file_warn_response_time = 60000;
 }

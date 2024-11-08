@@ -35,6 +35,7 @@ import org.junit.Test;
 import org.junit.rules.ExpectedException;
 
 import java.util.Optional;
+import java.util.concurrent.Executors;
 
 public class HiveViewTest extends PlanTestBase {
     @Rule
@@ -127,7 +128,7 @@ public class HiveViewTest extends PlanTestBase {
     @Test
     public void testRefreshHiveView(@Mocked CachingHiveMetastore hiveMetastore) throws Exception {
         HiveCacheUpdateProcessor hiveCacheUpdateProcessor = new HiveCacheUpdateProcessor("hive0", hiveMetastore,
-                null, null, true, false);
+                null, Executors.newFixedThreadPool(5), true, false);
         HiveMetadata hiveMetadata = new HiveMetadata("hive0", null, null, null, null,
                 Optional.of(hiveCacheUpdateProcessor), null, null);
 

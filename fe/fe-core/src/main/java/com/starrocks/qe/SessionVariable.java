@@ -836,6 +836,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_PUSH_DOWN_AGG_TO_UNION = "enable_push_down_agg_to_union";
 
+    public static final String REMOTE_FILE_PULL_TIMEOUT = "remote_file_pull_timeout";
+
     // --------  tq session variables end --------
 
     @VariableMgr.VarAttr(name = ENABLE_PIPELINE, alias = ENABLE_PIPELINE_ENGINE, show = ENABLE_PIPELINE_ENGINE)
@@ -4291,6 +4293,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setTqTauthPlatformToken(String tqTauthPlatformToken) {
         this.tqTauthPlatformToken = tqTauthPlatformToken;
+    }
+
+    @VariableMgr.VarAttr(name = REMOTE_FILE_PULL_TIMEOUT)
+    private long remoteFilePullTimeout = Long.MAX_VALUE;
+
+    public long getRemoteFilePullTimeout() {
+        return remoteFilePullTimeout;
+    }
+
+    public void setRemoteFilePullTimeout(long remoteFilePullTimeout) {
+        this.remoteFilePullTimeout = remoteFilePullTimeout;
     }
 
     // Serialize to thrift object

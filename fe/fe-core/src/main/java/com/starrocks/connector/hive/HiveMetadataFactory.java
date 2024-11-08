@@ -21,6 +21,7 @@ import com.starrocks.connector.MetastoreType;
 import com.starrocks.connector.RemoteFileIO;
 import com.starrocks.connector.RemoteFileOperations;
 
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.ExecutorService;
@@ -33,7 +34,7 @@ public class HiveMetadataFactory {
     private final RemoteFileIO remoteFileIO;
     private final long perQueryMetastoreMaxNum;
     private final long perQueryCacheRemotePathMaxNum;
-    private final ExecutorService pullRemoteFileExecutor;
+    private final List<ExecutorService> pullRemoteFileExecutors;
     private final Executor updateRemoteFilesExecutor;
     private final Executor updateStatisticsExecutor;
     private final Executor refreshOthersFeExecutor;
@@ -47,7 +48,7 @@ public class HiveMetadataFactory {
                                RemoteFileIO remoteFileIO,
                                CachingHiveMetastoreConf hmsConf,
                                CachingRemoteFileConf fileConf,
-                               ExecutorService pullRemoteFileExecutor,
+                               List<ExecutorService> pullRemoteFileExecutors,
                                Executor updateRemoteFilesExecutor,
                                Executor updateStatisticsExecutor,
                                Executor refreshOthersFeExecutor,
@@ -60,7 +61,7 @@ public class HiveMetadataFactory {
         this.remoteFileIO = remoteFileIO;
         this.perQueryMetastoreMaxNum = hmsConf.getPerQueryCacheMaxNum();
         this.perQueryCacheRemotePathMaxNum = fileConf.getPerQueryCacheMaxSize();
-        this.pullRemoteFileExecutor = pullRemoteFileExecutor;
+        this.pullRemoteFileExecutors = pullRemoteFileExecutors;
         this.updateRemoteFilesExecutor = updateRemoteFilesExecutor;
         this.updateStatisticsExecutor = updateStatisticsExecutor;
         this.refreshOthersFeExecutor = refreshOthersFeExecutor;
@@ -77,7 +78,7 @@ public class HiveMetadataFactory {
                 hdfsEnvironment.getConfiguration(), metastoreType, catalogName);
         RemoteFileOperations remoteFileOperations = new RemoteFileOperations(
                 CachingRemoteFileIO.createQueryLevelInstance(remoteFileIO, perQueryCacheRemotePathMaxNum),
-                pullRemoteFileExecutor,
+                pullRemoteFileExecutors,
                 updateRemoteFilesExecutor,
                 isRecursive,
                 remoteFileIO instanceof CachingRemoteFileIO,
@@ -93,7 +94,7 @@ public class HiveMetadataFactory {
         Optional<HiveCacheUpdateProcessor> cacheUpdateProcessor;
         if (remoteFileIO instanceof CachingRemoteFileIO || metastore instanceof CachingHiveMetastore) {
             cacheUpdateProcessor = Optional.of(new HiveCacheUpdateProcessor(
-                    catalogName, metastore, remoteFileIO, pullRemoteFileExecutor,
+                    catalogName, metastore, remoteFileIO, pullRemoteFileExecutors,
                     isRecursive, enableHmsEventsIncrementalSync));
         } else {
             cacheUpdateProcessor = Optional.empty();

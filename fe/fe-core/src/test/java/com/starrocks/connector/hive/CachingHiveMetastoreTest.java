@@ -457,10 +457,10 @@ public class CachingHiveMetastoreTest {
         CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
                 metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, false);
         HiveCacheUpdateProcessor processor = new HiveCacheUpdateProcessor(
-                "hive_catalog", cachingHiveMetastore, null, null, false, false);
+                "hive_catalog", cachingHiveMetastore, null, Executors.newFixedThreadPool(2), false, false);
         Assert.assertTrue(processor.getCachedTableNames().isEmpty());
 
-        processor = new HiveCacheUpdateProcessor("hive_catalog", metastore, null, null, false, false);
+        processor = new HiveCacheUpdateProcessor("hive_catalog", metastore, null, Executors.newFixedThreadPool(2), false, false);
         Assert.assertTrue(processor.getCachedTableNames().isEmpty());
     }
 }
