@@ -34,7 +34,9 @@ import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.StringLiteral;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.FunctionSet;
+import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.HivePartitionKey;
+import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.PrimitiveType;
@@ -46,8 +48,11 @@ import com.starrocks.common.UserException;
 import com.starrocks.common.util.DateUtils;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.connector.hive.THiveConstants;
+import com.starrocks.connector.hive.THiveUtils;
 import com.starrocks.connector.iceberg.IcebergPartitionUtils;
 import com.starrocks.planner.PartitionColumnFilter;
+import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.common.DmlException;
 import com.starrocks.sql.common.PListCell;
@@ -390,7 +395,27 @@ public class PartitionUtil {
                 mvPartitionKeySetMap.computeIfAbsent(mvPartitionName, x -> Sets.newHashSet())
                         .add(partitionName);
             }
-        } else {
+            return mvPartitionKeySetMap;
+        } else if (table.isHiveTable()) {
+            HiveTable hiveTable = (HiveTable) table;
+            if (hiveTable.isThiveTable()) {
+                for (String partitionName : partitionNames) {
+                    List<String> values = toPartitionValues(partitionName);
+                    String thivePartition = values.get(partitionColumnIndex);
+                    if (thivePartition.equalsIgnoreCase(THiveConstants.DEFAULT)) {
+                        String mvPartitionName = "thivemvp_DEFAULT";
+                        mvPartitionKeySetMap.computeIfAbsent(mvPartitionName, x -> Sets.newHashSet())
+                                .add(partitionName);
+                    } else {
+                        String mvPartitionName = "thivemvp_" + thivePartition;
+                        mvPartitionKeySetMap.computeIfAbsent(mvPartitionName, x -> Sets.newHashSet())
+                                .add(partitionName);
+                    }
+                }
+                return mvPartitionKeySetMap;
+            }
+        }
+        {
             for (String partitionName : partitionNames) {
                 List<String> partitionNameValues = toPartitionValues(partitionName);
                 PartitionKey partitionKey = createPartitionKey(
@@ -401,8 +426,8 @@ public class PartitionUtil {
                 mvPartitionKeySetMap.computeIfAbsent(mvPartitionName, x -> Sets.newHashSet())
                         .add(partitionName);
             }
+            return mvPartitionKeySetMap;
         }
-        return mvPartitionKeySetMap;
     }
 
     // Iceberg Table has partition transforms like this:
@@ -458,16 +483,55 @@ public class PartitionUtil {
         List<PartitionKey> partitionKeys = new ArrayList<>();
         Map<String, PartitionKey> mvPartitionKeyMap = Maps.newHashMap();
 
-        for (String partitionName : partitionNames) {
-            List<String> partitionNameValues = toPartitionValues(partitionName);
-            putMvPartitionKeyIntoMap(table, partitionColumns.get(partitionColumnIndex), partitionKeys,
-                    mvPartitionKeyMap, partitionNameValues.get(partitionColumnIndex));
+        if (table.isHiveTable()) {
+            HiveTable hiveTable = (HiveTable) table;
+            if (hiveTable.isThiveTable()) {
+                Map<String, List<String>> partitionNameToPartitionValues =
+                        getPartitionValues(hiveTable, partitionColumn);
+                for (String partitionName : partitionNames) {
+                    List<String> values = toPartitionValues(partitionName);
+                    String thivePartition = values.get(partitionColumnIndex);
+                    String rawValue = partitionNameToPartitionValues.get(thivePartition).get(0);
+                    putMvThivePartitionKeyIntoMap(table, partitionColumns.get(partitionColumnIndex), partitionKeys,
+                            mvPartitionKeyMap, rawValue, thivePartition);
+                }
+            } else {
+                for (String partitionName : partitionNames) {
+                    List<String> partitionNameValues = toPartitionValues(partitionName);
+                    putMvPartitionKeyIntoMap(table, partitionColumns.get(partitionColumnIndex), partitionKeys,
+                            mvPartitionKeyMap, partitionNameValues.get(partitionColumnIndex));
+                }
+            }
+        } else {
+            for (String partitionName : partitionNames) {
+                List<String> partitionNameValues = toPartitionValues(partitionName);
+                putMvPartitionKeyIntoMap(table, partitionColumns.get(partitionColumnIndex), partitionKeys,
+                        mvPartitionKeyMap, partitionNameValues.get(partitionColumnIndex));
+            }
         }
 
         LinkedHashMap<String, PartitionKey> sortedPartitionLinkMap = mvPartitionKeyMap.entrySet().stream()
                 .sorted(Map.Entry.comparingByValue(PartitionKey::compareTo))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue, (e1, e2) -> e1, LinkedHashMap::new));
 
+        if (table.isHiveTable()) {
+            HiveTable hiveTable = (HiveTable) table;
+            if (hiveTable.isThiveTable()) {
+                return getMvThivePartitionRangeMap(partitionColumn, partitionExpr, sortedPartitionLinkMap);
+            } else {
+                return getMvPartitionRangeMap(table, partitionColumn, partitionExpr, sortedPartitionLinkMap);
+            }
+        } else {
+            return getMvPartitionRangeMap(table, partitionColumn, partitionExpr, sortedPartitionLinkMap);
+        }
+    }
+
+    private static Map<String, Range<PartitionKey>> getMvPartitionRangeMap(
+            Table table,
+            Column partitionColumn,
+            Expr partitionExpr,
+            LinkedHashMap<String, PartitionKey> sortedPartitionLinkMap)
+            throws AnalysisException {
         boolean isConvertToDate = isConvertToDate(partitionExpr, partitionColumn);
         Map<String, Range<PartitionKey>> mvPartitionRangeMap = new LinkedHashMap<>();
 
@@ -586,6 +650,51 @@ public class PartitionUtil {
         mvPartitionRangeMap.put(partitionName, Range.openClosed(lastPartitionKey, upperBound));
     }
     /**
+     * thive table
+     * CREATE TABLE test_range_table(
+     *     id INT,
+     *     name STRING,
+     *     cdouble DOUBLE
+     * )
+     * PARTITION BY RANGE( id )
+     * (
+     *     PARTITION default,
+     *     PARTITION p_5 VALUES LESS THAN ( 5 ),
+     *     PARTITION p_10 VALUES LESS THAN ( 10 ),
+     *     PARTITION p_15 VALUES LESS THAN ( 15 )
+     * );
+     * 分区对应的范围为：p_5: (-∞, 5),  p_10: [5, 10), p_15: [10, 15), default: [15, +∞)
+     *
+     * @param partitionColumn
+     * @param partitionExpr
+     * @param sortedPartitionLinkMap
+     * @return
+     * @throws AnalysisException
+     */
+    private static Map<String, Range<PartitionKey>> getMvThivePartitionRangeMap(
+            Column partitionColumn,
+            Expr partitionExpr,
+            LinkedHashMap<String, PartitionKey> sortedPartitionLinkMap)
+            throws AnalysisException {
+        PartitionKey lastPartitionKey = null;
+        String lastPartitionName = null;
+
+        Map<String, Range<PartitionKey>> mvPartitionRangeMap = new LinkedHashMap<>();
+
+        //min value.
+        lastPartitionKey = PartitionKey.createInfinityPartitionKeyWithType(
+                ImmutableList.of(partitionColumn.getPrimitiveType()), false);
+        for (Map.Entry<String, PartitionKey> entry : sortedPartitionLinkMap.entrySet()) {
+            lastPartitionName = entry.getKey();
+            Preconditions.checkState(!mvPartitionRangeMap.containsKey(lastPartitionName));
+            PartitionKey upperBound = entry.getValue();
+            mvPartitionRangeMap.put(lastPartitionName, Range.closedOpen(lastPartitionKey, upperBound));
+            lastPartitionKey = upperBound;
+        }
+        return mvPartitionRangeMap;
+    }
+
+    /**
      * If base table column type is string but partition type is date, we need to convert the string to date
      * @param partitionExpr   PARTITION BY expr
      * @param partitionColumn PARTITION BY referenced column
@@ -685,6 +794,32 @@ public class PartitionUtil {
         mvPartitionKeyMap.put(mvPartitionName, partitionKey);
     }
 
+    private static void putMvThivePartitionKeyIntoMap(Table table, Column partitionColumn,
+                                                      List<PartitionKey> partitionKeys,
+                                                      Map<String, PartitionKey> mvPartitionKeyMap,
+                                                      String partitionName,
+                                                      String thivePartition)
+            throws AnalysisException {
+        if (thivePartition.equalsIgnoreCase(THiveConstants.DEFAULT)) {
+            PartitionKey partitionKey = new HivePartitionKey();
+            partitionKey.pushColumn(LiteralExpr.createInfinity(partitionColumn.getType(), true),
+                    partitionColumn.getPrimitiveType());
+            partitionKeys.add(partitionKey);
+            String mvPartitionName = "thivemvp_DEFAULT";
+            mvPartitionKeyMap.put(mvPartitionName, partitionKey);
+        } else {
+            PartitionKey partitionKey = createPartitionKey(
+                    ImmutableList.of(partitionName),
+                    ImmutableList.of(partitionColumn),
+                    table.getType());
+            partitionKeys.add(partitionKey);
+            //String mvPartitionName = generateMVPartitionName(partitionKey);
+            String mvPartitionName = "thivemvp_" + thivePartition;
+            // TODO: check `mvPartitionName` existed.
+            mvPartitionKeyMap.put(mvPartitionName, partitionKey);
+        }
+    }
+
     public static Map<String, PListCell> getMVPartitionNameWithList(Table table,
                                                                     Column partitionColumn,
                                                                     List<String> partitionNames)
@@ -696,6 +831,28 @@ public class PartitionUtil {
         int partitionColumnIndex = checkAndGetPartitionColumnIndex(partitionColumns, partitionColumn);
 
         List<PartitionKey> partitionKeys = new ArrayList<>();
+        if (table.isHiveTable()) {
+            HiveTable hiveTable = (HiveTable) table;
+            if (hiveTable.isThiveTable()) {
+                Map<String, List<String>> partitionNameToPartitionValues =
+                        getPartitionValues(hiveTable, partitionColumn);
+                for (String partitionName : partitionNames) {
+                    //List<String> partitionNameValues = toPartitionValues(partitionName);
+                    List<String> values = toPartitionValues(partitionName);
+                    String thivePartition = values.get(partitionColumnIndex);
+                    if (thivePartition.equalsIgnoreCase(THiveConstants.DEFAULT)) {
+                        String mvPartitionName = "thivemvp_DEFAULT";
+                        partitionListMap.put(mvPartitionName, new PListCell(Lists.newArrayList()));
+                    } else {
+                        List<String> partitionNameValues = partitionNameToPartitionValues.get(thivePartition);
+                        String mvPartitionName = "thivemvp_" + thivePartition;
+                        List<List<String>> partitionKeyList = generateMVPartitionList(partitionNameValues);
+                        partitionListMap.put(mvPartitionName, new PListCell(partitionKeyList));
+                    }
+                }
+                return partitionListMap;
+            }
+        }
         for (String partitionName : partitionNames) {
             List<String> partitionNameValues = toPartitionValues(partitionName);
             PartitionKey partitionKey = createPartitionKey(
@@ -717,6 +874,16 @@ public class PartitionUtil {
             partitionItem.add(key.getStringValue());
         }
         partitionKeyList.add(partitionItem);
+        return partitionKeyList;
+    }
+
+    private static List<List<String>> generateMVPartitionList(List<String> partitionNameValues) {
+        List<List<String>> partitionKeyList = Lists.newArrayList();
+        for (String entry : partitionNameValues) {
+            List<String> partitionItem = Lists.newArrayList();
+            partitionItem.add(entry);
+            partitionKeyList.add(partitionItem);
+        }
         return partitionKeyList;
     }
 
@@ -872,5 +1039,14 @@ public class PartitionUtil {
 
     public static String getPathWithSlash(String path) {
         return path.endsWith("/") ? path : path + "/";
+    }
+
+    /**
+     * Get all values of the specified partition field
+     */
+    public static Map<String, List<String>> getPartitionValues(HiveMetaStoreTable hmsTable, Column partitionColumn) {
+        return GlobalStateMgr.getCurrentState().getMetadataMgr().getPartitionValues(
+                hmsTable.getCatalogName(), hmsTable.getDbName(), hmsTable.getTableName(),
+                THiveUtils.toTHivePartitionKey(partitionColumn.getName()));
     }
 }

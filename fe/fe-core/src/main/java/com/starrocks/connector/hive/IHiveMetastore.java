@@ -19,6 +19,7 @@ import com.google.common.collect.Maps;
 import com.starrocks.catalog.Table;
 import com.starrocks.connector.metastore.IMetastore;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -95,6 +96,11 @@ public interface IHiveMetastore extends IMetastore {
     }
 
     default void invalidatePartitionKeys(HivePartitionValue partitionValue) {
+    }
+
+    default Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
+                                                         String partitionColumn) {
+        return Collections.emptyMap();
     }
 
     default long getCurrentEventId() {

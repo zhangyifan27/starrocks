@@ -709,6 +709,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String CONSISTENT_HASH_VIRTUAL_NUMBER = "consistent_hash_virtual_number";
 
+    public static final String ENABLE_THIVE_FUNCTION = "enable_thive_function";
+
+    public static final String PREFER_THIVE_FUNCTIONS = "prefer_thive_functions";
+
+    public static final String EXCLUDE_THIVE_DEFAULT_PARTITION = "exclude_thive_default_partition";
+
+    public static final String EXPERIMENTAL_ENABLE_CAST_TO_INT_ROUND = "experimental_enable_cast_to_int_round";
+
     public static final String ENABLE_COLLECT_TABLE_LEVEL_SCAN_STATS = "enable_collect_table_level_scan_stats";
 
     public static final String HIVE_TEMP_STAGING_DIR = "hive_temp_staging_dir";
@@ -1614,6 +1622,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public String getTraceLogMode() {
         return traceLogMode;
     }
+
+    @VarAttr(name = EXCLUDE_THIVE_DEFAULT_PARTITION, flag = VariableMgr.INVISIBLE)
+    private boolean excludeThiveDefaultPartition = true;
 
     public void setPartialUpdateMode(String mode) {
         this.partialUpdateMode = mode;
@@ -4139,6 +4150,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean isEnableRewriteUnnestBitmapToArray() {
         return enableRewriteUnnestBitmapToArray;
+    }
+
+    public boolean getExcludeThiveDefaultPartition() {
+        return excludeThiveDefaultPartition;
+    }
+
+    public void setExcludeThiveDefaultPartition(boolean excludeThiveDefaultPartition) {
+        this.excludeThiveDefaultPartition = excludeThiveDefaultPartition;
     }
 
     // Serialize to thrift object

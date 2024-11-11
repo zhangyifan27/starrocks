@@ -360,4 +360,9 @@ public class HiveMetastoreOperations {
 
         return targetPath;
     }
+
+    public Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
+                                                        String partitionColumn) {
+        return metastore.getPartitionValues(databaseName, tableName, partitionColumn);
+    }
 }

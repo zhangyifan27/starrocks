@@ -54,6 +54,7 @@ import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 import com.starrocks.thrift.TSinkCommitInfo;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -322,6 +323,11 @@ public interface ConnectorMetadata {
     }
 
     default void alterView(AlterViewStmt stmt) throws DdlException, UserException {
+    }
+
+    default Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
+                                                         String partitionColumn) {
+        return Collections.emptyMap();
     }
 
     default CloudConfiguration getCloudConfiguration() {

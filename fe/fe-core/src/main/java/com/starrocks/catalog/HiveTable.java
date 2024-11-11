@@ -54,6 +54,7 @@ import com.starrocks.common.util.concurrent.lock.Locker;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.HiveStorageFormat;
+import com.starrocks.connector.hive.THiveConstants;
 import com.starrocks.persist.ModifyTableColumnOperationLog;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.CatalogMgr;
@@ -272,6 +273,35 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
 
     public boolean hasBooleanTypePartitionColumn() {
         return getPartitionColumns().stream().anyMatch(column -> column.getType().isBoolean());
+    }
+
+    @Override
+    public boolean isThiveTable() {
+        return hiveProperties.containsKey(THiveConstants.TABLE_TYPE) &&
+                hiveProperties.get(THiveConstants.TABLE_TYPE).equalsIgnoreCase(THiveConstants.THIVE);
+    }
+
+    public List<String> getThivePartitionColumnsStr() {
+        if (isUnPartitioned()) {
+            return Lists.newArrayList();
+        } else {
+            String thivePartitionColumns = getProperties().get(THiveConstants.THIVE_PARTITION_COLUMNS);
+            String[] splits = thivePartitionColumns.split(THiveConstants.SEPARATOR);
+            return Lists.newArrayList(splits);
+        }
+    }
+
+    public List<Column> getThivePartitionColumns() {
+        if (isUnPartitioned()) {
+            return Lists.newArrayList();
+        } else {
+            List<String> partitionColumnsStr = getThivePartitionColumnsStr();
+            List<Column> partitionColumns = Lists.newArrayListWithCapacity(partitionColumnsStr.size());
+            for (String split : partitionColumnsStr) {
+                partitionColumns.add(getColumn(split));
+            }
+            return partitionColumns;
+        }
     }
 
     public void modifyTableSchema(String dbName, String tableName, HiveTable updatedTable) {

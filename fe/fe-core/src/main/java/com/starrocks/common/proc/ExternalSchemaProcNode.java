@@ -17,6 +17,7 @@ package com.starrocks.common.proc;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.starrocks.catalog.Column;
+import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.FeConstants;
@@ -48,6 +49,12 @@ public class ExternalSchemaProcNode implements ProcNodeInterface {
 
         List<Column> schema = table.getFullSchema();
         List<String> partitionColumns = table.getPartitionColumnNames();
+        if (table.isHiveTable()) {
+            HiveTable hiveTable = (HiveTable) table;
+            if (hiveTable.isThiveTable()) {
+                partitionColumns = hiveTable.getThivePartitionColumnsStr();
+            }
+        }
 
         for (Column column : schema) {
             String extraStr = partitionColumns.contains(column.getName()) ? PARTITION_KEY : "";

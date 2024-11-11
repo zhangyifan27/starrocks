@@ -258,4 +258,11 @@ public class UnifiedMetadata implements ConnectorMetadata {
     public CloudConfiguration getCloudConfiguration() {
         return hiveMetadata.getCloudConfiguration();
     }
+
+    @Override
+    public Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
+                                                        String partitionColumn) {
+        ConnectorMetadata metadata = metadataOfTable(databaseName, tableName);
+        return metadata.getPartitionValues(databaseName, tableName, partitionColumn);
+    }
 }

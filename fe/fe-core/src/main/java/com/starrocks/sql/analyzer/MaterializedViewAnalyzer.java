@@ -37,6 +37,7 @@ import com.starrocks.catalog.ColumnId;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.FunctionSet;
 import com.starrocks.catalog.HiveMetaStoreTable;
+import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.Index;
 import com.starrocks.catalog.InternalCatalog;
@@ -917,7 +918,12 @@ public class MaterializedViewAnalyzer {
         }
 
         private void checkPartitionColumnWithBaseHMSTable(SlotRef slotRef, HiveMetaStoreTable table) {
-            checkPartitionColumnWithBaseTable(slotRef, table.getPartitionColumns(), table.isUnPartitioned());
+            if (table.isThiveTable()) {
+                List<Column> partitionColumns = ((HiveTable) table).getThivePartitionColumns();
+                checkPartitionColumnWithBaseTable(slotRef, partitionColumns, table.isUnPartitioned());
+            } else {
+                checkPartitionColumnWithBaseTable(slotRef, table.getPartitionColumns(), table.isUnPartitioned());
+            }
         }
 
         private void checkPartitionColumnWithBaseJDBCTable(SlotRef slotRef, JDBCTable table) {

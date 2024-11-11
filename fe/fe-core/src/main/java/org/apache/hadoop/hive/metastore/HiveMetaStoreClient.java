@@ -1254,7 +1254,7 @@ public class HiveMetaStoreClient implements IMetaStoreClient, AutoCloseable {
     @Override
     public PartitionValuesResponse listPartitionValues(PartitionValuesRequest request)
             throws MetaException, TException, NoSuchObjectException {
-        throw new TException("method not implemented");
+        return client.get_partition_values(request);
     }
 
     @Override

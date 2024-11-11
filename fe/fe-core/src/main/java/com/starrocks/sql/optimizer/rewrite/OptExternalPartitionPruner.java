@@ -48,6 +48,7 @@ import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.Utils;
 import com.starrocks.sql.optimizer.operator.ScanOperatorPredicates;
 import com.starrocks.sql.optimizer.operator.logical.LogicalEsScanOperator;
+import com.starrocks.sql.optimizer.operator.logical.LogicalHiveScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalScanOperator;
 import com.starrocks.sql.optimizer.operator.scalar.BinaryPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.CallOperator;
@@ -115,6 +116,41 @@ public class OptExternalPartitionPruner {
             if (LOG.isDebugEnabled()) {
                 LOG.debug("partition prune finished, unpartitioned index [{}], " + "partitioned index [{}]",
                         String.join(",", unPartitionedIndices), String.join(",", partitionedIndices));
+            }
+        } else if (logicalScanOperator instanceof LogicalHiveScanOperator) {
+            Table table = logicalScanOperator.getTable();
+            if (table instanceof HiveMetaStoreTable && ((HiveMetaStoreTable) table).isThiveTable()) {
+                try {
+                    OptThivePartitionPruner.thivePrunePartitions(logicalScanOperator, context);
+                } catch (Exception e) {
+                    LOG.warn("HMS thive table partition prune failed : ", e);
+                    throw new StarRocksPlannerException(e.getMessage(), ErrorType.INTERNAL_ERROR);
+                }
+                return logicalScanOperator;
+            } else {
+                // partitionColumnName -> (LiteralExpr -> partition ids)
+                // no null partitions in this map, used by ListPartitionPruner
+                Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap =
+                        Maps.newHashMap();
+                // Store partitions with null partition values separately, used by ListPartitionPruner
+                // partitionColumnName -> null partitionIds
+                Map<ColumnRefOperator, Set<Long>> columnToNullPartitions = Maps.newHashMap();
+
+                try {
+                    initPartitionInfo(logicalScanOperator, context, columnToPartitionValuesMap, columnToNullPartitions);
+                    classifyConjuncts(logicalScanOperator, columnToPartitionValuesMap);
+                    computePartitionInfo(logicalScanOperator, context, columnToPartitionValuesMap, columnToNullPartitions);
+                } catch (Exception e) {
+                    LOG.warn("HMS table partition prune failed : ", e);
+                    throw new StarRocksPlannerException(e.getMessage(), ErrorType.INTERNAL_ERROR);
+                }
+
+                try {
+                    computeMinMaxConjuncts(logicalScanOperator, context);
+                } catch (Exception e) {
+                    LOG.warn("Remote scan min max conjuncts exception : ", e);
+                    throw new StarRocksPlannerException(e.getMessage(), ErrorType.INTERNAL_ERROR);
+                }
             }
         } else {
             // partitionColumnName -> (LiteralExpr -> partition ids)
@@ -286,7 +322,7 @@ public class OptExternalPartitionPruner {
         // RemoteScanPartitionPruneRule may be run multiple times, such like after MaterializedViewRewriter rewrite，
         // the predicates of scan operator may changed, it need to re-compute the ScanOperatorPredicates.
         operator.getScanOperatorPredicates().clear();
-        if (table instanceof HiveMetaStoreTable) {
+        if (table instanceof HiveMetaStoreTable && !((HiveMetaStoreTable) table).isThiveTable()) {
             HiveMetaStoreTable hmsTable = (HiveMetaStoreTable) table;
             List<Column> partitionColumns = hmsTable.getPartitionColumns();
             List<ColumnRefOperator> partitionColumnRefOperators = new ArrayList<>();
@@ -499,7 +535,7 @@ public class OptExternalPartitionPruner {
         }
     }
 
-    private static void computeMinMaxConjuncts(LogicalScanOperator operator, OptimizerContext context)
+    public static void computeMinMaxConjuncts(LogicalScanOperator operator, OptimizerContext context)
             throws AnalysisException {
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
         for (ScalarOperator scalarOperator : scanOperatorPredicates.getNonPartitionConjuncts()) {
@@ -513,7 +549,7 @@ public class OptExternalPartitionPruner {
      * Only conjuncts of the form <column> <op> <constant> and <column> in <constant> are supported,
      * and <op> must be one of LT, LE, GE, GT, or EQ.
      */
-    private static boolean isSupportedMinMaxConjuncts(LogicalScanOperator scanOperator, ScalarOperator operator) {
+    public static boolean isSupportedMinMaxConjuncts(LogicalScanOperator scanOperator, ScalarOperator operator) {
         if (operator instanceof BinaryPredicateOperator) {
             ScalarOperator leftChild = operator.getChild(0);
             ScalarOperator rightChild = operator.getChild(1);
@@ -541,7 +577,7 @@ public class OptExternalPartitionPruner {
         }
     }
 
-    private static void addMinMaxConjuncts(ScalarOperator scalarOperator, LogicalScanOperator operator)
+    public static void addMinMaxConjuncts(ScalarOperator scalarOperator, LogicalScanOperator operator)
             throws AnalysisException {
         List<ScalarOperator> minMaxConjuncts = operator.getScanOperatorPredicates().getMinMaxConjuncts();
         if (scalarOperator instanceof BinaryPredicateOperator) {

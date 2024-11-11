@@ -13,6 +13,7 @@
 // limitations under the License.
 package com.starrocks.connector.partitiontraits;
 
+import com.starrocks.catalog.Column;
 import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.HivePartitionKey;
 import com.starrocks.catalog.HiveTable;
@@ -61,5 +62,15 @@ public class HivePartitionTraits extends DefaultTraits {
                 partitionNameWithPartition.values().stream()
                         .map(com.starrocks.connector.PartitionInfo::getModifiedTime)
                         .max(Long::compareTo);
+    }
+
+    @Override
+    public List<Column> getPartitionColumns() {
+        HiveTable hiveTable = (HiveTable) table;
+        if (hiveTable.isThiveTable()) {
+            return hiveTable.getThivePartitionColumns();
+        } else {
+            return table.getPartitionColumns();
+        }
     }
 }

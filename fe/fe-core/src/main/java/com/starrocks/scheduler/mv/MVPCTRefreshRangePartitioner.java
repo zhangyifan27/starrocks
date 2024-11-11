@@ -28,6 +28,7 @@ import com.starrocks.analysis.StringLiteral;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.FunctionSet;
+import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.MaterializedView;
 import com.starrocks.catalog.PartitionInfo;
 import com.starrocks.catalog.PartitionKey;
@@ -171,6 +172,12 @@ public final class MVPCTRefreshRangePartitioner extends MVPCTRefreshPartitioner 
         }
         List<Expr> partitionPredicates =
                 MvUtils.convertRange(mvPartitionSlotRef, sourceTablePartitionRange);
+        if (table != null && table.isHiveTable()) {
+            boolean isThive = ((HiveTable) table).isThiveTable();
+            if (isThive) {
+                return Expr.compoundOr(partitionPredicates);
+            }
+        }
         // range contains the min value could be null value
         Optional<Range<PartitionKey>> nullRange = sourceTablePartitionRange.stream().
                 filter(range -> range.lowerEndpoint().isMinValue()).findAny();

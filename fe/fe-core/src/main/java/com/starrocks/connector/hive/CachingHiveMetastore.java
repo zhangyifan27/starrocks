@@ -75,6 +75,8 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
     protected LoadingCache<HivePartitionName, Partition> partitionCache;
     protected LoadingCache<DatabaseTableName, HivePartitionStats> tableStatsCache;
     protected LoadingCache<HivePartitionName, HivePartitionStats> partitionStatsCache;
+    // thive use it
+    protected LoadingCache<HiveTablePartitionColumn, Map<String, List<String>>> partitionValuesCache;
 
     public static CachingHiveMetastore createQueryLevelInstance(IHiveMetastore metastore, long perQueryCacheMaxSize) {
         return new CachingHiveMetastore(
@@ -136,6 +138,14 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                     public Map<HivePartitionName, HivePartitionStats> loadAll(
                             @NotNull Iterable<? extends HivePartitionName> partitionKeys) {
                         return loadPartitionsStatistics(partitionKeys);
+                    }
+                }, executor));
+
+        partitionValuesCache = newCacheBuilder(expireAfterWriteSec, NEVER_REFRESH, maxSize)
+                .build(asyncReloading(new CacheLoader<HiveTablePartitionColumn, Map<String, List<String>>>() {
+                    @Override
+                    public Map<String, List<String>> load(@NotNull HiveTablePartitionColumn key) {
+                        return loadPartitionValues(key);
                     }
                 }, executor));
     }
@@ -515,6 +525,11 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                 refreshPartitions(presentPartitionStatistics, updatedPartitionKeys,
                         this::loadPartitionsStatistics, partitionStatsCache);
             }
+            List<HiveTablePartitionColumn> presentHiveTablePartitionColumns =
+                    getPresentHiveTablePartitionColumns(partitionValuesCache, hiveDbName, hiveTblName);
+            for (HiveTablePartitionColumn hiveTablePartitionColumn : presentHiveTablePartitionColumns) {
+                partitionValuesCache.put(hiveTablePartitionColumn, loadPartitionValues(hiveTablePartitionColumn));
+            }
         }
         return refreshPartitionNames;
     }
@@ -619,6 +634,7 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         partitionCache.invalidateAll();
         tableStatsCache.invalidateAll();
         partitionStatsCache.invalidateAll();
+        partitionValuesCache.invalidateAll();
     }
 
     public synchronized void invalidateDatabase(String dbName) {
@@ -637,6 +653,9 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         presentPartitions.forEach(p -> partitionCache.invalidate(p));
         List<HivePartitionName> presentPartitionStats = getPresentPartitionNames(partitionStatsCache, dbName, tableName);
         presentPartitionStats.forEach(p -> partitionStatsCache.invalidate(p));
+        List<HiveTablePartitionColumn> presentHiveTablePartitionColumns =
+                getPresentHiveTablePartitionColumns(partitionValuesCache, dbName, tableName);
+        presentHiveTablePartitionColumns.forEach(p -> partitionValuesCache.invalidate(p));
     }
 
     public synchronized void invalidatePartition(HivePartitionName partitionName) {
@@ -677,6 +696,9 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
             presentPartitions.forEach(p -> partitionCache.invalidate(p));
             List<HivePartitionName> presentPartitionStats = getPresentPartitionNames(partitionStatsCache, dbName, tableName);
             presentPartitionStats.forEach(p -> partitionStatsCache.invalidate(p));
+            List<HiveTablePartitionColumn> presentHiveTablePartitionColumns =
+                    getPresentHiveTablePartitionColumns(partitionValuesCache, dbName, tableName);
+            presentHiveTablePartitionColumns.forEach(p -> partitionValuesCache.invalidate(p));
         }
     }
 
@@ -710,5 +732,28 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
             String catalogName,
             final boolean getAllEvents) throws MetastoreNotificationFetchException {
         return ((HiveMetastore) metastore).getNextEventResponse(lastSyncedEventId, catalogName, getAllEvents);
+    }
+
+    private List<HiveTablePartitionColumn> getPresentHiveTablePartitionColumns(
+            LoadingCache<HiveTablePartitionColumn, ?> cache,
+            String dbName, String tableName) {
+        return cache.asMap().keySet().stream()
+                .filter(tablePartition -> tablePartition.approximateMatchTable(dbName, tableName))
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * for thive, for example
+     * (test, thive_range_partition_table, id_hive_part) -> {default=[], p_5=[5], p_15=[15], p_10=[10]}
+     * (test, thive_list_partition_table, id_hive_part) ->
+     *                      {default=[], p_2021=[2020, 2021], p_2011=[2010, 2011], p_2001=[2000, 2001]}
+     */
+    private Map<String, List<String>> loadPartitionValues(HiveTablePartitionColumn key) {
+        return metastore.getPartitionValues(key.getDatabaseName(), key.getTableName(), key.getPartitionColumn());
+    }
+
+    public Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
+                                                         String partitionColumn) {
+        return get(partitionValuesCache, HiveTablePartitionColumn.of(databaseName, tableName, partitionColumn));
     }
 }

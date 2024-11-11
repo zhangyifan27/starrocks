@@ -1886,7 +1886,7 @@ public class AstToStringBuilder {
             createTableSql.append("\nPARTITION BY (");
 
             if (!table.isIcebergTable()) {
-                partitionNames = table.getPartitionColumnNames();
+                partitionNames = getPartitionByStr(table);
             } else {
                 partitionNames = ((IcebergTable) table).getPartitionColumnNamesWithTransform();
             }
@@ -1916,6 +1916,16 @@ public class AstToStringBuilder {
         }
 
         return createTableSql.toString();
+    }
+
+    private static List<String> getPartitionByStr(Table table) {
+        if (table.isHiveTable()) {
+            HiveTable hiveTable = (HiveTable) table;
+            if (hiveTable.isThiveTable()) {
+                return hiveTable.getThivePartitionColumnsStr();
+            }
+        }
+        return table.getPartitionColumnNames();
     }
 
     public static String getExternalCatalogViewDdlStmt(ConnectorView view) {

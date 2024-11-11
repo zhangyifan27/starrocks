@@ -53,8 +53,8 @@ import java.util.List;
 
 public class PartitionColumnFilter {
     private static final Logger LOG = LogManager.getLogger(PartitionColumnFilter.class);
-    private LiteralExpr lowerBound;
-    private LiteralExpr upperBound;
+    public LiteralExpr lowerBound;
+    public LiteralExpr upperBound;
     public boolean lowerBoundInclusive;
     public boolean upperBoundInclusive;
     // InPredicate
