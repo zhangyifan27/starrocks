@@ -96,6 +96,11 @@ Status HdfsScanner::_build_scanner_context() {
     HdfsScannerContext& ctx = _scanner_ctx;
     std::vector<ColumnPtr>& partition_values = ctx.partition_values;
 
+    std::unordered_set<SlotId> equality_delete_slots;
+    for (size_t i = 0; i < _scanner_params.mor_params.equality_slots.size(); i++) {
+        equality_delete_slots.emplace(_scanner_params.mor_params.equality_slots[i]->id());
+    }
+
     // evaluate partition values.
     for (size_t i = 0; i < _scanner_params.partition_slots.size(); i++) {
         int part_col_idx = _scanner_params._partition_index_in_hdfs_partition_columns[i];
@@ -118,9 +123,10 @@ Status HdfsScanner::_build_scanner_context() {
             HdfsScannerContext::ColumnInfo column;
             column.slot_desc = slot;
             column.idx_in_chunk = _scanner_params.materialize_index_in_chunk[i];
-            column.decode_needed =
-                    slot->is_output_column() || _scanner_params.slots_of_mutli_slot_conjunct.find(slot->id()) !=
-                                                        _scanner_params.slots_of_mutli_slot_conjunct.end();
+            column.decode_needed = slot->is_output_column() ||
+                                   _scanner_params.slots_of_mutli_slot_conjunct.find(slot->id()) !=
+                                           _scanner_params.slots_of_mutli_slot_conjunct.end() ||
+                                   equality_delete_slots.find(slot->id()) != equality_delete_slots.end();
             ctx.materialized_columns.emplace_back(std::move(column));
         }
     }
