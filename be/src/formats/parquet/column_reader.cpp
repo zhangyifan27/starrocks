@@ -317,11 +317,10 @@ void ScalarColumnReader::collect_column_io_range(std::vector<io::SharedBufferedI
             }
             _offset_index_ctx->collect_io_range(ranges, end_offset, active);
         } else {
-            int64_t offset = 0;
-            if (column_metadata.__isset.dictionary_page_offset) {
+            int64_t offset = column_metadata.data_page_offset;
+            if (column_metadata.__isset.dictionary_page_offset && column_metadata.dictionary_page_offset > 0 &&
+                offset > column_metadata.dictionary_page_offset) {
                 offset = column_metadata.dictionary_page_offset;
-            } else {
-                offset = column_metadata.data_page_offset;
             }
             int64_t size = column_metadata.total_compressed_size;
             auto r = io::SharedBufferedInputStream::IORange(offset, size, active);
