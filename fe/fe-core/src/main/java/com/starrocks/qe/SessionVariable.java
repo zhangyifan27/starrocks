@@ -1623,7 +1623,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         return traceLogMode;
     }
 
-    @VarAttr(name = EXCLUDE_THIVE_DEFAULT_PARTITION, flag = VariableMgr.INVISIBLE)
+    @VarAttr(name = EXCLUDE_THIVE_DEFAULT_PARTITION)
     private boolean excludeThiveDefaultPartition = true;
 
     public void setPartialUpdateMode(String mode) {

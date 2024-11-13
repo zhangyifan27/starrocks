@@ -1901,7 +1901,7 @@ public class Config extends ConfigBase {
     /**
      * If set to true, enable TDW Authentication
      */
-    @ConfField
+    @ConfField(mutable = true)
     public static boolean enable_tdw_authentication = false;
     @ConfField(mutable = true)
     public static boolean tdw_authentication_skip_root = false;
@@ -1911,18 +1911,20 @@ public class Config extends ConfigBase {
     public static long tdw_user_cache_count = 100L;
     @ConfField
     public static int tdw_check_priv_timeout = 3000;
+
     @ConfField(mutable = true)
     public static boolean tdw_ups_tauth_api_enabled = false;
-    @ConfField
+    @ConfField(mutable = true)
     public static String tdw_privapi_service_target = "tdwprivapi";
     @ConfField(mutable = true)
     public static boolean hive_metastore_tq_token_auth = false;
-    @ConfField
+    @ConfField(mutable = true)
     public static String tdw_metadata_service_target = "metadataservice";
     @ConfField(mutable = true)
     public static boolean enable_supersql_proxy_authentication = false;
     @ConfField(mutable = true)
     public static String tdw_supersql_platform_name = "";
+
     /**
      * When set to true, we cannot drop user named 'admin' or grant/revoke role to/from user named 'admin',
      * except that we're root user.
@@ -2246,7 +2248,7 @@ public class Config extends ConfigBase {
     /**
      * The maximum number of partitions to fetch from the metastore in one RPC.
      */
-    @ConfField
+    @ConfField(mutable = true)
     public static int max_hive_partitions_per_rpc = 1000;
 
     /**
@@ -2352,7 +2354,7 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean enable_refresh_hive_partitions_statistics = true;
 
-    @ConfField
+    @ConfField(mutable = true)
     public static boolean invalidate_cache_when_refresh_fail = true;
 
     /**

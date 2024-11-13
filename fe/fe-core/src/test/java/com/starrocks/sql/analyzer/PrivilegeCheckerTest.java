@@ -1914,11 +1914,7 @@ public class PrivilegeCheckerTest {
     @Test
     public void testAdminOperateStmt() throws Exception {
         // AdminSetConfigStmt
-        verifyGrantRevoke(
-                "admin set frontend config (\"key\" = \"value\");",
-                "grant OPERATE on system to test",
-                "revoke OPERATE on system from test",
-                "Access denied;");
+        verifyNODEAndGRANT("admin set frontend config (\"key\" = \"value\");", "Access denied;");
 
         // AdminSetReplicaStatusStmt
         verifyGrantRevoke(
@@ -1929,11 +1925,7 @@ public class PrivilegeCheckerTest {
                 "Access denied;");
 
         // AdminShowConfigStmt
-        verifyGrantRevoke(
-                "ADMIN SHOW FRONTEND CONFIG;",
-                "grant OPERATE on system to test",
-                "revoke OPERATE on system from test",
-                "Access denied;");
+        verifyNODEAndGRANT("ADMIN SHOW FRONTEND CONFIG;", "Access denied;");
 
         // AdminShowReplicaDistributionStatement
         verifyGrantRevoke(
