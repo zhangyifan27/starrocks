@@ -41,6 +41,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.stream.Collectors;
 
 public class ConnectorTableMetadataProcessor extends FrontendDaemon {
@@ -50,6 +51,7 @@ public class ConnectorTableMetadataProcessor extends FrontendDaemon {
 
     private final Map<String, CacheUpdateProcessor> cacheUpdateProcessors = new ConcurrentHashMap<>();
 
+    private final ExecutorService refreshHiveTableExecutor;
     private final ExecutorService refreshRemoteFileExecutor;
     private final Map<String, IcebergCatalog> cachingIcebergCatalogs = new ConcurrentHashMap<>();
 
@@ -77,10 +79,16 @@ public class ConnectorTableMetadataProcessor extends FrontendDaemon {
         cachingIcebergCatalogs.remove(catalogName);
     }
 
+    public Map<String, CacheUpdateProcessor> getCacheUpdateProcessors() {
+        return cacheUpdateProcessors;
+    }
+
     public ConnectorTableMetadataProcessor() {
         super(ConnectorTableMetadataProcessor.class.getName(), Config.background_refresh_metadata_interval_millis);
         refreshRemoteFileExecutor = Executors.newFixedThreadPool(Config.background_refresh_file_metadata_concurrency,
-                new ThreadFactoryBuilder().setNameFormat("background-refresh-remote-files-%d").build());
+                new ThreadFactoryBuilder().setNameFormat("background-refresh-remote-files-%d").setDaemon(true).build());
+        refreshHiveTableExecutor = Executors.newFixedThreadPool(Config.background_refresh_hive_table_cache_concurrency,
+                new ThreadFactoryBuilder().setNameFormat("background-refresh-hive-table-cache-%d").setDaemon(true).build());
     }
 
     @Override
@@ -107,28 +115,16 @@ public class ConnectorTableMetadataProcessor extends FrontendDaemon {
                 continue;
             }
 
+            List<Future<?>> futures = Lists.newArrayList();
             for (DatabaseTableName cachedTableName : updateProcessor.getCachedTableNames()) {
-                String dbName = cachedTableName.getDatabaseName();
-                String tableName = cachedTableName.getTableName();
-                Table table;
+                futures.add(refreshHiveTableExecutor.submit(
+                        new RunnableTask(metadataMgr, updateProcessor, catalogName, cachedTableName)));
+            }
+            for (Future<?> future : futures) {
                 try {
-                    table = metadataMgr.getTable(catalogName, dbName, tableName);
-                } catch (Exception e) {
-                    LOG.warn("can't get table of {}.{}.{}，msg: ", catalogName, dbName, tableName, e);
-                    continue;
+                    future.get();
+                } catch (Throwable e) {
                 }
-                if (table == null) {
-                    LOG.warn("{}.{}.{} not exist", catalogName, dbName, tableName);
-                    continue;
-                }
-                try {
-                    updateProcessor.refreshTableBackground(table, true, refreshRemoteFileExecutor);
-                } catch (Exception e) {
-                    LOG.warn("refresh {}.{}.{} meta store info failed, msg : ", catalogName, dbName,
-                            tableName, e);
-                    continue;
-                }
-                LOG.info("refresh table {}.{}.{} success", catalogName, dbName, tableName);
             }
             LOG.info("refresh connector metadata {} finished", catalogName);
         }
@@ -209,5 +205,48 @@ public class ConnectorTableMetadataProcessor extends FrontendDaemon {
             }
         }
         LOG.info("This round of background refresh hive external table metadata is over");
+    }
+
+    private class RunnableTask implements Runnable {
+        private MetadataMgr metadataMgr;
+        private CacheUpdateProcessor updateProcessor;
+        private String catalogName;
+        private DatabaseTableName cachedTableName;
+
+        RunnableTask(MetadataMgr metadataMgr, CacheUpdateProcessor updateProcessor, String catalogName,
+                     DatabaseTableName cachedTableName) {
+            this.metadataMgr = metadataMgr;
+            this.updateProcessor = updateProcessor;
+            this.catalogName = catalogName;
+            this.cachedTableName = cachedTableName;
+        }
+
+        @Override
+        public void run() {
+            String dbName = cachedTableName.getDatabaseName();
+            String tableName = cachedTableName.getTableName();
+            Table table;
+            try {
+                table = metadataMgr.getTable(catalogName, dbName, tableName);
+            } catch (Throwable e) {
+                LOG.warn("can't get table of {}.{}.{}，msg: ", catalogName, dbName, tableName, e);
+                return;
+            }
+            if (table == null) {
+                LOG.warn("{}.{}.{} not exist", catalogName, dbName, tableName);
+                return;
+            }
+            try {
+                updateProcessor.refreshTableBackground(table, true, refreshRemoteFileExecutor);
+            } catch (Throwable e) {
+                if (Config.invalidate_cache_when_refresh_fail) {
+                    updateProcessor.invalidateTable(dbName, tableName);
+                }
+                LOG.warn("refresh {}.{}.{} meta store info failed, msg : ", catalogName, dbName,
+                        tableName, e);
+                return;
+            }
+            LOG.info("refresh table {}.{}.{} success", catalogName, dbName, tableName);
+        }
     }
 }

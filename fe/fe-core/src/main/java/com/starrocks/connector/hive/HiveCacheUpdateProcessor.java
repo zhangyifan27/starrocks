@@ -137,9 +137,25 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
         }
     }
 
+    @Override
     public Set<DatabaseTableName> getCachedTableNames() {
         if (metastore instanceof CachingHiveMetastore) {
             return ((CachingHiveMetastore) metastore).getCachedTableNames();
+        } else {
+            return Sets.newHashSet();
+        }
+    }
+
+    @Override
+    public void refreshTableKeyInfoBackground(Table table) {
+        HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
+        metastore.refreshTableKeyInfoBackground(hmsTbl.getDbName(), hmsTbl.getTableName());
+    }
+
+    @Override
+    public Set<DatabaseTableName> getCachedTableNamesForPartitionKeysAndValues() {
+        if (metastore instanceof CachingHiveMetastore) {
+            return ((CachingHiveMetastore) metastore).getCachedTableNamesForPartitionKeysAndValues();
         } else {
             return Sets.newHashSet();
         }
@@ -329,6 +345,11 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
     public void invalidateAll() {
         metastore.invalidateAll();
         remoteFileIO.ifPresent(CachingRemoteFileIO::invalidateAll);
+    }
+
+    @Override
+    public void invalidateTable(String dbName, String tableName) {
+        metastore.invalidateTable(dbName, tableName);
     }
 
     public void invalidateTable(String dbName, String tableName, String originLocation) {

@@ -106,6 +106,7 @@ import com.starrocks.connector.ConnectorMgr;
 import com.starrocks.connector.ConnectorTblMetaInfoMgr;
 import com.starrocks.connector.elasticsearch.EsRepository;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.connector.hive.ConnectorTableMetadataKeyInfoProcessor;
 import com.starrocks.connector.hive.ConnectorTableMetadataProcessor;
 import com.starrocks.connector.hive.events.MetastoreEventsProcessor;
 import com.starrocks.consistency.ConsistencyChecker;
@@ -322,6 +323,7 @@ public class GlobalStateMgr {
     private final EsRepository esRepository;  // it is a daemon, so add it here
     private final MetastoreEventsProcessor metastoreEventsProcessor;
     private final ConnectorTableMetadataProcessor connectorTableMetadataProcessor;
+    private final ConnectorTableMetadataKeyInfoProcessor connectorTableMetadataKeyInfoProcessor;
 
     // set to true after finished replay all meta and ready to serve
     // set to false when globalStateMgr is not ready.
@@ -675,6 +677,8 @@ public class GlobalStateMgr {
         this.esRepository = new EsRepository();
         this.metastoreEventsProcessor = new MetastoreEventsProcessor();
         this.connectorTableMetadataProcessor = new ConnectorTableMetadataProcessor();
+        this.connectorTableMetadataKeyInfoProcessor =
+                new ConnectorTableMetadataKeyInfoProcessor(connectorTableMetadataProcessor);
 
         this.metaContext = new MetaContext();
         this.metaContext.setThreadLocalInfo();
@@ -1447,6 +1451,7 @@ public class GlobalStateMgr {
         }
 
         connectorTableMetadataProcessor.start();
+        connectorTableMetadataKeyInfoProcessor.start();
 
         // domain resolver
         domainResolver.start();

@@ -2231,6 +2231,12 @@ public class Config extends ConfigBase {
     @ConfField
     public static long hive_meta_cache_ttl_s = 3600L * 24L;
 
+    @ConfField
+    public static long hive_meta_key_info_cache_refresh_interval_s = 3600L * 2L;
+
+    @ConfField
+    public static long hive_meta_key_info_cache_ttl_s = 3600L * 24L;
+
     /**
      * Remote file's metadata from hdfs or s3 cache ttl
      */
@@ -2310,10 +2316,28 @@ public class Config extends ConfigBase {
     public static int background_refresh_file_metadata_concurrency = 4;
 
     /**
+     * Number of threads to refresh hive table cache concurrency.
+     */
+    @ConfField
+    public static int background_refresh_hive_table_cache_concurrency = 2;
+
+    /**
      * Background refresh external table metadata interval in milliseconds.
      */
     @ConfField(mutable = true)
     public static int background_refresh_metadata_interval_millis = 600000;
+
+    /**
+     * Background refresh external table metadata key info interval in milliseconds.
+     */
+    @ConfField(mutable = true)
+    public static int background_refresh_metadata_key_info_interval_millis = 300000;
+
+    /**
+     * Number of threads to refresh hive table key info cache concurrency.
+     */
+    @ConfField
+    public static int background_refresh_hive_table_key_info_cache_concurrency = 2;
 
     /**
      * The duration of background refresh external table metadata since the table last access.
@@ -2327,6 +2351,9 @@ public class Config extends ConfigBase {
      */
     @ConfField(mutable = true)
     public static boolean enable_refresh_hive_partitions_statistics = true;
+
+    @ConfField
+    public static boolean invalidate_cache_when_refresh_fail = true;
 
     /**
      * Enable reuse spark column statistics.

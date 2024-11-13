@@ -124,7 +124,9 @@ public class HiveConnectorInternalMgr {
                     hmsConf.getCacheTtlSec(),
                     enableHmsEventsIncrementalSync ? NEVER_REFRESH : hmsConf.getCacheRefreshIntervalSec(),
                     hmsConf.getCacheMaxNum(),
-                    hmsConf.enableListNamesCache());
+                    hmsConf.enableListNamesCache(),
+                    hmsConf.getKeyInfoCacheTtlSec(),
+                    hmsConf.getKeyInfoCacheRefreshIntervalSec());
         }
 
         return baseHiveMetastore;

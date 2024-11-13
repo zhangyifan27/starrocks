@@ -106,4 +106,7 @@ public interface IHiveMetastore extends IMetastore {
     default long getCurrentEventId() {
         return -1;
     }
+
+    default void refreshTableKeyInfoBackground(String hiveDbName, String hiveTblName) {
+    }
 }

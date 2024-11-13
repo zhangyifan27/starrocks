@@ -14,6 +14,7 @@
 
 package com.starrocks.connector;
 
+import com.google.common.collect.Sets;
 import com.starrocks.catalog.Table;
 
 import java.util.Set;
@@ -25,4 +26,14 @@ public interface CacheUpdateProcessor {
     Set<DatabaseTableName> getCachedTableNames();
 
     void refreshTableBackground(Table table, boolean onlyCachedPartitions, ExecutorService executor);
+
+    default void invalidateTable(String dbName, String table) {
+    }
+
+    default Set<DatabaseTableName> getCachedTableNamesForPartitionKeysAndValues() {
+        return Sets.newHashSet();
+    }
+
+    default void refreshTableKeyInfoBackground(Table table) {
+    }
 }

@@ -27,6 +27,8 @@ public class CachingHiveMetastoreConf {
     private final int cacheRefreshThreadMaxNum = 20;
 
     private final boolean enableListNamesCache;
+    private final long keyInfoCacheTtlSec;
+    private final long keyInfoCacheRefreshIntervalSec;
 
     public CachingHiveMetastoreConf(Map<String, String> conf, String catalogType) {
         this.cacheTtlSec = Long.parseLong(conf.getOrDefault("metastore_cache_ttl_sec",
@@ -37,6 +39,11 @@ public class CachingHiveMetastoreConf {
         this.enableListNamesCache = Boolean.parseBoolean(conf.getOrDefault("enable_cache_list_names",
                 enableListNamesCacheDefaultValue));
         this.cacheMaxNum = Long.parseLong(conf.getOrDefault("metastore_cache_max_num", String.valueOf(cacheMaxNum)));
+        this.keyInfoCacheTtlSec = Long.parseLong(conf.getOrDefault("metastore_key_info_cache_ttl_sec",
+                String.valueOf(Config.hive_meta_key_info_cache_ttl_s)));
+        this.keyInfoCacheRefreshIntervalSec =
+                Long.parseLong(conf.getOrDefault("metastore_key_info_cache_refresh_interval_sec",
+                        String.valueOf(Config.hive_meta_key_info_cache_refresh_interval_s)));
     }
 
     public long getCacheTtlSec() {
@@ -45,6 +52,14 @@ public class CachingHiveMetastoreConf {
 
     public long getCacheRefreshIntervalSec() {
         return cacheRefreshIntervalSec;
+    }
+
+    public long getKeyInfoCacheTtlSec() {
+        return keyInfoCacheTtlSec;
+    }
+
+    public long getKeyInfoCacheRefreshIntervalSec() {
+        return keyInfoCacheRefreshIntervalSec;
     }
 
     public long getCacheMaxNum() {

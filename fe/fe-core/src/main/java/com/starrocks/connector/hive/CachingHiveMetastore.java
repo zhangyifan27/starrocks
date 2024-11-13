@@ -85,17 +85,37 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                 NEVER_EVICT,
                 NEVER_REFRESH,
                 perQueryCacheMaxSize,
-                true);
+                true,
+                NEVER_EVICT,
+                NEVER_REFRESH);
     }
 
     public static CachingHiveMetastore createCatalogLevelInstance(IHiveMetastore metastore, Executor executor,
                                                                   long expireAfterWrite, long refreshInterval,
                                                                   long maxSize, boolean enableListNamesCache) {
-        return new CachingHiveMetastore(metastore, executor, expireAfterWrite, refreshInterval, maxSize, enableListNamesCache);
+        return new CachingHiveMetastore(metastore, executor, expireAfterWrite, refreshInterval, maxSize,
+                enableListNamesCache, expireAfterWrite, refreshInterval);
+    }
+
+    public static CachingHiveMetastore createCatalogLevelInstance(IHiveMetastore metastore, Executor executor,
+                                                                  long expireAfterWrite, long refreshInterval,
+                                                                  long maxSize, boolean enableListNamesCache,
+                                                                  long keyInfoExpireAfterWriteSec,
+                                                                  long keyInfoRefreshIntervalSec) {
+        return new CachingHiveMetastore(metastore, executor, expireAfterWrite, refreshInterval, maxSize,
+                enableListNamesCache, keyInfoExpireAfterWriteSec, keyInfoRefreshIntervalSec);
     }
 
     protected CachingHiveMetastore(IHiveMetastore metastore, Executor executor, long expireAfterWriteSec,
                                    long refreshIntervalSec, long maxSize, boolean enableListNamesCache) {
+        //super(executor, expireAfterWriteSec, refreshIntervalSec, maxSize);
+        this(metastore, executor, expireAfterWriteSec, refreshIntervalSec, maxSize, enableListNamesCache,
+                expireAfterWriteSec, refreshIntervalSec);
+    }
+
+    protected CachingHiveMetastore(IHiveMetastore metastore, Executor executor, long expireAfterWriteSec,
+                                   long refreshIntervalSec, long maxSize, boolean enableListNamesCache,
+                                   long keyInfoExpireAfterWriteSec, long keyInfoRefreshIntervalSec) {
         super(executor, expireAfterWriteSec, refreshIntervalSec, maxSize);
         this.metastore = metastore;
         this.enableListNameCache = enableListNamesCache;
@@ -103,11 +123,27 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
 
         // The list names interface of hive metastore latency is very low, so we default to pull the latest every time.
         if (enableListNamesCache) {
-            partitionKeysCache = newCacheBuilder(expireAfterWriteSec, refreshIntervalSec, maxSize)
+            partitionKeysCache = newCacheBuilder(keyInfoExpireAfterWriteSec, keyInfoRefreshIntervalSec, maxSize)
                     .build(asyncReloading(CacheLoader.from(this::loadPartitionKeys), executor));
+
+            partitionValuesCache = newCacheBuilder(keyInfoExpireAfterWriteSec, keyInfoRefreshIntervalSec, maxSize)
+                    .build(asyncReloading(new CacheLoader<HiveTablePartitionColumn, Map<String, List<String>>>() {
+                        @Override
+                        public Map<String, List<String>> load(@NotNull HiveTablePartitionColumn key) {
+                            return loadPartitionValues(key);
+                        }
+                    }, executor));
         } else {
             partitionKeysCache = newCacheBuilder(NEVER_CACHE, NEVER_CACHE, NEVER_CACHE)
                     .build(asyncReloading(CacheLoader.from(this::loadPartitionKeys), executor));
+
+            partitionValuesCache = newCacheBuilder(NEVER_CACHE, NEVER_CACHE, NEVER_CACHE)
+                    .build(asyncReloading(new CacheLoader<HiveTablePartitionColumn, Map<String, List<String>>>() {
+                        @Override
+                        public Map<String, List<String>> load(@NotNull HiveTablePartitionColumn key) {
+                            return loadPartitionValues(key);
+                        }
+                    }, executor));
         }
 
         partitionCache = newCacheBuilder(expireAfterWriteSec, NEVER_REFRESH, maxSize)
@@ -138,14 +174,6 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                     public Map<HivePartitionName, HivePartitionStats> loadAll(
                             @NotNull Iterable<? extends HivePartitionName> partitionKeys) {
                         return loadPartitionsStatistics(partitionKeys);
-                    }
-                }, executor));
-
-        partitionValuesCache = newCacheBuilder(expireAfterWriteSec, NEVER_REFRESH, maxSize)
-                .build(asyncReloading(new CacheLoader<HiveTablePartitionColumn, Map<String, List<String>>>() {
-                    @Override
-                    public Map<String, List<String>> load(@NotNull HiveTablePartitionColumn key) {
-                        return loadPartitionValues(key);
                     }
                 }, executor));
     }
@@ -183,9 +211,16 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
     public Set<DatabaseTableName> getCachedTableNames() {
         // use partition cache to get all cached table names because partition cache is more accurate,
         // table cache will be cached when user use `use catalog.db` command.
-        return partitionCache.asMap().keySet().stream().map(hivePartitionName ->
+        Set<DatabaseTableName> setInPartitionKeysCache = partitionKeysCache.asMap().keySet().stream()
+                .map(hivePartitionValue -> hivePartitionValue.getHiveTableName()).collect(Collectors.toSet());
+        Set<DatabaseTableName> setInPartitionCache = partitionCache.asMap().keySet().stream().map(hivePartitionName ->
                 DatabaseTableName.of(hivePartitionName.getDatabaseName(), hivePartitionName.getTableName())).collect(
                 Collectors.toSet());
+        Set<DatabaseTableName> setInPartitionValuesCache = partitionValuesCache.asMap().keySet().stream()
+                .map(hiveTablePartitionColumn -> hiveTablePartitionColumn.getHiveTableName()).collect(Collectors.toSet());
+        setInPartitionCache.addAll(setInPartitionKeysCache);
+        setInPartitionCache.addAll(setInPartitionValuesCache);
+        return setInPartitionCache;
     }
 
     public void createTable(String dbName, Table table) {
@@ -203,6 +238,16 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         } finally {
             invalidateTable(dbName, tableName);
         }
+    }
+
+    public Set<DatabaseTableName> getCachedTableNamesForPartitionKeysAndValues() {
+        Set<DatabaseTableName> setInPartitionKeysCache = partitionKeysCache.asMap().keySet().stream()
+                .map(hivePartitionValue -> hivePartitionValue.getHiveTableName()).collect(Collectors.toSet());
+        Set<DatabaseTableName> setInPartitionValuesCache = partitionValuesCache.asMap().keySet().stream()
+                .map(hiveTablePartitionColumn -> hiveTablePartitionColumn.getHiveTableName())
+                .collect(Collectors.toSet());
+        setInPartitionKeysCache.addAll(setInPartitionValuesCache);
+        return setInPartitionKeysCache;
     }
 
     @Override
@@ -549,6 +594,9 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                         LocalDateTime.ofInstant(Instant.ofEpochMilli(lastAccessTime), ZoneId.systemDefault()));
                 return null;
             }
+        } else {
+            LOG.info("lastAccessTimeMap do not containsKey {}, add it.", databaseTableName);
+            lastAccessTimeMap.put(databaseTableName, System.currentTimeMillis());
         }
 
         List<HivePartitionName> refreshPartitionNames = refreshTable(hiveDbName, hiveTblName, onlyCachedPartitions);
@@ -597,11 +645,31 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
 
             if (enableListNameCache && !partitionNames.isEmpty()) {
                 HivePartitionName firstName = partitionNames.get(0);
-                DatabaseTableName databaseTableName = DatabaseTableName.of(firstName.getDatabaseName(), firstName.getTableName());
+                DatabaseTableName databaseTableName =
+                        DatabaseTableName.of(firstName.getDatabaseName(), firstName.getTableName());
                 // refresh partitionKeysCache with all partition values
                 HivePartitionValue hivePartitionValue = HivePartitionValue.of(
                         databaseTableName, HivePartitionValue.ALL_PARTITION_VALUES);
                 partitionKeysCache.put(hivePartitionValue, loadPartitionKeys(hivePartitionValue));
+            }
+        }
+    }
+
+    @Override
+    public void refreshTableKeyInfoBackground(String hiveDbName, String hiveTblName) {
+        if (enableListNameCache) {
+            DatabaseTableName hiveTableName = DatabaseTableName.of(hiveDbName, hiveTblName);
+
+            // refresh table need to refresh partitionKeysCache with all partition values
+            HivePartitionValue hivePartitionValue =
+                    HivePartitionValue.of(hiveTableName, HivePartitionValue.ALL_PARTITION_VALUES);
+            List<String> updatedPartitionKeys = loadPartitionKeys(hivePartitionValue);
+            partitionKeysCache.put(hivePartitionValue, updatedPartitionKeys);
+
+            List<HiveTablePartitionColumn> presentHiveTablePartitionColumns =
+                    getPresentHiveTablePartitionColumns(partitionValuesCache, hiveDbName, hiveTblName);
+            for (HiveTablePartitionColumn hiveTablePartitionColumn : presentHiveTablePartitionColumns) {
+                partitionValuesCache.put(hiveTablePartitionColumn, loadPartitionValues(hiveTablePartitionColumn));
             }
         }
     }
@@ -754,6 +822,8 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
 
     public Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
                                                          String partitionColumn) {
+        DatabaseTableName hiveTableName = DatabaseTableName.of(databaseName, tableName);
+        lastAccessTimeMap.put(hiveTableName, System.currentTimeMillis());
         return get(partitionValuesCache, HiveTablePartitionColumn.of(databaseName, tableName, partitionColumn));
     }
 }

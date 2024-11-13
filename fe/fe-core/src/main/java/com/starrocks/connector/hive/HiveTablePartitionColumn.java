@@ -14,6 +14,8 @@
 
 package com.starrocks.connector.hive;
 
+import com.starrocks.connector.DatabaseTableName;
+
 import java.util.Objects;
 
 public class HiveTablePartitionColumn {
@@ -31,6 +33,10 @@ public class HiveTablePartitionColumn {
 
     public static HiveTablePartitionColumn of(String dbName, String tblName, String partitionColumn) {
         return new HiveTablePartitionColumn(dbName, tblName, partitionColumn);
+    }
+
+    public DatabaseTableName getHiveTableName() {
+        return DatabaseTableName.of(databaseName, tableName);
     }
 
     public String getTableName() {
