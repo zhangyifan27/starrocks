@@ -90,6 +90,7 @@ ${license}
 #include "exprs/es_functions.h"
 #include "exprs/utility_functions.h"
 #include "exprs/caliper_matching.h"
+#include "exprs/probability_distributions.h"
 
 namespace starrocks {
 

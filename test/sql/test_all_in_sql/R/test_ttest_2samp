@@ -71,3 +71,15 @@ select ttest_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, 
 -- result:
 [REGEX]\s*mean0\s*mean1\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*845.235707\s*783.648548\s*-61.587158\s*69.737975\s*-0.883122\s*0.188585\s*-inf\s*-176.296053
 -- !result
+
+select ttest_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95, [X3_string]) from ttest_2samp_test_tbl;
+-- result:
+[LOOSE]mean0       mean1       estimate    stderr      t-statistic p-value     lower       upper       
+845.096017  784.561984  -60.534033  69.837146   -0.866788   0.193029    -inf        -175.406050
+-- !result
+
+select ttest_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, X3], 'X=', 0.95, [X3_string]) from ttest_2samp_test_tbl;
+-- result:
+[LOOSE]mean0       mean1       estimate    stderr      t-statistic p-value     lower       upper       
+845.631031  784.026436  -61.604596  69.850210   -0.881953   0.188901    -inf        -176.498101
+-- !result

@@ -1368,4 +1368,9 @@ vectorized_functions = [
 
     [180001, 'has_any', True, False, 'BOOLEAN', ['ANY_ARRAY', 'ANY_ARRAY'], 'ArrayFunctions::array_contains_any'],
     [180002, 'has_all', True, False, 'BOOLEAN', ['ANY_ARRAY', 'ANY_ARRAY'], 'ArrayFunctions::array_contains_all'],
+    # percent_point_function
+    [200020, "percent_point_function", True, False, "DOUBLE", ['DOUBLE'], 'ProbabilityDistributions::percent_point_function'],
+    
+    # gauss_error_function
+    [200021, "gauss_error_function", True, False, "DOUBLE", ['DOUBLE'], 'ProbabilityDistributions::gauss_error_function'],
 ]

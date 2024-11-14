@@ -41,3 +41,6 @@ select ttest_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, 
 
 select ttest_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95) from ttest_2samp_test_tbl;
 
+select ttest_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95, [X3_string]) from ttest_2samp_test_tbl;
+
+select ttest_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, X3], 'X=', 0.95, [X3_string]) from ttest_2samp_test_tbl;

@@ -106,6 +106,7 @@ set(EXPR_FILES
   agg/hll_uniq_combined.h
   eval_ml_method.cpp
   caliper_matching.cpp
+  probability_distributions.cpp
 )
 
 add_library(Exprs ${EXPR_FILES})
