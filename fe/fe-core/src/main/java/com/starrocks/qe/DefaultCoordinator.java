@@ -85,6 +85,7 @@ import com.starrocks.qe.scheduler.dag.PhasedExecutionSchedule;
 import com.starrocks.qe.scheduler.slot.LogicalSlot;
 import com.starrocks.rpc.RpcException;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.service.arrow.flight.sql.ArrowFlightSqlConnectContext;
 import com.starrocks.sql.LoadPlanner;
 import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.sql.plan.ExecPlan;
@@ -1437,6 +1438,11 @@ public class DefaultCoordinator extends Coordinator {
     }
 
     public boolean tryProcessProfileAsync(Consumer<Boolean> task) {
+        if (connectContext instanceof ArrowFlightSqlConnectContext) {
+            queryProfile.addListener(task);
+            return true;
+        }
+
         if (executionDAG.getExecutions().isEmpty() && (!isShortCircuit)) {
             return false;
         }
@@ -1589,5 +1595,9 @@ public class DefaultCoordinator extends Coordinator {
 
     private void execShortCircuit() throws Exception {
         shortCircuitExecutor.exec();
+    }
+
+    public ResultReceiver getReceiver() {
+        return receiver;
     }
 }

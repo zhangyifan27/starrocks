@@ -126,6 +126,7 @@ import com.starrocks.qe.scheduler.FeExecuteCoordinator;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.WarehouseManager;
 import com.starrocks.service.ExecuteEnv;
+import com.starrocks.service.arrow.flight.sql.ArrowFlightSqlConnectContext;
 import com.starrocks.sql.ExplainAnalyzer;
 import com.starrocks.sql.PrepareStmtPlanner;
 import com.starrocks.sql.StatementPlanner;
@@ -688,7 +689,10 @@ public class StmtExecutor {
                                 coord.onReleaseSlots();
                             }
 
-                            if (context.isProfileEnabled()) {
+                            if (context instanceof ArrowFlightSqlConnectContext) {
+                                isAsync = true;
+                                tryProcessProfileAsync(execPlan, i);
+                            } else if (context.isProfileEnabled()) {
                                 isAsync = tryProcessProfileAsync(execPlan, i);
                                 if (parsedStmt.isExplain() &&
                                         StatementBase.ExplainLevel.ANALYZE.equals(parsedStmt.getExplainLevel())) {
@@ -710,8 +714,11 @@ public class StmtExecutor {
                                     context.getQueryId().toString(), plannerProfile);
                         }
                         if (isAsync) {
-                            QeProcessorImpl.INSTANCE.monitorQuery(context.getExecutionId(), System.currentTimeMillis() +
-                                    context.getSessionVariable().getProfileTimeout() * 1000L);
+                            int timeout = context.getSessionVariable().getQueryTimeoutS();
+                            QeProcessorImpl.INSTANCE
+                                    .monitorQuery(context.getExecutionId(),
+                                            System.currentTimeMillis() + timeout * 1000L +
+                                                    context.getSessionVariable().getProfileTimeout() * 1000L);
                         } else {
                             QeProcessorImpl.INSTANCE.unregisterQuery(context.getExecutionId());
                         }
@@ -1240,6 +1247,7 @@ public class StmtExecutor {
                 && StatementBase.ExplainLevel.SCHEDULER.equals(parsedStmt.getExplainLevel());
         boolean isOutfileQuery =
                 (parsedStmt instanceof QueryStatement) && ((QueryStatement) parsedStmt).hasOutFileClause();
+
         if (isOutfileQuery) {
             Map<TableName, Table> tables = AnalyzerUtils.collectAllTable(parsedStmt);
             boolean hasTemporaryTable = tables.values().stream().anyMatch(t -> t.isTemporaryTable());
@@ -1247,6 +1255,7 @@ public class StmtExecutor {
                 throw new SemanticException("temporary table doesn't support select outfile statement");
             }
         }
+
         boolean executeInFe = !isExplainAnalyze && !isSchedulerExplain && !isOutfileQuery
                 && canExecuteInFe(context, execPlan.getPhysicalPlan());
 
@@ -1303,10 +1312,15 @@ public class StmtExecutor {
         coord.setTopProfileSupplier(this::buildTopLevelProfile);
         coord.setExecPlan(execPlan);
 
-        RowBatch batch;
-
+        RowBatch batch = null;
         if (context instanceof HttpConnectContext) {
             batch = httpResultSender.sendQueryResult(coord, execPlan, parsedStmt.getOrigStmt().getOrigStmt());
+        } else if (context instanceof ArrowFlightSqlConnectContext) {
+            ArrowFlightSqlConnectContext ctx = (ArrowFlightSqlConnectContext) context;
+            ctx.setReturnFromFE(false);
+            ctx.setExecPlan(execPlan);
+            ctx.setCoordinator(coord);
+            ctx.getState().setEof();
         } else {
             // send mysql result
             // 1. If this is a query with OUTFILE clause, eg: select * from tbl1 into outfile xxx,
@@ -1356,27 +1370,29 @@ public class StmtExecutor {
             }
         }
 
-        statisticsForAuditLog = batch.getQueryStatistics();
-        if (!isOutfileQuery) {
-            context.getState().setEof();
-        } else {
-            context.getState().setOk(statisticsForAuditLog.returnedRows, 0, "");
-        }
-        if (null == statisticsForAuditLog || null == statisticsForAuditLog.statsItems ||
-                statisticsForAuditLog.statsItems.isEmpty()) {
-            return;
-        }
-        // collect table-level metrics
-        Set<Long> tableIds = Sets.newHashSet();
-        for (QueryStatisticsItemPB item : statisticsForAuditLog.statsItems) {
-            TableMetricsEntity entity = TableMetricsRegistry.getInstance().getMetricsEntity(item.tableId);
-            entity.counterScanRowsTotal.increase(item.scanRows);
-            entity.counterScanBytesTotal.increase(item.scanBytes);
-            tableIds.add(item.tableId);
-        }
-        for (Long tableId : tableIds) {
-            TableMetricsEntity entity = TableMetricsRegistry.getInstance().getMetricsEntity(tableId);
-            entity.counterScanFinishedTotal.increase(1L);
+        if (batch != null) {
+            statisticsForAuditLog = batch.getQueryStatistics();
+            if (!isOutfileQuery) {
+                context.getState().setEof();
+            } else {
+                context.getState().setOk(statisticsForAuditLog.returnedRows, 0, "");
+            }
+            if (null == statisticsForAuditLog || null == statisticsForAuditLog.statsItems ||
+                    statisticsForAuditLog.statsItems.isEmpty()) {
+                return;
+            }
+            // collect table-level metrics
+            Set<Long> tableIds = Sets.newHashSet();
+            for (QueryStatisticsItemPB item : statisticsForAuditLog.statsItems) {
+                TableMetricsEntity entity = TableMetricsRegistry.getInstance().getMetricsEntity(item.tableId);
+                entity.counterScanRowsTotal.increase(item.scanRows);
+                entity.counterScanBytesTotal.increase(item.scanBytes);
+                tableIds.add(item.tableId);
+            }
+            for (Long tableId : tableIds) {
+                TableMetricsEntity entity = TableMetricsRegistry.getInstance().getMetricsEntity(tableId);
+                entity.counterScanFinishedTotal.increase(1L);
+            }
         }
     }
 
@@ -1803,6 +1819,13 @@ public class StmtExecutor {
         // Send result set for http.
         if (context instanceof HttpConnectContext) {
             httpResultSender.sendShowResult(resultSet);
+            return;
+        }
+
+        // Send result set for Arrow Flight SQL.
+        if (context instanceof ArrowFlightSqlConnectContext) {
+            ((ArrowFlightSqlConnectContext) context).addShowResult(resultSet);
+            context.getState().setEof();
             return;
         }
 

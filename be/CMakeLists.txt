@@ -902,6 +902,7 @@ set(STARROCKS_DEPENDENCIES
     streamvbyte
     arrow
     arrow_flight
+    arrow_flight_sql
     gRPC::grpc
     gRPC::grpc++
     jemalloc # required by arrow
