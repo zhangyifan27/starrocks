@@ -57,7 +57,7 @@ public class SplitTwoPhaseAggRule extends SplitAggregateRule {
             return false;
         }
         LogicalAggregationOperator agg = (LogicalAggregationOperator) input.getOp();
-        if (agg.checkGroupByCountDistinctWithSkewHint()) {
+        if (agg.checkGroupByCountDistinctWithSkewHint(context)) {
             return false;
         }
 

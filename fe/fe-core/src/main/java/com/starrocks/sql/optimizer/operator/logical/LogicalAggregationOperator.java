@@ -23,6 +23,7 @@ import com.starrocks.catalog.FunctionSet;
 import com.starrocks.sql.optimizer.ExpressionContext;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
+import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.RowOutputInfo;
 import com.starrocks.sql.optimizer.base.ColumnRefFactory;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
@@ -148,8 +149,9 @@ public class LogicalAggregationOperator extends LogicalOperator {
                 call.isDistinct() && call.getFnName().equals(FunctionSet.COUNT) && call.getHints().contains("skew"));
     }
 
-    public boolean checkGroupByCountDistinctWithSkewHint() {
-        return checkGroupByCountDistinct() && hasSkew();
+    public boolean checkGroupByCountDistinctWithSkewHint(OptimizerContext context) {
+        return checkGroupByCountDistinct()
+                && (hasSkew() || context.getSessionVariable().isEnableDistinctColumnBucketization());
     }
 
     public boolean hasRemoveDistinctFunc() {
