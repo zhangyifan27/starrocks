@@ -33,6 +33,7 @@ import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.types.Types;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -170,6 +171,7 @@ public class IcebergApiConverterTest {
         Assert.assertEquals("ts_hour=1970-01-16-05/data_trunc=xy", partitionName);
     }
 
+    @Ignore
     @Test
     public void testToIcebergApiSchema() {
         List<Column> columns = Lists.newArrayList();

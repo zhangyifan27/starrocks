@@ -32,6 +32,8 @@ public class HadoopExt {
     public static final String HADOOP_RUNTIME_JARS = "hadoop.runtime.jars";
     public static final String HADOOP_CLOUD_CONFIGURATION_STRING = "hadoop.cloud.configuration.string";
     public static final String HADOOP_USERNAME = "hadoop.username";
+    public static final String TQ_PLATFORM_USER_NAME = "tq_platform_user_name";
+    public static final String TQ_PLATFORM_USER_CMK = "tq_platform_user_cmk";
 
     public static HadoopExt getInstance() {
         return INSTANCE;

@@ -16,6 +16,7 @@ package com.starrocks.hive.reader;
 
 import StorageEngineClient.CombineFileSplit;
 import com.google.common.base.Strings;
+import com.starrocks.connector.hadoop.HadoopExt;
 import com.starrocks.jni.connector.ColumnType;
 import com.starrocks.jni.connector.ColumnValue;
 import com.starrocks.jni.connector.ConnectorScanner;
@@ -35,6 +36,7 @@ import org.apache.hadoop.mapred.InputFormat;
 import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.RecordReader;
 import org.apache.hadoop.mapred.Reporter;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.hadoop.util.ReflectionUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -49,6 +51,9 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.starrocks.connector.hadoop.HadoopExt.HADOOP_USERNAME;
+import static com.starrocks.connector.hadoop.HadoopExt.TQ_PLATFORM_USER_CMK;
+import static com.starrocks.connector.hadoop.HadoopExt.TQ_PLATFORM_USER_NAME;
 import static com.starrocks.hive.reader.HiveScannerUtils.decodeStringToSplit;
 
 public class HiveScanner extends ConnectorScanner {
@@ -88,6 +93,10 @@ public class HiveScanner extends ConnectorScanner {
     private Writable key;
     // The value buffer used to store the value data.
     private Writable value;
+    private static final String FS_OPTIONS_PROPS = "fs_options_props";
+    private final String tqPlatformUserName;
+    private final String tqPlatformUserCmk;
+    private String proxyUser;
 
     private final String timeZone;
     private final String splitInfo;
@@ -107,7 +116,9 @@ public class HiveScanner extends ConnectorScanner {
         this.fieldInspectors = new ObjectInspector[requiredFields.length];
         this.structFields = new StructField[requiredFields.length];
         this.classLoader = this.getClass().getClassLoader();
-        this.fsOptionsProps = params.get("fs_options_props");
+        this.fsOptionsProps = params.get(FS_OPTIONS_PROPS);
+        this.tqPlatformUserName = params.get(TQ_PLATFORM_USER_NAME);
+        this.tqPlatformUserCmk = params.get(TQ_PLATFORM_USER_CMK);
         for (Map.Entry<String, String> kv : params.entrySet()) {
             if (kv.getKey().startsWith(SERDE_PROPERTY_PREFIX)) {
                 this.serdeProperties.put(kv.getKey().substring(SERDE_PROPERTY_PREFIX.length()), kv.getValue());
@@ -195,6 +206,7 @@ public class HiveScanner extends ConnectorScanner {
             LOG.debug("Invalid hive scanner fs options props argument: " + t);
             return null;
         });
+        proxyUser = properties.getProperty(HADOOP_USERNAME);
         return properties;
     }
 
@@ -228,7 +240,12 @@ public class HiveScanner extends ConnectorScanner {
             initOffHeapTableWriter(requiredTypes, requiredFields, fetchSize);
             Properties properties = makeProperties();
             JobConf jobConf = makeJobConf(properties);
-            initReader(jobConf, properties);
+            UserGroupInformation ugi = getUserGroupInformation();
+            LOG.info("ugi={}", ugi);
+            HadoopExt.getInstance().doAs(ugi, () -> {
+                initReader(jobConf, properties);
+                return null;
+            });
         } catch (Exception e) {
             close();
             LOG.error("Failed to open the hive reader, " + dataFilePath
@@ -333,5 +350,15 @@ public class HiveScanner extends ConnectorScanner {
         sb.append(inputFormat);
         sb.append("\n");
         return sb.toString();
+    }
+
+    private UserGroupInformation getUserGroupInformation() {
+        if (Strings.isNullOrEmpty(tqPlatformUserName) || Strings.isNullOrEmpty(proxyUser) ||
+                Strings.isNullOrEmpty(tqPlatformUserCmk)) {
+            return null;
+        }
+        UserGroupInformation platformUser =
+                UserGroupInformation.createUserByTAuthKey(tqPlatformUserName, tqPlatformUserCmk);
+        return UserGroupInformation.createProxyUser(proxyUser, platformUser);
     }
 }

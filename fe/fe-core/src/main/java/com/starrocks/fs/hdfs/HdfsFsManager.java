@@ -33,6 +33,8 @@ import com.starrocks.thrift.TBrokerFileStatus;
 import com.starrocks.thrift.TCloudConfiguration;
 import com.starrocks.thrift.THdfsProperties;
 import com.starrocks.thrift.TObjectStoreType;
+import com.starrocks.utils.TAuthUtils;
+import com.tencent.tdw.security.exceptions.SecureException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.CommonConfigurationKeysPublic;
 import org.apache.hadoop.fs.FSDataInputStream;
@@ -273,10 +275,13 @@ public class HdfsFsManager {
     private static final String WASB_SCHEMA = "wasb";
     private static final String WASBS_SCHEMA = "wasbs";
     private static final String GCS_SCHEMA = "gs";
-    private static final String USER_NAME_KEY = "username";
-    private static final String PASSWORD_KEY = "password";
+    public static final String USER_NAME_KEY = "username";
+    public static final String PASSWORD_KEY = "password";
     // arguments for ha hdfs
     private static final String DFS_NAMESERVICES_KEY = "dfs.nameservices";
+    private static final String HDFS_AUTHENTICATION = "hadoop.security.authentication";
+    private static final String AUTHENTICATION_SIMPLE = "simple";
+    private static final String AUTHENTICATION_TAUTH = "tauth";
     private static final String FS_DEFAULTFS_KEY = "fs.defaultFS";
     protected static final String FS_HDFS_IMPL_DISABLE_CACHE = "fs.hdfs.impl.disable.cache";
     // If this property is not set to "true", FileSystem instance will be returned
@@ -483,14 +488,11 @@ public class HdfsFsManager {
                 return null;
             }
             if (fileSystem.getDFSFileSystem() == null) {
-                LOG.info("could not find file system for path " + path + " create a new one");
                 // create a new filesystem
                 Configuration conf = new HDFSConfigurationWrap();
                 conf.set(FS_HDFS_IMPL_DISABLE_CACHE, disableCache);
-                UserGroupInformation ugi = null;
-                if (!Strings.isNullOrEmpty(username) && conf.get("hadoop.security.authentication").equals("simple")) {
-                    ugi = UserGroupInformation.createRemoteUser(username);
-                }
+                UserGroupInformation ugi = getUserGroupInformation(username, conf);
+                LOG.info("could not find file system for path " + path + " create a new one, use ugi " + ugi);
                 FileSystem dfsFileSystem = null;
                 if (ugi != null) {
                     dfsFileSystem = ugi.doAs(
@@ -524,6 +526,24 @@ public class HdfsFsManager {
         } finally {
             fileSystem.getLock().unlock();
         }
+    }
+
+    private UserGroupInformation getUserGroupInformation(String username, Configuration conf) throws SecureException {
+        UserGroupInformation ugi = null;
+        if (Config.enable_hdfs_tauth_authentication) {
+            if (Strings.isNullOrEmpty(username)) {
+                return UserGroupInformation.createProxyUser(TAuthUtils.getDefaultTdwUser(),
+                        TAuthUtils.getPlatformUser());
+            } else {
+                return UserGroupInformation.createProxyUser(username, TAuthUtils.getPlatformUser());
+            }
+        }
+        if (!Strings.isNullOrEmpty(username)
+                && (conf.get(HDFS_AUTHENTICATION).equals(AUTHENTICATION_SIMPLE)
+                || conf.get(HDFS_AUTHENTICATION).equalsIgnoreCase(AUTHENTICATION_TAUTH))) {
+            ugi = UserGroupInformation.createRemoteUser(username);
+        }
+        return ugi;
     }
 
     /**

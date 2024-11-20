@@ -82,4 +82,12 @@ public class CloudConfiguration {
     public String getCommonFieldsString() {
         return String.format("resources='%s', jars='%s', hdpuser='%s'", configResources, runtimeJars, hadoopUsername);
     }
+
+    public CloudConfiguration cloneWithNewUsername(String hadoopUsername) {
+        CloudConfiguration clone = new CloudConfiguration();
+        clone.configResources = this.configResources;
+        clone.runtimeJars = this.runtimeJars;
+        clone.hadoopUsername = hadoopUsername;
+        return clone;
+    }
 }

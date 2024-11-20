@@ -98,6 +98,7 @@ public class FileSystemManager {
     private static final String PASSWORD_KEY = "password";
     private static final String AUTHENTICATION_SIMPLE = "simple";
     private static final String AUTHENTICATION_KERBEROS = "kerberos";
+    private static final String AUTHENTICATION_TAUTH = "tauth";
     private static final String KERBEROS_PRINCIPAL = "kerberos_principal";
     private static final String KERBEROS_KEYTAB = "kerberos_keytab";
     private static final String KERBEROS_KEYTAB_CONTENT = "kerberos_keytab_content";
@@ -281,10 +282,11 @@ public class FileSystemManager {
         String password = properties.getOrDefault(PASSWORD_KEY, "");
         String dfsNameServices = properties.getOrDefault(DFS_NAMESERVICES_KEY, "");
         String authentication = properties.getOrDefault(CommonConfigurationKeysPublic.HADOOP_SECURITY_AUTHENTICATION,
-                AUTHENTICATION_SIMPLE);
+                AUTHENTICATION_TAUTH);
         String disableCache = properties.getOrDefault(FS_HDFS_IMPL_DISABLE_CACHE, "true");
         if (Strings.isNullOrEmpty(authentication) || (!authentication.equals(AUTHENTICATION_SIMPLE)
-                && !authentication.equals(AUTHENTICATION_KERBEROS))) {
+                && !authentication.equals(AUTHENTICATION_KERBEROS)
+                && !authentication.equalsIgnoreCase(AUTHENTICATION_TAUTH))) {
             logger.warn("invalid authentication: " + authentication);
             throw new BrokerException(TBrokerOperationStatusCode.INVALID_ARGUMENT,
                     "invalid authentication: " + authentication);
@@ -298,7 +300,7 @@ public class FileSystemManager {
         String hdfsUgi = username + "," + password;
         FileSystemIdentity fileSystemIdentity = null;
         BrokerFileSystem fileSystem = null;
-        if (authentication.equals(AUTHENTICATION_SIMPLE)) {
+        if (authentication.equals(AUTHENTICATION_SIMPLE) || authentication.equalsIgnoreCase(AUTHENTICATION_TAUTH)) {
             fileSystemIdentity = new FileSystemIdentity(host, hdfsUgi);
         } else {
             // for kerberos, use host + principal + keytab as filesystemindentity
@@ -460,6 +462,12 @@ public class FileSystemManager {
                     // Use the specified 'username' as the login name
                     ugi = UserGroupInformation.createRemoteUser(username);
                 }
+                if (authentication.equals(AUTHENTICATION_TAUTH) &&
+                        properties.containsKey(USER_NAME_KEY) && !Strings.isNullOrEmpty(username)) {
+                    // Use the specified 'username' as the login name
+                    ugi = TAuthUtils.getUserGroupInformation(username);
+                }
+                logger.info("ugi = " + ugi);
                 if (ugi != null) {
                     dfsFileSystem = ugi.doAs(new PrivilegedExceptionAction<FileSystem>() {
                         @Override

@@ -517,7 +517,7 @@ public class PrivilegeCheckerTest {
 
         // check create external catalog: CREATE EXTERNAL CATALOG on system object
         verifyGrantRevoke(
-                "create external catalog test_ex_catalog2 properties (\"type\"=\"iceberg\")",
+                "create external catalog test_ex_catalog2 properties (\"type\"=\"iceberg\", \"iceberg.catalog.type\"=\"hive\")",
                 "grant CREATE EXTERNAL CATALOG on system to test",
                 "revoke CREATE EXTERNAL CATALOG on system from test",
                 "Access denied; you need (at least one of) the CREATE EXTERNAL CATALOG privilege(s)");

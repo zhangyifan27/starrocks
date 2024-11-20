@@ -19,13 +19,17 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.starrocks.common.Config;
 import com.starrocks.common.FeConstants;
+import com.starrocks.common.UserException;
 import com.starrocks.connector.PartitionUtil;
 import com.starrocks.connector.RemoteFileBlockDesc;
 import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileIO;
 import com.starrocks.connector.RemotePathKey;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.fs.HdfsUtil;
+import com.starrocks.fs.hdfs.HdfsFs;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.BlockLocation;
 import org.apache.hadoop.fs.FileStatus;
@@ -72,12 +76,7 @@ public class HiveRemoteFileIO implements RemoteFileIO {
         List<RemoteFileDesc> fileDescs = Lists.newArrayList();
         try {
             URI uri = new Path(path).toUri();
-            FileSystem fileSystem;
-            if (!FeConstants.runningUnitTest) {
-                fileSystem = FileSystem.get(uri, configuration);
-            } else {
-                fileSystem = this.fileSystem;
-            }
+            FileSystem fileSystem = getFileSystem(uri, path, pathKey.getProperties());
             List<Path> expandedPaths = Lists.newArrayList();
             if (!expandWildCards) {
                 expandedPaths.add(new Path(uri.getPath()));
@@ -234,5 +233,18 @@ public class HiveRemoteFileIO implements RemoteFileIO {
     @VisibleForTesting
     public void setFileSystem(FileSystem fs) {
         this.fileSystem = fs;
+    }
+
+    private FileSystem getFileSystem(URI uri, String path, Map<String, String> properties)
+            throws IOException, UserException {
+        if (FeConstants.runningUnitTest) {
+            return this.fileSystem;
+        }
+        if (Config.enable_hdfs_tauth_authentication) {
+            HdfsFs hdfsFs = HdfsUtil.getHdfsService().getHdfsFsManager().getFileSystem(path, properties, null);
+            return hdfsFs.getDFSFileSystem();
+        } else {
+            return FileSystem.get(uri, configuration);
+        }
     }
 }

@@ -38,6 +38,11 @@ import java.util.Map;
 
 @Ignore
 public class TestHdfsFsManager extends TestCase {
+    static {
+        System.setProperty("TQ_PLATFORM_USER_NAME", "olap_metadata");
+        System.setProperty("TQ_PLATFORM_USER_CMK", "xxx");
+        System.setProperty("TDW_PRI_USER_NAME", "tdwadmin");
+    }
 
     private final String testHdfsHost = "hdfs://localhost:9000";
 

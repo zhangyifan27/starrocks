@@ -21,6 +21,7 @@
 #include "column/struct_column.h"
 #include "column/type_traits.h"
 #include "fmt/core.h"
+#include "fs/hdfs/tauth_env.h"
 #include "udf/java/java_udf.h"
 #include "util/defer_op.h"
 
@@ -540,6 +541,10 @@ std::unique_ptr<JniScanner> create_hive_jni_scanner(const JniScanner::CreateOpti
     jni_scanner_params["fs_options_props"] = build_fs_options_properties(*(options.fs_options));
     if (scan_range.__isset.storage_format_split_info) {
         jni_scanner_params["split_info"] = scan_range.storage_format_split_info;
+    }
+    if (TauthEnv::Instance().isTauthEnvSet()) {
+        jni_scanner_params["tq_platform_user_name"] = TauthEnv::Instance().getTqPlatformUserName();
+        jni_scanner_params["tq_platform_user_cmk"] = TauthEnv::Instance().getTqPlatformUserCmk();
     }
 
     for (const auto& pair : serde_properties) {

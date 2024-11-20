@@ -23,6 +23,10 @@
             <groupId>com.starrocks</groupId>
             <artifactId>jni-connector</artifactId>
         </dependency>
+        <dependency>
+            <groupId>com.starrocks</groupId>
+            <artifactId>hadoop-ext</artifactId>
+        </dependency>
 
         <dependency>
             <groupId>org.apache.hadoop</groupId>

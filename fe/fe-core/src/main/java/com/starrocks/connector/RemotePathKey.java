@@ -18,6 +18,7 @@ import org.apache.hudi.common.table.timeline.HoodieInstant;
 import org.apache.hudi.common.table.timeline.HoodieTimeline;
 import org.apache.hudi.common.table.view.HoodieTableFileSystemView;
 
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.locks.ReentrantLock;
@@ -28,6 +29,7 @@ public class RemotePathKey {
 
     // The table location must exist in HudiTable
     private final Optional<String> hudiTableLocation;
+    private final Map<String, String> properties;
 
     public static class HudiContext {
         // ---- concurrent initialization -----
@@ -51,17 +53,28 @@ public class RemotePathKey {
     private HudiContext hudiContext;
 
     public static RemotePathKey of(String path, boolean isRecursive) {
-        return new RemotePathKey(path, isRecursive, Optional.empty());
+        return new RemotePathKey(path, isRecursive, Optional.empty(), null);
     }
 
     public static RemotePathKey of(String path, boolean isRecursive, Optional<String> hudiTableLocation) {
-        return new RemotePathKey(path, isRecursive, hudiTableLocation);
+        return new RemotePathKey(path, isRecursive, hudiTableLocation, null);
+    }
+
+    public static RemotePathKey of(String path, boolean isRecursive, Optional<String> hudiTableLocation,
+                                   Map<String, String> properties) {
+        return new RemotePathKey(path, isRecursive, hudiTableLocation, properties);
     }
 
     public RemotePathKey(String path, boolean isRecursive, Optional<String> hudiTableLocation) {
+        this(path, isRecursive, hudiTableLocation, null);
+    }
+
+    public RemotePathKey(String path, boolean isRecursive, Optional<String> hudiTableLocation,
+                         Map<String, String> properties) {
         this.path = path;
         this.isRecursive = isRecursive;
         this.hudiTableLocation = hudiTableLocation;
+        this.properties = properties;
     }
 
     public boolean approximateMatchPath(String basePath, boolean isRecursive) {
@@ -80,6 +93,10 @@ public class RemotePathKey {
 
     public Optional<String> getHudiTableLocation() {
         return hudiTableLocation;
+    }
+
+    public Map<String, String> getProperties() {
+        return properties;
     }
 
     @Override

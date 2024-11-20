@@ -1926,6 +1926,12 @@ public class Config extends ConfigBase {
     public static String tdw_supersql_platform_name = "";
 
     /**
+     * If set to true, access hdfs use tauth Authentication
+     */
+    @ConfField(mutable = true)
+    public static boolean enable_hdfs_tauth_authentication = true;
+
+    /**
      * When set to true, we cannot drop user named 'admin' or grant/revoke role to/from user named 'admin',
      * except that we're root user.
      */

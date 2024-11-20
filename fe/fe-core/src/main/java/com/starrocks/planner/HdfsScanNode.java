@@ -36,6 +36,7 @@ import com.starrocks.thrift.THdfsScanNode;
 import com.starrocks.thrift.TPlanNode;
 import com.starrocks.thrift.TPlanNodeType;
 import com.starrocks.thrift.TScanRangeLocations;
+import com.starrocks.utils.TdwUtil;
 
 import java.util.List;
 
@@ -99,6 +100,8 @@ public class HdfsScanNode extends ScanNode {
         Preconditions.checkState(connector != null,
                 String.format("connector of catalog %s should not be null", catalog));
         cloudConfiguration = connector.getMetadata().getCloudConfiguration();
+        String username = TdwUtil.getTdwUserName();
+        cloudConfiguration = cloudConfiguration.cloneWithNewUsername(username);
         Preconditions.checkState(cloudConfiguration != null,
                 String.format("cloudConfiguration of catalog %s should not be null", catalog));
     }

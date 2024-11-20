@@ -24,7 +24,9 @@ import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.HiveWriteUtils;
 import com.starrocks.connector.hive.Partition;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
+import com.starrocks.utils.TdwUtil;
 import jline.internal.Log;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
@@ -37,6 +39,7 @@ import org.apache.logging.log4j.Logger;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -52,6 +55,7 @@ import java.util.stream.Collectors;
 import static com.starrocks.connector.hive.HiveWriteUtils.checkedDelete;
 import static com.starrocks.connector.hive.HiveWriteUtils.createDirectory;
 import static com.starrocks.connector.hive.HiveWriteUtils.fileCreatedByQuery;
+import static com.starrocks.fs.hdfs.HdfsFsManager.USER_NAME_KEY;
 
 public class RemoteFileOperations {
     private static final Logger LOG = LogManager.getLogger(RemoteFileOperations.class);
@@ -111,7 +115,8 @@ public class RemoteFileOperations {
         Tracers.count(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES, cacheMissSize);
         try (Timer ignored = Tracers.watchScope(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES)) {
             for (Partition partition : partitions) {
-                RemotePathKey pathKey = RemotePathKey.of(partition.getFullPath(), isRecursive, hudiTableLocation);
+                RemotePathKey pathKey =
+                        RemotePathKey.of(partition.getFullPath(), isRecursive, hudiTableLocation, getProperties());
                 pathKey.setHudiContext(hudiContext);
                 Future<Map<RemotePathKey, List<RemoteFileDesc>>> future = pullRemoteFileExecutor.submit(() ->
                         remoteFileIO.getRemoteFiles(pathKey, useCache));
@@ -326,5 +331,14 @@ public class RemoteFileOperations {
             LOG.error("Failed to list path {}", path, e);
             throw new StarRocksConnectorException("Failed to list path %s. msg: %s", path.toString(), e.getMessage());
         }
+    }
+
+    private Map<String, String> getProperties() {
+        String username = TdwUtil.getTdwUserName();
+        Map<String, String> properties = new HashMap<>();
+        if (StringUtils.isNotEmpty(username)) {
+            properties.put(USER_NAME_KEY, username);
+        }
+        return properties;
     }
 }

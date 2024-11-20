@@ -59,6 +59,9 @@ public class HdfsUtil {
 
     private static HdfsService hdfsService = new HdfsService();
 
+    public static HdfsService getHdfsService() {
+        return hdfsService;
+    }
     
     public static void getTProperties(String path, BrokerDesc brokerDesc,  THdfsProperties tProperties) throws UserException {
         hdfsService.getTProperties(path, brokerDesc.getProperties(), tProperties);

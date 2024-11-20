@@ -28,6 +28,7 @@ set(EXEC_FILES
     fs_s3.cpp
     hdfs/fs_hdfs.cpp
     hdfs/hdfs_fs_cache.cpp
+    hdfs/tauth_env.cpp
     fs_util.cpp
     fs_starlet.cpp
     )

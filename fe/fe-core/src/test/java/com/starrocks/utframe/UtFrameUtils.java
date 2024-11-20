@@ -196,6 +196,12 @@ public class UtFrameUtils {
             "\"in_memory\" = \"false\"\n" +
             ");";
 
+    static {
+        System.setProperty("TQ_PLATFORM_USER_NAME", "olap_metadata");
+        System.setProperty("TQ_PLATFORM_USER_CMK", "xxx");
+        System.setProperty("TDW_PRI_USER_NAME", "tdwadmin");
+    }
+
     // Help to create a mocked ConnectContext.
     public static ConnectContext createDefaultCtx() {
         ConnectContext ctx = new ConnectContext(null);

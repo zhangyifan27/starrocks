@@ -28,6 +28,7 @@
 #include "common/status.h"
 #include "exec/pipeline/query_context.h"
 #include "gutil/strings/join.h"
+#include "fs/hdfs/tauth_env.h"
 #include "runtime/exec_env.h"
 #include "runtime/fragment_mgr.h"
 #include "runtime/jdbc_driver_manager.h"
@@ -189,6 +190,7 @@ void start_be(const std::vector<StorePath>& paths, bool as_cn) {
     EXIT_IF_ERROR(storage_engine->start_bg_threads());
     LOG(INFO) << process_name << " start step " << start_step++ << ": storage engine start bg threads successfully";
 
+    TauthEnv::Instance();
 #ifdef USE_STAROS
     init_staros_worker();
     LOG(INFO) << process_name << " start step " << start_step++ << ": staros worker init successfully";

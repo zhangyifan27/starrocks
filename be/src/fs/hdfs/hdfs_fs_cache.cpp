@@ -17,6 +17,7 @@
 #include <memory>
 
 #include "common/config.h"
+#include "fs/hdfs/tauth_env.h"
 #include "gutil/strings/substitute.h"
 #include "udf/java/java_udf.h"
 #include "util/hdfs_util.h"
@@ -46,9 +47,11 @@ static Status create_hdfs_fs_handle(const std::string& namenode, const std::shar
     auto hdfs_builder = hdfsNewBuilder();
     hdfsBuilderSetNameNode(hdfs_builder, namenode.c_str());
     const THdfsProperties* properties = options.hdfs_properties();
+    std::string hdfs_username = "";
     if (properties != nullptr) {
-        if (properties->__isset.hdfs_username) {
+        if (properties->__isset.hdfs_username && !properties->hdfs_username.empty()) {
             hdfsBuilderSetUserName(hdfs_builder, properties->hdfs_username.data());
+            hdfs_username = properties->hdfs_username;
         }
     }
     hdfsBuilderSetForceNewInstance(hdfs_builder);
@@ -60,7 +63,13 @@ static Status create_hdfs_fs_handle(const std::string& namenode, const std::shar
         for (const auto& cloud_property : cloud_properties) {
             hdfsBuilderConfSetStr(hdfs_builder, cloud_property.first.data(), cloud_property.second.data());
         }
+        auto iter = cloud_properties.find("hadoop.username");
+        if (iter != cloud_properties.end()) {
+            hdfs_username = iter->second;
+        }
     }
+
+    TauthEnv::Instance().setTauthConf(hdfs_builder, hdfs_username);
 
     // Set for hdfs client hedged read
     std::string hedged_read_threadpool_size = std::to_string(config::hdfs_client_hedged_read_threadpool_size);
@@ -105,6 +114,7 @@ Status HdfsFsCache::get_connection(const std::string& namenode, std::shared_ptr<
         // Found a cache client, return directly
         return Status::OK();
     }
+    LOG(INFO) << "hdfs fs cache_key = " << cache_key;
 
     const uint32_t max_cache_clients = config::hdfs_client_max_cache_size;
     // Not found a cached client, create a new one

@@ -32,6 +32,13 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class UnifiedConnectorTest {
+
+    static {
+        System.setProperty("TQ_PLATFORM_USER_NAME", "olap_metadata");
+        System.setProperty("TQ_PLATFORM_USER_CMK", "xxx");
+        System.setProperty("TDW_PRI_USER_NAME", "tdwadmin");
+    }
+
     @Mocked private PaimonConnector paimonConnector;
     @Mocked private PaimonMetadata paimonMetadata;
 

@@ -82,6 +82,7 @@ public class CachingRemoteFileIO implements RemoteFileIO {
             }
             return ImmutableMap.of(pathKey, cache.getUnchecked(pathKey));
         } catch (UncheckedExecutionException e) {
+            invalidatePartition(pathKey);
             LOG.error("Error occurred when getting remote files from cache", e);
             throwIfInstanceOf(e.getCause(), StarRocksConnectorException.class);
             throw e;
