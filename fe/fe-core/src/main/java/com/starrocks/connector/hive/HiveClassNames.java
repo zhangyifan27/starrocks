@@ -50,4 +50,7 @@ public class HiveClassNames {
     public static final String SEQUENCE_OUTPUT_FORMAT_CLASS =
             "org.apache.hadoop.hive.ql.io.HiveSequenceFileOutputFormat";
 
+    public static final String FORMATFILE_INPUT_FORMAT_CLASS = "StorageEngineClient.FormatStorageInputFormat";
+    public static final String FORMATFILE_OUTPUT_FORMAT_CLASS = "StorageEngineClient.FormatStorageHiveOutputFormat";
+    public static final String FORMATFILE_SERDE_CLASS = "StorageEngineClient.FormatStorageSerDe";
 }

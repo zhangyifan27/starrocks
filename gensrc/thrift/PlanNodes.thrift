@@ -388,6 +388,9 @@ struct THdfsScanRange {
 
     // Paimon Deletion Vector File
     27: optional TPaimonDeletionFile paimon_deletion_file
+
+    // storage format split info
+    28: optional string storage_format_split_info
 }
 
 struct TBinlogScanRange {

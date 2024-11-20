@@ -14,6 +14,7 @@
 
 package com.starrocks.connector;
 
+import StorageEngineClient.CombineFileSplit;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
@@ -24,6 +25,8 @@ import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.HudiTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
+import com.starrocks.common.Config;
+import com.starrocks.connector.hive.RemoteFileInputFormat;
 import com.starrocks.connector.hudi.HudiRemoteFileDesc;
 import com.starrocks.datacache.DataCacheExprRewriter;
 import com.starrocks.datacache.DataCacheMgr;
@@ -316,6 +319,38 @@ public class RemoteScanRangeLocations {
         return splits;
     }
 
+    private void createScanRangeLocationsForStorageFormatSplit(long partitionId, RemoteFileInfo partition,
+                                                               RemoteFileDesc fileDesc,
+                                                               CombineFileSplit split,
+                                                               DataCacheOptions dataCacheOptions) {
+        TScanRangeLocations scanRangeLocations = new TScanRangeLocations();
+
+        THdfsScanRange hdfsScanRange = new THdfsScanRange();
+        hdfsScanRange.setRelative_path("");
+        hdfsScanRange.setOffset(0);
+        hdfsScanRange.setLength(split.getLength());
+        hdfsScanRange.setPartition_id(partitionId);
+        hdfsScanRange.setFile_length(split.getLength());
+        hdfsScanRange.setModification_time(0);
+        hdfsScanRange.setFile_format(partition.getFormat().toThrift());
+        hdfsScanRange.setStorage_format_split_info(StorageFormatUtils.encodeSplitToString(split));
+
+        if (dataCacheOptions != null) {
+            TDataCacheOptions tDataCacheOptions = new TDataCacheOptions();
+            tDataCacheOptions.setPriority(dataCacheOptions.getPriority());
+            hdfsScanRange.setDatacache_options(tDataCacheOptions);
+        }
+
+        TScanRange scanRange = new TScanRange();
+        scanRange.setHdfs_scan_range(hdfsScanRange);
+        scanRangeLocations.setScan_range(scanRange);
+
+        TScanRangeLocation scanRangeLocation = new TScanRangeLocation(new TNetworkAddress("-1", -1));
+        scanRangeLocations.addToLocations(scanRangeLocation);
+
+        result.add(scanRangeLocations);
+    }
+
     public List<TScanRangeLocations> getScanRangeLocations(DescriptorTable descTbl, Table table,
                                                            HDFSScanNodePredicates scanNodePredicates) {
         result.clear();
@@ -350,8 +385,22 @@ public class RemoteScanRangeLocations {
                 if (dataCacheOptionsList.isPresent()) {
                     dataCacheOptions = dataCacheOptionsList.get().get(i);
                 }
-                for (RemoteFileDesc fileDesc : partitions.get(i).getFiles()) {
+                RemoteFileInfo remoteFileInfo = partitions.get(i);
+                for (RemoteFileDesc fileDesc : remoteFileInfo.getFiles()) {
                     if (fileDesc.getLength() == 0) {
+                        continue;
+                    }
+                    if (remoteFileInfo.getFormat().equals(RemoteFileInputFormat.FORMATFILE)) {
+                        if (Config.enable_split_storage_format) {
+                            StorageFormatRemoteFileDesc storageFormatFileDesc = (StorageFormatRemoteFileDesc) fileDesc;
+                            for (CombineFileSplit split : storageFormatFileDesc.getStorageFormatSplitsInfo()) {
+                                createScanRangeLocationsForStorageFormatSplit(partitionInfos.get(i).getId(),
+                                        remoteFileInfo, fileDesc, split, dataCacheOptions);
+                            }
+                        } else {
+                            createScanRangeLocationsForSplit(partitionInfos.get(i).getId(), partitions.get(i), fileDesc,
+                                    Optional.empty(), 0, fileDesc.getLength(), dataCacheOptions);
+                        }
                         continue;
                     }
                     if (forceScheduleLocal) {

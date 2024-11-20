@@ -538,6 +538,9 @@ std::unique_ptr<JniScanner> create_hive_jni_scanner(const JniScanner::CreateOpti
     jni_scanner_params["input_format"] = input_format;
     jni_scanner_params["time_zone"] = time_zone;
     jni_scanner_params["fs_options_props"] = build_fs_options_properties(*(options.fs_options));
+    if (scan_range.__isset.storage_format_split_info) {
+        jni_scanner_params["split_info"] = scan_range.storage_format_split_info;
+    }
 
     for (const auto& pair : serde_properties) {
         jni_scanner_params[serde_property_prefix + pair.first] = pair.second;

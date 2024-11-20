@@ -14,6 +14,8 @@
 
 package com.starrocks.hive.reader;
 
+import StorageEngineClient.CombineFileSplit;
+import com.google.common.base.Strings;
 import com.starrocks.jni.connector.ColumnType;
 import com.starrocks.jni.connector.ColumnValue;
 import com.starrocks.jni.connector.ConnectorScanner;
@@ -47,6 +49,7 @@ import java.util.Properties;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
+import static com.starrocks.hive.reader.HiveScannerUtils.decodeStringToSplit;
 
 public class HiveScanner extends ConnectorScanner {
 
@@ -87,6 +90,8 @@ public class HiveScanner extends ConnectorScanner {
     private Writable value;
 
     private final String timeZone;
+    private final String splitInfo;
+    private CombineFileSplit split;
 
     public HiveScanner(int fetchSize, Map<String, String> params) {
         this.fetchSize = fetchSize;
@@ -110,6 +115,10 @@ public class HiveScanner extends ConnectorScanner {
             LOG.debug("key = " + kv.getKey() + ", value = " + kv.getValue());
         }
         this.timeZone = params.get("time_zone");
+        this.splitInfo = params.get("split_info");
+        if (!Strings.isNullOrEmpty(splitInfo)) {
+            split = decodeStringToSplit(splitInfo);
+        }
     }
 
     private JobConf makeJobConf(Properties properties) {
@@ -168,8 +177,11 @@ public class HiveScanner extends ConnectorScanner {
         }
         properties.setProperty("columns", this.hiveColumnNames);
         List<String> types = new ArrayList<>();
+        String[] hiveColumnNames = this.hiveColumnNames.split(",");
         for (int i = 0; i < this.hiveColumnTypes.length; i++) {
-            String type = this.hiveColumnTypes[i];
+            //String type = this.hiveColumnTypes[i];
+            ColumnType columnType = new ColumnType(hiveColumnNames[i], hiveColumnTypes[i]);
+            String type = HiveScannerUtils.mapColumnTypeToHiveType(columnType);
             types.add(type);
         }
         properties.setProperty("columns.types", types.stream().collect(Collectors.joining(",")));
@@ -180,7 +192,7 @@ public class HiveScanner extends ConnectorScanner {
             properties.put(kv[0], kv[1]);
             return null;
         }, t -> {
-            LOG.warn("Invalid hive scanner fs options props argument: " + t);
+            LOG.debug("Invalid hive scanner fs options props argument: " + t);
             return null;
         });
         return properties;
@@ -188,10 +200,15 @@ public class HiveScanner extends ConnectorScanner {
 
     private void initReader(JobConf jobConf, Properties properties) throws Exception {
         Path path = new Path(dataFilePath);
-        FileSplit fileSplit = new FileSplit(path, blockOffset, blockLength, (String[]) null);
-
         InputFormat<?, ?> inputFormatClass = createInputFormat(jobConf, inputFormat);
-        reader = (RecordReader<Writable, Writable>) inputFormatClass.getRecordReader(fileSplit, jobConf, Reporter.NULL);
+        if (!Strings.isNullOrEmpty(splitInfo)) {
+            reader = (RecordReader<Writable, Writable>) inputFormatClass
+                    .getRecordReader(split, jobConf, Reporter.NULL);
+        } else {
+            FileSplit fileSplit = new FileSplit(path, blockOffset, blockLength, (String[]) null);
+            reader = (RecordReader<Writable, Writable>) inputFormatClass
+                    .getRecordReader(fileSplit, jobConf, Reporter.NULL);
+        }
 
         deserializer = getDeserializer(jobConf, properties, serde);
         rowInspector = getTableObjectInspector(deserializer);
@@ -214,7 +231,8 @@ public class HiveScanner extends ConnectorScanner {
             initReader(jobConf, properties);
         } catch (Exception e) {
             close();
-            LOG.error("Failed to open the hive reader.", e);
+            LOG.error("Failed to open the hive reader, " + dataFilePath
+                    + ", offset = " + blockOffset + ", length = " + blockLength, e);
             throw new IOException("Failed to open the hive reader.", e);
         }
     }
@@ -226,7 +244,8 @@ public class HiveScanner extends ConnectorScanner {
                 reader.close();
             }
         } catch (IOException e) {
-            LOG.error("Failed to close the hive reader.", e);
+            LOG.error("Failed to close the hive reader, " + dataFilePath
+                    + ", offset = " + blockOffset + ", length = " + blockLength, e);
             throw new IOException("Failed to close the hive reader.", e);
         }
     }
@@ -253,7 +272,8 @@ public class HiveScanner extends ConnectorScanner {
             return numRows;
         } catch (Exception e) {
             close();
-            LOG.error("Failed to get the next off-heap table chunk of hive.", e);
+            LOG.error("Failed to get the next off-heap table chunk of hive, " + dataFilePath
+                    + ", offset = " + blockOffset + ", length = " + blockLength, e);
             throw new IOException("Failed to get the next off-heap table chunk of hive.", e);
         }
     }

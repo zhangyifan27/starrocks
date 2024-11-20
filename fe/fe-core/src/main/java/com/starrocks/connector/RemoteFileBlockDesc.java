@@ -49,6 +49,10 @@ public class RemoteFileBlockDesc {
         return remoteFileIO.getHdfsDataNodeIp(hostId);
     }
 
+    public HiveRemoteFileIO getHiveRemoteFileIO() {
+        return remoteFileIO;
+    }
+
     @Override
     public String toString() {
         final StringBuffer sb = new StringBuffer("RemoteFileBlockDesc{");

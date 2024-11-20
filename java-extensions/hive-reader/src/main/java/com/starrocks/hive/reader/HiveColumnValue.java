@@ -17,7 +17,7 @@ package com.starrocks.hive.reader;
 import com.starrocks.jni.connector.ColumnType;
 import com.starrocks.jni.connector.ColumnValue;
 import org.apache.hadoop.hive.common.type.HiveDecimal;
-import org.apache.hadoop.hive.serde2.io.TimestampWritableV2;
+import org.apache.hadoop.hive.serde2.io.TimestampWritable;
 import org.apache.hadoop.hive.serde2.objectinspector.ListObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.MapObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
@@ -26,15 +26,18 @@ import org.apache.hadoop.hive.serde2.objectinspector.StructField;
 import org.apache.hadoop.hive.serde2.objectinspector.StructObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.DateObjectInspector;
 import org.apache.hadoop.hive.serde2.objectinspector.primitive.TimestampObjectInspector;
+import org.apache.hadoop.io.LongWritable;
 
 import java.math.BigDecimal;
 import java.sql.Timestamp;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+
+import static com.starrocks.hive.reader.HiveScannerUtils.TIMESTAMP_UNIT_MAPPING;
 
 public class HiveColumnValue implements ColumnValue {
     private final Object fieldData;
@@ -170,22 +173,31 @@ public class HiveColumnValue implements ColumnValue {
 
     @Override
     public LocalDate getDate() {
-        return LocalDate.ofEpochDay((((DateObjectInspector) fieldInspector).getPrimitiveJavaObject(fieldData))
-                .toEpochDay());
+        ZoneId zoneId = ZoneId.systemDefault();
+        if (timeZone != null) {
+            zoneId = ZoneId.of(timeZone);
+        }
+        return ((DateObjectInspector) fieldInspector).getPrimitiveJavaObject(fieldData).toInstant()
+                .atZone(zoneId)
+                .toLocalDate();
     }
 
     @Override
     public LocalDateTime getDateTime(ColumnType.TypeValue type) {
+        ZoneId zoneId = ZoneId.systemDefault();
+        if (timeZone != null) {
+            zoneId = ZoneId.of(timeZone);
+        }
         if (fieldData instanceof Timestamp) {
             return ((Timestamp) fieldData).toLocalDateTime();
-        } else if (fieldData instanceof TimestampWritableV2) {
-            return LocalDateTime.ofInstant(Instant.ofEpochSecond((((TimestampObjectInspector) fieldInspector)
-                    .getPrimitiveJavaObject(fieldData)).toEpochSecond()), ZoneId.of(timeZone));
+        } else if (fieldData instanceof TimestampWritable) {
+            Timestamp timestamp = ((TimestampObjectInspector) fieldInspector).getPrimitiveJavaObject(fieldData);
+            return timestamp.toLocalDateTime();
         } else {
-            org.apache.hadoop.hive.common.type.Timestamp timestamp =
-                    ((TimestampObjectInspector) fieldInspector).getPrimitiveJavaObject(fieldData);
-            return LocalDateTime.of(timestamp.getYear(), timestamp.getMonth(), timestamp.getDay(),
-                    timestamp.getHours(), timestamp.getMinutes(), timestamp.getSeconds());
+            // INT64 timestamp type
+            long datetime = ((LongWritable) fieldData).get();
+            TimeUnit timeUnit = TIMESTAMP_UNIT_MAPPING.get(type);
+            return HiveScannerUtils.getTimestamp(datetime, timeUnit, zoneId);
         }
     }
 }

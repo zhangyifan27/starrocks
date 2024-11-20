@@ -14,13 +14,16 @@
 
 package com.starrocks.connector;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.starrocks.common.Config;
 import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.HiveWriteUtils;
 import com.starrocks.connector.hive.Partition;
+import com.starrocks.connector.hive.RemoteFileInputFormat;
 import jline.internal.Log;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
@@ -32,6 +35,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -175,10 +179,43 @@ public class RemoteFileOperations {
     }
 
     private RemoteFileInfo buildRemoteFileInfo(Partition partition, List<RemoteFileDesc> fileDescs) {
+        if (partition.getInputFormat().equals(RemoteFileInputFormat.FORMATFILE)) {
+            return buildRemoteFileInfoForStorageFormat(partition, fileDescs);
+        } else {
+            RemoteFileInfo.Builder builder = RemoteFileInfo.builder()
+                    .setFormat(partition.getInputFormat())
+                    .setFullPath(partition.getFullPath())
+                    .setFiles(fileDescs.stream()
+                            .map(desc -> desc.setTextFileFormatDesc(partition.getTextFileFormatDesc()))
+                            .map(desc -> desc.setSplittable(partition.isSplittable()))
+                            .collect(Collectors.toList()));
+
+            return builder.build();
+        }
+    }
+
+    private RemoteFileInfo buildRemoteFileInfoForStorageFormat(Partition partition, List<RemoteFileDesc> fileDescs) {
+        if (Config.enable_split_storage_format) {
+            return StorageFormatUtils.buildRemoteFileInfoForStorageFormat(partition, fileDescs);
+        }
+        List<RemoteFileDesc> sfFileDescs = new ArrayList<>(fileDescs.size());
+        for (RemoteFileDesc desc : fileDescs) {
+            List<RemoteFileBlockDesc> fileBlockDescs = new ArrayList<>(1);
+            // file as a whole
+            RemoteFileBlockDesc wholeFileBlockDesc = new RemoteFileBlockDesc(0,
+                    desc.getLength(),
+                    desc.getBlockDescs().get(0).getReplicaHostIds(),
+                    new long[] {-1},
+                    desc.getBlockDescs().get(0).getHiveRemoteFileIO());
+            fileBlockDescs.add(wholeFileBlockDesc);
+            RemoteFileDesc sfFileDesc = new RemoteFileDesc(desc.getFileName(), "", desc.getLength(),
+                    desc.getModificationTime(), ImmutableList.copyOf(fileBlockDescs));
+            sfFileDescs.add(sfFileDesc);
+        }
         RemoteFileInfo.Builder builder = RemoteFileInfo.builder()
                 .setFormat(partition.getInputFormat())
                 .setFullPath(partition.getFullPath())
-                .setFiles(fileDescs.stream()
+                .setFiles(sfFileDescs.stream()
                         .map(desc -> desc.setTextFileFormatDesc(partition.getTextFileFormatDesc()))
                         .map(desc -> desc.setSplittable(partition.isSplittable()))
                         .collect(Collectors.toList()));

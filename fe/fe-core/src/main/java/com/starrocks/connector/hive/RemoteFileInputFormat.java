@@ -18,6 +18,7 @@ import com.google.common.collect.ImmutableMap;
 import com.starrocks.thrift.THdfsFileFormat;
 
 import static com.starrocks.connector.hive.HiveClassNames.AVRO_INPUT_FORMAT_CLASS;
+import static com.starrocks.connector.hive.HiveClassNames.FORMATFILE_INPUT_FORMAT_CLASS;
 import static com.starrocks.connector.hive.HiveClassNames.HUDI_PARQUET_INPUT_FORMAT;
 import static com.starrocks.connector.hive.HiveClassNames.MAPRED_PARQUET_INPUT_FORMAT_CLASS;
 import static com.starrocks.connector.hive.HiveClassNames.ORC_INPUT_FORMAT_CLASS;
@@ -33,6 +34,7 @@ public enum RemoteFileInputFormat {
     RCBINARY,
     RCTEXT,
     SEQUENCE,
+    FORMATFILE,
     UNKNOWN;
     private static final ImmutableMap<String, RemoteFileInputFormat> CLASS_NAME_TO_INPUT_FORMAT =
             new ImmutableMap.Builder<String, RemoteFileInputFormat>()
@@ -42,6 +44,7 @@ public enum RemoteFileInputFormat {
                     .put(AVRO_INPUT_FORMAT_CLASS, AVRO)
                     .put(RCFILE_INPUT_FORMAT_CLASS, RCBINARY)
                     .put(SEQUENCE_INPUT_FORMAT_CLASS, SEQUENCE)
+                    .put(FORMATFILE_INPUT_FORMAT_CLASS, FORMATFILE)
                     .build();
     private static final ImmutableMap<String, Boolean> INPUT_FORMAT_SPLITTABLE =
             new ImmutableMap.Builder<String, Boolean>()
@@ -52,6 +55,7 @@ public enum RemoteFileInputFormat {
                     .put(AVRO_INPUT_FORMAT_CLASS, true)
                     .put(RCFILE_INPUT_FORMAT_CLASS, true)
                     .put(SEQUENCE_INPUT_FORMAT_CLASS, true)
+                    .put(FORMATFILE_INPUT_FORMAT_CLASS, false)
                     .build();
 
     private static final ImmutableMap<RemoteFileInputFormat, Boolean> INPUT_FORMAT_BACKEND_SPLITTABLE =
@@ -88,6 +92,8 @@ public enum RemoteFileInputFormat {
                 return THdfsFileFormat.RC_TEXT;
             case SEQUENCE:
                 return THdfsFileFormat.SEQUENCE_FILE;
+            case FORMATFILE:
+                return THdfsFileFormat.FORMAT_FILE;
             default:
                 return THdfsFileFormat.UNKNOWN;
         }

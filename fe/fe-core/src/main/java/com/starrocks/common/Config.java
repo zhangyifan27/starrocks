@@ -3326,4 +3326,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = false)
     public static int lake_remove_table_thread_num = 4;
+
+    @ConfField(mutable = true)
+    public static boolean enable_split_storage_format = true;
 }

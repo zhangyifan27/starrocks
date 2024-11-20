@@ -32,6 +32,7 @@ under the License.
         <module>plugin-common</module>
         <module>fe-common</module>
         <module>spark-dpp</module>
+        <module>storage-format</module>
         <module>fe-core</module>
         <module>hive-udf</module>
     </modules>
@@ -174,6 +175,12 @@ under the License.
             <dependency>
                 <groupId>com.starrocks</groupId>
                 <artifactId>spark-dpp</artifactId>
+                <version>1.0.0</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.starrocks</groupId>
+                <artifactId>storage-format</artifactId>
                 <version>1.0.0</version>
             </dependency>
 
