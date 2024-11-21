@@ -13,15 +13,88 @@
 // limitations under the License.
 
 #pragma once
+#include <velocypack/Builder.h>
+
 #include <boost/numeric/ublas/lu.hpp>
 #include <boost/numeric/ublas/matrix.hpp>
+#include <cmath>
 #include <iomanip>
 #include <numeric>
 #include <sstream>
+#include <type_traits>
+
+#include "util/json.h"
 
 namespace starrocks {
 
 namespace ublas = boost::numeric::ublas;
+
+template <typename T>
+static vpack::Value to_json(T const& value) {
+    if constexpr (std::is_floating_point_v<T>) {
+        if (std::isfinite(value)) {
+            return vpack::Value(value);
+        }
+        if (std::isnan(value)) {
+            return vpack::Value("nan");
+        }
+        if (std::isinf(value)) {
+            return vpack::Value(value > 0 ? "inf" : "-inf");
+        }
+        return vpack::Value(value);
+    }
+    return vpack::Value(value);
+}
+
+class JsonSchemaFormatter {
+public:
+    void add_field(const std::string& k, const std::string& v) {
+        _schema.insert(std::make_pair(k, std::make_pair(false, v)));
+    }
+    void add_field(const std::string& v) { _schema.insert(std::make_pair("$", std::make_pair(false, v))); }
+    void add_array_field(const std::string& k, const std::string& v) {
+        _schema.insert(std::make_pair(k, std::make_pair(true, v)));
+    }
+    void add_array_field(const std::string& v) { _schema.insert(std::make_pair("$", std::make_pair(true, v))); }
+
+    std::string print() {
+        std::string result;
+        print(result, "$", "  ");
+        return result;
+    }
+
+private:
+    void print(std::string& result, std::string const& now, std::string const& tab) {
+        if (!_schema.count(now)) {
+            return;
+        }
+        if (now != "$") {
+            result += ": ";
+        }
+        auto range = _schema.equal_range(now);
+        if (range.first->second.first) {
+            result += "[";
+        }
+        result += "{";
+        result += "\n";
+        for (auto it = range.first; it != range.second; ++it) {
+            result += tab + "  ";
+            result += it->second.second;
+            print(result, it->second.second, tab + "  ");
+            if (it != std::prev(range.second)) {
+                result += ",\n";
+            }
+        }
+        result += "\n";
+        if (range.first->second.first) {
+            result += tab + "}]";
+        } else {
+            result += tab + "}";
+        }
+    }
+
+    std::multimap<std::string, std::pair<bool, std::string>> _schema;
+};
 
 class MathHelpers {
 public:

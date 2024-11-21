@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <velocypack/Builder.h>
+#include <velocypack/Value.h>
+
 #include <cctype>
 #include <cmath>
 #include <cstddef>
@@ -330,17 +333,32 @@ public:
         return size;
     }
 
-    std::string get_ttest_result() const {
+    void get_ttest_result(vpack::Builder& builder) const {
+        vpack::ObjectBuilder obj_builder(&builder);
+        builder.add("causal-function", to_json(AllInSqlFunctions::xexpt_ttest_2samp));
+        JsonSchemaFormatter schema;
+        schema.add_field("causal-function");
         if (is_uninitialized()) {
-            return fmt::format("Internal error: ttest agg state is uninitialized.");
+            builder.add("error", to_json("ttest agg state is uninitialized."));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
         if (_all_stats.size() != 2) {
-            return fmt::format("xexpt_ttest_2samp need excatly two groups, but you give ({}) groups.",
-                               _all_stats.size());
+            builder.add("error",
+                        to_json(fmt::format("xexpt_ttest_2samp need excatly two groups, but you give ({}) groups.",
+                                            _all_stats.size())));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
         for (auto const& [treatment, stats] : _all_stats) {
             if (stats.count() <= 1) {
-                return fmt::format("count({}) of group({}) should be greater than 1.", stats.count(), treatment);
+                builder.add("error", to_json(fmt::format("count({}) of group({}) should be greater than 1.",
+                                                         stats.count(), treatment)));
+                schema.add_field("error");
+                builder.add("schema", to_json(schema.print()));
+                return;
             }
         }
 
@@ -427,7 +445,10 @@ public:
                                               delta_method_stats_avg_sub_stats.at(group_names[0]),
                                               delta_method_stats_avg_sub_stats.at(group_names[1]), theta_stats_avg,
                                               means_avg[0], means_avg[1], vars_avg[0], vars_avg[1])) {
-            return "InvertMatrix failed. some variables in the table are perfectly collinear.";
+            builder.add("error", to_json("InvertMatrix failed. some variables in the table are perfectly collinear."));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
 
         if (_ttest_params.metric_type() == XexptTtest2SampMetricType::Avg) {
@@ -443,7 +464,11 @@ public:
                                                   delta_method_stats_sum_sub_stats.at(group_names[0]),
                                                   delta_method_stats_sum_sub_stats.at(group_names[1]), theta_stats_sum,
                                                   means[0], means[1], vars[0], vars[1])) {
-                return "InvertMatrix failed. some variables in the table are perfectly collinear.";
+                builder.add("error",
+                            to_json("InvertMatrix failed. some variables in the table are perfectly collinear."));
+                schema.add_field("error");
+                builder.add("schema", to_json(schema.print()));
+                return;
             }
         }
 
@@ -488,7 +513,11 @@ public:
         double estimate = means[1] - means[0];
         double stderr_var = sqrt(vars[0] + vars[1]);
         if (!std::isfinite(stderr_var) || stderr_var == 0) {
-            return fmt::format("stderr_var({}) is not a finite value, please check your data.", stderr_var);
+            builder.add("error", to_json(fmt::format("stderr_var({}) is not a finite value, please check your data.",
+                                                     stderr_var)));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
         double diff_relative = estimate / means[0];
         std::string prefix;
@@ -525,6 +554,9 @@ public:
         std::string group0;
         std::string group1;
 
+        std::vector<std::string> titles;
+        std::vector<std::vector<vpack::Value>> values(2);
+
         auto add_result3 = [&title, &group0, &group1](const std::string& title_, const std::string& group0_,
                                                       const std::string& group1_) {
             title += MathHelpers::to_string_with_precision<false>(title_);
@@ -535,12 +567,20 @@ public:
             group0 += std::string(max_len - group0.size(), ' ');
             group1 += std::string(max_len - group1.size(), ' ');
         };
+        auto add_result3_json = [&titles, &values](const std::string& title_, auto const& group0_,
+                                                   auto const& group1_) {
+            titles.emplace_back(title_);
+            values[0].emplace_back(to_json(group0_));
+            values[1].emplace_back(to_json(group1_));
+        };
 
         if constexpr (std::is_same_v<std::string, TreatmentType>) {
             add_result3("groupname", group_names[0], group_names[1]);
+            add_result3_json("groupname", group_names[0], group_names[1]);
         } else {
             add_result3("groupname", MathHelpers::to_string_with_precision<false>(group_names[0]),
                         MathHelpers::to_string_with_precision<false>(group_names[1]));
+            add_result3_json("groupname", group_names[0], group_names[1]);
         }
         // add_result3("numerator",
         //             MathHelpers::to_string_with_precision<false>(static_cast<uint64_t>(floor(numerators[0] + 0.5))),
@@ -550,29 +590,39 @@ public:
                     "denominator",
                     MathHelpers::to_string_with_precision<false>(static_cast<uint64_t>(floor(denominators[0] + 0.5))),
                     MathHelpers::to_string_with_precision<false>(static_cast<uint64_t>(floor(denominators[1] + 0.5))));
-        } else
+            add_result3_json("denominator", static_cast<uint64_t>(floor(denominators[0] + 0.5)),
+                             static_cast<uint64_t>(floor(denominators[1] + 0.5)));
+        } else {
             add_result3("ratio", MathHelpers::to_string_with_precision<false>(_ttest_params.ratios()[0], 12, 0),
                         MathHelpers::to_string_with_precision<false>(_ttest_params.ratios()[1], 12, 0));
-
+            add_result3_json("ratio", _ttest_params.ratios()[0], _ttest_params.ratios()[1]);
+        }
         add_result3("numerator", MathHelpers::to_string_with_precision<false, true>(numerators[0]),
                     MathHelpers::to_string_with_precision<false, true>(numerators[1]));
+        add_result3_json("numerator", numerators[0], numerators[1]);
 
         if (!denominators_pre.empty()) {
-            if (_ttest_params.metric_type() == XexptTtest2SampMetricType::Avg)
+            if (_ttest_params.metric_type() == XexptTtest2SampMetricType::Avg) {
                 add_result3("denominator_pre",
                             MathHelpers::to_string_with_precision<false>(
                                     static_cast<uint64_t>(floor(denominators_pre[0] + 0.5))),
                             MathHelpers::to_string_with_precision<false>(
                                     static_cast<uint64_t>(floor(denominators_pre[1] + 0.5))));
+                add_result3_json("denominator_pre", static_cast<uint64_t>(floor(denominators_pre[0] + 0.5)),
+                                 static_cast<uint64_t>(floor(denominators_pre[1] + 0.5)));
+            }
             add_result3("numerator_pre", MathHelpers::to_string_with_precision<false, true>(numerators_pre[0]),
                         MathHelpers::to_string_with_precision<false, true>(numerators_pre[1]));
+            add_result3_json("numerator_pre", numerators_pre[0], numerators_pre[1]);
         }
 
         if (_ttest_params.metric_type() == XexptTtest2SampMetricType::Avg) {
             add_result3("mean", MathHelpers::to_string_with_precision<false>(means[0]),
                         MathHelpers::to_string_with_precision<false>(means[1]));
+            add_result3_json("mean", means[0], means[1]);
             add_result3("std_samp", MathHelpers::to_string_with_precision<false>(std_samp[0]),
                         MathHelpers::to_string_with_precision<false>(std_samp[1]));
+            add_result3_json("std_samp", std_samp[0], std_samp[1]);
         }
 
         std::string ci_prefix = std::to_string((1 - _ttest_params.alpha()) * 100);
@@ -584,33 +634,78 @@ public:
         title = "";
         std::string group;
 
-        auto add_result2 = [&title, &group](const std::string& title_, const std::string& group_) {
+        auto add_result2 = [&title, &group, &builder](const std::string& title_, const std::string& group_) {
             title += MathHelpers::to_string_with_precision<false>(title_);
             group += MathHelpers::to_string_with_precision<false>(group_);
             size_t max_len = std::max({title.size(), group.size()});
             title += std::string(max_len - title.size(), ' ');
             group += std::string(max_len - group.size(), ' ');
+            builder.add(title_, to_json(group_));
+        };
+
+        DCHECK(titles.size() == values[0].size() && titles.size() == values[1].size());
+        for (int i = 0; i < 2; ++i) {
+            vpack::ObjectBuilder group_builder(&builder, "group" + std::to_string(i));
+            schema.add_field("group" + std::to_string(i));
+            for (int j = 0; j < titles.size(); ++j) {
+                schema.add_field("group" + std::to_string(i), titles[j]);
+                builder.add(titles[j], values[i][j]);
+            }
+        }
+        titles.clear();
+        std::vector<vpack::Value> values2;
+
+        auto add_result2_json = [&titles, &values2](const std::string& title_, auto const& value) {
+            titles.emplace_back(title_);
+            values2.emplace_back(to_json(value));
         };
 
         add_result2("diff_relative", std::to_string(diff_relative * 100) + "%");
-        add_result2(ci_prefix + "%_relative_CI",
-                    "[" + std::to_string(lower_relative * 100) + "%," + std::to_string(upper_relative * 100) + "%]");
-        add_result2("p-value", MathHelpers::to_string_with_precision<false>(p_value));
-        add_result2("t-statistic", MathHelpers::to_string_with_precision<false>(t_stat));
+        add_result2_json("diff_relative", diff_relative);
+        std::string relative_ci =
+                "[" + std::to_string(lower_relative * 100) + "%," + std::to_string(upper_relative * 100) + "%]";
+        add_result2(ci_prefix + "%_relative_CI", relative_ci);
+        add_result2_json(ci_prefix + "%_relative_CI_lower", lower_relative);
+        add_result2_json(ci_prefix + "%_relative_CI_upper", upper_relative);
+        add_result2_json(ci_prefix + "%_relative_CI", relative_ci);
 
+        add_result2("p-value", MathHelpers::to_string_with_precision<false>(p_value));
+        add_result2_json("p-value", p_value);
+        add_result2("t-statistic", MathHelpers::to_string_with_precision<false>(t_stat));
+        add_result2_json("t-statistic", t_stat);
+        std::string ci = "[" + std::to_string(lower) + "," + std::to_string(upper) + "]";
         if (_ttest_params.metric_type() == XexptTtest2SampMetricType::Avg) {
             add_result2("diff", MathHelpers::to_string_with_precision<false>(estimate));
-            add_result2(ci_prefix + "%_CI", "[" + std::to_string(lower) + "," + std::to_string(upper) + "]");
+            add_result2_json("diff", estimate);
+
+            add_result2(ci_prefix + "%_CI", ci);
+            add_result2_json(ci_prefix + "%_CI_lower", lower);
+            add_result2_json(ci_prefix + "%_CI_upper", upper);
+            add_result2_json(ci_prefix + "%_CI", ci);
         }
         add_result2("power(MDE=" + std::to_string(_ttest_params.mde()) + ")",
                     MathHelpers::to_string_with_precision<false>(power));
+        add_result2_json("power", power);
 
         add_result2("recommend_samples", MathHelpers::to_string_with_precision<false>(
                                                  static_cast<uint64_t>(std::floor(recommend_samples + 0.5))));
+        add_result2_json("recommend_samples", static_cast<uint64_t>(std::floor(recommend_samples + 0.5)));
         add_result2("MDE(power=" + std::to_string(_ttest_params.power()) + ")",
                     MathHelpers::to_string_with_precision<false>(result_mde));
+        add_result2_json("MDE", result_mde);
         res += title + '\n' + group + '\n';
-        return prefix + res;
+        if (!prefix.empty()) {
+            builder.add("warning", to_json(prefix));
+            schema.add_field("warning");
+        }
+        DCHECK(titles.size() == values2.size());
+        for (int j = 0; j < titles.size(); ++j) {
+            builder.add(titles[j], values2[j]);
+            schema.add_field(titles[j]);
+        }
+        builder.add("summary", to_json(prefix + res));
+        schema.add_field("summary");
+        builder.add("schema", to_json(schema.print()));
     }
 
     size_t num_treatment() const { return _all_stats.size(); }
@@ -792,8 +887,11 @@ public:
             dst_nullable_col->null_column_data().emplace_back(false);
             to = dst_nullable_col->data_column().get();
         }
-        std::string result = this->data(state).get_ttest_result();
-        down_cast<XexptTtest2SampResultColumnType*>(to)->append(result);
+        vpack::Builder result_builder;
+        this->data(state).get_ttest_result(result_builder);
+        auto slice = result_builder.slice();
+        JsonValue result_json(slice);
+        down_cast<JsonColumn&>(*to).append(std::move(result_json));
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,

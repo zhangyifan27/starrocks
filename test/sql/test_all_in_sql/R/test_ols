@@ -43,57 +43,28 @@ sync;
 
 select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from ols_test_tbl;
 -- result:
-[REGEX]793200\s646026213\s323166914
+[LOOSE]793200 646026213 323166914
 -- !result
 
 select ols(Y, [X1, X2, X3, weight], false) from ols_test_tbl;
 -- result:
-
-Call:
-  lm( formula = y ~ x1 + x2 + x3 + x4 )
-
-Coefficients:
-.               Estimate    Std. Error  t value     Pr(>|t|)    
-x1              -20.528704  6.298855    -3.259117   0.001118    
-x2              95.353022   30.638332   3.112213    0.001857    
-x3              3553.144390 31.193115   113.907969  0.000000    
-x4              -40.894824  37.980938   -1.076720   0.281606    
-
-Residual standard error: 15528.986180 on 793195 degrees of freedom
-Multiple R-squared: 0.016095, Adjusted R-squared: 0.016090
-F-statistic: 3243.857985 on 4 and 793195 DF,  p-value: 0.000000
-
+[LOOSE]{"adjusted-r-squared": 0.016090185680992075, "causal-function": "ols", "coef": [{"estimate": -20.528704143256782, "p-value": 0.001117643647178475, "stderr": 6.298855073172179, "t-value": -3.2591167608684604, "variable": "x1"}, {"estimate": 95.35302209239728, "p-value": 0.0018569693097155759, "stderr": 30.638332177654668, "t-value": 3.112213208587794, "variable": "x2"}, {"estimate": 3553.1443902639503, "p-value": 0, "stderr": 31.193115150318338, "t-value": 113.90796889446577, "variable": "x3"}, {"estimate": -40.894823792298666, "p-value": 0.2816058436281503, "stderr": 37.980938242161095, "t-value": -1.0767196832147496, "variable": "x4"}], "df": 793195, "f-statistic": 3243.857985111834, "f-value": 0, "formula": "y ~ x1 + x2 + x3 + x4 ", "num-variables": 4, "r-squared": 0.01609514741097059, "residual-stderr": 1.5528986180369986e+4, "schema": "{\n    causal-function,\n    formula,\n    coef: [{\n      variable,\n      estimate,\n      stderr,\n      t-value,\n      p-value\n    }],\n    residual-stderr,\n    df,\n    r-squared,\n    adjusted-r-squared,\n    f-statistic,\n    num-variables,\n    f-value\n  }", "summary": "\nCall:\n  lm( formula = y ~ x1 + x2 + x3 + x4 )\n\nCoefficients:\n.               Estimate    Std. Error  t value     Pr(>|t|)    \nx1              -20.528704  6.298855    -3.259117   0.001118    \nx2              95.353022   30.638332   3.112213    0.001857    \nx3              3553.144390 31.193115   113.907969  0.000000    \nx4              -40.894824  37.980938   -1.076720   0.281606    \n\nResidual standard error: 15528.986180 on 793195 degrees of freedom\nMultiple R-squared: 0.016095, Adjusted R-squared: 0.016090\nF-statistic: 3243.857985 on 4 and 793195 DF,  p-value: 0.000000\n"}
 -- !result
 
 
 select ols(Y, [X1, X2, X3, weight], true) from ols_test_tbl;
 -- result:
-
-Call:
-  lm( formula = y ~ x1 + x2 + x3 + x4 )
-
-Coefficients:
-.               Estimate    Std. Error  t value     Pr(>|t|)    
-(Intercept)     356.216890  67.732529   5.259170    0.000000    
-x1              -45.842475  7.927275    -5.782879   0.000000    
-x2              -29.268450  38.732114   -0.755664   0.449851    
-x3              3548.677962 31.204130   113.724623  0.000000    
-x4              -52.068275  38.039652   -1.368789   0.171065    
-
-Residual standard error: 15528.715438 on 793195 degrees of freedom
-Multiple R-squared: 0.016053, Adjusted R-squared: 0.016048
-F-statistic: 3235.275415 on 4 and 793195 DF,  p-value: 0.000000
-
+[LOOSE]{"adjusted-r-squared": 0.01604828468991959, "causal-function": "ols", "coef": [{"estimate": 356.2168900632196, "p-value": 1.4474440344032338e-7, "stderr": 67.73252931541853, "t-value": 5.2591700570398, "variable": "intercept"}, {"estimate": -45.842475164561165, "p-value": 7.346029268144449e-9, "stderr": 7.927275499203565, "t-value": -5.782879019300749, "variable": "x1"}, {"estimate": -29.268450120177476, "p-value": 0.44985112129189264, "stderr": 38.73211447548366, "t-value": -0.7556636273680225, "variable": "x2"}, {"estimate": 3548.67796150496, "p-value": 0, "stderr": 31.20413042911911, "t-value": 113.72462275678095, "variable": "x3"}, {"estimate": -52.06827470684013, "p-value": 0.17106548770288077, "stderr": 38.0396523081411, "t-value": -1.368789448574867, "variable": "x4"}], "df": 793195, "f-statistic": 3235.275414558329, "f-value": 0, "formula": "y ~ x1 + x2 + x3 + x4 ", "num-variables": 4, "r-squared": 0.016053246631199482, "residual-stderr": 1.552871543800994e+4, "schema": "{\n    causal-function,\n    formula,\n    coef: [{\n      variable,\n      estimate,\n      stderr,\n      t-value,\n      p-value\n    }],\n    residual-stderr,\n    df,\n    r-squared,\n    adjusted-r-squared,\n    f-statistic,\n    num-variables,\n    f-value\n  }", "summary": "\nCall:\n  lm( formula = y ~ x1 + x2 + x3 + x4 )\n\nCoefficients:\n.               Estimate    Std. Error  t value     Pr(>|t|)    \n(Intercept)     356.216890  67.732529   5.259170    0.000000    \nx1              -45.842475  7.927275    -5.782879   0.000000    \nx2              -29.268450  38.732114   -0.755664   0.449851    \nx3              3548.677962 31.204130   113.724623  0.000000    \nx4              -52.068275  38.039652   -1.368789   0.171065    \n\nResidual standard error: 15528.715438 on 793195 degrees of freedom\nMultiple R-squared: 0.016053, Adjusted R-squared: 0.016048\nF-statistic: 3235.275415 on 4 and 793195 DF,  p-value: 0.000000\n"}
 -- !result
 
 select ols_train(Y, [X1, X2, X3, weight], false) as params from ols_test_tbl;
 -- result:
-[REGEX]{"coef":\s*[-20.52870[0-9]*,\s*95.35302[0-9]*,\s*3553.14439[0-9]*,\s*-40.89482[0-9]*],\s*"name":\s*"ols",\s*"num_variables":\s*4,\s*"use_bias":\s*false}
+[LOOSE]{"coef": [-20.528704143256782, 95.35302209239728, 3553.1443902639503, -40.894823792298666], "name": "ols", "num_variables": 4, "use_bias": false}
 -- !result
 
 select ols_train(Y, [X1, X2, X3, weight], true) as params from ols_test_tbl;
 -- result:
-[REGEX]{"coef":\s*[-45.84247[0-9]*,\s*-29.26845[0-9]*,\s*3548.67796[0-9]*,\s*-52.06827[0-9]*,\s*356.21689[0-9]*],\s*"name":\s*"ols",\s*"num_variables":\s*4,\s*"use_bias":\s*true}
+[LOOSE]{"coef": [-45.842475164561165, -29.268450120177476, 3548.67796150496, -52.06827470684013, 356.2168900632196], "name": "ols", "num_variables": 4, "use_bias": true}
 -- !result
 
 with model as (

@@ -1,0 +1,61 @@
+-- name: test_mann_whitney
+
+drop database if exists mann_whitney_test_db;
+-- result:
+-- !result
+create database mann_whitney_test_db;
+-- result:
+-- !result
+use mann_whitney_test_db;
+-- result:
+-- !result
+drop table if exists mann_whitney_test_tbl;
+-- result:
+-- !result
+create table mann_whitney_test_tbl
+(
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean,
+    `numerator_pre` bigint,
+    `denominator_pre` boolean,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `X3_string` string,
+    `X7_needcut` bigint,
+    `X8_needcut` bigint,
+    `weight` double,
+    `distance` double
+)
+properties (
+    "replication_num"="1"
+);
+-- result:
+-- !result
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test.csv -XPUT -H column_separator:, ${url}/api/mann_whitney_test_db/mann_whitney_test_tbl/_stream_load
+-- result:
+-- !result
+sync;
+-- result:
+-- !result
+select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from mann_whitney_test_tbl;
+-- result:
+[LOOSE]793200 646026213 323166914
+-- !result
+select 'mann_whitney',  
+  mann_whitney_u_test(numerator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(numerator, treatment, 'two-sided', 1),
+  mann_whitney_u_test(numerator, treatment, 'less', 0),
+  mann_whitney_u_test(numerator, treatment, 'less', 1),
+  mann_whitney_u_test(numerator, treatment, 'greater', 0),
+  mann_whitney_u_test(numerator, treatment, 'greater', 1),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 1),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 1)
+from mann_whitney_test_tbl;
+-- result:
+[LOOSE]mann_whitney {"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function,\n    staticstic,\n    u1,\n    u2,\n    p-value\n  }", "staticstic": 122778144784.5, "u1": 122778144784.5, "u2": 34513384939.5} {"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function,\n    staticstic,\n    u1,\n    u2,\n    p-value\n  }", "staticstic": 122778144784.5, "u1": 122778144784.5, "u2": 34513384939.5} {"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function,\n    staticstic,\n    u1,\n    u2,\n    p-value\n  }", "staticstic": 122778144784.5, "u1": 122778144784.5, "u2": 34513384939.5} {"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function,\n    staticstic,\n    u1,\n    u2,\n    p-value\n  }", "staticstic": 122778144784.5, "u1": 122778144784.5, "u2": 34513384939.5} {"causal-function": "mann_whitney_u_test", "p-value": 1, "schema": "{\n    causal-function,\n    staticstic,\n    u1,\n    u2,\n    p-value\n  }", "staticstic": 122778144784.5, "u1": 122778144784.5, "u2": 34513384939.5} {"causal-function": "mann_whitney_u_test", "p-value": 1, "schema": "{\n    causal-function,\n    staticstic,\n    u1,\n    u2,\n    p-value\n  }", "staticstic": 122778144784.5, "u1": 122778144784.5, "u2": 34513384939.5} {"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."} {"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."} {"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."} {"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."}
+-- !result

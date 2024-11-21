@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <velocypack/Builder.h>
+
 #include <cctype>
 #include <cmath>
 #include <cstddef>
@@ -356,15 +358,32 @@ public:
         return Status::OK();
     }
 
-    std::string get_ttest_result() const {
+    void get_ttest_result(vpack::Builder& builder) const {
+        vpack::ObjectBuilder obj_builder(&builder);
+        JsonSchemaFormatter schema;
+        builder.add("causal-function", to_json(AllInSqlFunctions::ttest_2samp));
+        schema.add_field("causal-function");
         if (is_uninitialized()) {
-            return "Internal error: ttest agg state is uninitialized.";
+            builder.add("error", to_json("ttest agg state is uninitialized."));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
         if (_delta_method_stats0.count() == 0) {
-            return "error: at least 2 groups are required for 2-sample t-test, please check the argument of index";
+            builder.add(
+                    "error",
+                    to_json("at least 2 groups are required for 2-sample t-test, please check the argument of index"));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
         if (_delta_method_stats1.count() == 0) {
-            return "error: at least 2 groups are required for 2-sample t-test, please check the argument of index";
+            builder.add(
+                    "error",
+                    to_json("at least 2 groups are required for 2-sample t-test, please check the argument of index"));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
 
         double mean0 = 0, mean1 = 0, var0 = 0, var1 = 0;
@@ -380,20 +399,31 @@ public:
                         _delta_method_stats0.count(), _delta_method_stats1.count(), _delta_method_stats0.means(),
                         _delta_method_stats1.means(), delta_method_stats.means(), _delta_method_stats0.cov_matrix(),
                         _delta_method_stats1.cov_matrix(), delta_method_stats.cov_matrix(), mean0, mean1, var0, var1)) {
-                return "InvertMatrix failed. some variables in the table are perfectly collinear.";
+                builder.add("error",
+                            to_json("InvertMatrix failed. some variables in the table are perfectly collinear."));
+                schema.add_field("error");
+                builder.add("schema", to_json(schema.print()));
+                return;
             }
         } else {
             DCHECK(_ttest_params.num_pses() > 0);
             auto st = calc_means_and_vars_with_pse(mean0, mean1, var0, var1, warning_prefix);
             if (!st.ok()) {
-                return st.to_string();
+                builder.add("error", to_json(st.to_string()));
+                schema.add_field("error");
+                builder.add("schema", to_json(schema.print()));
+                return;
             }
         }
 
         double stderr_var = std::sqrt(var0 + var1);
 
         if (!std::isfinite(stderr_var)) {
-            return fmt::format("stderr({}) is an abnormal float value, please check your data.", stderr_var);
+            builder.add("error", to_json(fmt::format("stderr({}) is an abnormal float value, please check your data.",
+                                                     stderr_var)));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
 
         double estimate = mean1 - mean0;
@@ -426,7 +456,31 @@ public:
         result_ss << MathHelpers::to_string_with_precision(upper);
         result_ss << "\n";
 
-        return result_ss.str();
+        builder.add("mean0", to_json(mean0));
+        builder.add("mean1", to_json(mean1));
+        builder.add("estimate", to_json(estimate));
+        builder.add("stderr", to_json(stderr_var));
+        builder.add("t-statistic", to_json(t_stat));
+        builder.add("p-value", to_json(p_value));
+        builder.add("lower", to_json(lower));
+        builder.add("upper", to_json(upper));
+        schema.add_field("mean0");
+        schema.add_field("mean1");
+        schema.add_field("estimate");
+        schema.add_field("stderr");
+        schema.add_field("t-statistic");
+        schema.add_field("p-value");
+        schema.add_field("lower");
+        schema.add_field("upper");
+
+        if (!warning_prefix.empty()) {
+            builder.add("warning", to_json(warning_prefix));
+            schema.add_field("warning");
+        }
+        builder.add("summary", to_json(result_ss.str()));
+        schema.add_field("summary");
+
+        builder.add("schema", to_json(schema.print()));
     }
 
     size_t num_pses() const { return _ttest_params.num_pses(); }
@@ -609,13 +663,15 @@ public:
             dst_nullable_col->null_column_data().emplace_back(false);
             to = dst_nullable_col->data_column().get();
         }
-        std::string result;
         if (this->data(state).is_uninitialized()) {
             ctx->set_error("Internal Error: state not initialized.");
             return;
         }
-        result = this->data(state).get_ttest_result();
-        down_cast<Ttest2SampResultColumnType*>(to)->append(result);
+        vpack::Builder result_builder;
+        this->data(state).get_ttest_result(result_builder);
+        auto slice = result_builder.slice();
+        JsonValue result_json(slice);
+        down_cast<JsonColumn&>(*to).append(std::move(result_json));
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,

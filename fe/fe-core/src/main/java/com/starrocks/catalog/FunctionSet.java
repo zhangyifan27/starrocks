@@ -1443,64 +1443,64 @@ public class FunctionSet {
 
         addBuiltin(AggregateFunction.createBuiltin(TTEST_1SAMP,
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.DOUBLE,
-                        Type.ARRAY_DOUBLE, Type.VARCHAR), Type.VARCHAR, Type.VARBINARY, false, true, false));
+                        Type.ARRAY_DOUBLE, Type.VARCHAR), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(TTEST_1SAMP,
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.DOUBLE,
-                        Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true,
+                        Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true,
                 false));
 
         addBuiltin(AggregateFunction.createBuiltin(TTEST_1SAMP,
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.DOUBLE,
-                        Type.ARRAY_DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true, false));
+                        Type.ARRAY_DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
 
         // expression, side, treatment, data, [cuped, alpha]
         addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN,
-                        Type.ARRAY_DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true, false));
+                        Type.ARRAY_DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN,
-                        Type.ARRAY_DOUBLE, Type.VARCHAR), Type.VARCHAR, Type.VARBINARY, false, true, false));
+                        Type.ARRAY_DOUBLE, Type.VARCHAR), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN,
-                        Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true,
+                        Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true,
                 false));
 
         addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR, 
-                        Type.DOUBLE, Type.ARRAY_VARCHAR), Type.VARCHAR, Type.VARBINARY, false, true, false));
+                        Type.DOUBLE, Type.ARRAY_VARCHAR), Type.JSON, Type.VARBINARY, false, true, false));
 
         // expression, side, treatment, data, [cuped, alpha]
         addBuiltin(AggregateFunction.createBuiltin(TTESTS_2SAMP,
-                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.INT,
-                        Type.ARRAY_DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true, false));
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BIGINT,
+                        Type.ARRAY_DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(TTESTS_2SAMP,
-                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.INT,
-                        Type.ARRAY_DOUBLE, Type.VARCHAR), Type.VARCHAR, Type.VARBINARY, false, true, false));
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BIGINT,
+                        Type.ARRAY_DOUBLE, Type.VARCHAR), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(TTESTS_2SAMP,
-                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.INT,
-                        Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BIGINT,
+                        Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true,
                 false));
 
         addBuiltin(AggregateFunction.createBuiltin(XEXPT_TTEST_2SAMP,
-                Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE), Type.VARCHAR, Type.VARBINARY,
+                Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE), Type.JSON, Type.VARBINARY,
                 false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(XEXPT_TTEST_2SAMP,
-                Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.VARCHAR), Type.VARCHAR,
+                Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.VARCHAR), Type.JSON,
                 Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(XEXPT_TTEST_2SAMP,
                 Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE, Type.DOUBLE,
-                        Type.DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true, false));
+                        Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(XEXPT_TTEST_2SAMP,
                 Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE, Type.DOUBLE,
-                        Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true,
+                        Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE), Type.JSON, Type.VARBINARY, false, true,
                 false));
 
         addBuiltin(AggregateFunction.createBuiltin(OLS_TRAIN,
@@ -1508,34 +1508,32 @@ public class FunctionSet {
                 true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(OLS,
-                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN), Type.VARCHAR, Type.VARBINARY, false,
+                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN), Type.JSON, Type.VARBINARY, false,
                 true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(OLS,
-                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN, Type.VARCHAR), Type.VARCHAR,
+                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN, Type.VARCHAR), Type.JSON,
                 Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(OLS,
                 Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN, Type.VARCHAR, Type.JSON, Type.JSON),
-                Type.VARCHAR, Type.VARBINARY, false, true, false));
+                Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(WLS_TRAIN,
                 Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.DOUBLE, Type.BOOLEAN), Type.JSON,
                 Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(WLS,
-                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.DOUBLE, Type.BOOLEAN), Type.VARCHAR,
+                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.DOUBLE, Type.BOOLEAN), Type.JSON,
                 Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(WLS,
                 Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.DOUBLE, Type.BOOLEAN, Type.VARCHAR),
-                Type.VARCHAR,
-                Type.VARBINARY, false, true, false));
+                Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(WLS,
                 Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.DOUBLE, Type.BOOLEAN, Type.VARCHAR, Type.JSON,
-                        Type.JSON),
-                Type.VARCHAR, Type.VARBINARY, false, true, false));
+                Type.JSON), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(MATRIX_MULTIPLICATION,
                 Lists.newArrayList(Type.ARRAY_DOUBLE, Type.BOOLEAN, Type.BOOLEAN), Type.JSON,
@@ -1553,7 +1551,7 @@ public class FunctionSet {
                 Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(SRM,
-                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE), Type.VARCHAR,
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE), Type.JSON,
                 Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(GROUP_SET,

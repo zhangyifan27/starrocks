@@ -23,12 +23,14 @@
 
 #include "column/const_column.h"
 #include "column/vectorized_fwd.h"
+#include "common/status.h"
 #include "delta_method.h"
 #include "exprs/agg/aggregate.h"
 #include "exprs/agg/ttest_common.h"
 #include "exprs/function_helper.h"
 #include "gutil/casts.h"
 #include "types/logical_type.h"
+#include "util/json.h"
 
 namespace starrocks {
 
@@ -38,7 +40,6 @@ using Ttest1SampDataMuColumnType = RunTimeColumnType<TYPE_DOUBLE>;
 using Ttest1SampDataAlphaColumnType = RunTimeColumnType<TYPE_DOUBLE>;
 using Ttest1SampDataArrayColumnType = RunTimeColumnType<TYPE_ARRAY>;
 using Ttest1SampDataElementColumnType = RunTimeColumnType<TYPE_DOUBLE>;
-using Ttest1SampResultColumnType = RunTimeColumnType<TYPE_VARCHAR>;
 
 class Ttest1SampParams {
 public:
@@ -198,10 +199,18 @@ public:
         return size + _delta_method_stats.serialized_size();
     }
 
-    std::string get_ttest_result() const {
+    void get_ttest_result(vpack::Builder& builder) const {
         DCHECK(!is_uninitialized());
+        vpack::ObjectBuilder obj_builder(&builder);
+        JsonSchemaFormatter schema;
+        schema.add_field("causal-function");
+        builder.add("causal-function", to_json(AllInSqlFunctions::ttest_1samp));
         if (_delta_method_stats.count() <= 1) {
-            return fmt::format("count({}) should be greater than 1.", _delta_method_stats.count());
+            builder.add("error",
+                        to_json(fmt::format("count({}) should be greater than 1.", _delta_method_stats.count())));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
         auto means = _delta_method_stats.means();
         auto cov_matrix = _delta_method_stats.cov_matrix();
@@ -209,12 +218,18 @@ public:
         double mean, var;
         if (!TtestCommon::calc_cuped_mean_and_var(_ttest_params.Y_expression(), _ttest_params.cuped_expression(),
                                                   _ttest_params.num_variables(), count, means, cov_matrix, mean, var)) {
-            return "InvertMatrix failed. some variables in the table are perfectly collinear.";
+            builder.add("error", to_json("InvertMatrix failed. some variables in the table are perfectly collinear."));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
 
         double stderr_var = std::sqrt(var);
         if (!std::isfinite(stderr_var)) {
-            return fmt::format("stderr({}) is an abnormal float value, please check your data.", stderr_var);
+            builder.add("error", to_json("stderr is an abnormal float value, please check your data."));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
 
         std::string prefix;
@@ -222,6 +237,9 @@ public:
         double estimate = mean - _ttest_params.mu();
         double t_stat = estimate / stderr_var;
         if (std::isnan(t_stat) || std::isinf(t_stat)) {
+            builder.add("warning", to_json("Data are essentially constant (standard error is zero), making "
+                                           "t-statistic undefined. Check for variability in your data."));
+            schema.add_field("warning");
             prefix = "Warning: Data are essentially constant (standard error is zero), making t-statistic undefined. "
                      "Check for variability in your data.\n\n";
             if (std::abs(estimate) < std::numeric_limits<double>::epsilon()) {
@@ -251,7 +269,22 @@ public:
         result_ss << MathHelpers::to_string_with_precision(upper);
         result_ss << "\n";
 
-        return prefix + result_ss.str();
+        builder.add("estimate", to_json(estimate));
+        builder.add("stderr", to_json(stderr_var));
+        builder.add("t-statistic", to_json(t_stat));
+        builder.add("p-value", to_json(p_value));
+        builder.add("lower", to_json(lower));
+        builder.add("upper", to_json(upper));
+        schema.add_field("estimate");
+        schema.add_field("stderr");
+        schema.add_field("t-statistic");
+        schema.add_field("p-value");
+        schema.add_field("lower");
+        schema.add_field("upper");
+        schema.add_field("summary");
+
+        builder.add("schema", to_json(schema.print()));
+        builder.add("summary", to_json(prefix + result_ss.str()));
     }
 
 private:
@@ -413,12 +446,16 @@ public:
             dst_nullable_col->null_column_data().emplace_back(false);
             to = dst_nullable_col->data_column().get();
         }
+        DCHECK(to->is_json());
         if (this->data(state).is_uninitialized()) {
             ctx->set_error("Internal Error: state not initialized.");
             return;
         }
-        std::string result = this->data(state).get_ttest_result();
-        down_cast<Ttest1SampResultColumnType*>(to)->append(result);
+        vpack::Builder result_builder;
+        this->data(state).get_ttest_result(result_builder);
+        auto slice = result_builder.slice();
+        JsonValue result_json(slice);
+        down_cast<JsonColumn&>(*to).append(std::move(result_json));
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,

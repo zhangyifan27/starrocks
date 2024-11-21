@@ -327,18 +327,18 @@ public:
         StatsResult result;
         auto status = calc_stats_result(result);
         if (status.has_value()) {
-            builder.add("Error", vpack::Value(status.value()));
+            builder.add("Error", to_json(status.value()));
             return;
         }
 
         ublas::matrix<double> const& coef = result.coef;
-        obj_builder->add("name", vpack::Value("ols"));
-        obj_builder->add("num_variables", vpack::Value(_params.num_variables()));
-        obj_builder->add("use_bias", vpack::Value(use_bias()));
+        obj_builder->add("name", to_json("ols"));
+        obj_builder->add("num_variables", to_json(_params.num_variables()));
+        obj_builder->add("use_bias", to_json(use_bias()));
         {
             vpack::ArrayBuilder coef_builder(&builder, "coef");
             for (uint32_t i = 0; i < result.biased_size; ++i) {
-                coef_builder->add(vpack::Value(coef(i, 0)));
+                coef_builder->add(to_json(coef(i, 0)));
             }
         }
     }
@@ -480,11 +480,18 @@ public:
         return std::nullopt;
     }
 
-    std::string get_result() const {
+    void get_result(vpack::Builder& builder, std::string const& function_name) const {
+        vpack::ObjectBuilder obj_builder(&builder);
+        builder.add("causal-function", to_json(function_name));
+        JsonSchemaFormatter schema;
+        schema.add_field("causal-function");
         StatsResult stats_result;
         auto status = calc_stats_result(stats_result);
         if (status.has_value()) {
-            return status.value();
+            builder.add("error", to_json(status.value()));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
 
         std::string result;
@@ -502,19 +509,24 @@ public:
                 argument_names.emplace_back(fmt::format("x{}", i));
             }
         } else if (argument_names.size() != _params.num_variables() + 1) {
-            return fmt::format("Size of argument_names should be {}, but get {}", _params.num_variables() + 1,
-                               argument_names.size());
+            builder.add("error", to_json(fmt::format("Size of argument_names should be {}, but get {}",
+                                                     _params.num_variables() + 1, argument_names.size())));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
         result += "\nCall:\n  lm( formula = ";
-        result += argument_names[0];
-        result += " ~";
+        std::string formula = argument_names[0] + " ~";
         for (size_t i = 1; i <= _params.num_variables(); ++i) {
             auto const& argument_name = argument_names[i];
             if (i > 1) {
-                result += "+";
+                formula += "+";
             }
-            result += " " + argument_name + " ";
+            formula += " " + argument_name + " ";
         }
+        result += formula;
+        builder.add("formula", to_json(formula));
+        schema.add_field("formula");
 
         result += ")\n\n";
         result += "Coefficients:\n";
@@ -522,23 +534,58 @@ public:
                   MathHelpers::to_string_with_precision("Std. Error") +
                   MathHelpers::to_string_with_precision("t value") + MathHelpers::to_string_with_precision("Pr(>|t|)") +
                   "\n";
-        if (_params.use_bias()) {
-            result += MathHelpers::to_string_with_precision("(Intercept)", 16) +
-                      MathHelpers::to_string_with_precision(stats_result.coef(stats_result.biased_size - 1, 0)) +
-                      MathHelpers::to_string_with_precision(stats_result.std(0, stats_result.biased_size - 1)) +
-                      MathHelpers::to_string_with_precision(stats_result.t_stat(0, stats_result.biased_size - 1)) +
-                      MathHelpers::to_string_with_precision(stats_result.p_value(0, stats_result.biased_size - 1)) +
-                      "\n";
-        }
+        {
+            vpack::ArrayBuilder coef_builder(&builder, "coef");
+            schema.add_field("coef");
+            schema.add_array_field("coef", "variable");
+            schema.add_array_field("coef", "estimate");
+            schema.add_array_field("coef", "stderr");
+            schema.add_array_field("coef", "t-value");
+            schema.add_array_field("coef", "p-value");
+            if (_params.use_bias()) {
+                vpack::ObjectBuilder intercept_obj_builder(&builder);
+                result += MathHelpers::to_string_with_precision("(Intercept)", 16) +
+                          MathHelpers::to_string_with_precision(stats_result.coef(stats_result.biased_size - 1, 0)) +
+                          MathHelpers::to_string_with_precision(stats_result.std(0, stats_result.biased_size - 1)) +
+                          MathHelpers::to_string_with_precision(stats_result.t_stat(0, stats_result.biased_size - 1)) +
+                          MathHelpers::to_string_with_precision(stats_result.p_value(0, stats_result.biased_size - 1)) +
+                          "\n";
+                builder.add("variable", to_json("intercept"));
+                builder.add("estimate", to_json(stats_result.coef(stats_result.biased_size - 1, 0)));
+                builder.add("stderr", to_json(stats_result.std(0, stats_result.biased_size - 1)));
+                builder.add("t-value", to_json(stats_result.t_stat(0, stats_result.biased_size - 1)));
+                builder.add("p-value", to_json(stats_result.p_value(0, stats_result.biased_size - 1)));
+            }
 
-        for (size_t i = 0; i < _params.num_variables(); ++i) {
-            std::string argument_name = argument_names[i + 1];
-            result += MathHelpers::to_string_with_precision(argument_name, 16) +
-                      MathHelpers::to_string_with_precision(stats_result.coef(i, 0)) +
-                      MathHelpers::to_string_with_precision(stats_result.std(0, i)) +
-                      MathHelpers::to_string_with_precision(stats_result.t_stat(0, i)) +
-                      MathHelpers::to_string_with_precision(stats_result.p_value(0, i)) + "\n";
+            for (size_t i = 0; i < _params.num_variables(); ++i) {
+                std::string argument_name = argument_names[i + 1];
+                result += MathHelpers::to_string_with_precision(argument_name, 16) +
+                          MathHelpers::to_string_with_precision(stats_result.coef(i, 0)) +
+                          MathHelpers::to_string_with_precision(stats_result.std(0, i)) +
+                          MathHelpers::to_string_with_precision(stats_result.t_stat(0, i)) +
+                          MathHelpers::to_string_with_precision(stats_result.p_value(0, i)) + "\n";
+                vpack::ObjectBuilder coef_obj_builder(&builder);
+                builder.add("variable", to_json(argument_name));
+                builder.add("estimate", to_json(stats_result.coef(i, 0)));
+                builder.add("stderr", to_json(stats_result.std(0, i)));
+                builder.add("t-value", to_json(stats_result.t_stat(0, i)));
+                builder.add("p-value", to_json(stats_result.p_value(0, i)));
+            }
         }
+        builder.add("residual-stderr", to_json(stats_result.standard_error));
+        builder.add("df", to_json(stats_result.df));
+        builder.add("r-squared", to_json(stats_result.rows_required));
+        builder.add("adjusted-r-squared", to_json(stats_result.adjusted_rows_required));
+        builder.add("f-statistic", to_json(stats_result.f_statistic));
+        builder.add("num-variables", to_json(stats_result.k));
+        builder.add("f-value", to_json(stats_result.f_value));
+        schema.add_field("residual-stderr");
+        schema.add_field("df");
+        schema.add_field("r-squared");
+        schema.add_field("adjusted-r-squared");
+        schema.add_field("f-statistic");
+        schema.add_field("num-variables");
+        schema.add_field("f-value");
         result += "\nResidual standard error: " + std::to_string(stats_result.standard_error) + " on " +
                   std::to_string(stats_result.df) + " degrees of freedom\n";
         result += "Multiple R-squared: " + std::to_string(stats_result.rows_required) +
@@ -546,7 +593,8 @@ public:
         result += "F-statistic: " + std::to_string(stats_result.f_statistic) + " on " + std::to_string(stats_result.k) +
                   " and " + std::to_string(stats_result.df) + " DF,  p-value: " + std::to_string(stats_result.f_value) +
                   "\n";
-        return result;
+        builder.add("schema", to_json(schema.print()));
+        builder.add("summary", to_json(result));
     }
 
 private:
@@ -731,8 +779,11 @@ public:
             JsonValue result_json(slice);
             down_cast<OlsModelColumnType&>(*to).append(std::move(result_json));
         } else {
-            auto result_string = this->data(state).get_result();
-            down_cast<OlsResultColumnType&>(*to).append(std::move(result_string));
+            vpack::Builder result_builder;
+            this->data(state).get_result(result_builder, get_name());
+            auto slice = result_builder.slice();
+            JsonValue result_json(slice);
+            down_cast<JsonColumn&>(*to).append(std::move(result_json));
         }
     }
 

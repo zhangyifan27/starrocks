@@ -105,13 +105,22 @@ public:
         return size;
     }
 
-    std::string get_result() const {
+    void get_result(vpack::Builder& builder) const {
+        vpack::ObjectBuilder obj_builder(&builder);
+        builder.add("causal-function", to_json(AllInSqlFunctions::srm));
+        JsonSchemaFormatter schema;
+        schema.add_field("causal-function");
         if (_group2sum.size() != _ratios.size()) {
-            return fmt::format("Logical Error: the number of groups({}) must equal to the number of ratios({}).",
-                               _group2sum.size(), _ratios.size());
+            builder.add("error", to_json("the number of groups must equal to the number of ratios."));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
         if (_group2sum.empty()) {
-            return "Logical Error: empty table";
+            builder.add("error", to_json("empty table"));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
         std::vector<double> f_obs, f_exp;
         double f_obs_sum = 0;
@@ -121,12 +130,18 @@ public:
         }
         double ratio_sum = std::reduce(_ratios.begin(), _ratios.end(), 0.);
         if (fabs(ratio_sum) <= 1e-6) {
-            return fmt::format("sum of ratio({}) must not equal to zero!", ratio_sum);
+            builder.add("error", to_json(fmt::format("sum of ratio({}) must not equal to zero!", ratio_sum)));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
         for (auto& ratio : _ratios) {
             double exp = ratio / ratio_sum * f_obs_sum;
             if (exp <= 1e-6) {
-                return fmt::format("f_exp({}) should not contain zeros or negative.", exp);
+                builder.add("error", to_json(fmt::format("f_exp({}) should not contain zeros or negative.", exp)));
+                schema.add_field("error");
+                builder.add("schema", to_json(schema.print()));
+                return;
             }
             f_exp.emplace_back(exp);
         }
@@ -134,7 +149,10 @@ public:
         double chisquare = 0;
         for (size_t i = 0; i < f_obs.size(); i++) chisquare += (f_obs[i] - f_exp[i]) * (f_obs[i] - f_exp[i]) / f_exp[i];
         if (chisquare <= 1e-6) {
-            return fmt::format("chisquare({}) should not equal to zero!", chisquare);
+            builder.add("error", to_json(fmt::format("chisquare({}) should not equal to zero!", chisquare)));
+            schema.add_field("error");
+            builder.add("schema", to_json(schema.print()));
+            return;
         }
         double dof = f_obs.size() - 0 - 1;
         p_value = 1 - boost::math::cdf(boost::math::chi_squared{dof}, chisquare);
@@ -143,18 +161,32 @@ public:
                << MathHelpers::to_string_with_precision("groupname") << MathHelpers::to_string_with_precision("f_obs")
                << MathHelpers::to_string_with_precision("ratio") << MathHelpers::to_string_with_precision("chisquare")
                << MathHelpers::to_string_with_precision("p-value") << "\n";
+
         size_t pos = 0;
         for (const auto& [group, ob] : _group2sum) {
             result << MathHelpers::to_string_with_precision(group) << MathHelpers::to_string_with_precision(ob)
                    << MathHelpers::to_string_with_precision(_ratios[pos]);
+            vpack::ObjectBuilder group_obj_builder(&builder, "group" + std::to_string(pos));
+            schema.add_field("group" + std::to_string(pos));
+            builder.add("groupname", to_json(group));
+            schema.add_field("group" + std::to_string(pos), "groupname");
+            builder.add("f_obs", to_json(ob));
+            schema.add_field("group" + std::to_string(pos), "f_obs");
+            builder.add("ratio", to_json(_ratios[pos]));
+            schema.add_field("group" + std::to_string(pos), "ratio");
             if (!pos) {
                 result << MathHelpers::to_string_with_precision(chisquare)
                        << MathHelpers::to_string_with_precision(p_value);
+                builder.add("chisquare", to_json(chisquare));
+                schema.add_field("group" + std::to_string(pos), "chisquare");
+                builder.add("p-value", to_json(p_value));
+                schema.add_field("group" + std::to_string(pos), "p-value");
             }
             result << "\n";
             pos++;
         }
-        return result.str();
+        builder.add("schema", to_json(schema.print()));
+        builder.add("summary", to_json(result.str()));
     }
 
 private:
@@ -244,7 +276,11 @@ public:
             dst_nullable_col->null_column_data().emplace_back(false);
             to = dst_nullable_col->data_column().get();
         }
-        down_cast<BinaryColumn&>(*to).append(this->data(state).get_result());
+        vpack::Builder result_builder;
+        this->data(state).get_result(result_builder);
+        auto slice = result_builder.slice();
+        JsonValue result_json(slice);
+        down_cast<JsonColumn&>(*to).append(std::move(result_json));
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,

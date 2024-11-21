@@ -14,6 +14,8 @@
 
 #pragma once
 
+#include <velocypack/Builder.h>
+
 #include <cctype>
 #include <cmath>
 #include <ios>
@@ -26,6 +28,7 @@
 #include "delta_method.h"
 #include "exprs/agg/aggregate.h"
 #include "exprs/agg/ttest_common.h"
+#include "exprs/all_in_sql_functions.h"
 #include "exprs/function_helper.h"
 #include "exprs/helpers/serialize_helpers.hpp"
 #include "gutil/casts.h"
@@ -38,7 +41,7 @@ using Ttests2SampDataMuColumnType = RunTimeColumnType<TYPE_DOUBLE>;
 using Ttests2SampDataAlphaColumnType = RunTimeColumnType<TYPE_DOUBLE>;
 using Ttests2SampDataArrayColumnType = RunTimeColumnType<TYPE_ARRAY>;
 using Ttests2SampDataElementColumnType = RunTimeColumnType<TYPE_DOUBLE>;
-using Ttests2SampTreatmentColumnType = RunTimeColumnType<TYPE_INT>;
+using Ttests2SampTreatmentColumnType = RunTimeColumnType<TYPE_BIGINT>;
 using Ttests2SampResultColumnType = RunTimeColumnType<TYPE_VARCHAR>;
 
 class Ttests2SampParams {
@@ -222,13 +225,18 @@ public:
         return size;
     }
 
-    std::string get_ttest_result() const {
+    void get_ttest_result(vpack::Builder& builder) const {
+        vpack::ObjectBuilder obj_builder(&builder);
+        builder.add("causal-function", to_json(AllInSqlFunctions::ttests_2samp));
         if (is_uninitialized()) {
-            return fmt::format("Internal error: ttest agg state is uninitialized.");
+            builder.add("error", to_json("ttest agg state is uninitialized."));
+            return;
         }
         for (auto const& [treatment, stats] : all_stats) {
             if (stats.count() <= 1) {
-                return fmt::format("count({}) of group({}) should be greater than 1.", stats.count(), treatment);
+                builder.add("error", to_json(fmt::format("count({}) of group({}) should be greater than 1.",
+                                                         stats.count(), treatment)));
+                return;
             }
         }
 
@@ -246,56 +254,80 @@ public:
         result_ss << MathHelpers::to_string_with_precision("upper");
         result_ss << "\n";
 
-        for (auto iter0 = all_stats.begin(); iter0 != all_stats.end(); ++iter0) {
-            auto const& [control, delta_method_stats0] = *iter0;
-            for (auto iter1 = std::next(iter0); iter1 != all_stats.end(); ++iter1) {
-                auto const& [treatment, delta_method_stats1] = *iter1;
+        bool is_error = false;
+        std::string err_msg = "";
+        {
+            vpack::ArrayBuilder array_builder(&builder, "results");
+            for (auto iter0 = all_stats.begin(); iter0 != all_stats.end() && !is_error; ++iter0) {
+                auto const& [control, delta_method_stats0] = *iter0;
+                for (auto iter1 = std::next(iter0); iter1 != all_stats.end(); ++iter1) {
+                    vpack::ObjectBuilder group_builder(&builder);
+                    auto const& [treatment, delta_method_stats1] = *iter1;
 
-                DeltaMethodStats delta_method_stats;
-                delta_method_stats.init(ttest_params.num_variables());
-                delta_method_stats.merge(delta_method_stats0);
-                delta_method_stats.merge(delta_method_stats1);
+                    DeltaMethodStats delta_method_stats;
+                    delta_method_stats.init(ttest_params.num_variables());
+                    delta_method_stats.merge(delta_method_stats0);
+                    delta_method_stats.merge(delta_method_stats1);
 
-                double mean0 = 0, mean1 = 0, var0 = 0, var1 = 0;
+                    double mean0 = 0, mean1 = 0, var0 = 0, var1 = 0;
 
-                if (!TtestCommon::calc_means_and_vars(
-                            ttest_params.Y_expression(), ttest_params.cuped_expression(), ttest_params.num_variables(),
-                            delta_method_stats0.count(), delta_method_stats1.count(), delta_method_stats0.means(),
-                            delta_method_stats1.means(), delta_method_stats.means(), delta_method_stats0.cov_matrix(),
-                            delta_method_stats1.cov_matrix(), delta_method_stats.cov_matrix(), mean0, mean1, var0,
-                            var1)) {
-                    return "InvertMatrix failed. some variables in the table are perfectly collinear.";
+                    if (!TtestCommon::calc_means_and_vars(
+                                ttest_params.Y_expression(), ttest_params.cuped_expression(),
+                                ttest_params.num_variables(), delta_method_stats0.count(), delta_method_stats1.count(),
+                                delta_method_stats0.means(), delta_method_stats1.means(), delta_method_stats.means(),
+                                delta_method_stats0.cov_matrix(), delta_method_stats1.cov_matrix(),
+                                delta_method_stats.cov_matrix(), mean0, mean1, var0, var1)) {
+                        is_error = true;
+                        err_msg = "InvertMatrix failed. some variables in the table are perfectly collinear.";
+                        break;
+                    }
+
+                    double stderr_var = std::sqrt(var0 + var1);
+
+                    if (!std::isfinite(stderr_var)) {
+                        is_error = true;
+                        err_msg = fmt::format("stderr({}) is an abnormal float value, please check your data.",
+                                              stderr_var);
+                        break;
+                    }
+
+                    double estimate = mean1 - mean0;
+                    double t_stat = estimate / stderr_var;
+                    size_t count = delta_method_stats0.count() + delta_method_stats1.count();
+
+                    double p_value = TtestCommon::calc_pvalue(t_stat, ttest_params.alternative());
+                    auto [lower, upper] = TtestCommon::calc_confidence_interval(
+                            estimate, stderr_var, count, ttest_params.alpha(), ttest_params.alternative());
+
+                    result_ss << MathHelpers::to_string_with_precision(control);
+                    result_ss << MathHelpers::to_string_with_precision(treatment);
+                    result_ss << MathHelpers::to_string_with_precision(mean0);
+                    result_ss << MathHelpers::to_string_with_precision(mean1);
+                    result_ss << MathHelpers::to_string_with_precision(estimate);
+                    result_ss << MathHelpers::to_string_with_precision(stderr_var);
+                    result_ss << MathHelpers::to_string_with_precision(t_stat);
+                    result_ss << MathHelpers::to_string_with_precision(p_value);
+                    result_ss << MathHelpers::to_string_with_precision(lower);
+                    result_ss << MathHelpers::to_string_with_precision(upper);
+                    result_ss << "\n";
+                    builder.add("control", to_json(control));
+                    builder.add("treatment", to_json(treatment));
+                    builder.add("mean0", to_json(mean0));
+                    builder.add("mean1", to_json(mean1));
+                    builder.add("estimate", to_json(estimate));
+                    builder.add("stderr", to_json(stderr_var));
+                    builder.add("t-statistic", to_json(t_stat));
+                    builder.add("p-value", to_json(p_value));
+                    builder.add("lower", to_json(lower));
+                    builder.add("upper", to_json(upper));
                 }
-
-                double stderr_var = std::sqrt(var0 + var1);
-
-                if (!std::isfinite(stderr_var)) {
-                    return fmt::format("stderr({}) is an abnormal float value, please check your data.", stderr_var);
-                }
-
-                double estimate = mean1 - mean0;
-                double t_stat = estimate / stderr_var;
-                size_t count = delta_method_stats0.count() + delta_method_stats1.count();
-
-                double p_value = TtestCommon::calc_pvalue(t_stat, ttest_params.alternative());
-                auto [lower, upper] = TtestCommon::calc_confidence_interval(
-                        estimate, stderr_var, count, ttest_params.alpha(), ttest_params.alternative());
-
-                result_ss << MathHelpers::to_string_with_precision(control);
-                result_ss << MathHelpers::to_string_with_precision(treatment);
-                result_ss << MathHelpers::to_string_with_precision(mean0);
-                result_ss << MathHelpers::to_string_with_precision(mean1);
-                result_ss << MathHelpers::to_string_with_precision(estimate);
-                result_ss << MathHelpers::to_string_with_precision(stderr_var);
-                result_ss << MathHelpers::to_string_with_precision(t_stat);
-                result_ss << MathHelpers::to_string_with_precision(p_value);
-                result_ss << MathHelpers::to_string_with_precision(lower);
-                result_ss << MathHelpers::to_string_with_precision(upper);
-                result_ss << "\n";
             }
         }
-
-        return result_ss.str();
+        if (is_error) {
+            builder.add("error", to_json(err_msg));
+            return;
+        }
+        builder.add("summary", to_json(result_ss.str()));
     }
 
 private:
@@ -457,13 +489,11 @@ public:
             dst_nullable_col->null_column_data().emplace_back(false);
             to = dst_nullable_col->data_column().get();
         }
-        std::string result;
-        if (this->data(state).is_uninitialized()) {
-            result = "Null";
-        } else {
-            result = this->data(state).get_ttest_result();
-        }
-        down_cast<Ttests2SampResultColumnType*>(to)->append(result);
+        vpack::Builder result_builder;
+        this->data(state).get_ttest_result(result_builder);
+        auto slice = result_builder.slice();
+        JsonValue result_json(slice);
+        down_cast<JsonColumn&>(*to).append(std::move(result_json));
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,

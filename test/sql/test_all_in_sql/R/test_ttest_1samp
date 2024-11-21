@@ -49,30 +49,30 @@ select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from ttest_1samp_test_
 
 select ttest_1samp('x1/x2', 'less', 0, [numerator, denominator]) from ttest_1samp_test_tbl;
 -- result:
-[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*814.455640\s*35.154624\s*23.167810\s*1.000000\s*-inf\s*872.279918
+[LOOSE]{"causal-function": "ttest_1samp", "estimate": 814.4556396877344, "lower": "-inf", "p-value": 1, "schema": "{\n    causal-function,\n    estimate,\n    stderr,\n    t-statistic,\n    p-value,\n    lower,\n    upper,\n    summary\n  }", "stderr": 35.154624098844856, "summary": "\nestimate    stderr      t-statistic p-value     lower       upper       \n814.455640  35.154624   23.167810   1.000000    -inf        872.279918  \n", "t-statistic": 23.167809657065757, "upper": 872.2799181744483}
 -- !result
 
 select ttest_1samp('x1/x2', 'two-sided', 0, [numerator, denominator]) from ttest_1samp_test_tbl;
 -- result:
-[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*814.455640\s*35.154624\s*23.167810\s*0.000000\s*745.553737\s*883.357542
+[LOOSE]{"causal-function": "ttest_1samp", "estimate": 814.4556396877344, "lower": 745.5537374246032, "p-value": 0, "schema": "{\n    causal-function,\n    estimate,\n    stderr,\n    t-statistic,\n    p-value,\n    lower,\n    upper,\n    summary\n  }", "stderr": 35.154624098844856, "summary": "\nestimate    stderr      t-statistic p-value     lower       upper       \n814.455640  35.154624   23.167810   0.000000    745.553737  883.357542  \n", "t-statistic": 23.167809657065757, "upper": 883.3575419508657}
 -- !result
 
 select ttest_1samp('x1/x2', 'two-sided', 1, [numerator, denominator]) from ttest_1samp_test_tbl;
 -- result:
-[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*813.455640\s*35.154624\s*23.139364\s*0.000000\s*744.553737\s*882.357542
+[LOOSE]{"causal-function": "ttest_1samp", "estimate": 813.4556396877344, "lower": 744.5537374246032, "p-value": 0, "schema": "{\n    causal-function,\n    estimate,\n    stderr,\n    t-statistic,\n    p-value,\n    lower,\n    upper,\n    summary\n  }", "stderr": 35.154624098844856, "summary": "\nestimate    stderr      t-statistic p-value     lower       upper       \n813.455640  35.154624   23.139364   0.000000    744.553737  882.357542  \n", "t-statistic": 23.139363897065927, "upper": 882.3575419508657}
 -- !result
 
 select ttest_1samp('x1/x2', 'greater', 1.111, [numerator, denominator]) from ttest_1samp_test_tbl;
 -- result:
-[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*813.344640\s*35.154624\s*23.136206\s*0.000000\s*755.520361\s*inf 
+[LOOSE]{"causal-function": "ttest_1samp", "estimate": 813.3446396877345, "lower": 755.5203612010206, "p-value": 0, "schema": "{\n    causal-function,\n    estimate,\n    stderr,\n    t-statistic,\n    p-value,\n    lower,\n    upper,\n    summary\n  }", "stderr": 35.154624098844856, "summary": "\nestimate    stderr      t-statistic p-value     lower       upper       \n813.344640  35.154624   23.136206   0.000000    755.520361  inf         \n", "t-statistic": 23.136206417705946, "upper": "inf"}
 -- !result
 
 select ttest_1samp('x1/x2', 'less', 1.111, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5') from ttest_1samp_test_tbl;
 -- result:
-[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*813.344640\s*34.872044\s*23.323687\s*1.000000\s*-inf\s*870.704114
+[LOOSE]{"causal-function": "ttest_1samp", "estimate": 813.3446396877345, "lower": "-inf", "p-value": 1, "schema": "{\n    causal-function,\n    estimate,\n    stderr,\n    t-statistic,\n    p-value,\n    lower,\n    upper,\n    summary\n  }", "stderr": 34.872043526899745, "summary": "\nestimate    stderr      t-statistic p-value     lower       upper       \n813.344640  34.872044   23.323687   1.000000    -inf        870.704114  \n", "t-statistic": 23.323687327366784, "upper": 870.7041139529284}
 -- !result
 
 select ttest_1samp('x1/x2', 'less', 1.111, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95) from ttest_1samp_test_tbl;
 -- result:
-[REGEX]\s*estimate\s*stderr\s*t-statistic\s*p-value\s*lower\s*upper\s*813.344640\s*34.872044\s*23.323687\s*1.000000\s*-inf\s*755.985165
+[LOOSE]{"causal-function": "ttest_1samp", "estimate": 813.3446396877345, "lower": "-inf", "p-value": 1, "schema": "{\n    causal-function,\n    estimate,\n    stderr,\n    t-statistic,\n    p-value,\n    lower,\n    upper,\n    summary\n  }", "stderr": 34.872043526899745, "summary": "\nestimate    stderr      t-statistic p-value     lower       upper       \n813.344640  34.872044   23.323687   1.000000    -inf        755.985165  \n", "t-statistic": 23.323687327366784, "upper": 755.9851654225405}
 -- !result
