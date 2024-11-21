@@ -190,6 +190,7 @@ public final class MetricRepo {
 
     public static GaugeMetricImpl<Long> GAUGE_ENCRYPTION_KEY_NUM;
 
+    public static GaugeMetricImpl<Long> GAUGE_ROUTINE_LOAD_IDLE_SLOT_NUM;
     public static List<GaugeMetricImpl<Long>> GAUGE_ROUTINE_LOAD_LAGS;
 
     public static List<GaugeMetricImpl<Long>> GAUGE_MEMORY_USAGE_STATS;
@@ -365,6 +366,11 @@ public final class MetricRepo {
                 "encryption_key_num", MetricUnit.NOUNIT, "number of encryption keys in key manager");
         GAUGE_ENCRYPTION_KEY_NUM.setValue(0L);
         STARROCKS_METRIC_REGISTER.addMetric(GAUGE_ENCRYPTION_KEY_NUM);
+
+        GAUGE_ROUTINE_LOAD_IDLE_SLOT_NUM = new GaugeMetricImpl<>("routine_load_idle_slot_num", MetricUnit.OPERATIONS,
+                "idle slot num for routine load");
+        GAUGE_ROUTINE_LOAD_IDLE_SLOT_NUM.setValue(0L);
+        STARROCKS_METRIC_REGISTER.addMetric(GAUGE_ROUTINE_LOAD_IDLE_SLOT_NUM);
 
         GAUGE_QUERY_LATENCY_MEAN =
                 new GaugeMetricImpl<>("query_latency", MetricUnit.MILLISECONDS, "mean of query latency");
