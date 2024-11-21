@@ -21,13 +21,10 @@ import com.google.gson.annotations.SerializedName;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.FeConstants;
 import com.starrocks.common.proc.BaseProcResult;
-import org.apache.commons.codec.binary.Hex;
 
-import java.io.InputStream;
-import java.net.URL;
-import java.net.URLConnection;
-import java.security.MessageDigest;
 import java.util.Map;
+
+import static com.starrocks.utils.MD5Utils.computeChecksum;
 
 /*
  * External JDBC resource for JDBC table query
@@ -83,22 +80,7 @@ public class JDBCResource extends Resource {
             return;
         }
         try {
-            URL url = new URL(getProperty(DRIVER_URL));
-            URLConnection urlConnection = url.openConnection();
-            InputStream inputStream = urlConnection.getInputStream();
-
-            MessageDigest digest = MessageDigest.getInstance("MD5");
-            byte[] buf = new byte[4096];
-            int bytesRead = 0;
-            do {
-                bytesRead = inputStream.read(buf);
-                if (bytesRead < 0) {
-                    break;
-                }
-                digest.update(buf, 0, bytesRead);
-            } while (true);
-
-            String checkSum = Hex.encodeHexString(digest.digest());
+            String checkSum = computeChecksum(getProperty(DRIVER_URL));
             configs.put(CHECK_SUM, checkSum);
         } catch (Exception e) {
             throw new DdlException("Cannot get driver from url: " + getProperty(DRIVER_URL));

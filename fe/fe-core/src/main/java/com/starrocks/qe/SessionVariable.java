@@ -3870,6 +3870,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.enableStrictType = val;
     }
 
+    @VarAttr(name = ENABLE_THIVE_FUNCTION, flag = VariableMgr.INVISIBLE)
+    private boolean enableThiveFunction = false;
+
+    public boolean isEnableThiveFunction() {
+        return enableThiveFunction;
+    }
+
+    public void setEnableThiveFunction(boolean val) {
+        this.enableThiveFunction = val;
+    }
+
     public boolean getEnablePlanValidation() {
         return this.enablePlanValidation;
     }

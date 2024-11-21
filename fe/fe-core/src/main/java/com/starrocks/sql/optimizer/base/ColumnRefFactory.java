@@ -21,7 +21,9 @@ import com.starrocks.analysis.CaseExpr;
 import com.starrocks.analysis.CastExpr;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.FunctionCallExpr;
+import com.starrocks.analysis.FunctionName;
 import com.starrocks.analysis.SlotRef;
+import com.starrocks.analysis.TimestampArithmeticExpr;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
@@ -64,6 +66,11 @@ public class ColumnRefFactory {
             nameHint = "case";
         } else if (expression instanceof CastExpr) {
             nameHint = "cast";
+        } else if (expression instanceof TimestampArithmeticExpr) {
+            FunctionName fnName = ((TimestampArithmeticExpr) expression).getFnName();
+            if (fnName != null) {
+                nameHint = fnName.toString();
+            }
         }
         return create(nextId++, nameHint, type, nullable, false);
     }

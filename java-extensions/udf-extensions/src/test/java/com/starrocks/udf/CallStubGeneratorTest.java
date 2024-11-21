@@ -106,7 +106,7 @@ public class CallStubGeneratorTest {
         SumStringConcat.State state = new SumStringConcat.State();
 
         int testSize = 1000;
-        String expect = "";
+        StringBuilder expect = new StringBuilder();
 
         String[] inputs1 = new String[testSize];
         Integer[] inputs2 = new Integer[testSize];
@@ -114,11 +114,11 @@ public class CallStubGeneratorTest {
         for (int i = 0; i < testSize; i++) {
             inputs1[i] = i + "";
             inputs2[i] = i;
-            expect += inputs1[i] + inputs2[i];
+            expect.append(inputs1[i]).append(inputs2[i]);
         }
 
         batchCall.invoke(null, testSize, concat, state, inputs1, inputs2);
-        Assertions.assertEquals(expect, state.val);
+        Assertions.assertEquals(expect.toString(), state.val);
     }
 
     public static class ScalarAdd {

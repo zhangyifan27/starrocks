@@ -125,6 +125,7 @@ import java.util.function.Consumer;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
+import static com.starrocks.connector.thive.ThiveUdfUtils.getThiveUdfFunction;
 import static com.starrocks.sql.analyzer.AnalyticAnalyzer.verifyAnalyticExpression;
 import static com.starrocks.sql.common.ErrorMsgProxy.PARSER_ERROR_MSG;
 
@@ -808,6 +809,20 @@ public class ExpressionAnalyzer {
 
         @Override
         public Void visitTimestampArithmeticExpr(TimestampArithmeticExpr node, Scope scope) {
+            if (node.getFnName() != null && node.getFnName().isThiveFunction()) {
+                Type[] argumentTypes = node.getChildren().stream().map(Expr::getType)
+                        .toArray(Type[]::new);
+                Function fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                if (fn == null) {
+                    String msg = String.format("No matching function in thive udf with signature: %s(%s)",
+                            node.getFnName().getFunction(),
+                            Arrays.stream(argumentTypes).map(Type::toSql).collect(Collectors.joining(", ")));
+                    throw new SemanticException(msg, node.getPos());
+                }
+                node.setType(fn.getReturnType());
+                node.setFn(fn);
+                return null;
+            }
             node.setChild(0, TypeManager.addCastExpr(node.getChild(0), Type.DATETIME));
 
             String funcOpName;
@@ -1030,12 +1045,25 @@ public class ExpressionAnalyzer {
 
             // throw exception direct
             checkFunction(fnName, node, argumentTypes);
+            if (node.getFnName().isThiveFunction()) {
+                fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                if (fn == null) {
+                    String msg = String.format("No matching function in thive udf with signature: %s(%s)", fnName,
+                            node.getParams().isStar() ? "*" :
+                                    Arrays.stream(argumentTypes).map(Type::toSql).collect(Collectors.joining(", ")));
+                    throw new SemanticException(msg, node.getPos());
+                }
+                node.setFn(fn);
+                node.setType(fn.getReturnType());
+                FunctionAnalyzer.analyze(node);
+                return null;
+            }
             if (fnName.equalsIgnoreCase("typeof") && argumentTypes.length == 1) {
                 // For the typeof function, the parameter type of the function is the result of this function.
-                // At this time, the parameter type has been obtained. You can directly replace the current 
-                // function with StringLiteral. However, since the parent node of the current node in ast 
-                // cannot be obtained, this cannot be done directly. Replacement, here the StringLiteral is 
-                // stored in the parameter of the function, so that the StringLiteral can be obtained in the 
+                // At this time, the parameter type has been obtained. You can directly replace the current
+                // function with StringLiteral. However, since the parent node of the current node in ast
+                // cannot be obtained, this cannot be done directly. Replacement, here the StringLiteral is
+                // stored in the parameter of the function, so that the StringLiteral can be obtained in the
                 // subsequent rule rewriting, and then the typeof can be replaced.
                 Type originType = argumentTypes[0];
                 argumentTypes[0] = Type.STRING;

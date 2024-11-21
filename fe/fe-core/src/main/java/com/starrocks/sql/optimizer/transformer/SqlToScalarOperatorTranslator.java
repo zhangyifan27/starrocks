@@ -541,7 +541,7 @@ public final class SqlToScalarOperatorTranslator {
                 arguments.add(visit(argument, context.clone(node)));
             }
 
-            return new CallOperator(node.getFn().getFunctionName().getFunction(), node.getType(), arguments,
+            return new CallOperator(node.getFn().getFunctionName().toString(), node.getType(), arguments,
                     node.getFn());
         }
 

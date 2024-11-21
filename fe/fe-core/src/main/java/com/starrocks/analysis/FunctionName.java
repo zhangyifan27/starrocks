@@ -36,6 +36,8 @@ import java.util.Objects;
 public class FunctionName implements Writable {
     public static final String GLOBAL_UDF_DB = "__global_udf_db__";
 
+    public static final String THIVE_UDF_DB = "__thive_udf_db_";
+
     @SerializedName(value = "db")
     private String db_;
     @SerializedName(value = "fn")
@@ -88,8 +90,16 @@ public class FunctionName implements Writable {
         return GLOBAL_UDF_DB.equals(db_);
     }
 
+    public boolean isThiveFunction() {
+        return THIVE_UDF_DB.equals(db_);
+    }
+
     public void setAsGlobalFunction() {
         db_ = GLOBAL_UDF_DB;
+    }
+
+    public void setAsThiveFunction() {
+        db_ = THIVE_UDF_DB;
     }
 
     @Override

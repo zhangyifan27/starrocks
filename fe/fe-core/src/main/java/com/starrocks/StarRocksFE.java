@@ -41,6 +41,7 @@ import com.starrocks.common.Config;
 import com.starrocks.common.Log4jConfig;
 import com.starrocks.common.ThreadPoolManager;
 import com.starrocks.common.Version;
+import com.starrocks.connector.thive.ThiveUdfUtils;
 import com.starrocks.ha.StateChangeExecutor;
 import com.starrocks.http.HttpServer;
 import com.starrocks.journal.Journal;
@@ -174,6 +175,9 @@ public class StarRocksFE {
             ThreadPoolManager.registerAllThreadPoolMetric();
 
             addShutdownHook();
+
+            //thive udf init
+            ThiveUdfUtils.init();
 
             LOG.info("FE started successfully");
 

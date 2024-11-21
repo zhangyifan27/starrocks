@@ -1,0 +1,4 @@
+-- name: test_date
+
+select date_format(current_timestamp - interval '1' day, '%Y%m%d');
+select date_format(current_timestamp() - interval '1' day, '%Y%m%d');

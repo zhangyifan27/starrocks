@@ -40,6 +40,8 @@
 
 namespace starrocks {
 
+constexpr const char* THIVE_UDF_DB_NAME = "__thive_udf_db_";
+
 struct UDFFunctionCallHelper {
     JavaUDFContext* fn_desc;
     JavaMethodDescriptor* call_desc;
@@ -60,6 +62,11 @@ struct UDFFunctionCallHelper {
             }
         }
 
+        ColumnPtr const_column_ptr;
+        if (fn_desc->f_db == THIVE_UDF_DB_NAME) {
+            const_column_ptr = ColumnHelper::create_const_column<TYPE_VARCHAR>(fn_desc->f_name, size);
+            input_cols.emplace_back(const_column_ptr.get());
+        }
         for (const auto& col : columns) {
             input_cols.emplace_back(col.get());
         }
@@ -69,12 +76,24 @@ struct UDFFunctionCallHelper {
         auto defer = DeferOp([env]() { env->PopLocalFrame(nullptr); });
         // convert input columns to object columns
         std::vector<jobject> input_col_objs;
-        auto st = JavaDataTypeConverter::convert_to_boxed_array(ctx, &buffers, input_cols.data(), num_cols, size,
-                                                                &input_col_objs);
+        Status st;
+        if (fn_desc->f_db == THIVE_UDF_DB_NAME) {
+            st = JavaDataTypeConverter::convert_to_boxed_array_thive(ctx, &buffers, input_cols.data(), num_cols + 1,
+                                                                     size, &input_col_objs);
+        } else {
+            st = JavaDataTypeConverter::convert_to_boxed_array(ctx, &buffers, input_cols.data(), num_cols, size,
+                                                               &input_col_objs);
+        }
         RETURN_IF_UNLIKELY(!st.ok(), ColumnHelper::create_const_null_column(size));
 
+        jobject res;
         // call UDF method
-        jobject res = helper.batch_call(fn_desc->call_stub.get(), input_col_objs.data(), input_col_objs.size(), size);
+        if (fn_desc->f_db == THIVE_UDF_DB_NAME) {
+            res = helper.batch_call(ctx, fn_desc->udf_handle.handle(), fn_desc->evaluate->method.handle(),
+                                    input_col_objs.data(), input_col_objs.size(), size);
+        } else {
+            res = helper.batch_call(fn_desc->call_stub.get(), input_col_objs.data(), input_col_objs.size(), size);
+        }
         // The ctx of the current function argument is not the same as the ctx of fn_desc->call_stub.
         // The latter is created in JavaFunctionCallExpr::prepare and used in java udf, so we should
         // use it to determine whether an exception has occurred.
@@ -94,7 +113,13 @@ struct UDFFunctionCallHelper {
         }
         auto& helper = JVMFunctionHelper::getInstance();
         DCHECK(call_desc->method_desc[0].is_box);
-        TypeDescriptor type_desc(call_desc->method_desc[0].type);
+        LogicalType type;
+        if (fn_desc->f_db == THIVE_UDF_DB_NAME) {
+            type = ctx->get_return_type().type;
+        } else {
+            type = call_desc->method_desc[0].type;
+        }
+        TypeDescriptor type_desc(type);
         auto res = ColumnHelper::create_column(type_desc, true);
         helper.get_result_from_boxed_array(ctx, type_desc.type, res.get(), result, num_rows);
         down_cast<NullableColumn*>(res.get())->update_has_null();
@@ -261,6 +286,8 @@ Status JavaFunctionCallExpr::open(RuntimeState* state, ExprContext* context,
             _func_desc = std::any_cast<std::shared_ptr<JavaUDFContext>>(desc);
         }
 
+        _func_desc->f_name = _fn.name.function_name;
+        _func_desc->f_db = _fn.name.db_name;
         _call_helper = std::make_shared<UDFFunctionCallHelper>();
         _call_helper->fn_desc = _func_desc.get();
         _call_helper->call_desc = _func_desc->evaluate.get();

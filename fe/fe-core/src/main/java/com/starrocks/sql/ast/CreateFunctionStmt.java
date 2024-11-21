@@ -35,17 +35,13 @@ import com.starrocks.common.FeConstants;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.parser.NodePosition;
 import com.starrocks.thrift.TFunctionBinaryType;
-import org.apache.commons.codec.binary.Hex;
 
 import java.io.IOException;
-import java.io.InputStream;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
 import java.net.URL;
 import java.net.URLClassLoader;
-import java.net.URLConnection;
-import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.Permission;
 import java.util.Arrays;
@@ -53,6 +49,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
+
+import static com.starrocks.utils.MD5Utils.computeChecksum;
 
 // create a user define function
 public class CreateFunctionStmt extends DdlStmt {
@@ -75,6 +73,7 @@ public class CreateFunctionStmt extends DdlStmt {
     public static final String WINDOW_UPDATE_METHOD_NAME = "windowUpdate";
     public static final String IS_ANALYTIC_NAME = "analytic";
     public static final String PROCESS_METHOD_NAME = "process";
+    public static final String JAVA_OBJECT_ARRAY_TYPE = "[Ljava.lang.Object;";
 
     private final FunctionName functionName;
     private final boolean isAggregate;
@@ -202,6 +201,9 @@ public class CreateFunctionStmt extends DdlStmt {
                 throw new AnalysisException(
                         String.format("UDF class '%s' method '%s' does not support type '%s'",
                                 clazz.getCanonicalName(), method.getName(), scalarType));
+            }
+            if (ptype.equals(Object.class) || ptype.getName().equals(JAVA_OBJECT_ARRAY_TYPE)) {
+                return;
             }
             if (!cls.equals(ptype)) {
                 throw new AnalysisException(
@@ -388,22 +390,7 @@ public class CreateFunctionStmt extends DdlStmt {
             checksum = "";
             return;
         }
-        URL url = new URL(objectFile);
-        URLConnection urlConnection = url.openConnection();
-        InputStream inputStream = urlConnection.getInputStream();
-
-        MessageDigest digest = MessageDigest.getInstance("MD5");
-        byte[] buf = new byte[4096];
-        int bytesRead = 0;
-        do {
-            bytesRead = inputStream.read(buf);
-            if (bytesRead < 0) {
-                break;
-            }
-            digest.update(buf, 0, bytesRead);
-        } while (true);
-
-        checksum = Hex.encodeHexString(digest.digest());
+        checksum = computeChecksum(objectFile);
     }
 
     private void checkStarrocksJarUdfClass() throws AnalysisException {
@@ -411,7 +398,9 @@ public class CreateFunctionStmt extends DdlStmt {
             // RETURN_TYPE evaluate(...)
             Method method = mainClass.getMethod(EVAL_METHOD_NAME, true);
             mainClass.checkMethodNonStaticAndPublic(method);
-            mainClass.checkArgumentCount(method, argsDef.getArgTypes().length);
+            if (!method.getParameterTypes()[0].getName().equals(JAVA_OBJECT_ARRAY_TYPE)) {
+                mainClass.checkArgumentCount(method, argsDef.getArgTypes().length);
+            }
             mainClass.checkReturnUdfType(method, returnType.getType());
             for (int i = 0; i < method.getParameters().length; i++) {
                 Parameter p = method.getParameters()[i];

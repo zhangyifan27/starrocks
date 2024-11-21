@@ -21,15 +21,12 @@ import com.starrocks.connector.Connector;
 import com.starrocks.connector.ConnectorContext;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.exception.StarRocksConnectorException;
-import org.apache.commons.codec.binary.Hex;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
-import java.io.InputStream;
-import java.net.URL;
-import java.net.URLConnection;
-import java.security.MessageDigest;
 import java.util.Map;
+
+import static com.starrocks.utils.MD5Utils.computeChecksum;
 
 public class JDBCConnector implements Connector {
 
@@ -49,7 +46,7 @@ public class JDBCConnector implements Connector {
         validate(JDBCResource.PASSWORD);
         validate(JDBCResource.DRIVER_URL);
 
-        // CHECK_SUM used to check the `Dirver` file's integrity in `be`, we only compute it when creating catalog,
+        // CHECK_SUM used to check the `Driver` file's integrity in `be`, we only compute it when creating catalog,
         // and put it into properties and then persisted, when `fe` replay create catalog, we can skip it.
         if (this.properties.get(JDBCResource.CHECK_SUM) == null) {
             computeDriverChecksum();
@@ -65,26 +62,11 @@ public class JDBCConnector implements Connector {
 
     private void computeDriverChecksum() {
         if (FeConstants.runningUnitTest) {
-            // skip checking checksun when running ut
+            // skip checking checksum when running ut
             return;
         }
         try {
-            URL url = new URL(properties.get(JDBCResource.DRIVER_URL));
-            URLConnection urlConnection = url.openConnection();
-            InputStream inputStream = urlConnection.getInputStream();
-
-            MessageDigest digest = MessageDigest.getInstance("MD5");
-            byte[] buf = new byte[4096];
-            int bytesRead = 0;
-            do {
-                bytesRead = inputStream.read(buf);
-                if (bytesRead < 0) {
-                    break;
-                }
-                digest.update(buf, 0, bytesRead);
-            } while (true);
-
-            String checkSum = Hex.encodeHexString(digest.digest());
+            String checkSum = computeChecksum(properties.get(JDBCResource.DRIVER_URL));
             properties.put(JDBCResource.CHECK_SUM, checkSum);
         } catch (Exception e) {
             throw new StarRocksConnectorException("Cannot get driver from url: " + properties.get(JDBCResource.DRIVER_URL));

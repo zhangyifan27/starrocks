@@ -453,12 +453,15 @@ public:
     [[nodiscard]] Status get_method_desc(const std::string& sign, std::vector<MethodTypeDescriptor>* desc);
     StatusOr<jobject> get_method_object(jclass clazz, const std::string& method_name);
     [[nodiscard]] Status get_udaf_method_desc(const std::string& sign, std::vector<MethodTypeDescriptor>* desc);
+    Status get_udf_method_desc(const std::string& sign, std::vector<MethodTypeDescriptor>* desc);
 };
 
 struct JavaUDFContext {
     JavaUDFContext() = default;
     ~JavaUDFContext();
 
+    std::string f_db;
+    std::string f_name;
     std::unique_ptr<ClassLoader> udf_classloader;
     std::unique_ptr<ClassAnalyzer> analyzer;
     std::unique_ptr<BatchEvaluateStub> call_stub;

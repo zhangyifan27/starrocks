@@ -1326,6 +1326,8 @@ public class Config extends ConfigBase {
 
     @ConfField
     public static boolean enable_udf = false;
+    @ConfField
+    public static String thive_udf_wrapper_url = "";
 
     @ConfField(mutable = true)
     public static boolean enable_decimal_v3 = true;

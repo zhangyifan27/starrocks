@@ -58,6 +58,13 @@ public:
     [[nodiscard]] static Status convert_to_boxed_array(FunctionContext* ctx, std::vector<DirectByteBuffer>* buffers,
                                                        const Column** columns, int num_cols, int num_rows,
                                                        std::vector<jobject>* res);
+
+    static Status convert_to_boxed_array_thive(FunctionContext* ctx, std::vector<DirectByteBuffer>* buffers,
+                                               const Column** columns, int num_cols, int num_rows,
+                                               std::vector<jobject>* res);
+
+    static jobject convert_constant_column(const Column* column, LogicalType type, int num_rows,
+                                           JVMFunctionHelper& helper);
 };
 
 template <bool handle_null>

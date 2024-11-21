@@ -727,7 +727,7 @@ StatusOr<jobject> ClassAnalyzer::get_method_object(jclass clazz, const std::stri
 }
 
 Status ClassAnalyzer::get_method_desc(const std::string& sign, std::vector<MethodTypeDescriptor>* desc) {
-    RETURN_IF_ERROR(get_udaf_method_desc(sign, desc));
+    RETURN_IF_ERROR(get_udf_method_desc(sign, desc));
     // return type may be a void type
     for (int i = 1; i < desc->size(); ++i) {
         if (desc->at(i).type == TYPE_UNKNOWN) {
@@ -745,6 +745,10 @@ Status ClassAnalyzer::get_method_desc(const std::string& sign, std::vector<Metho
 #define ADD_PRIM_METHOD_TYPE_DESC(STR, TYPE) \
     } else if (sign[i] == STR) {             \
       desc->emplace_back(MethodTypeDescriptor{TYPE, false});
+
+#define ADD_BOXED_METHOD_ARRAY_TYPE_DESC(STR, TYPE) \
+    } else if (type == STR) {                 \
+      desc->emplace_back(MethodTypeDescriptor{TYPE, true, true});
 // clang-format on
 
 Status ClassAnalyzer::get_udaf_method_desc(const std::string& sign, std::vector<MethodTypeDescriptor>* desc) {
@@ -774,6 +778,84 @@ Status ClassAnalyzer::get_udaf_method_desc(const std::string& sign, std::vector<
             ADD_BOXED_METHOD_TYPE_DESC("java/lang/Long", TYPE_BIGINT)
             ADD_BOXED_METHOD_TYPE_DESC("java/lang/Float", TYPE_FLOAT)
             ADD_BOXED_METHOD_TYPE_DESC("java/lang/Double", TYPE_DOUBLE)
+                // clang-format on
+            } else if (type == "java/lang/String") {
+                desc->emplace_back(MethodTypeDescriptor{TYPE_VARCHAR, true});
+            } else {
+                desc->emplace_back(MethodTypeDescriptor{TYPE_UNKNOWN, true});
+            }
+            continue;
+        }
+        if (false) {
+            // clang-format off
+        ADD_PRIM_METHOD_TYPE_DESC('Z', TYPE_BOOLEAN)
+        ADD_PRIM_METHOD_TYPE_DESC('B', TYPE_TINYINT)
+        ADD_PRIM_METHOD_TYPE_DESC('S', TYPE_SMALLINT)
+        ADD_PRIM_METHOD_TYPE_DESC('I', TYPE_INT)
+        ADD_PRIM_METHOD_TYPE_DESC('J', TYPE_BIGINT)
+        ADD_PRIM_METHOD_TYPE_DESC('F', TYPE_FLOAT)
+        ADD_PRIM_METHOD_TYPE_DESC('D', TYPE_DOUBLE)
+            // clang-format on
+        } else if (sign[i] == 'V') {
+            desc->emplace_back(MethodTypeDescriptor{TYPE_UNKNOWN, false});
+        } else {
+            desc->emplace_back(MethodTypeDescriptor{TYPE_UNKNOWN, false});
+        }
+    }
+
+    if (desc->size() > 1) {
+        desc->insert(desc->begin(), (*desc)[desc->size() - 1]);
+        desc->erase(desc->begin() + desc->size() - 1);
+    }
+    return Status::OK();
+}
+
+Status ClassAnalyzer::get_udf_method_desc(const std::string& sign, std::vector<MethodTypeDescriptor>* desc) {
+    for (int i = 0; i < sign.size(); ++i) {
+        if (sign[i] == '(' || sign[i] == ')') {
+            continue;
+        }
+        if (sign[i] == '[') {
+            i++;
+            if (sign[i] == 'L') {
+                int st = i + 1;
+                while (sign[i] != ';') {
+                    i++;
+                }
+                std::string type = sign.substr(st, i - st);
+                if (false) {
+                    ADD_BOXED_METHOD_ARRAY_TYPE_DESC("java/lang/Boolean", TYPE_BOOLEAN)
+                    ADD_BOXED_METHOD_ARRAY_TYPE_DESC("java/lang/Byte", TYPE_TINYINT)
+                    ADD_BOXED_METHOD_ARRAY_TYPE_DESC("java/lang/Short", TYPE_SMALLINT)
+                    ADD_BOXED_METHOD_ARRAY_TYPE_DESC("java/lang/Integer", TYPE_INT)
+                    ADD_BOXED_METHOD_ARRAY_TYPE_DESC("java/lang/Long", TYPE_BIGINT)
+                    ADD_BOXED_METHOD_ARRAY_TYPE_DESC("java/lang/Float", TYPE_FLOAT)
+                    ADD_BOXED_METHOD_ARRAY_TYPE_DESC("java/lang/Double", TYPE_DOUBLE)
+                    ADD_BOXED_METHOD_ARRAY_TYPE_DESC("java/lang/Object", TYPE_OBJECT)
+                } else if (type == "java/lang/String") {
+                    desc->emplace_back(MethodTypeDescriptor{TYPE_VARCHAR, true, true});
+                } else {
+                    desc->emplace_back(MethodTypeDescriptor{TYPE_UNKNOWN, true, true});
+                }
+                continue;
+            }
+        }
+        if (sign[i] == 'L') {
+            int st = i + 1;
+            while (sign[i] != ';') {
+                i++;
+            }
+            std::string type = sign.substr(st, i - st);
+            if (false) {
+                // clang-format off
+            ADD_BOXED_METHOD_TYPE_DESC("java/lang/Boolean", TYPE_BOOLEAN)
+            ADD_BOXED_METHOD_TYPE_DESC("java/lang/Byte", TYPE_TINYINT)
+            ADD_BOXED_METHOD_TYPE_DESC("java/lang/Short", TYPE_SMALLINT)
+            ADD_BOXED_METHOD_TYPE_DESC("java/lang/Integer", TYPE_INT)
+            ADD_BOXED_METHOD_TYPE_DESC("java/lang/Long", TYPE_BIGINT)
+            ADD_BOXED_METHOD_TYPE_DESC("java/lang/Float", TYPE_FLOAT)
+            ADD_BOXED_METHOD_TYPE_DESC("java/lang/Double", TYPE_DOUBLE)
+            ADD_BOXED_METHOD_TYPE_DESC("java/lang/Object", TYPE_OBJECT)
                 // clang-format on
             } else if (type == "java/lang/String") {
                 desc->emplace_back(MethodTypeDescriptor{TYPE_VARCHAR, true});

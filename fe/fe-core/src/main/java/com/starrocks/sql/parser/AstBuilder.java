@@ -6306,14 +6306,14 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                 }
                 IntervalLiteral intervalLiteral = (IntervalLiteral) e2;
 
-                return new TimestampArithmeticExpr(functionName, e1, intervalLiteral.getValue(),
+                return new TimestampArithmeticExpr(fnName, e1, intervalLiteral.getValue(),
                         intervalLiteral.getUnitIdentifier().getDescription(), pos);
             } else if (context.expression().size() == 3) {
                 Expr e1 = (Expr) visit(context.expression(0));
                 Expr e2 = (Expr) visit(context.expression(1));
                 Expr e3 = (Expr) visit(context.expression(2));
                 IntervalLiteral intervalLiteral = new IntervalLiteral(e2, new UnitIdentifier(((SlotRef) e1).getColumnName()));
-                return new TimestampArithmeticExpr(functionName, e3, intervalLiteral.getValue(),
+                return new TimestampArithmeticExpr(fnName, e3, intervalLiteral.getValue(),
                         intervalLiteral.getUnitIdentifier().getDescription());
             } else {
                 throw new ParsingException(PARSER_ERROR_MSG.wrongNumOfArgs(functionName), pos);

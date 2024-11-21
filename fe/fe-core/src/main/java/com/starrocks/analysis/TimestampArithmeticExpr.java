@@ -60,7 +60,7 @@ public class TimestampArithmeticExpr extends Expr {
     }
 
     // Set for function call-like arithmetic.
-    private final String funcName;
+    private final FunctionName fnName;
     // Keep the original string passed in the c'tor to resolve
     // ambiguities with other uses of IDENT during query parsing.
     private final String timeUnitIdent;
@@ -70,13 +70,21 @@ public class TimestampArithmeticExpr extends Expr {
     private TimeUnit timeUnit;
 
     // C'tor for function-call like arithmetic, e.g., 'date_add(a, interval b year)'.
-    public TimestampArithmeticExpr(String funcName, Expr e1, Expr e2, String timeUnitIdent) {
-        this(funcName, e1, e2, timeUnitIdent, NodePosition.ZERO);
+    public TimestampArithmeticExpr(String fnName, Expr e1, Expr e2, String timeUnitIdent) {
+        this(new FunctionName(fnName), e1, e2, timeUnitIdent, NodePosition.ZERO);
     }
 
-    public TimestampArithmeticExpr(String funcName, Expr e1, Expr e2, String timeUnitIdent, NodePosition pos) {
+    public TimestampArithmeticExpr(FunctionName fnName, Expr e1, Expr e2, String timeUnitIdent) {
+        this(fnName, e1, e2, timeUnitIdent, NodePosition.ZERO);
+    }
+
+    public TimestampArithmeticExpr(String functionName, Expr e1, Expr e2, String timeUnitIdent, NodePosition pos) {
+        this(new FunctionName(functionName), e1, e2, timeUnitIdent, pos);
+    }
+
+    public TimestampArithmeticExpr(FunctionName fnName, Expr e1, Expr e2, String timeUnitIdent, NodePosition pos) {
         super(pos);
-        this.funcName = funcName.toLowerCase();
+        this.fnName = fnName;
         this.timeUnitIdent = timeUnitIdent;
         this.intervalFirst = false;
         children.add(e1);
@@ -95,7 +103,7 @@ public class TimestampArithmeticExpr extends Expr {
                                    String timeUnitIdent, boolean intervalFirst, NodePosition pos) {
         super(pos);
         Preconditions.checkState(op == Operator.ADD || op == Operator.SUBTRACT);
-        this.funcName = null;
+        this.fnName = null;
         this.op = op;
         this.timeUnitIdent = timeUnitIdent;
         this.intervalFirst = intervalFirst;
@@ -105,7 +113,7 @@ public class TimestampArithmeticExpr extends Expr {
 
     protected TimestampArithmeticExpr(TimestampArithmeticExpr other) {
         super(other);
-        funcName = other.funcName;
+        fnName = other.fnName;
         op = other.op;
         timeUnitIdent = other.timeUnitIdent;
         timeUnit = other.timeUnit;
@@ -132,7 +140,14 @@ public class TimestampArithmeticExpr extends Expr {
     }
 
     public String getFuncName() {
-        return funcName;
+        if (fnName != null) {
+            return fnName.getFunction();
+        }
+        return null;
+    }
+
+    public FunctionName getFnName() {
+        return fnName;
     }
 
     public String getTimeUnitIdent() {
@@ -146,16 +161,16 @@ public class TimestampArithmeticExpr extends Expr {
     @Override
     public String toSqlImpl() {
         StringBuilder strBuilder = new StringBuilder();
-        if (funcName != null) {
-            if (funcName.equalsIgnoreCase("TIMESTAMPDIFF") || funcName.equalsIgnoreCase("TIMESTAMPADD")) {
-                strBuilder.append(funcName).append("(");
+        if (fnName != null) {
+            if (getFuncName().equalsIgnoreCase("TIMESTAMPDIFF") || getFuncName().equalsIgnoreCase("TIMESTAMPADD")) {
+                strBuilder.append(fnName).append("(");
                 strBuilder.append(timeUnitIdent).append(", ");
                 strBuilder.append(getChild(1).toSql()).append(", ");
                 strBuilder.append(getChild(0).toSql()).append(")");
                 return strBuilder.toString();
             }
             // Function-call like version.
-            strBuilder.append(funcName).append("(");
+            strBuilder.append(fnName).append("(");
             strBuilder.append(getChild(0).toSql()).append(", ");
             strBuilder.append("INTERVAL ");
             strBuilder.append(getChild(1).toSql());

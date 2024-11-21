@@ -20,6 +20,7 @@ import java.lang.reflect.Array;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.lang.reflect.Parameter;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
@@ -52,10 +53,13 @@ public class UDFHelper {
     public static final int TYPE_VARCHAR = 17;
     public static final int TYPE_ARRAY = 19;
     public static final int TYPE_BOOLEAN = 24;
+    public static final int TYPE_OBJECT = 25;
     public static final int TYPE_TIME = 44;
     public static final int TYPE_VARBINARY = 46;
     public static final int TYPE_DATE = 50;
     public static final int TYPE_DATETIME = 51;
+
+    public static final String JAVA_OBJECT_ARRAY_TYPE = "[Ljava.lang.Object;";
 
     private static final byte[] emptyBytes = new byte[0];
 
@@ -360,31 +364,60 @@ public class UDFHelper {
     public static void getResultFromBoxedArray(int type, int numRows, Object boxedResult, long columnAddr) {
         switch (type) {
             case TYPE_BOOLEAN: {
-                getBooleanBoxedResult(numRows, (Boolean[]) boxedResult, columnAddr);
+                if (boxedResult instanceof Object[]) {
+                    getBooleanBoxedResult(numRows, getBooleanArray((Object[]) boxedResult), columnAddr);
+                } else {
+                    getBooleanBoxedResult(numRows, (Boolean[]) boxedResult, columnAddr);
+                }
                 break;
             }
             case TYPE_TINYINT: {
-                getByteBoxedResult(numRows, (Byte[]) boxedResult, columnAddr);
+                if (boxedResult instanceof Object[]) {
+                    getByteBoxedResult(numRows, getByteArray((Object[]) boxedResult), columnAddr);
+                } else {
+                    getByteBoxedResult(numRows, (Byte[]) boxedResult, columnAddr);
+                }
                 break;
             }
             case TYPE_SMALLINT: {
-                getShortBoxedResult(numRows, (Short[]) boxedResult, columnAddr);
+                if (boxedResult instanceof Object[]) {
+                    getShortBoxedResult(numRows, getShortArray((Object[]) boxedResult), columnAddr);
+
+                } else {
+                    getShortBoxedResult(numRows, (Short[]) boxedResult, columnAddr);
+                }
                 break;
             }
             case TYPE_INT: {
-                getIntBoxedResult(numRows, (Integer[]) boxedResult, columnAddr);
+                if (boxedResult instanceof Object[]) {
+                    getIntBoxedResult(numRows, getIntegerArray((Object[]) boxedResult), columnAddr);
+                } else {
+                    getIntBoxedResult(numRows, (Integer[]) boxedResult, columnAddr);
+                }
                 break;
             }
             case TYPE_FLOAT: {
-                getFloatBoxedResult(numRows, (Float[]) boxedResult, columnAddr);
+                if (boxedResult instanceof Object[]) {
+                    getFloatBoxedResult(numRows, getFloatArray((Object[]) boxedResult), columnAddr);
+                } else {
+                    getFloatBoxedResult(numRows, (Float[]) boxedResult, columnAddr);
+                }
                 break;
             }
             case TYPE_DOUBLE: {
-                getDoubleBoxedResult(numRows, (Double[]) boxedResult, columnAddr);
+                if (boxedResult instanceof Object[]) {
+                    getDoubleBoxedResult(numRows, getDoubleArray((Object[]) boxedResult), columnAddr);
+                } else {
+                    getDoubleBoxedResult(numRows, (Double[]) boxedResult, columnAddr);
+                }
                 break;
             }
             case TYPE_BIGINT: {
-                getBigIntBoxedResult(numRows, (Long[]) boxedResult, columnAddr);
+                if (boxedResult instanceof Object[]) {
+                    getBigIntBoxedResult(numRows, getLongArray((Object[]) boxedResult), columnAddr);
+                } else {
+                    getBigIntBoxedResult(numRows, (Long[]) boxedResult, columnAddr);
+                }
                 break;
             }
             case TYPE_TIME: {
@@ -406,6 +439,8 @@ public class UDFHelper {
                     getStringLargeIntResult(numRows, (BigInteger[]) boxedResult, columnAddr);
                 } else if (boxedResult instanceof String[]) {
                     getStringBoxedResult(numRows, (String[]) boxedResult, columnAddr);
+                } else if (boxedResult instanceof Object[]) {
+                    getStringBoxedResult(numRows, getStringArray((Object[]) boxedResult), columnAddr);
                 } else {
                     throw new UnsupportedOperationException("unsupported type:" + boxedResult);
                 }
@@ -421,9 +456,151 @@ public class UDFHelper {
                 }
                 break;
             }
+            case TYPE_OBJECT: {
+                if (boxedResult instanceof String[]) {
+                    getResultFromBoxedArray(TYPE_VARCHAR, numRows, boxedResult, columnAddr);
+                } else if (boxedResult instanceof Long[]) {
+                    getResultFromBoxedArray(TYPE_BIGINT, numRows, boxedResult, columnAddr);
+                } else if (boxedResult instanceof Double[]) {
+                    getResultFromBoxedArray(TYPE_DOUBLE, numRows, boxedResult, columnAddr);
+                } else if (boxedResult instanceof Float[]) {
+                    getResultFromBoxedArray(TYPE_FLOAT, numRows, boxedResult, columnAddr);
+                } else if (boxedResult instanceof Boolean[]) {
+                    getResultFromBoxedArray(TYPE_BOOLEAN, numRows, boxedResult, columnAddr);
+                } else if (boxedResult instanceof Byte[]) {
+                    getResultFromBoxedArray(TYPE_TINYINT, numRows, boxedResult, columnAddr);
+                } else if (boxedResult instanceof Short[]) {
+                    getResultFromBoxedArray(TYPE_SMALLINT, numRows, boxedResult, columnAddr);
+                } else if (boxedResult instanceof Integer[]) {
+                    getResultFromBoxedArray(TYPE_INT, numRows, boxedResult, columnAddr);
+                } else {
+                    throw new UnsupportedOperationException("unsupported type:" + boxedResult);
+                }
+                break;
+            }
             default:
                 throw new UnsupportedOperationException("unsupported type:" + type);
         }
+    }
+
+    public static String[] getStringArray(Object[] objects) {
+        String[] result = new String[objects.length];
+        for (int i = 0; i < objects.length; i++) {
+            result[i] = objects[i] == null ? null : objects[i].toString();
+        }
+        return result;
+    }
+
+    public static Integer[] getIntegerArray(Object[] objects) {
+        Integer[] result = new Integer[objects.length];
+        for (int i = 0; i < objects.length; i++) {
+            if (objects[i] == null) {
+                result[i] = null;
+            } else {
+                try {
+                    result[i] = (int) objects[i];
+                } catch (Exception e) {
+                    result[i] = Integer.parseInt(objects[i].toString());
+                }
+            }
+        }
+        return result;
+    }
+
+    public static Float[] getFloatArray(Object[] objects) {
+        Float[] result = new Float[objects.length];
+        for (int i = 0; i < objects.length; i++) {
+            if (objects[i] == null) {
+                result[i] = null;
+            } else {
+                try {
+                    result[i] = (float) objects[i];
+                } catch (Exception e) {
+                    result[i] = Float.parseFloat(objects[i].toString());
+                }
+            }
+        }
+        return result;
+    }
+
+    public static Double[] getDoubleArray(Object[] objects) {
+        Double[] result = new Double[objects.length];
+        for (int i = 0; i < objects.length; i++) {
+            if (objects[i] == null) {
+                result[i] = null;
+            } else {
+                try {
+                    result[i] = (double) objects[i];
+                } catch (Exception e) {
+                    result[i] = Double.parseDouble(objects[i].toString());
+                }
+            }
+        }
+        return result;
+    }
+
+    public static Byte[] getByteArray(Object[] objects) {
+        Byte[] result = new Byte[objects.length];
+        for (int i = 0; i < objects.length; i++) {
+            if (objects[i] == null) {
+                result[i] = null;
+            } else {
+                try {
+                    result[i] = (byte) objects[i];
+                } catch (Exception e) {
+                    result[i] = Byte.parseByte(objects[i].toString());
+                }
+            }
+        }
+        return result;
+    }
+
+    public static Boolean[] getBooleanArray(Object[] objects) {
+        Boolean[] result = new Boolean[objects.length];
+        for (int i = 0; i < objects.length; i++) {
+            if (objects[i] == null) {
+                result[i] = null;
+            } else {
+                try {
+                    result[i] = (boolean) objects[i];
+                } catch (Exception e) {
+                    result[i] = Boolean.parseBoolean(objects[i].toString());
+                }
+            }
+        }
+        return result;
+    }
+
+    public static Short[] getShortArray(Object[] objects) {
+        Short[] result = new Short[objects.length];
+        for (int i = 0; i < objects.length; i++) {
+            if (objects[i] == null) {
+                result[i] = null;
+            } else {
+                try {
+                    result[i] = (short) objects[i];
+                } catch (Exception e) {
+                    result[i] = Short.parseShort(objects[i].toString());
+                }
+            }
+        }
+        return result;
+    }
+
+    public static Long[] getLongArray(Object[] objects) {
+        Long[] result = new Long[objects.length];
+        for (int i = 0; i < objects.length; i++) {
+            if (objects[i] == null) {
+                result[i] = null;
+            } else {
+                try {
+                    result[i] = (long) objects[i];
+                } catch (Exception e) {
+                    result[i] = Long.parseLong(objects[i].toString());
+                }
+            }
+        }
+        return result;
     }
 
     // create boxed array
@@ -752,7 +929,13 @@ public class UDFHelper {
                 for (int j = 0; j < column.length; ++j) {
                     parameter[j] = inputs[j][i];
                 }
-                res[i] = method.invoke(o, parameter);
+                Class<?>[] parameters = method.getParameterTypes();
+                if (parameters.length == 1
+                        && parameters[0].getName().equals(JAVA_OBJECT_ARRAY_TYPE)) {
+                    res[i] = method.invoke(o, (Object) parameter);
+                } else {
+                    res[i] = method.invoke(o, parameter);
+                }
             }
             return res;
         } catch (InvocationTargetException e) {
