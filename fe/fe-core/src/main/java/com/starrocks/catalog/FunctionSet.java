@@ -137,6 +137,11 @@ public class FunctionSet {
     public static final String TIME_FORMAT = "time_format";
     public static final String ALIGNMENT_TIMESTAMP = "alignment_timestamp";
     public static final String SUBSTITUTE = "substitute";
+    public static final String TDW_DATE_ADD = "tdw_date_add";
+    public static final String TDW_DATE_SUB = "tdw_date_sub";
+    public static final String TDW_ADD_MONTHS = "tdw_add_months";
+    public static final String TDW_TO_DATE = "tdw_to_date";
+    public static final String TDW_TO_CHAR = "tdw_to_char";
 
     // Encryption functions:
     public static final String AES_DECRYPT = "aes_decrypt";

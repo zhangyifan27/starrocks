@@ -710,6 +710,138 @@ bool DateTimeValue::from_date_str(const char* date_str, int len) {
     return true;
 }
 
+// The interval format is that with no delimiters
+// YYYY-MM-DD HH-MM-DD.FFFFFF AM in default format
+// 0    1  2  3  4  5  6      7
+// like from_date_str but support 2011-01-10 16:45:47:164547
+// 2011-01-10 16:45:47.164547
+bool DateTimeValue::from_tdw_date_str(const char* date_str, int len) {
+    const char* ptr = date_str;
+    const char* end = date_str + len;
+    // ONLY 2, 6 can follow by a sapce
+    const static int allow_space_mask = 4 | 64;
+    const static int MAX_DATE_PARTS = 8;
+    uint32_t date_val[MAX_DATE_PARTS];
+    int32_t date_len[MAX_DATE_PARTS];
+
+    _neg = false;
+    // Skip space character
+    while (ptr < end && isspace(*ptr)) {
+        ptr++;
+    }
+    if (ptr == end || !isdigit(*ptr)) {
+        return false;
+    }
+    // Fix year length
+    const char* pos = ptr;
+    while (pos < end && (isdigit(*pos) || *pos == 'T')) {
+        pos++;
+    }
+    int year_len = 4;
+    int digits = pos - ptr;
+    bool is_interval_format = false;
+
+    // Compatible with MySQL. Shit!!!
+    // For YYYYMMDD/YYYYMMDDHHMMSS is 4 digits years
+    if (pos == end || *pos == '.') {
+        if (digits == 4 || digits == 8 || digits >= 14) {
+            year_len = 4;
+        } else {
+            year_len = 2;
+        }
+        is_interval_format = true;
+    }
+
+    int field_idx = 0;
+    int field_len = year_len;
+    while (ptr < end && isdigit(*ptr) && field_idx < MAX_DATE_PARTS - 1) {
+        const char* start = ptr;
+        int temp_val = 0;
+        bool scan_to_delim = (!is_interval_format) && (field_idx != 6);
+        while (ptr < end && isdigit(*ptr) && (scan_to_delim || field_len--)) {
+            temp_val = temp_val * 10 + (*ptr++ - '0');
+        }
+        // Imposible
+        if (temp_val > 999999L) {
+            return false;
+        }
+        date_val[field_idx] = temp_val;
+        date_len[field_idx] = ptr - start;
+        field_len = 2;
+
+        if (ptr == end) {
+            field_idx++;
+            break;
+        }
+        if (field_idx == 2 && *ptr == 'T') {
+            // YYYYMMDDTHHMMDD, skip 'T' and continue
+            ptr++;
+            field_idx++;
+            continue;
+        }
+
+        // Second part
+        if (field_idx == 5) {
+            if (*ptr == '.' || *ptr == ':') {
+                ptr++;
+                field_len = 6;
+            } else if (isdigit(*ptr)) {
+                field_idx++;
+                break;
+            }
+            field_idx++;
+            continue;
+        }
+        // escape separator
+        while (ptr < end && (ispunct(*ptr) || isspace(*ptr))) {
+            if (isspace(*ptr)) {
+                if (((1 << field_idx) & allow_space_mask) == 0) {
+                    return false;
+                }
+            }
+            ptr++;
+        }
+        field_idx++;
+    }
+    int num_field = field_idx;
+    if (num_field <= 3) {
+        _type = TIME_DATE;
+    } else {
+        _type = TIME_DATETIME;
+    }
+    if (!is_interval_format) {
+        year_len = date_len[0];
+    }
+    for (; field_idx < MAX_DATE_PARTS; ++field_idx) {
+        date_len[field_idx] = 0;
+        date_val[field_idx] = 0;
+    }
+    _year = date_val[0];
+    _month = date_val[1];
+    _day = date_val[2];
+    _hour = date_val[3];
+    _minute = date_val[4];
+    _second = date_val[5];
+    _microsecond = date_val[6];
+    if (_microsecond && date_len[6] < 6) {
+        _microsecond *= log_10_int[6 - date_len[6]];
+    }
+    if (year_len == 2) {
+        if (_year < YY_PART_YEAR) {
+            _year += 2000;
+        } else {
+            _year += 1900;
+        }
+    }
+    if (num_field < 3 || check_range()) {
+        return false;
+    }
+    if (check_date()) {
+        return false;
+    }
+    return true;
+}
+
 // [0, 101) invalid
 // [101, (YY_PART_YEAR - 1) * 10000 + 1231] for two digits year 2000 ~ 2069
 // [(YY_PART_YEAR - 1) * 10000 + 1231, YY_PART_YEAR * 10000L + 101) invalid

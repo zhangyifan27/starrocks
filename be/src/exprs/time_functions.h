@@ -790,6 +790,62 @@ public:
      */
     DEFINE_VECTORIZED_FN(make_date);
 
+    /**
+     * @param: [datevalue, days]
+     * @paramType columns: [DateColumn, IntColumn]
+     * @return BinaryColumn of TYPE_VARCHAR.
+     */
+    DEFINE_VECTORIZED_FN(tdw_date_add);
+    DEFINE_VECTORIZED_FN(tdw_date_sub);
+
+    DEFINE_VECTORIZED_FN(tdw_date_add_with_datetime);
+    DEFINE_VECTORIZED_FN(tdw_date_sub_with_datetime);
+
+    DEFINE_VECTORIZED_FN(tdw_date_add_with_str);
+    DEFINE_VECTORIZED_FN(tdw_date_sub_with_str);
+
+    /**
+     * @param: [datevalue, month]
+     * @paramType columns: [DateColumn, IntColumn]
+     * @return BinaryColumn of TYPE_VARCHAR.
+     */
+    DEFINE_VECTORIZED_FN(tdw_months_add);
+    DEFINE_VECTORIZED_FN(tdw_months_sub);
+    DEFINE_VECTORIZED_FN(tdw_months_add_with_datetime);
+    DEFINE_VECTORIZED_FN(tdw_months_sub_with_datetime);
+    DEFINE_VECTORIZED_FN(tdw_months_add_with_str);
+
+    /**
+     * @param: [str]
+     * @paramType columns: [BinaryColumn]
+     * @return BinaryColumn of TYPE_VARCHAR
+     */
+    DEFINE_VECTORIZED_FN(tdw_to_date_with_format_general);
+    DEFINE_VECTORIZED_FN(tdw_to_date_with_date);
+    DEFINE_VECTORIZED_FN(tdw_to_date_with_datetime);
+
+    /**
+     * @param: [str, formatstr]
+     * @paramType columns: [BinaryColumn, BinaryColumn]
+     * @return BinaryColumn of TYPE_VARCHAR
+     */
+    DEFINE_VECTORIZED_FN(tdw_to_date_with_format);
+
+    /**
+     * @param: [str, formatstr]
+     * @paramType columns: [BinaryColumn, BinaryColumn]
+     * @return BinaryColumn of TYPE_VARCHAR
+     */
+    DEFINE_VECTORIZED_FN(tdw_to_char_with_str);
+    DEFINE_VECTORIZED_FN(tdw_to_char_with_date);
+    DEFINE_VECTORIZED_FN(tdw_to_char_with_datetime);
+
+    DEFINE_VECTORIZED_FN(sysdate);
+    DEFINE_VECTORIZED_FN(systimestamp);
+
+    DEFINE_VECTORIZED_FN(trino_date_add_with_datetime);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_date);
+
     /** Flags for calc_week() function.  */
     constexpr static const unsigned int WEEK_MONDAY_FIRST = 1;
     constexpr static const unsigned int WEEK_YEAR = 2;
@@ -826,6 +882,19 @@ private:
 
     DEFINE_VECTORIZED_FN_TEMPLATE(_t_from_unix_with_format);
     DEFINE_VECTORIZED_FN_TEMPLATE(_t_from_unix_with_format_general);
+
+    DEFINE_VECTORIZED_FN_TEMPLATE(_tdw_to_date_with_format);
+    DEFINE_VECTORIZED_FN_TEMPLATE(_tdw_to_date_with_format_general);
+    static StatusOr<ColumnPtr> _tdw_to_date_with_date(FunctionContext* context, const starrocks::Columns& columns);
+    static StatusOr<ColumnPtr> _tdw_to_date_with_datetime(FunctionContext* context, const starrocks::Columns& columns);
+
+    static StatusOr<ColumnPtr> _tdw_date_add_with_str(FunctionContext* context, const starrocks::Columns& columns);
+    static StatusOr<ColumnPtr> _tdw_date_sub_with_str(FunctionContext* context, const starrocks::Columns& columns);
+    static StatusOr<ColumnPtr> _tdw_months_add_with_str(FunctionContext* context, const starrocks::Columns& columns);
+
+    static StatusOr<ColumnPtr> _tdw_to_char_with_str(FunctionContext* context, const starrocks::Columns& columns);
+    static StatusOr<ColumnPtr> _tdw_to_char_with_date(FunctionContext* context, const starrocks::Columns& columns);
+    static StatusOr<ColumnPtr> _tdw_to_char_with_datetime(FunctionContext* context, const starrocks::Columns& columns);
 
     template <LogicalType TIMESTAMP_TYPE>
     static StatusOr<ColumnPtr> _t_from_unix_with_format_const(std::string& format_content, FunctionContext* context,

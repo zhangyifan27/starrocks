@@ -515,7 +515,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
     private static final List<String> DATE_FUNCTIONS =
             Lists.newArrayList(FunctionSet.DATE_ADD,
                     FunctionSet.ADDDATE,
-                    FunctionSet.DATE_ADD, FunctionSet.DATE_SUB,
+                    FunctionSet.DAYS_ADD, FunctionSet.DATE_SUB,
                     FunctionSet.SUBDATE,
                     FunctionSet.DAYS_SUB);
 
@@ -6223,6 +6223,29 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
 
         FunctionName fnName = FunctionName.createFnName(fullFunctionName);
         String functionName = fnName.getFunction();
+        if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableHiveMode()) {
+            if (fullFunctionName.equalsIgnoreCase(FunctionSet.DATE_ADD)) {
+                fullFunctionName = FunctionSet.TDW_DATE_ADD;
+                fnName = FunctionName.createFnName(fullFunctionName);
+                functionName = fnName.getFunction();
+            } else if (fullFunctionName.equalsIgnoreCase(FunctionSet.DATE_SUB)) {
+                fullFunctionName = FunctionSet.TDW_DATE_SUB;
+                fnName = FunctionName.createFnName(fullFunctionName);
+                functionName = fnName.getFunction();
+            } else if (fullFunctionName.equalsIgnoreCase(FunctionSet.ADD_MONTHS)) {
+                fullFunctionName = FunctionSet.TDW_ADD_MONTHS;
+                fnName = FunctionName.createFnName(fullFunctionName);
+                functionName = fnName.getFunction();
+            } else if (fullFunctionName.equalsIgnoreCase(FunctionSet.TO_DATE)) {
+                fullFunctionName = FunctionSet.TDW_TO_DATE;
+                fnName = FunctionName.createFnName(fullFunctionName);
+                functionName = fnName.getFunction();
+            } else if (fullFunctionName.equalsIgnoreCase("to_char")) {
+                fullFunctionName = FunctionSet.TDW_TO_CHAR;
+                fnName = FunctionName.createFnName(fullFunctionName);
+                functionName = fnName.getFunction();
+            }
+        }
         if (functionName.equals(FunctionSet.TIME_SLICE) || functionName.equals(FunctionSet.DATE_SLICE)) {
             if (context.expression().size() == 2) {
                 Expr e1 = (Expr) visit(context.expression(0));

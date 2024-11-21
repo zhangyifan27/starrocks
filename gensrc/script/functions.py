@@ -551,11 +551,38 @@ vectorized_functions = [
     [50501, 'makedate', True, False, 'DATE', ['INT', 'INT'], 'TimeFunctions::make_date'],
     [50610, 'time_format', True, False, 'VARCHAR', ['TIME', 'VARCHAR'], 'TimeFunctions::time_format'],
 
+    [50801, 'tdw_date_add', True, False, 'VARCHAR', ['DATE', 'INT'], 'TimeFunctions::tdw_date_add'],
+    [50802, 'tdw_date_add', True, False, 'VARCHAR', ['DATETIME', 'INT'], 'TimeFunctions::tdw_date_add_with_datetime'],
+    [50803, 'tdw_date_add', True, False, 'VARCHAR', ['VARCHAR', 'INT'], 'TimeFunctions::tdw_date_add_with_str'],
+    [50804, 'tdw_date_sub', True, False, 'VARCHAR', ['DATE', 'INT'], 'TimeFunctions::tdw_date_sub'],
+    [50805, 'tdw_date_sub', True, False, 'VARCHAR', ['DATETIME', 'INT'], 'TimeFunctions::tdw_date_sub_with_datetime'],
+    [50806, 'tdw_date_sub', True, False, 'VARCHAR', ['VARCHAR', 'INT'], 'TimeFunctions::tdw_date_sub_with_str'],
+    [50807, 'tdw_add_months', True, False, 'VARCHAR', ['DATE', 'INT'], 'TimeFunctions::tdw_months_add'],
+    [50808, 'tdw_add_months', True, False, 'VARCHAR', ['DATETIME', 'INT'], 'TimeFunctions::tdw_months_add_with_datetime'],
+    [50809, 'tdw_add_months', True, False, 'VARCHAR', ['VARCHAR', 'INT'], 'TimeFunctions::tdw_months_add_with_str'],
+
+    [50810, 'tdw_to_date', True, False, 'VARCHAR', ['VARCHAR'], 'TimeFunctions::tdw_to_date_with_format_general'],
+    [50811, 'tdw_to_date', True, False, 'VARCHAR', ['VARCHAR', 'VARCHAR'], 'TimeFunctions::tdw_to_date_with_format'],
+    [50812, 'tdw_to_date', True, False, 'VARCHAR', ['DATE'], 'TimeFunctions::tdw_to_date_with_date'],
+    [50813, 'tdw_to_date', True, False, 'VARCHAR', ['DATETIME'], 'TimeFunctions::tdw_to_date_with_datetime'],
+
+    [50814, 'tdw_to_char', True, False, 'VARCHAR', ['VARCHAR', 'VARCHAR'], 'TimeFunctions::tdw_to_char_with_str'],
+    [50815, 'tdw_to_char', True, False, 'VARCHAR', ['DATE', 'VARCHAR'], 'TimeFunctions::tdw_to_char_with_date'],
+    [50816, 'tdw_to_char', True, False, 'VARCHAR', ['DATETIME', 'VARCHAR'], 'TimeFunctions::tdw_to_char_with_datetime'],
+
+    [50817, 'sysdate', True, False, 'VARCHAR', [], 'TimeFunctions::sysdate'],
+    [50818, 'SYSTIMESTAMP', True, False, 'VARCHAR', [], 'TimeFunctions::systimestamp'],
+    [50819, 'tdw_date_add', True, False, 'DATETIME', ['VARCHAR', 'BIGINT', 'DATETIME'], 'TimeFunctions::trino_date_add_with_datetime'],
+    [50820, 'tdw_date_add', True, False, 'DATE', ['VARCHAR', 'BIGINT', 'DATE'], 'TimeFunctions::trino_date_add_with_date'],
+
     # 60xxx: like predicate
     # important ref: LikePredicate.java, must keep name equals LikePredicate.Operator
     [60010, 'LIKE', True, False, 'BOOLEAN', ['VARCHAR', 'VARCHAR'], 'LikePredicate::like',
      'LikePredicate::like_prepare', 'LikePredicate::like_close'],
     [60020, 'REGEXP', True, False, 'BOOLEAN', ['VARCHAR', 'VARCHAR'], 'LikePredicate::regex',
+     'LikePredicate::regex_prepare', 'LikePredicate::regex_close'],
+
+    [60021, 'regexp_like', True, False, 'BOOLEAN', ['VARCHAR', 'VARCHAR'], 'LikePredicate::regex',
      'LikePredicate::regex_prepare', 'LikePredicate::regex_close'],
 
     # 70xxx: condition functions
@@ -772,6 +799,11 @@ vectorized_functions = [
      "JsonFunctions::native_json_path_prepare", "JsonFunctions::native_json_path_close"],
     [110100, "to_json", False, False, "JSON", ["ANY_MAP"], "JsonFunctions::to_json"],
     [110101, "to_json", False, False, "JSON", ["ANY_STRUCT"], "JsonFunctions::to_json"],
+
+    [110095, "json_extract", False, False, "JSON", ["JSON", "VARCHAR"], "JsonFunctions::json_query",
+     "JsonFunctions::native_json_path_prepare", "JsonFunctions::native_json_path_close"],
+    [110096, "json_extract_scalar", False, True, "VARCHAR", ["JSON", "VARCHAR"],"JsonFunctions::get_native_json_string",
+     "JsonFunctions::native_json_path_prepare", "JsonFunctions::native_json_path_close"],
 
     # aes and base64 function
     [120100, "aes_encrypt", False, False, "VARCHAR", ["VARCHAR", "VARCHAR"], "EncryptionFunctions::aes_encrypt"],
@@ -1313,6 +1345,8 @@ vectorized_functions = [
     # map, array common functions
     [170100, 'cardinality', True, False, 'INT', ['ANY_MAP'], 'MapFunctions::map_size'],
     [170101, 'cardinality', True, False, 'INT', ['ANY_ARRAY'], 'ArrayFunctions::array_length'],
+    [170110, 'size', True, False, 'INT', ['ANY_MAP'], 'MapFunctions::map_size'],
+    [170111, 'size', True, False, 'INT', ['ANY_ARRAY'], 'ArrayFunctions::array_length'],
 
     # struct functions
     [170500, 'row', True, False, 'ANY_STRUCT', ['ANY_ELEMENT', "..."], 'StructFunctions::new_struct'],

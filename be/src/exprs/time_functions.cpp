@@ -1435,8 +1435,15 @@ StatusOr<ColumnPtr> TimeFunctions::_t_to_unix_from_datetime_with_format(Function
         }
         DateTimeValue tv;
         if (!tv.from_date_format_str(format.data, format.size, date.data, date.size)) {
-            result.append_null();
-            continue;
+            joda::JodaFormat joda;
+            if (!joda.prepare(format.to_string())) {
+                result.append_null();
+                continue;
+            }
+            if (!joda.parse(date.to_string(), &tv)) {
+                result.append_null();
+                continue;
+            }
         }
         int64_t timestamp;
         if (!tv.unix_timestamp(&timestamp, context->state()->timezone_obj())) {
@@ -3311,4 +3318,1559 @@ StatusOr<ColumnPtr> TimeFunctions::time_format(FunctionContext* context, const s
     return builder.build(ColumnHelper::is_all_const(columns));
 }
 
+template <LogicalType Type>
+ColumnPtr date_tranform(const ColumnPtr& v1) {
+    if (v1->only_null()) {
+        return v1;
+    }
+    int num_rows = v1->size();
+    ColumnViewer<TYPE_DATE> viewer_date(v1);
+    ColumnBuilder<Type> builder(num_rows);
+
+    for (int i = 0; i < num_rows; ++i) {
+        if (viewer_date.is_null(i)) {
+            builder.append_null();
+            continue;
+        }
+        builder.append(format_for_yyyy_MM_dd_Impl(viewer_date.value(i)));
+    }
+    Columns list = {v1};
+    return builder.build(ColumnHelper::is_all_const(list));
+}
+
+template <TimeUnit UNIT>
+DateValue datevalue_add(DateValue dv, int count) {
+    return dv.add<UNIT>(count);
+}
+
+#define DEFINE_DATE_CALC_FN(NAME, LTYPE, RTYPE, ETYPE, RESULT_TYPE)                                                \
+    StatusOr<ColumnPtr> TimeFunctions::NAME(FunctionContext* context, const starrocks::Columns& columns) {         \
+        auto p = VectorizedStrictBinaryFunction<NAME##Impl>::evaluate<LTYPE, RTYPE, ETYPE>(VECTORIZED_FN_ARGS(0),  \
+                                                                                           VECTORIZED_FN_ARGS(1)); \
+        date_valid<ETYPE>(p);                                                                                      \
+        return date_tranform<RESULT_TYPE>(p);                                                                      \
+    }
+
+#define DEFINE_DATE_ADD_FN(FN, UNIT)                               \
+    DEFINE_BINARY_FUNCTION_WITH_IMPL(FN##Impl, timestamp, value) { \
+        return datevalue_add<UNIT>(timestamp, value);              \
+    }                                                              \
+                                                                   \
+    DEFINE_DATE_CALC_FN(FN, TYPE_DATE, TYPE_INT, TYPE_DATE, TYPE_VARCHAR);
+
+#define DEFINE_DATE_SUB_FN(FN, UNIT)                               \
+    DEFINE_BINARY_FUNCTION_WITH_IMPL(FN##Impl, timestamp, value) { \
+        return datevalue_add<UNIT>(timestamp, -value);             \
+    }                                                              \
+                                                                   \
+    DEFINE_DATE_CALC_FN(FN, TYPE_DATE, TYPE_INT, TYPE_DATE, TYPE_VARCHAR);
+
+#define DEFINE_DATE_ADD_AND_SUB_FN(FN_PREFIX, UNIT) \
+    DEFINE_DATE_ADD_FN(FN_PREFIX##_add, UNIT);      \
+    DEFINE_DATE_SUB_FN(FN_PREFIX##_sub, UNIT);
+
+// tdw_date_add
+// tdw_date_sub
+DEFINE_DATE_ADD_AND_SUB_FN(tdw_date, TimeUnit::DAY);
+
+// tdw_months_add
+// tdw_months_sub
+DEFINE_DATE_ADD_AND_SUB_FN(tdw_months, TimeUnit::MONTH);
+
+#undef DEFINE_DATE_CALC_FN
+#undef DEFINE_DATE_ADD_FN
+#undef DEFINE_DATE_SUB_FN
+#undef DEFINE_DATE_ADD_AND_SUB_FN
+
+template <LogicalType Type>
+ColumnPtr datetime_tranform(const ColumnPtr& v1) {
+    if (v1->only_null()) {
+        return v1;
+    }
+    int num_rows = v1->size();
+    ColumnViewer<TYPE_DATETIME> viewer_date(v1);
+    ColumnBuilder<Type> builder(num_rows);
+
+    for (int i = 0; i < num_rows; ++i) {
+        if (viewer_date.is_null(i)) {
+            builder.append_null();
+            continue;
+        }
+        builder.append(format_for_yyyy_MM_dd_Impl(viewer_date.value(i)));
+    }
+    Columns list = {v1};
+    return builder.build(ColumnHelper::is_all_const(list));
+}
+
+#define DEFINE_DATETIME_CALC_FN(NAME, LTYPE, RTYPE, ETYPE, RESULT_TYPE)                                            \
+    StatusOr<ColumnPtr> TimeFunctions::NAME(FunctionContext* context, const starrocks::Columns& columns) {         \
+        auto p = VectorizedStrictBinaryFunction<NAME##Impl>::evaluate<LTYPE, RTYPE, ETYPE>(VECTORIZED_FN_ARGS(0),  \
+                                                                                           VECTORIZED_FN_ARGS(1)); \
+        date_valid<ETYPE>(p);                                                                                      \
+        return datetime_tranform<RESULT_TYPE>(p);                                                                  \
+    }
+
+#define DEFINE_DATETIME_ADD_FN(FN, UNIT)                           \
+    DEFINE_BINARY_FUNCTION_WITH_IMPL(FN##Impl, timestamp, value) { \
+        return timestamp_add<UNIT>(timestamp, value);              \
+    }                                                              \
+                                                                   \
+    DEFINE_DATETIME_CALC_FN(FN, TYPE_DATETIME, TYPE_INT, TYPE_DATETIME, TYPE_VARCHAR);
+
+#define DEFINE_DATETIME_SUB_FN(FN, UNIT)                           \
+    DEFINE_BINARY_FUNCTION_WITH_IMPL(FN##Impl, timestamp, value) { \
+        return timestamp_add<UNIT>(timestamp, -value);             \
+    }                                                              \
+                                                                   \
+    DEFINE_DATETIME_CALC_FN(FN, TYPE_DATETIME, TYPE_INT, TYPE_DATETIME, TYPE_VARCHAR);
+
+#define DEFINE_DATETIME_ADD_AND_SUB_FN(FN_PREFIX, UNIT)          \
+    DEFINE_DATETIME_ADD_FN(FN_PREFIX##_add_with_datetime, UNIT); \
+    DEFINE_DATETIME_SUB_FN(FN_PREFIX##_sub_with_datetime, UNIT);
+
+// tdw_date_add_with_datetime
+// tdw_date_sub_with_datetime
+DEFINE_DATETIME_ADD_AND_SUB_FN(tdw_date, TimeUnit::DAY);
+
+// tdw_months_add_with_datetime
+// tdw_months_sub_with_datetime
+DEFINE_DATETIME_ADD_AND_SUB_FN(tdw_months, TimeUnit::MONTH);
+
+#undef DEFINE_DATETIME_CALC_FN
+#undef DEFINE_DATETIME_ADD_FN
+#undef DEFINE_DATETIME_SUB_FN
+#undef DEFINE_DATETIME_ADD_AND_SUB_FN
+
+std::string format_datetime_yyyy_mm_dd_hhmissff3(int y, int m, int d, int h, int mi, int s, int ms) {
+    // Convert to string format 'YYYY-MM-DD hh:mm:ss:xxx'
+    // 2024-06-01 09:00:00:000
+    int t;
+    char to[23];
+
+    t = y / 100;
+    to[0] = t / 10 + '0';
+    to[1] = t % 10 + '0';
+
+    t = y % 100;
+    to[2] = t / 10 + '0';
+    to[3] = t % 10 + '0';
+
+    to[4] = '-';
+
+    to[5] = m / 10 + '0';
+    to[6] = m % 10 + '0';
+
+    to[7] = '-';
+
+    to[8] = d / 10 + '0';
+    to[9] = d % 10 + '0';
+
+    to[10] = ' ';
+
+    to[11] = h / 10 + '0';
+    to[12] = h % 10 + '0';
+    to[13] = ':';
+    to[14] = mi / 10 + '0';
+    to[15] = mi % 10 + '0';
+    to[16] = ':';
+    to[17] = s / 10 + '0';
+    to[18] = s % 10 + '0';
+    to[19] = ':';
+
+    if (ms > 0) {
+        uint32_t first = ms / 10000;
+        uint32_t second = (ms % 10000) / 100;
+        to[20] = (char)('0' + first / 10);
+        to[21] = (char)('0' + first % 10);
+        to[22] = (char)('0' + second / 10);
+    } else {
+        to[20] = (char)('0');
+        to[21] = (char)('0');
+        to[22] = (char)('0');
+    }
+    return std::string(to, 23);
+}
+
+template <LogicalType TYPE>
+StatusOr<ColumnPtr> TimeFunctions::_tdw_to_date_with_format_general(FunctionContext* context, const Columns& columns) {
+    DCHECK_EQ(columns.size(), 1);
+
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    ColumnViewer<TYPE_VARCHAR> data_column(columns[0]);
+
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (data_column.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+
+        auto date = data_column.value(row);
+        if (date.empty()) {
+            result.append_null();
+            continue;
+        }
+
+        DateTimeValue tv;
+        if (!tv.from_tdw_date_str(date.data, date.size)) {
+            result.append_null();
+            continue;
+        }
+        int64_t timestamp;
+        if (!tv.unix_timestamp(&timestamp, context->state()->timezone_obj())) {
+            result.append_null();
+            continue;
+        }
+        if (timestamp < 0 || timestamp > MAX_UNIX_TIMESTAMP) {
+            result.append_null();
+            continue;
+        }
+
+        result.append(format_datetime_yyyy_mm_dd_hhmissff3(tv.year(), tv.month(), tv.day(), tv.hour(), tv.minute(),
+                                                           tv.second(), tv.microsecond()));
+    }
+
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::tdw_to_date_with_format_general(FunctionContext* context, const Columns& columns) {
+    return _tdw_to_date_with_format_general<TYPE_VARCHAR>(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::_tdw_to_date_with_date(FunctionContext* context, const Columns& columns) {
+    DCHECK_EQ(columns.size(), 1);
+
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    ColumnViewer<TYPE_DATE> data_column(columns[0]);
+
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE_VARCHAR> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (data_column.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+
+        auto date = data_column.value(row);
+        int year, month, day;
+        date.to_date(&year, &month, &day);
+        result.append(format_datetime_yyyy_mm_dd_hhmissff3(year, month, day, 0, 0, 0, 0));
+    }
+
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::tdw_to_date_with_date(FunctionContext* context, const Columns& columns) {
+    return _tdw_to_date_with_date(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::_tdw_to_date_with_datetime(FunctionContext* context, const Columns& columns) {
+    DCHECK_EQ(columns.size(), 1);
+
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    ColumnViewer<TYPE_DATETIME> data_column(columns[0]);
+
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE_VARCHAR> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (data_column.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+
+        auto date = data_column.value(row);
+        int year, month, day, hour, minute, second, usec;
+        date.to_timestamp(&year, &month, &day, &hour, &minute, &second, &usec);
+        result.append(format_datetime_yyyy_mm_dd_hhmissff3(year, month, day, hour, minute, second, usec));
+    }
+
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::tdw_to_date_with_datetime(FunctionContext* context, const Columns& columns) {
+    return _tdw_to_date_with_datetime(context, columns);
+}
+
+static constexpr int s_days_in_month[13] = {0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
+
+// 20240601
+// process string content based on format like "YYYYMMDD".
+// string content must match digit parts and chats parts.
+bool parse_datetime_yyyymmdd(const char* value, int value_len, TimestampValue& tv) {
+    if (value_len != 8) {
+        return false;
+    }
+    uint8_t year1;
+    uint8_t year2;
+    uint8_t year3;
+    uint8_t year4;
+    uint8_t month1;
+    uint8_t month2;
+    uint8_t day1;
+    uint8_t day2;
+    if (date::char_to_digit(value, 0, &year1) || date::char_to_digit(value, 1, &year2) ||
+        date::char_to_digit(value, 2, &year3) || date::char_to_digit(value, 3, &year4) ||
+        date::char_to_digit(value, 4, &month1) || date::char_to_digit(value, 5, &month2) ||
+        date::char_to_digit(value, 6, &day1) || date::char_to_digit(value, 7, &day2)) {
+        return false;
+    }
+
+    uint16_t year = year1 * 1000 + year2 * 100 + year3 * 10 + year4;
+    uint8_t month = month1 * 10 + month2;
+    uint8_t day = day1 * 10 + day2;
+
+    if (month > 12 || (day > s_days_in_month[month] && (month != 2 || day != 29 || !date::is_leap(year)))) {
+        return false;
+    }
+
+    tv.from_timestamp(year, month, day, 0, 0, 0, 0);
+    return true;
+}
+
+// 202406
+// process string content based on format like "YYYYMM".
+// string content must match digit parts and chats parts.
+bool parse_datetime_yyyymm(const char* value, int value_len, TimestampValue& tv) {
+    if (value_len != 6) {
+        return false;
+    }
+    uint8_t year1;
+    uint8_t year2;
+    uint8_t year3;
+    uint8_t year4;
+    uint8_t month1;
+    uint8_t month2;
+    if (date::char_to_digit(value, 0, &year1) || date::char_to_digit(value, 1, &year2) ||
+        date::char_to_digit(value, 2, &year3) || date::char_to_digit(value, 3, &year4) ||
+        date::char_to_digit(value, 4, &month1) || date::char_to_digit(value, 5, &month2)) {
+        return false;
+    }
+
+    uint16_t year = year1 * 1000 + year2 * 100 + year3 * 10 + year4;
+    uint8_t month = month1 * 10 + month2;
+
+    if (month > 12) {
+        return false;
+    }
+
+    tv.from_timestamp(year, month, 1, 0, 0, 0, 0);
+    return true;
+}
+
+// 2024
+// process string content based on format like "YYYY".
+// string content must match digit parts and chats parts.
+bool parse_datetime_yyyy(const char* value, int value_len, TimestampValue& tv) {
+    if (value_len != 4) {
+        return false;
+    }
+    uint8_t year1;
+    uint8_t year2;
+    uint8_t year3;
+    uint8_t year4;
+    if (date::char_to_digit(value, 0, &year1) || date::char_to_digit(value, 1, &year2) ||
+        date::char_to_digit(value, 2, &year3) || date::char_to_digit(value, 3, &year4)) {
+        return false;
+    }
+
+    uint16_t year = year1 * 1000 + year2 * 100 + year3 * 10 + year4;
+
+    tv.from_timestamp(year, 1, 1, 0, 0, 0, 0);
+    return true;
+}
+
+// 06
+// process string content based on format like "MM".
+// string content must match digit parts and chats parts.
+bool parse_datetime_mm(const char* value, int value_len, TimestampValue& tv) {
+    if (value_len != 2) {
+        return false;
+    }
+    uint8_t month1;
+    uint8_t month2;
+    if (date::char_to_digit(value, 0, &month1) || date::char_to_digit(value, 1, &month2)) {
+        return false;
+    }
+
+    uint8_t month = month1 * 10 + month2;
+
+    if (month > 12) {
+        return false;
+    }
+    tv.from_timestamp(1970, month, 1, 0, 0, 0, 0);
+    return true;
+}
+
+// 01
+// process string content based on format like "DD".
+// string content must match digit parts and chats parts.
+bool parse_datetime_dd(const char* value, int value_len, TimestampValue& tv) {
+    if (value_len != 2) {
+        return false;
+    }
+    uint8_t day1;
+    uint8_t day2;
+    if (date::char_to_digit(value, 0, &day1) || date::char_to_digit(value, 1, &day2)) {
+        return false;
+    }
+
+    uint8_t day = day1 * 10 + day2;
+
+    if (day > 32) {
+        return false;
+    }
+    tv.from_timestamp(1970, 1, day, 0, 0, 0, 0);
+    return true;
+}
+
+// 2024-06-01
+// process string content based on format like "YYYY-MM-DD".
+// string content must match digit parts and chats parts.
+bool parse_datetime_yyyy_mm_dd(const char* value, int value_len, TimestampValue& tv) {
+    if (value_len != 10 || value[4] != '-' || value[7] != '-') {
+        return false;
+    }
+    uint8_t year1;
+    uint8_t year2;
+    uint8_t year3;
+    uint8_t year4;
+    uint8_t month1;
+    uint8_t month2;
+    uint8_t day1;
+    uint8_t day2;
+    if (date::char_to_digit(value, 0, &year1) || date::char_to_digit(value, 1, &year2) ||
+        date::char_to_digit(value, 2, &year3) || date::char_to_digit(value, 3, &year4) ||
+        date::char_to_digit(value, 5, &month1) || date::char_to_digit(value, 6, &month2) ||
+        date::char_to_digit(value, 8, &day1) || date::char_to_digit(value, 9, &day2)) {
+        return false;
+    }
+
+    uint16_t year = year1 * 1000 + year2 * 100 + year3 * 10 + year4;
+    uint8_t month = month1 * 10 + month2;
+    uint8_t day = day1 * 10 + day2;
+
+    if (month > 12 || (day > s_days_in_month[month] && (month != 2 || day != 29 || !date::is_leap(year)))) {
+        return false;
+    }
+
+    tv.from_timestamp(year, month, day, 0, 0, 0, 0);
+    return true;
+}
+
+// 2024-06
+// process string content based on format like "YYYY-MM".
+// string content must match digit parts and chats parts.
+bool parse_datetime_yyyy_mm(const char* value, int value_len, TimestampValue& tv) {
+    if (value_len != 7 || value[4] != '-') {
+        return false;
+    }
+    uint8_t year1;
+    uint8_t year2;
+    uint8_t year3;
+    uint8_t year4;
+    uint8_t month1;
+    uint8_t month2;
+    if (date::char_to_digit(value, 0, &year1) || date::char_to_digit(value, 1, &year2) ||
+        date::char_to_digit(value, 2, &year3) || date::char_to_digit(value, 3, &year4) ||
+        date::char_to_digit(value, 5, &month1) || date::char_to_digit(value, 6, &month2)) {
+        return false;
+    }
+
+    uint16_t year = year1 * 1000 + year2 * 100 + year3 * 10 + year4;
+    uint8_t month = month1 * 10 + month2;
+
+    if (month > 12) {
+        return false;
+    }
+
+    tv.from_timestamp(year, month, 1, 0, 0, 0, 0);
+    return true;
+}
+
+// 20240601090000
+// process string content based on format like "YYYYMMDDhhmmss".
+// string content must match digit parts and chats parts.
+bool parse_datetime_yyyymmddhh24miss(const char* value, int value_len, TimestampValue& tv) {
+    if (value_len != 14) {
+        return false;
+    }
+
+    uint8_t year1;
+    uint8_t year2;
+    uint8_t year3;
+    uint8_t year4;
+    uint8_t month1;
+    uint8_t month2;
+    uint8_t day1;
+    uint8_t day2;
+
+    uint8_t hour1;
+    uint8_t hour2;
+    uint8_t minute1;
+    uint8_t minute2;
+    uint8_t second1;
+    uint8_t second2;
+    if (date::char_to_digit(value, 0, &year1) || date::char_to_digit(value, 1, &year2) ||
+        date::char_to_digit(value, 2, &year3) || date::char_to_digit(value, 3, &year4) ||
+        date::char_to_digit(value, 4, &month1) || date::char_to_digit(value, 5, &month2) ||
+        date::char_to_digit(value, 6, &day1) || date::char_to_digit(value, 7, &day2) ||
+        date::char_to_digit(value, 8, &hour1) || date::char_to_digit(value, 9, &hour2) ||
+        date::char_to_digit(value, 10, &minute1) || date::char_to_digit(value, 11, &minute2) ||
+        date::char_to_digit(value, 12, &second1) || date::char_to_digit(value, 13, &second2)) {
+        return false;
+    }
+
+    uint16_t year = year1 * 1000 + year2 * 100 + year3 * 10 + year4;
+    uint8_t month = month1 * 10 + month2;
+    uint8_t day = day1 * 10 + day2;
+    uint16_t hour = hour1 * 10 + hour2;
+    uint8_t minute = minute1 * 10 + minute2;
+    uint8_t second = second1 * 10 + second2;
+
+    if (month > 12 || (day > s_days_in_month[month] && (month != 2 || day != 29 || !date::is_leap(year))) ||
+        hour > 23 || minute > 59 || second > 59) {
+        return false;
+    }
+
+    tv.from_timestamp(year, month, day, hour, minute, second, 0);
+    return true;
+}
+
+// 091010
+// process string content based on format like "hhmmss".
+// string content must match digit parts and chats parts.
+bool parse_datetime_hh24miss(const char* value, int value_len, TimestampValue& tv) {
+    if (value_len != 6) {
+        return false;
+    }
+
+    uint8_t hour1;
+    uint8_t hour2;
+    uint8_t minute1;
+    uint8_t minute2;
+    uint8_t second1;
+    uint8_t second2;
+    if (date::char_to_digit(value, 0, &hour1) || date::char_to_digit(value, 1, &hour2) ||
+        date::char_to_digit(value, 2, &minute1) || date::char_to_digit(value, 3, &minute2) ||
+        date::char_to_digit(value, 4, &second1) || date::char_to_digit(value, 5, &second2)) {
+        return false;
+    }
+
+    uint16_t hour = hour1 * 10 + hour2;
+    uint8_t minute = minute1 * 10 + minute2;
+    uint8_t second = second1 * 10 + second2;
+
+    if (hour > 23 || minute > 59 || second > 59) {
+        return false;
+    }
+
+    tv.from_timestamp(1970, 1, 1, hour, minute, second, 0);
+    return true;
+}
+
+// 2024-06-01 09:00:00
+// process string content based on format like "YYYY-MM-DD hh:mm:ss".
+// string content must match digit parts and chats parts.
+bool parse_datetime_yyyy_mm_dd_hh24_mi_ss(const char* value, int value_len, TimestampValue& tv) {
+    if (value_len != 19 || value[4] != '-' || value[7] != '-' || value[10] != ' ' || value[13] != ':' ||
+        value[16] != ':') {
+        return false;
+    }
+
+    uint8_t year1;
+    uint8_t year2;
+    uint8_t year3;
+    uint8_t year4;
+    uint8_t month1;
+    uint8_t month2;
+    uint8_t day1;
+    uint8_t day2;
+
+    uint8_t hour1;
+    uint8_t hour2;
+    uint8_t minute1;
+    uint8_t minute2;
+    uint8_t second1;
+    uint8_t second2;
+    if (date::char_to_digit(value, 0, &year1) || date::char_to_digit(value, 1, &year2) ||
+        date::char_to_digit(value, 2, &year3) || date::char_to_digit(value, 3, &year4) ||
+        date::char_to_digit(value, 5, &month1) || date::char_to_digit(value, 6, &month2) ||
+        date::char_to_digit(value, 8, &day1) || date::char_to_digit(value, 9, &day2) ||
+        date::char_to_digit(value, 11, &hour1) || date::char_to_digit(value, 12, &hour2) ||
+        date::char_to_digit(value, 14, &minute1) || date::char_to_digit(value, 15, &minute2) ||
+        date::char_to_digit(value, 17, &second1) || date::char_to_digit(value, 18, &second2)) {
+        return false;
+    }
+
+    uint16_t year = year1 * 1000 + year2 * 100 + year3 * 10 + year4;
+    uint8_t month = month1 * 10 + month2;
+    uint8_t day = day1 * 10 + day2;
+    uint16_t hour = hour1 * 10 + hour2;
+    uint8_t minute = minute1 * 10 + minute2;
+    uint8_t second = second1 * 10 + second2;
+
+    if (month > 12 || (day > s_days_in_month[month] && (month != 2 || day != 29 || !date::is_leap(year))) ||
+        hour > 23 || minute > 59 || second > 59) {
+        return false;
+    }
+
+    tv.from_timestamp(year, month, day, hour, minute, second, 0);
+    return true;
+}
+
+// 20240601091010456
+// process string content based on format like "YYYYMMDDhhmmssff3".
+// string content must match digit parts and chats parts.
+bool parse_datetime_yyyymmddhh24missff3(const char* value, int value_len, TimestampValue& tv) {
+    if (value_len != 17) {
+        return false;
+    }
+
+    uint8_t year1;
+    uint8_t year2;
+    uint8_t year3;
+    uint8_t year4;
+    uint8_t month1;
+    uint8_t month2;
+    uint8_t day1;
+    uint8_t day2;
+
+    uint8_t hour1;
+    uint8_t hour2;
+    uint8_t minute1;
+    uint8_t minute2;
+    uint8_t second1;
+    uint8_t second2;
+
+    uint8_t microsecond1;
+    uint8_t microsecond2;
+    uint8_t microsecond3;
+    if (date::char_to_digit(value, 0, &year1) || date::char_to_digit(value, 1, &year2) ||
+        date::char_to_digit(value, 2, &year3) || date::char_to_digit(value, 3, &year4) ||
+        date::char_to_digit(value, 4, &month1) || date::char_to_digit(value, 5, &month2) ||
+        date::char_to_digit(value, 6, &day1) || date::char_to_digit(value, 7, &day2) ||
+        date::char_to_digit(value, 8, &hour1) || date::char_to_digit(value, 9, &hour2) ||
+        date::char_to_digit(value, 10, &minute1) || date::char_to_digit(value, 11, &minute2) ||
+        date::char_to_digit(value, 12, &second1) || date::char_to_digit(value, 13, &second2) ||
+        date::char_to_digit(value, 14, &microsecond1) || date::char_to_digit(value, 15, &microsecond2) ||
+        date::char_to_digit(value, 16, &microsecond3)) {
+        return false;
+    }
+
+    uint16_t year = year1 * 1000 + year2 * 100 + year3 * 10 + year4;
+    uint8_t month = month1 * 10 + month2;
+    uint8_t day = day1 * 10 + day2;
+    uint16_t hour = hour1 * 10 + hour2;
+    uint8_t minute = minute1 * 10 + minute2;
+    uint8_t second = second1 * 10 + second2;
+    uint32_t microsecond = microsecond1 * 100000 + microsecond2 * 10000 + microsecond3 * 1000;
+
+    if (month > 12 || (day > s_days_in_month[month] && (month != 2 || day != 29 || !date::is_leap(year))) ||
+        hour > 23 || minute > 59 || second > 59) {
+        return false;
+    }
+
+    tv.from_timestamp(year, month, day, hour, minute, second, microsecond);
+    return true;
+}
+
+bool parse_tdw_date_format_str(const char* value, int value_len, TimestampValue& tv, std::string& format) {
+    if (format.empty()) {
+        return false;
+    }
+    if (format == "yyyymmdd" || format == "%Y%m%d" || format == "yyyyMMdd") {
+        return parse_datetime_yyyymmdd(value, value_len, tv);
+    } else if (format == "yyyymm") {
+        return parse_datetime_yyyymm(value, value_len, tv);
+    } else if (format == "yyyy") {
+        return parse_datetime_yyyy(value, value_len, tv);
+    } else if (format == "mm") {
+        return parse_datetime_mm(value, value_len, tv);
+    } else if (format == "dd") {
+        return parse_datetime_dd(value, value_len, tv);
+    } else if (format == "yyyy-mm-dd" || format == "%Y-%m-%d" || format == "yyyy-MM-dd") {
+        return parse_datetime_yyyy_mm_dd(value, value_len, tv);
+    } else if (format == "yyyy-mm") {
+        return parse_datetime_yyyy_mm(value, value_len, tv);
+    } else if (format == "yyyymmddhh24miss") {
+        return parse_datetime_yyyymmddhh24miss(value, value_len, tv);
+    } else if (format == "yyyy-mm-dd hh24:mi:ss" || format == "%Y-%m-%d %H:%i:%s" || format == "yyyy-MM-dd HH:mm:ss") {
+        return parse_datetime_yyyy_mm_dd_hh24_mi_ss(value, value_len, tv);
+    } else if (format == "hh24miss") {
+        return parse_datetime_hh24miss(value, value_len, tv);
+    } else if (format == "yyyymmddhh24missff3") {
+        return parse_datetime_yyyymmddhh24missff3(value, value_len, tv);
+    }
+    return false;
+}
+
+template <LogicalType TYPE>
+StatusOr<ColumnPtr> TimeFunctions::_tdw_to_date_with_format(FunctionContext* context, const Columns& columns) {
+    DCHECK_EQ(columns.size(), 2);
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    auto date_viewer = ColumnViewer<TYPE_VARCHAR>(columns[0]);
+    auto formatViewer = ColumnViewer<TYPE_VARCHAR>(columns[1]);
+
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (date_viewer.is_null(row) || formatViewer.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+
+        auto date = date_viewer.value(row);
+        auto format = formatViewer.value(row);
+        if (date.empty() || format.empty()) {
+            result.append_null();
+            continue;
+        }
+        TimestampValue tv;
+        std::string format_str = format.to_string();
+        // to lower case
+        std::transform(format_str.begin(), format_str.end(), format_str.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+
+        if (!parse_tdw_date_format_str(date.data, date.size, tv, format_str)) {
+            result.append_null();
+            continue;
+        }
+        int year, month, day, hour, minute, second, usec;
+        tv.to_timestamp(&year, &month, &day, &hour, &minute, &second, &usec);
+        result.append(format_datetime_yyyy_mm_dd_hhmissff3(year, month, day, hour, minute, second, usec));
+    }
+
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::tdw_to_date_with_format(FunctionContext* context, const Columns& columns) {
+    return _tdw_to_date_with_format<TYPE_VARCHAR>(context, columns);
+}
+
+std::string format_datetime_yyyy_MM_dd(int y, int m, int d) {
+    int t;
+    char to[10];
+
+    t = y / 100;
+    to[0] = t / 10 + '0';
+    to[1] = t % 10 + '0';
+
+    t = y % 100;
+    to[2] = t / 10 + '0';
+    to[3] = t % 10 + '0';
+
+    to[4] = '-';
+
+    to[5] = m / 10 + '0';
+    to[6] = m % 10 + '0';
+
+    to[7] = '-';
+
+    to[8] = d / 10 + '0';
+    to[9] = d % 10 + '0';
+    return std::string(to, 10);
+}
+
+std::string format_datetime_yyyy_MM(int y, int m) {
+    int t;
+    char to[7];
+
+    t = y / 100;
+    to[0] = t / 10 + '0';
+    to[1] = t % 10 + '0';
+
+    t = y % 100;
+    to[2] = t / 10 + '0';
+    to[3] = t % 10 + '0';
+
+    to[4] = '-';
+
+    to[5] = m / 10 + '0';
+    to[6] = m % 10 + '0';
+    return std::string(to, 7);
+}
+
+std::string format_datetime_yyyyMMdd(int y, int m, int d) {
+    int t;
+    char to[8];
+
+    t = y / 100;
+    to[0] = t / 10 + '0';
+    to[1] = t % 10 + '0';
+
+    t = y % 100;
+    to[2] = t / 10 + '0';
+    to[3] = t % 10 + '0';
+
+    to[4] = m / 10 + '0';
+    to[5] = m % 10 + '0';
+    to[6] = d / 10 + '0';
+    to[7] = d % 10 + '0';
+    return std::string(to, 8);
+}
+
+std::string format_datetime_yyyyMM(int y, int m) {
+    int t;
+    char to[6];
+
+    t = y / 100;
+    to[0] = t / 10 + '0';
+    to[1] = t % 10 + '0';
+
+    t = y % 100;
+    to[2] = t / 10 + '0';
+    to[3] = t % 10 + '0';
+
+    to[4] = m / 10 + '0';
+    to[5] = m % 10 + '0';
+    return std::string(to, 6);
+}
+
+std::string format_datetime_yyyy(int y) {
+    int t;
+    char to[4];
+
+    t = y / 100;
+    to[0] = t / 10 + '0';
+    to[1] = t % 10 + '0';
+
+    t = y % 100;
+    to[2] = t / 10 + '0';
+    to[3] = t % 10 + '0';
+    return std::string(to, 4);
+}
+
+std::string format_datetime_mm(int m) {
+    char to[2];
+
+    to[0] = m / 10 + '0';
+    to[1] = m % 10 + '0';
+    return std::string(to, 2);
+}
+
+std::string format_datetime_dd(int d) {
+    char to[2];
+
+    to[0] = d / 10 + '0';
+    to[1] = d % 10 + '0';
+    return std::string(to, 2);
+}
+
+std::string format_datetime_yyyymmddhh24miss(int y, int m, int d, int h, int mi, int s) {
+    int t;
+    char to[14];
+
+    t = y / 100;
+    to[0] = t / 10 + '0';
+    to[1] = t % 10 + '0';
+
+    t = y % 100;
+    to[2] = t / 10 + '0';
+    to[3] = t % 10 + '0';
+
+    to[4] = m / 10 + '0';
+    to[5] = m % 10 + '0';
+
+    to[6] = d / 10 + '0';
+    to[7] = d % 10 + '0';
+
+    to[8] = h / 10 + '0';
+    to[9] = h % 10 + '0';
+
+    to[10] = mi / 10 + '0';
+    to[11] = mi % 10 + '0';
+
+    to[12] = s / 10 + '0';
+    to[13] = s % 10 + '0';
+    return std::string(to, 14);
+}
+
+std::string format_datetime_hh24miss(int h, int mi, int s) {
+    char to[6];
+
+    to[0] = h / 10 + '0';
+    to[1] = h % 10 + '0';
+
+    to[2] = mi / 10 + '0';
+    to[3] = mi % 10 + '0';
+
+    to[4] = s / 10 + '0';
+    to[5] = s % 10 + '0';
+    return std::string(to, 6);
+}
+
+std::string format_datetime_yyyy_mm_dd_hh24_mi_ss(int y, int m, int d, int h, int mi, int s) {
+    int t;
+    char to[19];
+
+    t = y / 100;
+    to[0] = t / 10 + '0';
+    to[1] = t % 10 + '0';
+
+    t = y % 100;
+    to[2] = t / 10 + '0';
+    to[3] = t % 10 + '0';
+
+    to[4] = '-';
+
+    to[5] = m / 10 + '0';
+    to[6] = m % 10 + '0';
+
+    to[7] = '-';
+
+    to[8] = d / 10 + '0';
+    to[9] = d % 10 + '0';
+
+    to[10] = ' ';
+
+    to[11] = h / 10 + '0';
+    to[12] = h % 10 + '0';
+
+    to[13] = ':';
+
+    to[14] = mi / 10 + '0';
+    to[15] = mi % 10 + '0';
+
+    to[16] = ':';
+
+    to[17] = s / 10 + '0';
+    to[18] = s % 10 + '0';
+    return std::string(to, 19);
+}
+
+std::string format_datetime_yyyymmddhh24missff3(int y, int m, int d, int h, int mi, int s, int ms) {
+    int t;
+    char to[17];
+
+    t = y / 100;
+    to[0] = t / 10 + '0';
+    to[1] = t % 10 + '0';
+
+    t = y % 100;
+    to[2] = t / 10 + '0';
+    to[3] = t % 10 + '0';
+
+    to[4] = m / 10 + '0';
+    to[5] = m % 10 + '0';
+
+    to[6] = d / 10 + '0';
+    to[7] = d % 10 + '0';
+
+    to[8] = h / 10 + '0';
+    to[9] = h % 10 + '0';
+
+    to[10] = mi / 10 + '0';
+    to[11] = mi % 10 + '0';
+
+    to[12] = s / 10 + '0';
+    to[13] = s % 10 + '0';
+    if (ms > 0) {
+        uint32_t first = ms / 10000;
+        uint32_t second = (ms % 10000) / 100;
+        to[14] = (char)('0' + first / 10);
+        to[15] = (char)('0' + first % 10);
+        to[16] = (char)('0' + second / 10);
+    } else {
+        to[14] = (char)('0');
+        to[15] = (char)('0');
+        to[16] = (char)('0');
+    }
+    return std::string(to, 17);
+}
+
+void tdw_format_datetime(const DateTimeValue& tv, std::string& format, ColumnBuilder<TYPE_VARCHAR>* builder) {
+    if (format.empty()) {
+        builder->append(format_datetime_yyyyMMdd(tv.year(), tv.month(), tv.day()));
+        return;
+    }
+
+    if (format == "yyyymmdd" || format == "%Y%m%d" || format == "yyyyMMdd") {
+        builder->append(format_datetime_yyyyMMdd(tv.year(), tv.month(), tv.day()));
+    } else if (format == "yyyymm") {
+        builder->append(format_datetime_yyyyMM(tv.year(), tv.month()));
+    } else if (format == "yyyy") {
+        builder->append(format_datetime_yyyy(tv.year()));
+    } else if (format == "mm") {
+        builder->append(format_datetime_mm(tv.month()));
+    } else if (format == "dd") {
+        builder->append(format_datetime_dd(tv.day()));
+    } else if (format == "yyyy-mm-dd" || format == "%Y-%m-%d" || format == "yyyy-MM-dd") {
+        builder->append(format_datetime_yyyy_MM_dd(tv.year(), tv.month(), tv.day()));
+    } else if (format == "yyyy-mm") {
+        builder->append(format_datetime_yyyy_MM(tv.year(), tv.month()));
+    } else if (format == "yyyymmddhh24miss") {
+        builder->append(
+                format_datetime_yyyymmddhh24miss(tv.year(), tv.month(), tv.day(), tv.hour(), tv.minute(), tv.second()));
+    } else if (format == "yyyy-mm-dd hh24:mi:ss" || format == "%Y-%m-%d %H:%i:%s" || format == "yyyy-MM-dd HH:mm:ss") {
+        builder->append(format_datetime_yyyy_mm_dd_hh24_mi_ss(tv.year(), tv.month(), tv.day(), tv.hour(), tv.minute(),
+                                                              tv.second()));
+    } else if (format == "hh24miss") {
+        builder->append(format_datetime_hh24miss(tv.hour(), tv.minute(), tv.second()));
+    } else if (format == "yyyymmddhh24missff3") {
+        builder->append(format_datetime_yyyymmddhh24missff3(tv.year(), tv.month(), tv.day(), tv.hour(), tv.minute(),
+                                                            tv.second(), tv.microsecond()));
+    } else {
+        builder->append_null();
+    }
+}
+
+StatusOr<ColumnPtr> TimeFunctions::_tdw_to_char_with_str(FunctionContext* context, const starrocks::Columns& columns) {
+    DCHECK_EQ(columns.size(), 2);
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    ColumnViewer<TYPE_VARCHAR> data_column(columns[0]);
+    ColumnViewer<TYPE_VARCHAR> format_column(columns[1]);
+
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE_VARCHAR> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (data_column.is_null(row) || format_column.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+
+        auto date = data_column.value(row);
+        auto format = format_column.value(row);
+
+        if (date.empty()) {
+            result.append_null();
+            continue;
+        }
+        DateTimeValue tv;
+        if (!tv.from_tdw_date_str(date.data, date.size)) {
+            result.append_null();
+            continue;
+        }
+        int64_t timestamp;
+        if (!tv.unix_timestamp(&timestamp, context->state()->timezone_obj())) {
+            result.append_null();
+            continue;
+        }
+        if (timestamp < 0 || timestamp > MAX_UNIX_TIMESTAMP) {
+            result.append_null();
+            continue;
+        }
+
+        std::string format_str = format.to_string();
+        // to lower case
+        std::transform(format_str.begin(), format_str.end(), format_str.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        tdw_format_datetime(tv, format_str, &result);
+    }
+
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::tdw_to_char_with_str(FunctionContext* context, const starrocks::Columns& columns) {
+    return _tdw_to_char_with_str(context, columns);
+}
+
+void tdw_format_date(const DateValue& tv, std::string& format, ColumnBuilder<TYPE_VARCHAR>* builder) {
+    int year, month, day;
+    tv.to_date(&year, &month, &day);
+    if (format.empty()) {
+        builder->append(format_datetime_yyyyMMdd(year, month, day));
+        return;
+    }
+
+    if (format == "yyyymmdd" || format == "%Y%m%d" || format == "yyyyMMdd") {
+        builder->append(format_datetime_yyyyMMdd(year, month, day));
+    } else if (format == "yyyymm") {
+        builder->append(format_datetime_yyyyMM(year, month));
+    } else if (format == "yyyy") {
+        builder->append(format_datetime_yyyy(year));
+    } else if (format == "mm") {
+        builder->append(format_datetime_mm(month));
+    } else if (format == "dd") {
+        builder->append(format_datetime_dd(day));
+    } else if (format == "yyyy-mm-dd" || format == "%Y-%m-%d" || format == "yyyy-MM-dd") {
+        builder->append(format_datetime_yyyy_MM_dd(year, month, day));
+    } else if (format == "yyyy-mm") {
+        builder->append(format_datetime_yyyy_MM(year, month));
+    } else if (format == "yyyymmddhh24miss") {
+        builder->append(format_datetime_yyyymmddhh24miss(year, month, day, 0, 0, 0));
+    } else if (format == "yyyy-mm-dd hh24:mi:ss" || format == "%Y-%m-%d %H:%i:%s" || format == "yyyy-MM-dd HH:mm:ss") {
+        builder->append(format_datetime_yyyy_mm_dd_hh24_mi_ss(year, month, day, 0, 0, 0));
+    } else if (format == "hh24miss") {
+        builder->append(format_datetime_hh24miss(0, 0, 0));
+    } else if (format == "yyyymmddhh24missff3") {
+        builder->append(format_datetime_yyyymmddhh24missff3(year, month, day, 0, 0, 0, 0));
+    } else {
+        builder->append_null();
+    }
+}
+
+StatusOr<ColumnPtr> TimeFunctions::_tdw_to_char_with_date(FunctionContext* context, const starrocks::Columns& columns) {
+    DCHECK_EQ(columns.size(), 2);
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    ColumnViewer<TYPE_DATE> data_column(columns[0]);
+    ColumnViewer<TYPE_VARCHAR> format_column(columns[1]);
+
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE_VARCHAR> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (data_column.is_null(row) || format_column.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+
+        auto date = data_column.value(row);
+        auto format = format_column.value(row);
+        std::string format_str = format.to_string();
+        // to lower case
+        std::transform(format_str.begin(), format_str.end(), format_str.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        tdw_format_date(date, format_str, &result);
+    }
+
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::tdw_to_char_with_date(FunctionContext* context, const starrocks::Columns& columns) {
+    return _tdw_to_char_with_date(context, columns);
+}
+
+void tdw_format_timestamp(const TimestampValue& tv, std::string& format, ColumnBuilder<TYPE_VARCHAR>* builder) {
+    int year, month, day, hour, minute, second, usec;
+    tv.to_timestamp(&year, &month, &day, &hour, &minute, &second, &usec);
+    if (format.empty()) {
+        builder->append(format_datetime_yyyyMMdd(year, month, day));
+        return;
+    }
+
+    if (format == "yyyymmdd" || format == "%Y%m%d" || format == "yyyyMMdd") {
+        builder->append(format_datetime_yyyyMMdd(year, month, day));
+    } else if (format == "yyyymm") {
+        builder->append(format_datetime_yyyyMM(year, month));
+    } else if (format == "yyyy") {
+        builder->append(format_datetime_yyyy(year));
+    } else if (format == "mm") {
+        builder->append(format_datetime_mm(month));
+    } else if (format == "dd") {
+        builder->append(format_datetime_dd(day));
+    } else if (format == "yyyy-mm-dd" || format == "%Y-%m-%d" || format == "yyyy-MM-dd") {
+        builder->append(format_datetime_yyyy_MM_dd(year, month, day));
+    } else if (format == "yyyy-mm") {
+        builder->append(format_datetime_yyyy_MM(year, month));
+    } else if (format == "yyyymmddhh24miss") {
+        builder->append(format_datetime_yyyymmddhh24miss(year, month, day, hour, minute, second));
+    } else if (format == "yyyy-mm-dd hh24:mi:ss" || format == "%Y-%m-%d %H:%i:%s" || format == "yyyy-MM-dd HH:mm:ss") {
+        builder->append(format_datetime_yyyy_mm_dd_hh24_mi_ss(year, month, day, hour, minute, second));
+    } else if (format == "hh24miss") {
+        builder->append(format_datetime_hh24miss(hour, minute, second));
+    } else if (format == "yyyymmddhh24missff3") {
+        builder->append(format_datetime_yyyymmddhh24missff3(year, month, day, hour, minute, second, usec));
+    } else {
+        builder->append_null();
+    }
+}
+
+StatusOr<ColumnPtr> TimeFunctions::_tdw_to_char_with_datetime(FunctionContext* context,
+                                                              const starrocks::Columns& columns) {
+    DCHECK_EQ(columns.size(), 2);
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    ColumnViewer<TYPE_DATETIME> data_column(columns[0]);
+    ColumnViewer<TYPE_VARCHAR> format_column(columns[1]);
+
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE_VARCHAR> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (data_column.is_null(row) || format_column.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+
+        auto date = data_column.value(row);
+        auto format = format_column.value(row);
+
+        std::string format_str = format.to_string();
+        // to lower case
+        std::transform(format_str.begin(), format_str.end(), format_str.begin(),
+                       [](unsigned char c) { return std::tolower(c); });
+        tdw_format_timestamp(date, format_str, &result);
+    }
+
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::tdw_to_char_with_datetime(FunctionContext* context,
+                                                             const starrocks::Columns& columns) {
+    return _tdw_to_char_with_datetime(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::_tdw_date_add_with_str(FunctionContext* context, const Columns& columns) {
+    DCHECK_EQ(columns.size(), 2);
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    auto date_viewer = ColumnViewer<TYPE_VARCHAR>(columns[0]);
+    auto plus_Viewer = ColumnViewer<TYPE_INT>(columns[1]);
+
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE_VARCHAR> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (date_viewer.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+
+        auto date = date_viewer.value(row);
+        int plus = plus_Viewer.value(row);
+        if (date.empty()) {
+            result.append_null();
+            continue;
+        }
+        DateTimeValue tv;
+        if (!tv.from_tdw_date_str(date.data, date.size)) {
+            result.append_null();
+            continue;
+        }
+        int64_t timestamp;
+        if (!tv.unix_timestamp(&timestamp, context->state()->timezone_obj())) {
+            result.append_null();
+            continue;
+        }
+        if (timestamp < 0 || timestamp > MAX_UNIX_TIMESTAMP) {
+            result.append_null();
+            continue;
+        }
+        TimestampValue ts;
+        ts.from_timestamp(tv.year(), tv.month(), tv.day(), tv.hour(), tv.minute(), tv.second(), tv.microsecond());
+        auto ts_plus = timestamp_add<TimeUnit::DAY>(ts, plus);
+
+        bool hasLine = false;
+        const char* ptr = date.data;
+        const char* end = date.data + date.size;
+        while (ptr < end) {
+            if (*ptr == '-') {
+                hasLine = true;
+            }
+            ptr++;
+        }
+
+        int year, month, day, hour, minute, second, usec;
+        ts_plus.to_timestamp(&year, &month, &day, &hour, &minute, &second, &usec);
+        if (hasLine) {
+            result.append(format_datetime_yyyy_MM_dd(year, month, day));
+        } else {
+            result.append(format_datetime_yyyyMMdd(year, month, day));
+        }
+    }
+
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::tdw_date_add_with_str(FunctionContext* context, const Columns& columns) {
+    return _tdw_date_add_with_str(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::_tdw_date_sub_with_str(FunctionContext* context, const Columns& columns) {
+    DCHECK_EQ(columns.size(), 2);
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    auto date_viewer = ColumnViewer<TYPE_VARCHAR>(columns[0]);
+    auto plus_Viewer = ColumnViewer<TYPE_INT>(columns[1]);
+
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE_VARCHAR> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (date_viewer.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+
+        auto date = date_viewer.value(row);
+        int plus = plus_Viewer.value(row);
+        if (date.empty()) {
+            result.append_null();
+            continue;
+        }
+        DateTimeValue tv;
+        if (!tv.from_tdw_date_str(date.data, date.size)) {
+            result.append_null();
+            continue;
+        }
+        int64_t timestamp;
+        if (!tv.unix_timestamp(&timestamp, context->state()->timezone_obj())) {
+            result.append_null();
+            continue;
+        }
+        if (timestamp < 0 || timestamp > MAX_UNIX_TIMESTAMP) {
+            result.append_null();
+            continue;
+        }
+        TimestampValue ts;
+        ts.from_timestamp(tv.year(), tv.month(), tv.day(), tv.hour(), tv.minute(), tv.second(), tv.microsecond());
+        auto ts_plus = timestamp_add<TimeUnit::DAY>(ts, -plus);
+
+        bool hasLine = false;
+        const char* ptr = date.data;
+        const char* end = date.data + date.size;
+        while (ptr < end) {
+            if (*ptr == '-') {
+                hasLine = true;
+            }
+            ptr++;
+        }
+
+        int year, month, day, hour, minute, second, usec;
+        ts_plus.to_timestamp(&year, &month, &day, &hour, &minute, &second, &usec);
+        if (hasLine) {
+            result.append(format_datetime_yyyy_MM_dd(year, month, day));
+        } else {
+            result.append(format_datetime_yyyyMMdd(year, month, day));
+        }
+    }
+
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::tdw_date_sub_with_str(FunctionContext* context, const Columns& columns) {
+    return _tdw_date_sub_with_str(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::_tdw_months_add_with_str(FunctionContext* context, const Columns& columns) {
+    DCHECK_EQ(columns.size(), 2);
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+
+    auto date_viewer = ColumnViewer<TYPE_VARCHAR>(columns[0]);
+    auto plus_Viewer = ColumnViewer<TYPE_INT>(columns[1]);
+
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE_VARCHAR> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (date_viewer.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+
+        auto date = date_viewer.value(row);
+        int plus = plus_Viewer.value(row);
+        if (date.empty()) {
+            result.append_null();
+            continue;
+        }
+        DateTimeValue tv;
+        if (!tv.from_tdw_date_str(date.data, date.size)) {
+            result.append_null();
+            continue;
+        }
+        int64_t timestamp;
+        if (!tv.unix_timestamp(&timestamp, context->state()->timezone_obj())) {
+            result.append_null();
+            continue;
+        }
+        if (timestamp < 0 || timestamp > MAX_UNIX_TIMESTAMP) {
+            result.append_null();
+            continue;
+        }
+        TimestampValue ts;
+        ts.from_timestamp(tv.year(), tv.month(), tv.day(), tv.hour(), tv.minute(), tv.second(), tv.microsecond());
+        auto ts_plus = timestamp_add<TimeUnit::MONTH>(ts, plus);
+
+        bool hasLine = false;
+        const char* ptr = date.data;
+        const char* end = date.data + date.size;
+        while (ptr < end) {
+            if (*ptr == '-') {
+                hasLine = true;
+            }
+            ptr++;
+        }
+
+        int year, month, day, hour, minute, second, usec;
+        ts_plus.to_timestamp(&year, &month, &day, &hour, &minute, &second, &usec);
+        if (hasLine) {
+            result.append(format_datetime_yyyy_MM_dd(year, month, day));
+        } else {
+            result.append(format_datetime_yyyyMMdd(year, month, day));
+        }
+    }
+
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::tdw_months_add_with_str(FunctionContext* context, const Columns& columns) {
+    return _tdw_months_add_with_str(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::sysdate(FunctionContext* context, const Columns& columns) {
+    starrocks::RuntimeState* state = context->state();
+    DateTimeValue dtv;
+    if (dtv.from_unixtime(state->timestamp_ms() / 1000, state->timezone_obj())) {
+        return ColumnHelper::create_const_column<TYPE_VARCHAR>(
+                format_datetime_yyyy_MM_dd(dtv.year(), dtv.month(), dtv.day()), 1);
+    } else {
+        return ColumnHelper::create_const_null_column(1);
+    }
+}
+
+StatusOr<ColumnPtr> TimeFunctions::systimestamp(FunctionContext* context, const Columns& columns) {
+    starrocks::RuntimeState* state = context->state();
+    DateTimeValue dtv;
+    if (dtv.from_unixtime(state->timestamp_ms() / 1000, state->timezone_obj())) {
+        return ColumnHelper::create_const_column<TYPE_VARCHAR>(
+                format_datetime_yyyy_mm_dd_hhmissff3(dtv.year(), dtv.month(), dtv.day(), dtv.hour(), dtv.minute(),
+                                                     dtv.second(), state->timestamp_us() % 1000000),
+                1);
+    } else {
+        return ColumnHelper::create_const_null_column(1);
+    }
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_datetime(FunctionContext* context, const Columns& columns) {
+    DCHECK_EQ(columns.size(), 3);
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+    ColumnViewer<TYPE_VARCHAR> type_column(columns[0]);
+    ColumnViewer<TYPE_BIGINT> plus_column(columns[1]);
+    ColumnViewer<TYPE_DATETIME> ts_column(columns[2]);
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE_DATETIME> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (type_column.is_null(row) || plus_column.is_null(row) || ts_column.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+        long plus = plus_column.value(row);
+        TimestampValue ts = ts_column.value(row);
+        auto type_str = type_column.value(row).to_string();
+        transform(type_str.begin(), type_str.end(), type_str.begin(), ::tolower);
+        if (type_str == "millisecond") {
+            auto ts_plus = timestamp_add<TimeUnit::MILLISECOND>(ts, plus);
+            if (ts_plus.is_valid_non_strict()) {
+                result.append(ts_plus);
+            } else {
+                result.append_null();
+            }
+        } else if (type_str == "second") {
+            auto ts_plus = timestamp_add<TimeUnit::SECOND>(ts, plus);
+            if (ts_plus.is_valid_non_strict()) {
+                result.append(ts_plus);
+            } else {
+                result.append_null();
+            }
+        } else if (type_str == "minute") {
+            auto ts_plus = timestamp_add<TimeUnit::MINUTE>(ts, plus);
+            if (ts_plus.is_valid_non_strict()) {
+                result.append(ts_plus);
+            } else {
+                result.append_null();
+            }
+        } else if (type_str == "hour") {
+            auto ts_plus = timestamp_add<TimeUnit::HOUR>(ts, plus);
+            if (ts_plus.is_valid_non_strict()) {
+                result.append(ts_plus);
+            } else {
+                result.append_null();
+            }
+        } else if (type_str == "day") {
+            auto ts_plus = timestamp_add<TimeUnit::DAY>(ts, plus);
+            if (ts_plus.is_valid_non_strict()) {
+                result.append(ts_plus);
+            } else {
+                result.append_null();
+            }
+        } else if (type_str == "week") {
+            auto ts_plus = timestamp_add<TimeUnit::WEEK>(ts, plus);
+            if (ts_plus.is_valid_non_strict()) {
+                result.append(ts_plus);
+            } else {
+                result.append_null();
+            }
+        } else if (type_str == "month") {
+            auto ts_plus = timestamp_add<TimeUnit::MONTH>(ts, plus);
+            if (ts_plus.is_valid_non_strict()) {
+                result.append(ts_plus);
+            } else {
+                result.append_null();
+            }
+        } else if (type_str == "quarter") {
+            auto ts_plus = timestamp_add<TimeUnit::QUARTER>(ts, plus);
+            if (ts_plus.is_valid_non_strict()) {
+                result.append(ts_plus);
+            } else {
+                result.append_null();
+            }
+        } else if (type_str == "year") {
+            auto ts_plus = timestamp_add<TimeUnit::YEAR>(ts, plus);
+            if (ts_plus.is_valid_non_strict()) {
+                result.append(ts_plus);
+            } else {
+                result.append_null();
+            }
+        } else {
+            result.append_null();
+        }
+    }
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
+void getDateResult(TimestampValue* ts_plus, ColumnBuilder<TYPE_DATE>* result) {
+    if (ts_plus->is_valid_non_strict()) {
+        int year, month, day, hour, minute, second, usec;
+        ts_plus->to_timestamp(&year, &month, &day, &hour, &minute, &second, &usec);
+        DateValue dv;
+        dv.from_date(year, month, day);
+        result->append(dv);
+    } else {
+        result->append_null();
+    }
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_date(FunctionContext* context, const Columns& columns) {
+    DCHECK_EQ(columns.size(), 3);
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+    ColumnViewer<TYPE_VARCHAR> type_column(columns[0]);
+    ColumnViewer<TYPE_BIGINT> plus_column(columns[1]);
+    ColumnViewer<TYPE_DATE> ts_column(columns[2]);
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE_DATE> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (type_column.is_null(row) || plus_column.is_null(row) || ts_column.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+        long plus = plus_column.value(row);
+        TimestampValue ts = ts_column.value(row);
+        auto type_str = type_column.value(row).to_string();
+        transform(type_str.begin(), type_str.end(), type_str.begin(), ::tolower);
+        if (type_str == "millisecond") {
+            auto ts_plus = timestamp_add<TimeUnit::MILLISECOND>(ts, plus);
+            getDateResult(&ts_plus, &result);
+        } else if (type_str == "second") {
+            auto ts_plus = timestamp_add<TimeUnit::SECOND>(ts, plus);
+            getDateResult(&ts_plus, &result);
+        } else if (type_str == "minute") {
+            auto ts_plus = timestamp_add<TimeUnit::MINUTE>(ts, plus);
+            getDateResult(&ts_plus, &result);
+        } else if (type_str == "hour") {
+            auto ts_plus = timestamp_add<TimeUnit::HOUR>(ts, plus);
+            getDateResult(&ts_plus, &result);
+        } else if (type_str == "day") {
+            auto ts_plus = timestamp_add<TimeUnit::DAY>(ts, plus);
+            getDateResult(&ts_plus, &result);
+        } else if (type_str == "week") {
+            auto ts_plus = timestamp_add<TimeUnit::WEEK>(ts, plus);
+            getDateResult(&ts_plus, &result);
+        } else if (type_str == "month") {
+            auto ts_plus = timestamp_add<TimeUnit::MONTH>(ts, plus);
+            getDateResult(&ts_plus, &result);
+        } else if (type_str == "quarter") {
+            auto ts_plus = timestamp_add<TimeUnit::QUARTER>(ts, plus);
+            getDateResult(&ts_plus, &result);
+        } else if (type_str == "year") {
+            auto ts_plus = timestamp_add<TimeUnit::YEAR>(ts, plus);
+            getDateResult(&ts_plus, &result);
+        } else {
+            result.append_null();
+        }
+    }
+    return result.build(ColumnHelper::is_all_const(columns));
+}
 } // namespace starrocks

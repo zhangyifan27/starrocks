@@ -46,6 +46,9 @@ import com.starrocks.common.Config;
 import com.starrocks.common.Pair;
 import com.starrocks.common.util.DateUtils;
 import com.starrocks.common.util.TimeUtils;
+import com.starrocks.common.util.UDFDateAdd;
+import com.starrocks.common.util.UDFToChar;
+import com.starrocks.common.util.UDFToDate2;
 import com.starrocks.privilege.AuthorizationMgr;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
@@ -1438,5 +1441,75 @@ public class ScalarOperatorFunctions {
         return ConstantOperator.createVarchar(value.getVarchar());
     }
 
+    @ConstantFunction.List(list = {
+            @ConstantFunction(name = "tdw_date_sub", argTypes = {DATETIME, INT}, returnType = VARCHAR, isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_sub", argTypes = {VARCHAR, INT}, returnType = VARCHAR, isMonotonic = true)
+    })
+    public static ConstantOperator tdwDaysSub(ConstantOperator date, ConstantOperator day) {
+        if (date.getType().isStringType()) {
+            LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
+            dateTime = dateTime.minusDays(day.getInt());
+            return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
+        } else {
+            LocalDateTime dateTime = date.getDatetime().minusDays(day.getInt());
+            return ConstantOperator.createVarchar(dateTime.format(DateUtils.DATE_FORMATTER_UNIX));
+        }
+    }
+
+    @ConstantFunction.List(list = {
+            @ConstantFunction(name = "tdw_date_add", argTypes = {DATETIME, INT}, returnType = VARCHAR, isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, INT}, returnType = VARCHAR, isMonotonic = true)
+    })
+    public static ConstantOperator tdwDaysAdd(ConstantOperator date, ConstantOperator day) {
+        if (date.getType().isStringType()) {
+            LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
+            dateTime = dateTime.plusDays(day.getInt());
+            return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
+        } else {
+            LocalDateTime dateTime = date.getDatetime().plusDays(day.getInt());
+            return ConstantOperator.createVarchar(dateTime.format(DateUtils.DATE_FORMATTER_UNIX));
+        }
+    }
+
+    @ConstantFunction.List(list = {
+            @ConstantFunction(name = "tdw_add_months", argTypes = {DATETIME, INT}, returnType = VARCHAR, isMonotonic = true),
+            @ConstantFunction(name = "tdw_add_months", argTypes = {VARCHAR, INT}, returnType = VARCHAR, isMonotonic = true)
+    })
+    public static ConstantOperator tdwAddMonths(ConstantOperator date, ConstantOperator day) {
+        if (date.getType().isStringType()) {
+            LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
+            dateTime = dateTime.plusMonths(day.getInt());
+            return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
+        } else {
+            LocalDateTime dateTime = date.getDatetime().plusMonths(day.getInt());
+            return ConstantOperator.createVarchar(dateTime.format(DateUtils.DATE_FORMATTER_UNIX));
+        }
+    }
+
+    @ConstantFunction.List(list = {
+            @ConstantFunction(name = "tdw_to_date", argTypes = {DATETIME}, returnType = VARCHAR, isMonotonic = true)
+    })
+    public static ConstantOperator tdwToDate(ConstantOperator date) {
+        return ConstantOperator.createVarchar(UDFToDate2.evaluate(date.getDatetime()));
+    }
+
+    @ConstantFunction.List(list = {
+            @ConstantFunction(name = "tdw_to_date", argTypes = {VARCHAR, VARCHAR}, returnType = VARCHAR, isMonotonic = true)
+    })
+    public static ConstantOperator tdwToDate(ConstantOperator date, ConstantOperator day) {
+        return ConstantOperator.createVarchar(UDFToDate2.evaluate(date.getVarchar(), day.getVarchar()));
+    }
+
+    @ConstantFunction.List(list = {
+            @ConstantFunction(name = "tdw_to_char", argTypes = {DATETIME, VARCHAR}, returnType = VARCHAR, isMonotonic = true),
+            @ConstantFunction(name = "tdw_to_char", argTypes = {VARCHAR, VARCHAR}, returnType = VARCHAR, isMonotonic = true)
+    })
+    public static ConstantOperator tdwToChar(ConstantOperator date, ConstantOperator day) {
+        if (date.getType().isStringType()) {
+            return ConstantOperator.createVarchar(UDFToChar.evaluate(date.getVarchar(), day.getVarchar()));
+        } else {
+            return ConstantOperator.createVarchar(UDFToChar.evaluate(date.getDatetime(), day.getVarchar()));
+        }
+    }
 }
 

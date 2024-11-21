@@ -30,12 +30,38 @@ import com.starrocks.analysis.StringLiteral;
 import com.starrocks.analysis.TimestampArithmeticExpr;
 import com.starrocks.catalog.FunctionSet;
 import com.starrocks.catalog.Type;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.MapExpr;
 
 import java.util.Collections;
+import java.util.List;
 
 public class ComplexFunctionCallTransformer {
+
+    public static Expr convertTDWFunction(String functionName, List<Expr> children) {
+        if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableHiveMode()) {
+            String fullFunctionName = functionName;
+            if (fullFunctionName.equalsIgnoreCase(FunctionSet.DATE_ADD)) {
+                fullFunctionName = FunctionSet.TDW_DATE_ADD;
+                return new FunctionCallExpr(fullFunctionName, children);
+            } else if (fullFunctionName.equalsIgnoreCase(FunctionSet.DATE_SUB)) {
+                fullFunctionName = FunctionSet.TDW_DATE_SUB;
+                return new FunctionCallExpr(fullFunctionName, children);
+            } else if (fullFunctionName.equalsIgnoreCase(FunctionSet.ADD_MONTHS)) {
+                fullFunctionName = FunctionSet.TDW_ADD_MONTHS;
+                return new FunctionCallExpr(fullFunctionName, children);
+            } else if (fullFunctionName.equalsIgnoreCase(FunctionSet.TO_DATE)) {
+                fullFunctionName = FunctionSet.TDW_TO_DATE;
+                return new FunctionCallExpr(fullFunctionName, children);
+            } else if (fullFunctionName.equalsIgnoreCase("to_char")) {
+                fullFunctionName = FunctionSet.TDW_TO_CHAR;
+                return new FunctionCallExpr(fullFunctionName, children);
+            }
+        }
+        return null;
+    }
+
     public static Expr transform(String functionName, Expr... args) {
         if (functionName.equalsIgnoreCase("date_add")) {
             if (args.length == 3 && args[0] instanceof StringLiteral) {

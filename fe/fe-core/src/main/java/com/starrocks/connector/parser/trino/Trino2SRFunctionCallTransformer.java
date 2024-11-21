@@ -44,7 +44,10 @@ public class Trino2SRFunctionCallTransformer {
     }
 
     public static Expr convert(String fnName, List<Expr> children) {
-        Expr result = convertRegisterFn(fnName, children);
+        Expr result = ComplexFunctionCallTransformer.convertTDWFunction(fnName, children);
+        if (result == null) {
+            result = convertRegisterFn(fnName, children);
+        }
         if (result == null) {
             result = ComplexFunctionCallTransformer.transform(fnName, children.toArray(new Expr[0]));
         }

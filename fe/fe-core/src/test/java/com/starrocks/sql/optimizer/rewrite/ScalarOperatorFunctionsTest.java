@@ -1594,4 +1594,37 @@ public class ScalarOperatorFunctionsTest {
             assertEquals(String.format("test case failed: %s, result = %d", tc, result), tc.value, result);
         }
     }
+
+    @Test
+    public void tdwDaysSub() {
+        assertEquals("2015-03-13",
+                ScalarOperatorFunctions.tdwDaysSub(O_DT_20150323_092355, O_INT_10).toString());
+    }
+
+    @Test
+    public void tdwDaysAdd() {
+        assertEquals("2015-04-02",
+                ScalarOperatorFunctions.tdwDaysAdd(O_DT_20150323_092355, O_INT_10).toString());
+    }
+
+    @Test
+    public void tdwAddMonths() {
+        assertEquals("2016-01-23",
+                ScalarOperatorFunctions.tdwAddMonths(O_DT_20150323_092355, O_INT_10).toString());
+    }
+
+    @Test
+    public void tdwToChar() {
+        assertEquals("2015-03-23 09:23:55", ScalarOperatorFunctions.tdwToChar(O_DT_20150323_092355,
+                ConstantOperator.createVarchar("yyyy-mm-dd hh24:mi:ss")).toString());
+    }
+
+    @Test
+    public void tdwToDate() {
+        assertEquals("2015-03-23 09:23:55:000", ScalarOperatorFunctions.tdwToDate(O_DT_20150323_092355).toString());
+
+        assertEquals("2015-03-23 09:23:55:000",
+                ScalarOperatorFunctions.tdwToDate(ConstantOperator.createVarchar("2015-03-23 09:23:55"),
+                        ConstantOperator.createVarchar("yyyy-mm-dd hh24:mi:ss")).toString());
+    }
 }

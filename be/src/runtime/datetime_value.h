@@ -206,6 +206,10 @@ public:
     // 'YYYYMMDDTHHMMSS'
     bool from_date_str(const char* str, int len);
 
+    // Construct Date/Datetime type value from string.
+    // support YYYY-MM-DD HH:MM:SS:FF3 like 2011-01-10 16:45:47:164547
+    bool from_tdw_date_str(const char* str, int len);
+
     // Construct Date/Datetime type value from int64_t value.
     // Return true if convert success. Otherwise return false.
     bool from_date_int64(int64_t value);
