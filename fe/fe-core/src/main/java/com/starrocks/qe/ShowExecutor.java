@@ -809,6 +809,13 @@ public class ShowExecutor {
                 ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_TABLE_ERROR, tableName);
             }
 
+            String createTableStmt = metadataMgr.showCreateTable(catalogName, dbName, tableName);
+            if (!Strings.isNullOrEmpty(createTableStmt)) {
+                List<List<String>> rows = Lists.newArrayList();
+                rows.add(Lists.newArrayList(tableName, createTableStmt));
+                return new ShowResultSet(showStmt.getMetaData(), rows);
+            }
+
             List<List<String>> rows = Lists.newArrayList();
             if (table.isConnectorView()) {
                 String createViewSql = AstToStringBuilder.getExternalCatalogViewDdlStmt((ConnectorView) table);

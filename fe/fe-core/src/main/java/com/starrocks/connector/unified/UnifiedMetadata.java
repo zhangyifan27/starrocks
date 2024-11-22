@@ -265,4 +265,10 @@ public class UnifiedMetadata implements ConnectorMetadata {
         ConnectorMetadata metadata = metadataOfTable(databaseName, tableName);
         return metadata.getPartitionValues(databaseName, tableName, partitionColumn);
     }
+
+    @Override
+    public String showCreateTable(String dbName, String tblName) {
+        Table.TableType type = getTableType(dbName, tblName);
+        return metadataMap.get(type).showCreateTable(dbName, tblName);
+    }
 }

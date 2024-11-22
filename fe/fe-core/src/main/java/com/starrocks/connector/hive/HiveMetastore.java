@@ -373,4 +373,30 @@ public class HiveMetastore implements IHiveMetastore {
                     "Last synced event id is " + lastSyncedEventId, e);
         }
     }
+
+    public String showCreateTable(String dbName, String tblName) {
+        org.apache.hadoop.hive.metastore.api.Table table = client.getTable(dbName, tblName);
+        StorageDescriptor sd = table.getSd();
+        if (sd == null) {
+            throw new StarRocksConnectorException("Table is missing storage descriptor");
+        }
+
+        if (HiveMetastoreApiConverter.isHudiTable(table.getSd().getInputFormat())) {
+            return "";
+        } else if (HiveMetastoreApiConverter.isKuduTable(table.getSd().getInputFormat())) {
+            return "";
+        } else {
+            validateHiveTableType(table.getTableType());
+            if (AcidUtils.isFullAcidTable(table)) {
+                throw new StarRocksConnectorException(
+                        String.format("%s.%s is a hive transactional table(full acid), sr didn't support it yet",
+                                dbName, tblName));
+            }
+            if (table.getTableType().equalsIgnoreCase("VIRTUAL_VIEW")) {
+                return HiveMetastoreApiConverter.showCreateViewTable(tblName, table);
+            } else {
+                return HiveMetastoreApiConverter.showCreateTable(tblName, table);
+            }
+        }
+    }
 }

@@ -365,4 +365,8 @@ public class HiveMetastoreOperations {
                                                         String partitionColumn) {
         return metastore.getPartitionValues(databaseName, tableName, partitionColumn);
     }
+
+    public String showCreateTable(String dbName, String tblName) {
+        return metastore.showCreateTable(dbName, tblName);
+    }
 }

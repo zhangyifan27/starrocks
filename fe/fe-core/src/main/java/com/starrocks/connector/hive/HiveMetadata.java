@@ -393,4 +393,9 @@ public class HiveMetadata implements ConnectorMetadata {
     public CloudConfiguration getCloudConfiguration() {
         return hdfsEnvironment.getCloudConfiguration();
     }
+
+    @Override
+    public String showCreateTable(String dbName, String tblName) {
+        return hmsOps.showCreateTable(dbName, tblName);
+    }
 }

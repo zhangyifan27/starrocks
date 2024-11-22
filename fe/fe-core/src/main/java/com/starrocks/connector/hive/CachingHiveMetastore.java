@@ -826,4 +826,8 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         lastAccessTimeMap.put(hiveTableName, System.currentTimeMillis());
         return get(partitionValuesCache, HiveTablePartitionColumn.of(databaseName, tableName, partitionColumn));
     }
+
+    public String showCreateTable(String dbName, String tblName) {
+        return metastore.showCreateTable(dbName, tblName);
+    }
 }

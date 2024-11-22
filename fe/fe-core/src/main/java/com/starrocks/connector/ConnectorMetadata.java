@@ -333,5 +333,9 @@ public interface ConnectorMetadata {
     default CloudConfiguration getCloudConfiguration() {
         throw new StarRocksConnectorException("This connector doesn't support getting cloud configuration");
     }
+
+    default String showCreateTable(String dbName, String tblName) {
+        return "";
+    }
 }
 

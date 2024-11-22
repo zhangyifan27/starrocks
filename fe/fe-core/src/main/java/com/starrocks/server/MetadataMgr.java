@@ -847,4 +847,9 @@ public class MetadataMgr {
         }
         return null;
     }
+
+    public String showCreateTable(String catalogName, String dbName, String tblName) {
+        Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
+        return connectorMetadata.map(metadata -> metadata.showCreateTable(dbName, tblName)).orElse(null);
+    }
 }

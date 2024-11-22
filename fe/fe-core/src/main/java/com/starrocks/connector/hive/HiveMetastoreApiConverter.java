@@ -45,6 +45,10 @@ import com.starrocks.sql.common.StarRocksPlannerException;
 import org.apache.avro.Schema;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.hive.common.StatsSetupConst;
+import org.apache.hadoop.hive.conf.Constants;
+import org.apache.hadoop.hive.metastore.TableType;
+import org.apache.hadoop.hive.metastore.Warehouse;
 import org.apache.hadoop.hive.metastore.api.BooleanColumnStatsData;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsData;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
@@ -55,13 +59,17 @@ import org.apache.hadoop.hive.metastore.api.DecimalColumnStatsData;
 import org.apache.hadoop.hive.metastore.api.DoubleColumnStatsData;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.LongColumnStatsData;
+import org.apache.hadoop.hive.metastore.api.Order;
 import org.apache.hadoop.hive.metastore.api.SerDeInfo;
+import org.apache.hadoop.hive.metastore.api.SkewedInfo;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.StringColumnStatsData;
 import org.apache.hadoop.hive.metastore.api.Table;
+import org.apache.hadoop.hive.ql.parse.BaseSemanticAnalyzer;
 import org.apache.hadoop.hive.serde.serdeConstants;
 import org.apache.hadoop.hive.serde2.OpenCSVSerde;
 import org.apache.hadoop.hive.serde2.io.DateWritableV2;
+import org.apache.hive.common.util.HiveStringUtils;
 import org.apache.hudi.avro.HoodieAvroUtils;
 import org.apache.hudi.common.table.HoodieTableConfig;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -73,6 +81,7 @@ import org.apache.logging.log4j.Logger;
 
 import java.math.BigDecimal;
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.HashMap;
@@ -82,6 +91,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Strings.emptyToNull;
@@ -105,6 +115,7 @@ import static java.util.Objects.requireNonNull;
 import static org.apache.hadoop.hive.common.StatsSetupConst.NUM_FILES;
 import static org.apache.hadoop.hive.common.StatsSetupConst.ROW_COUNT;
 import static org.apache.hadoop.hive.common.StatsSetupConst.TOTAL_SIZE;
+import static org.apache.hadoop.hive.metastore.api.hive_metastoreConstants.META_TABLE_STORAGE;
 
 public class HiveMetastoreApiConverter {
     private static final Logger LOG = LogManager.getLogger(HiveMetastoreApiConverter.class);
@@ -817,4 +828,221 @@ public class HiveMetastoreApiConverter {
         }
     }
 
+    public static String showCreateViewTable(String tblName, Table table) {
+        return "CREATE VIEW `" + tblName + "` AS " +
+                table.getViewExpandedText();
+    }
+
+    public static String showCreateTable(String tableName, Table table) {
+        boolean needsLocation = true;
+
+        org.apache.hadoop.hive.ql.metadata.Table tbl = new org.apache.hadoop.hive.ql.metadata.Table(table);
+        List<String> duplicateProps = new ArrayList<>();
+        needsLocation = doesTableNeedLocation(tbl);
+
+        // For cases where the table is temporary
+        String tblTemp = "";
+        if (tbl.isTemporary()) {
+            duplicateProps.add("TEMPORARY");
+            tblTemp = "TEMPORARY ";
+        }
+        // For cases where the table is external
+        String tblExternal = "";
+        if (tbl.getTableType() == TableType.EXTERNAL_TABLE) {
+            duplicateProps.add("EXTERNAL");
+            tblExternal = "EXTERNAL ";
+        }
+
+        // Columns
+        String tblColumns = "";
+        List<FieldSchema> cols = tbl.getCols();
+        List<String> columns = new ArrayList<>();
+        for (FieldSchema col : cols) {
+            String columnDesc = "  `" + col.getName() + "` " + col.getType();
+            if (col.getComment() != null) {
+                columnDesc = columnDesc + " COMMENT '"
+                        + HiveStringUtils.escapeHiveCommand(col.getComment()) + "'";
+            }
+            columns.add(columnDesc);
+        }
+        tblColumns = StringUtils.join(columns, ", \n");
+
+        // Table comment
+        String tblComment = "";
+        String tabComment = tbl.getProperty("comment");
+        if (tabComment != null) {
+            duplicateProps.add("comment");
+            tblComment = "COMMENT '"
+                    + HiveStringUtils.escapeHiveCommand(tabComment) + "'";
+        }
+
+        // Partitions
+        String tblPartitions = "";
+        List<FieldSchema> partKeys = tbl.getPartitionKeys();
+        if (partKeys.size() > 0) {
+            tblPartitions += "PARTITIONED BY ( \n";
+            List<String> partCols = new ArrayList<String>();
+            for (FieldSchema partKey : partKeys) {
+                String partColDesc = "  `" + partKey.getName() + "` " + partKey.getType();
+                if (partKey.getComment() != null) {
+                    partColDesc = partColDesc + " COMMENT '"
+                            + HiveStringUtils.escapeHiveCommand(partKey.getComment()) + "'";
+                }
+                partCols.add(partColDesc);
+            }
+            tblPartitions += StringUtils.join(partCols, ", \n");
+            tblPartitions += ")";
+        }
+
+        // Clusters (Buckets)
+        String tblSortBucket = "";
+        List<String> buckCols = tbl.getBucketCols();
+        if (buckCols.size() > 0) {
+            duplicateProps.add("SORTBUCKETCOLSPREFIX");
+            tblSortBucket += "CLUSTERED BY ( \n  ";
+            tblSortBucket += StringUtils.join(buckCols, ", \n  ");
+            tblSortBucket += ") \n";
+            List<Order> sortCols = tbl.getSortCols();
+            if (sortCols.size() > 0) {
+                tblSortBucket += "SORTED BY ( \n";
+                // Order
+                List<String> sortKeys = new ArrayList<>();
+                for (Order sortCol : sortCols) {
+                    String sortKeyDesc = "  " + sortCol.getCol() + " ";
+                    if (sortCol.getOrder() == BaseSemanticAnalyzer.HIVE_COLUMN_ORDER_ASC) {
+                        sortKeyDesc = sortKeyDesc + "ASC";
+                    } else if (sortCol.getOrder() == BaseSemanticAnalyzer.HIVE_COLUMN_ORDER_DESC) {
+                        sortKeyDesc = sortKeyDesc + "DESC";
+                    }
+                    sortKeys.add(sortKeyDesc);
+                }
+                tblSortBucket += StringUtils.join(sortKeys, ", \n");
+                tblSortBucket += ") \n";
+            }
+            tblSortBucket += "INTO " + tbl.getNumBuckets() + " BUCKETS";
+        }
+
+        // Skewed Info
+        StringBuilder tblSkewedinfo = new StringBuilder();
+        SkewedInfo skewedInfo = tbl.getSkewedInfo();
+        if (skewedInfo != null && !skewedInfo.getSkewedColNames().isEmpty()) {
+            tblSkewedinfo.append("SKEWED BY (" + StringUtils.join(skewedInfo.getSkewedColNames(), ",") + ")\n");
+            tblSkewedinfo.append("  ON (");
+            List<String> colValueList = new ArrayList<>();
+            for (List<String> colValues : skewedInfo.getSkewedColValues()) {
+                colValueList.add("('" + StringUtils.join(colValues, "','") + "')");
+            }
+            tblSkewedinfo.append(StringUtils.join(colValueList, ",") + ")");
+            if (tbl.isStoredAsSubDirectories()) {
+                tblSkewedinfo.append("\n  STORED AS DIRECTORIES");
+            }
+        }
+
+        // Row format (SerDe)
+        StringBuilder tblRowFormat = new StringBuilder();
+        StorageDescriptor sd = tbl.getTTable().getSd();
+        SerDeInfo serdeInfo = sd.getSerdeInfo();
+        Map<String, String> serdeParams = serdeInfo.getParameters();
+        tblRowFormat.append("ROW FORMAT SERDE \n");
+        tblRowFormat.append("  '"
+                + HiveStringUtils.escapeHiveCommand(serdeInfo.getSerializationLib()) + "' \n");
+        if (tbl.getStorageHandler() == null) {
+            // If serialization.format property has the default value, it will not to be included in
+            // SERDE properties
+            if (Warehouse.DEFAULT_SERIALIZATION_FORMAT.equals(serdeParams.get(
+                    serdeConstants.SERIALIZATION_FORMAT))) {
+                serdeParams.remove(serdeConstants.SERIALIZATION_FORMAT);
+            }
+            if (!serdeParams.isEmpty()) {
+                appendSerdeParams(tblRowFormat, serdeParams).append(" \n");
+            }
+            tblRowFormat.append("STORED AS INPUTFORMAT \n  '"
+                    + HiveStringUtils.escapeHiveCommand(sd.getInputFormat()) + "' \n");
+            tblRowFormat.append("OUTPUTFORMAT \n  '"
+                    + HiveStringUtils.escapeHiveCommand(sd.getOutputFormat()) + "'");
+        } else {
+            duplicateProps.add(META_TABLE_STORAGE);
+            tblRowFormat.append("STORED BY \n  '"
+                    + HiveStringUtils.escapeHiveCommand(tbl.getParameters().get(
+                    META_TABLE_STORAGE)) + "' \n");
+            // SerDe Properties
+            if (!serdeParams.isEmpty()) {
+                appendSerdeParams(tblRowFormat, serdeInfo.getParameters());
+            }
+        }
+        String tblLocation = "  '" + HiveStringUtils.escapeHiveCommand(sd.getLocation()) + "'";
+
+        // Table properties
+        duplicateProps.addAll(Arrays.asList(StatsSetupConst.TABLE_PARAMS_STATS_KEYS));
+        String tblProperties = propertiesToString(tbl.getParameters(), duplicateProps);
+
+        StringBuilder createTabStr = new StringBuilder();
+        createTabStr.append("CREATE " + tblTemp + tblExternal + "TABLE `");
+        createTabStr.append(tableName + "`(\n");
+        createTabStr.append("" + tblColumns + ")\n");
+        if (!Strings.isNullOrEmpty(tblComment)) {
+            createTabStr.append("" + tblComment + "\n");
+        }
+        if (!Strings.isNullOrEmpty(tblPartitions)) {
+            createTabStr.append("" + tblPartitions + "\n");
+        }
+        if (!Strings.isNullOrEmpty(tblSortBucket)) {
+            createTabStr.append("" + tblSortBucket + "\n");
+        }
+        if (!Strings.isNullOrEmpty(tblSkewedinfo.toString())) {
+            createTabStr.append("" + tblSkewedinfo + "\n");
+        }
+        createTabStr.append("" + tblRowFormat + "\n");
+        if (needsLocation) {
+            createTabStr.append("LOCATION\n");
+            createTabStr.append("" + tblLocation + "\n");
+        }
+        createTabStr.append("TBLPROPERTIES (\n");
+        createTabStr.append("" + tblProperties + ")\n");
+        return createTabStr.toString();
+    }
+
+    public static boolean doesTableNeedLocation(org.apache.hadoop.hive.ql.metadata.Table tbl) {
+        // TODO: If we are ok with breaking compatibility of existing 3rd party StorageHandlers,
+        // this method could be moved to the HiveStorageHandler interface.
+        boolean retval = true;
+        if (tbl.getStorageHandler() != null) {
+            // TODO: why doesn't this check class name rather than toString?
+            String sh = tbl.getStorageHandler().toString();
+            retval = !sh.equals("org.apache.hadoop.hive.hbase.HBaseStorageHandler")
+                    && !sh.equals(Constants.DRUID_HIVE_STORAGE_HANDLER_ID)
+                    && !sh.equals(Constants.JDBC_HIVE_STORAGE_HANDLER_ID)
+                    && !sh.equals("org.apache.hadoop.hive.accumulo.AccumuloStorageHandler");
+        }
+        return retval;
+    }
+
+    public static StringBuilder appendSerdeParams(
+            StringBuilder builder, Map<String, String> serdeParam) {
+        serdeParam = new TreeMap<>(serdeParam);
+        builder.append("WITH SERDEPROPERTIES ( \n");
+        List<String> serdeCols = new ArrayList<String>();
+        for (Map.Entry<String, String> entry : serdeParam.entrySet()) {
+            serdeCols.add("  '" + entry.getKey() + "'='"
+                    + HiveStringUtils.escapeHiveCommand(entry.getValue()) + "'");
+        }
+        builder.append(StringUtils.join(serdeCols, ", \n")).append(')');
+        return builder;
+    }
+
+    public static String propertiesToString(Map<String, String> props, List<String> exclude) {
+        String propString = "";
+        if (!props.isEmpty()) {
+            Map<String, String> properties = new TreeMap<>(props);
+            List<String> realProps = new ArrayList<>();
+            for (String key : properties.keySet()) {
+                if (properties.get(key) != null && (exclude == null || !exclude.contains(key))) {
+                    realProps.add("  '" + key + "'='" +
+                            HiveStringUtils.escapeHiveCommand(properties.get(key)) + "'");
+                }
+            }
+            propString += StringUtils.join(realProps, ", \n");
+        }
+        return propString;
+    }
 }

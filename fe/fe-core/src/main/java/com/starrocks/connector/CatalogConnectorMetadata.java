@@ -324,4 +324,9 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
     public CloudConfiguration getCloudConfiguration() {
         return normal.getCloudConfiguration();
     }
+
+    @Override
+    public String showCreateTable(String dbName, String tblName) {
+        return normal.showCreateTable(dbName, tblName);
+    }
 }

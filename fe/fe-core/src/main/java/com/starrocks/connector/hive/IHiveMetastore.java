@@ -109,4 +109,8 @@ public interface IHiveMetastore extends IMetastore {
 
     default void refreshTableKeyInfoBackground(String hiveDbName, String hiveTblName) {
     }
+
+    default String showCreateTable(String dbName, String tblName) {
+        return "";
+    }
 }
