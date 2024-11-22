@@ -763,6 +763,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_HYPERSCAN_VEC = "enable_hyperscan_vec";
 
+    public static final String ENABLE_RELATION_ALIAS_CASE_INSENSITIVE = "enable_relation_alias_case_insensitive";
+
     // whether rewrite bitmap_union(to_bitmap(x)) to bitmap_agg(x) directly.
     public static final String ENABLE_REWRITE_BITMAP_UNION_TO_BITMAP_AGG = "enable_rewrite_bitmap_union_to_bitamp_agg";
 
@@ -4193,6 +4195,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setExcludeThiveDefaultPartition(boolean excludeThiveDefaultPartition) {
         this.excludeThiveDefaultPartition = excludeThiveDefaultPartition;
+    }
+
+    @VarAttr(name = ENABLE_RELATION_ALIAS_CASE_INSENSITIVE)
+    private boolean enableRelationAliasCaseInsensitive = true;
+
+    public boolean isEnableRelationAliasCaseInsensitive() {
+        return enableRelationAliasCaseInsensitive;
+    }
+
+    public void setEnableRelationAliasCaseInsensitive(boolean enableRelationAliasCaseInsensitive) {
+        this.enableRelationAliasCaseInsensitive = enableRelationAliasCaseInsensitive;
     }
 
     // Serialize to thrift object

@@ -112,6 +112,7 @@ public class HiveViewTest extends PlanTestBase {
 
     @Test
     public void testQueryHiveViewCaseInsensitive() throws Exception {
+        connectContext.getSessionVariable().setEnableRelationAliasCaseInsensitive(false);
         String sql = "select * from hive0.tpch.customer_case_insensitive_view where c_custkey = 1";
         String sqlPlan = getFragmentPlan(sql);
         assertContains(sqlPlan, "TABLE: customer");
@@ -120,6 +121,7 @@ public class HiveViewTest extends PlanTestBase {
         expectedException.expectMessage("Column '`t0`.`v1`' cannot be resolved");
         sql = "select * from hive0.tpch.customer_case_insensitive_view v1 join test.t0 T0 on v1.c_custkey = t0.v1";
         getFragmentPlan(sql);
+        connectContext.getSessionVariable().setEnableRelationAliasCaseInsensitive(true);
     }
 
     @Test

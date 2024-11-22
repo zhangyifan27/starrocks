@@ -220,7 +220,8 @@ public class Field {
             return false;
         }
 
-        if (ConnectContext.get() != null && ConnectContext.get().isRelationAliasCaseInsensitive()) {
+        if (ConnectContext.get() != null && (ConnectContext.get().isRelationAliasCaseInsensitive() ||
+                ConnectContext.get().getSessionVariable().isEnableRelationAliasCaseInsensitive())) {
             return tableName.getTbl().equalsIgnoreCase(relationAlias.getTbl());
         } else {
             return tableName.getTbl().equals(relationAlias.getTbl());
