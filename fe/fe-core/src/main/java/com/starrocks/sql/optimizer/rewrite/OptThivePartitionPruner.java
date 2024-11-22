@@ -52,6 +52,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -484,7 +485,8 @@ public class OptThivePartitionPruner {
                                                   Set<Long> defaultPartitionIds) throws AnalysisException {
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
         ListPartitionPruner partitionPruner = new ListPartitionPruner(columnToPartitionValues, columnToNullPartitions,
-                scanOperatorPredicates.getPartitionConjuncts(), null);
+                scanOperatorPredicates.getPartitionConjuncts(), null, null,
+                Optional.of(ListPartitionPruner.PartitionType.HIVE));
         Collection<Long> selectedPartitionIds = partitionPruner.prune();
         Collection<Long> finalPartitions = processThiveDefaultParititions(selectedPartitionIds, defaultPartitionIds,
                 new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));

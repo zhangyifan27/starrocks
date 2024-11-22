@@ -651,6 +651,26 @@ public class ScalarOperatorFunctions {
     }
 
     @ConstantFunction.List(list = {
+            @ConstantFunction(name = "unix_timestamp", argTypes = {VARCHAR, VARCHAR}, returnType = BIGINT)
+    })
+    public static ConstantOperator unixTimestamp(ConstantOperator unixTime, ConstantOperator dateFormat) {
+        DateTimeFormatter formatter = DateUtils.unixDatetimeFormatter(dateFormat.getVarchar());
+        LocalDateTime dateObj;
+        try {
+            dateObj = LocalDateTime.parse(unixTime.getVarchar(), formatter);
+        } catch (DateTimeParseException e) {
+            // means the date string doesn't contain time fields.
+            dateObj = LocalDate.parse(unixTime.getVarchar(), formatter).atStartOfDay();
+        }
+        ZonedDateTime zdt = ZonedDateTime.of(dateObj, TimeUtils.getTimeZone().toZoneId());
+        long value = zdt.toEpochSecond();
+        if (value < 0 || value > TimeUtils.MAX_UNIX_TIMESTAMP) {
+            value = 0;
+        }
+        return ConstantOperator.createBigint(value);
+    }
+
+    @ConstantFunction.List(list = {
             @ConstantFunction(name = "from_unixtime", argTypes = {INT}, returnType = VARCHAR),
             @ConstantFunction(name = "from_unixtime", argTypes = {BIGINT}, returnType = VARCHAR)
     })

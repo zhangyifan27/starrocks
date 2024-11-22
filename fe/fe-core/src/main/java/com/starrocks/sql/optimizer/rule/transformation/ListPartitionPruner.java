@@ -44,6 +44,8 @@ import com.starrocks.sql.optimizer.operator.scalar.IsNullPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.PredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperatorVisitor;
+import com.starrocks.sql.optimizer.rewrite.HivePartitionEvaluatorVisitor;
+import com.starrocks.sql.optimizer.rewrite.HivePartitionPredicateEvaluator;
 import com.starrocks.sql.optimizer.rewrite.ReplaceColumnRefRewriter;
 import com.starrocks.sql.optimizer.rewrite.ScalarOperatorEvaluator;
 import com.starrocks.sql.optimizer.rewrite.ScalarOperatorRewriter;
@@ -58,6 +60,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -65,6 +68,14 @@ import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 public class ListPartitionPruner implements PartitionPruner {
+
+    public enum PartitionType {
+        HIVE,
+        THIVE,
+        OLAP,
+        ICEBERG
+    }
+
     private static final Logger LOG = LogManager.getLogger(ListPartitionPruner.class);
 
     // example:
@@ -104,6 +115,8 @@ public class ListPartitionPruner implements PartitionPruner {
     private boolean deduceExtraConjuncts = false;
     private LogicalScanOperator scanOperator;
 
+    private Optional<PartitionType> partitionType;
+
     public ListPartitionPruner(
             Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
             Map<ColumnRefOperator, Set<Long>> columnToNullPartitions,
@@ -116,6 +129,16 @@ public class ListPartitionPruner implements PartitionPruner {
             Map<ColumnRefOperator, Set<Long>> columnToNullPartitions,
             List<ScalarOperator> partitionConjuncts, List<Long> specifyPartitionIds,
             ListPartitionInfo listPartitionInfo) {
+        this(columnToPartitionValuesMap, columnToNullPartitions, partitionConjuncts, specifyPartitionIds,
+                listPartitionInfo, Optional.empty());
+    }
+
+    public ListPartitionPruner(
+            Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
+            Map<ColumnRefOperator, Set<Long>> columnToNullPartitions,
+            List<ScalarOperator> partitionConjuncts, List<Long> specifyPartitionIds,
+            ListPartitionInfo listPartitionInfo,
+            Optional<PartitionType> partitionType) {
         this.columnToPartitionValuesMap = columnToPartitionValuesMap;
         this.columnToNullPartitions = columnToNullPartitions;
         this.partitionConjuncts = partitionConjuncts;
@@ -123,6 +146,7 @@ public class ListPartitionPruner implements PartitionPruner {
         this.partitionColumnRefs = getPartitionColumnRefs();
         this.specifyPartitionIds = specifyPartitionIds;
         this.listPartitionInfo = listPartitionInfo;
+        this.partitionType = partitionType;
     }
 
     private Set<Long> getAllPartitions() {
@@ -184,9 +208,23 @@ public class ListPartitionPruner implements PartitionPruner {
                 continue;
             }
 
-            Pair<Set<Long>, Boolean> matchesPair = evalPartitionPruneFilter(operator);
-            Set<Long> conjunctMatches = matchesPair.first;
-            Boolean existNoEvalConjuncts = matchesPair.second;
+            //Pair<Set<Long>, Boolean> matchesPair = evalPartitionPruneFilter(operator);
+            Pair<Set<Long>, Boolean> matchesPair = null;
+            Set<Long> conjunctMatches = null;
+            Boolean existNoEvalConjuncts = false;
+            if (partitionType.isPresent() && partitionType.get() == PartitionType.HIVE) {
+                HivePartitionPredicateEvaluator evaluator = new HivePartitionPredicateEvaluator();
+                HivePartitionEvaluatorVisitor visitor = new HivePartitionEvaluatorVisitor(partitionColumnRefs,
+                        columnToNullPartitions, allPartitions, columnToPartitionValuesMap);
+                matchesPair = evaluator.prunePartitions(operator, visitor);
+                conjunctMatches = matchesPair.first;
+                existNoEvalConjuncts = matchesPair.second;
+            } else {
+                matchesPair = evalPartitionPruneFilter(operator);
+                conjunctMatches = matchesPair.first;
+                existNoEvalConjuncts = matchesPair.second;
+            }
+
             LOG.debug("prune by expr: {}, partitions: {}", operator.toString(), conjunctMatches);
             if (conjunctMatches != null) {
                 if (matches == null) {

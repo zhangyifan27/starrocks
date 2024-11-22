@@ -59,6 +59,7 @@ import com.starrocks.sql.optimizer.operator.scalar.InPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.LikePredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.rule.transformation.ListPartitionPruner;
+import com.starrocks.sql.optimizer.rule.transformation.ListPartitionPruner.PartitionType;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.paimon.table.source.Split;
@@ -438,7 +439,8 @@ public class OptExternalPartitionPruner {
         if (table instanceof HiveMetaStoreTable) {
             ListPartitionPruner partitionPruner =
                     new ListPartitionPruner(columnToPartitionValuesMap, columnToNullPartitions,
-                            scanOperatorPredicates.getPartitionConjuncts(), null);
+                            scanOperatorPredicates.getPartitionConjuncts(), null, null,
+                            Optional.of(PartitionType.HIVE));
             Collection<Long> selectedPartitionIds = partitionPruner.prune();
             if (selectedPartitionIds == null) {
                 selectedPartitionIds = scanOperatorPredicates.getIdToPartitionKey().keySet();
