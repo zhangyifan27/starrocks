@@ -484,12 +484,12 @@ public:
         vpack::ObjectBuilder obj_builder(&builder);
         builder.add("causal-function", to_json(function_name));
         JsonSchemaFormatter schema;
-        schema.add_field("causal-function");
+        schema.add_field("causal-function", "string");
         StatsResult stats_result;
         auto status = calc_stats_result(stats_result);
         if (status.has_value()) {
             builder.add("error", to_json(status.value()));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -511,7 +511,7 @@ public:
         } else if (argument_names.size() != _params.num_variables() + 1) {
             builder.add("error", to_json(fmt::format("Size of argument_names should be {}, but get {}",
                                                      _params.num_variables() + 1, argument_names.size())));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -526,7 +526,7 @@ public:
         }
         result += formula;
         builder.add("formula", to_json(formula));
-        schema.add_field("formula");
+        schema.add_field("formula", "string");
 
         result += ")\n\n";
         result += "Coefficients:\n";
@@ -536,12 +536,12 @@ public:
                   "\n";
         {
             vpack::ArrayBuilder coef_builder(&builder, "coef");
-            schema.add_field("coef");
-            schema.add_array_field("coef", "variable");
-            schema.add_array_field("coef", "estimate");
-            schema.add_array_field("coef", "stderr");
-            schema.add_array_field("coef", "t-value");
-            schema.add_array_field("coef", "p-value");
+            schema.add_field("coef", "array");
+            schema.add_array_field("coef", "variable", "string");
+            schema.add_array_field("coef", "estimate", "double");
+            schema.add_array_field("coef", "stderr", "double");
+            schema.add_array_field("coef", "t-value", "double");
+            schema.add_array_field("coef", "p-value", "double");
             if (_params.use_bias()) {
                 vpack::ObjectBuilder intercept_obj_builder(&builder);
                 result += MathHelpers::to_string_with_precision("(Intercept)", 16) +
@@ -579,13 +579,13 @@ public:
         builder.add("f-statistic", to_json(stats_result.f_statistic));
         builder.add("num-variables", to_json(stats_result.k));
         builder.add("f-value", to_json(stats_result.f_value));
-        schema.add_field("residual-stderr");
-        schema.add_field("df");
-        schema.add_field("r-squared");
-        schema.add_field("adjusted-r-squared");
-        schema.add_field("f-statistic");
-        schema.add_field("num-variables");
-        schema.add_field("f-value");
+        schema.add_field("residual-stderr", "double");
+        schema.add_field("df", "int");
+        schema.add_field("r-squared", "double");
+        schema.add_field("adjusted-r-squared", "double");
+        schema.add_field("f-statistic", "double");
+        schema.add_field("num-variables", "int");
+        schema.add_field("f-value", "double");
         result += "\nResidual standard error: " + std::to_string(stats_result.standard_error) + " on " +
                   std::to_string(stats_result.df) + " degrees of freedom\n";
         result += "Multiple R-squared: " + std::to_string(stats_result.rows_required) +

@@ -90,22 +90,22 @@ nan
 
 select ttest_1samp('x1/x2', 'less', 1.111, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
 -- result:
-count(1) should be greater than 1.
+[LOOSE]{"causal-function": "ttest_1samp", "error": "count(1) should be greater than 1.", "schema": "{\n    causal-function(string),\n    error(string)\n  }"}
 -- !result
 
 select ttest_2samp('x1/x2', 'less', treatment, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
 -- result:
-count(0) of group 0 should be greater than 1.
+[LOOSE]{"causal-function": "ttest_2samp", "error": "at least 2 groups are required for 2-sample t-test, please check the argument of index", "schema": "{\n    causal-function(string),\n    error(string)\n  }"}
 -- !result
 
 select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from corner_cases_test_tbl;
 -- result:
-xexpt_ttest_2samp need excatly two groups, but you give (1) groups.
+[LOOSE]{"causal-function": "xexpt_ttest_2samp", "error": "xexpt_ttest_2samp need excatly two groups, but you give (1) groups.", "schema": "{\n    causal-function(string),\n    error(string)\n  }"}
 -- !result
 
 select ols(Y, [X1, X2], false) from corner_cases_test_tbl;
 -- result:
-Given too less data, num_rows(1) is less than 2.
+[LOOSE]{"causal-function": "ols", "error": "Given too less data, num_rows(1) is less than 2.", "schema": "{\n    causal-function(string),\n    error(string)\n  }"}
 -- !result
 
 select ols_train(Y, [X1, X2], false) from corner_cases_test_tbl;
@@ -133,30 +133,27 @@ select delta_method("x1/x2", false, [X1, X2]) from corner_cases_test_tbl;
 
 select ttest_1samp('x1/x2', 'less', 1.111, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
 -- result:
-
-estimate    stderr      t-statistic p-value     lower       upper       
--0.511000   0.000000    -2.7434e+08 0.000000    -inf        -0.511000   
-
+[LOOSE]{"causal-function": "ttest_1samp", "estimate": -0.511, "lower": "-inf", "p-value": 0, "schema": "{\n    causal-function(string),\n    estimate(double),\n    stderr(double),\n    t-statistic(double),\n    p-value(double),\n    lower(double),\n    upper(double),\n    summary(string)\n  }", "stderr": 1.862645149230957e-9, "summary": "\nestimate    stderr      t-statistic p-value     lower       upper       \n-0.511000   0.000000    -2.7434e+08 0.000000    -inf        -0.511000   \n", "t-statistic": -274341036.032, "upper": -0.5109999942673678}
 -- !result
 
 select ttest_2samp('x1/x2', 'less', treatment, [X1, X2, X3], 'X=x3', 0.1) from corner_cases_test_tbl;
 -- result:
-count(1) of group 0 should be greater than 1.
+[LOOSE]{"causal-function": "ttest_2samp", "error": "no enough data for group 0, expected at least 2 samples", "schema": "{\n    causal-function(string),\n    error(string)\n  }"}
 -- !result
 
 select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from corner_cases_test_tbl;
 -- result:
-count(1) of group(0) should be greater than 1.
+[LOOSE]{"causal-function": "xexpt_ttest_2samp", "error": "count(1) of group(0) should be greater than 1.", "schema": "{\n    causal-function(string),\n    error(string)\n  }"}
 -- !result
 
 select ols(Y, [X1, X2], false) from corner_cases_test_tbl;
 -- result:
-Given too less data, df: n(2)-k(2)-1 is less than one.
+[LOOSE]{"causal-function": "ols", "error": "Given too less data, df: n(2)-k(2)-1 is less than one.", "schema": "{\n    causal-function(string),\n    error(string)\n  }"}
 -- !result
 
 select ols_train(Y, [X1, X2], false) from corner_cases_test_tbl;
 -- result:
-{"Error": "Given too less data, df: n(2)-k(2)-1 is less than one."}
+[LOOSE]{"Error": "Given too less data, df: n(2)-k(2)-1 is less than one."}
 -- !result
 
 select floor(eval_ml_method(
@@ -170,7 +167,7 @@ from corner_cases_test_tbl;
 
 select wls(Y, [X1, X2], false, weight) from corner_cases_test_tbl;
 -- result:
-Given too less data, df: n(2)-k(2)-1 is less than one.
+[LOOSE]{"causal-function": "wls", "error": "Given too less data, df: n(2)-k(2)-1 is less than one.", "schema": "{\n    causal-function(string),\n    error(string)\n  }"}
 -- !result
 
 select wls_train(Y, [X1, X2], false, weight) from corner_cases_test_tbl;

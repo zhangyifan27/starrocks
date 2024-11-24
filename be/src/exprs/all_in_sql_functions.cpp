@@ -36,6 +36,7 @@ const std::unordered_set<std::string_view> AllInSqlFunctions::all_in_sql_functio
         "group_set",
         "mann_whitney_u_test",
         "causal_forest",
+        "quantile_test",
 };
 
 } // namespace starrocks

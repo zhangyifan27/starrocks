@@ -362,10 +362,10 @@ public:
         vpack::ObjectBuilder obj_builder(&builder);
         JsonSchemaFormatter schema;
         builder.add("causal-function", to_json(AllInSqlFunctions::ttest_2samp));
-        schema.add_field("causal-function");
+        schema.add_field("causal-function", "string");
         if (is_uninitialized()) {
             builder.add("error", to_json("ttest agg state is uninitialized."));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -373,7 +373,7 @@ public:
             builder.add(
                     "error",
                     to_json("at least 2 groups are required for 2-sample t-test, please check the argument of index"));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -381,7 +381,19 @@ public:
             builder.add(
                     "error",
                     to_json("at least 2 groups are required for 2-sample t-test, please check the argument of index"));
-            schema.add_field("error");
+            schema.add_field("error", "string");
+            builder.add("schema", to_json(schema.print()));
+            return;
+        }
+        if (_delta_method_stats0.count() == 1) {
+            builder.add("error", to_json("no enough data for group 0, expected at least 2 samples"));
+            schema.add_field("error", "string");
+            builder.add("schema", to_json(schema.print()));
+            return;
+        }
+        if (_delta_method_stats1.count() == 1) {
+            builder.add("error", to_json("no enough data for group 1, expected at least 2 samples"));
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -401,7 +413,7 @@ public:
                         _delta_method_stats1.cov_matrix(), delta_method_stats.cov_matrix(), mean0, mean1, var0, var1)) {
                 builder.add("error",
                             to_json("InvertMatrix failed. some variables in the table are perfectly collinear."));
-                schema.add_field("error");
+                schema.add_field("error", "string");
                 builder.add("schema", to_json(schema.print()));
                 return;
             }
@@ -410,7 +422,7 @@ public:
             auto st = calc_means_and_vars_with_pse(mean0, mean1, var0, var1, warning_prefix);
             if (!st.ok()) {
                 builder.add("error", to_json(st.to_string()));
-                schema.add_field("error");
+                schema.add_field("error", "string");
                 builder.add("schema", to_json(schema.print()));
                 return;
             }
@@ -421,7 +433,7 @@ public:
         if (!std::isfinite(stderr_var)) {
             builder.add("error", to_json(fmt::format("stderr({}) is an abnormal float value, please check your data.",
                                                      stderr_var)));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -464,21 +476,21 @@ public:
         builder.add("p-value", to_json(p_value));
         builder.add("lower", to_json(lower));
         builder.add("upper", to_json(upper));
-        schema.add_field("mean0");
-        schema.add_field("mean1");
-        schema.add_field("estimate");
-        schema.add_field("stderr");
-        schema.add_field("t-statistic");
-        schema.add_field("p-value");
-        schema.add_field("lower");
-        schema.add_field("upper");
+        schema.add_field("mean0", "double");
+        schema.add_field("mean1", "double");
+        schema.add_field("estimate", "double");
+        schema.add_field("stderr", "double");
+        schema.add_field("t-statistic", "double");
+        schema.add_field("p-value", "double");
+        schema.add_field("lower", "double");
+        schema.add_field("upper", "double");
 
         if (!warning_prefix.empty()) {
             builder.add("warning", to_json(warning_prefix));
-            schema.add_field("warning");
+            schema.add_field("warning", "string");
         }
         builder.add("summary", to_json(result_ss.str()));
-        schema.add_field("summary");
+        schema.add_field("summary", "string");
 
         builder.add("schema", to_json(schema.print()));
     }

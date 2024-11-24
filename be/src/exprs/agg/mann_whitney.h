@@ -85,11 +85,11 @@ public:
     void build_result(vpack::Builder& builder) const {
         JsonSchemaFormatter schema;
         vpack::ObjectBuilder obj_builder(&builder);
-        schema.add_field("causal-function");
+        schema.add_field("causal-function", "string");
         builder.add("causal-function", to_json(AllInSqlFunctions::mann_whitney_u_test));
         if (_alternative == TtestAlternative::Unknown) {
             builder.add("error", to_json("state not initialized."));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             return;
         }
         size_t size = _stats[0].size() + _stats[1].size();
@@ -121,7 +121,7 @@ public:
                 /// Scipy implementation throws exception in this case too.
                 if (count_equal == size) {
                     builder.add("error", to_json("All numbers in both samples are identical."));
-                    schema.add_field("error");
+                    schema.add_field("error", "string");
                     return;
                 }
 
@@ -147,7 +147,7 @@ public:
 
         if (std::isnan(sd) || std::isinf(sd) || std::abs(sd) < 1e-7) {
             builder.add("error", to_json(fmt::format("sd({}) is not a valid value.", sd)));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             return;
         }
 
@@ -181,10 +181,10 @@ public:
         builder.add("u1", to_json(u1));
         builder.add("u2", to_json(u2));
         builder.add("p-value", to_json(p_value));
-        schema.add_field("staticstic");
-        schema.add_field("u1");
-        schema.add_field("u2");
-        schema.add_field("p-value");
+        schema.add_field("staticstic", "double");
+        schema.add_field("u1", "double");
+        schema.add_field("u2", "double");
+        schema.add_field("p-value", "double");
         builder.add("schema", to_json(schema.print()));
     }
 

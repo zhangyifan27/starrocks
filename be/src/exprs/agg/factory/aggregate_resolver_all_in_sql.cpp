@@ -25,6 +25,7 @@
 #include "exprs/agg/mann_whitney.h"
 #include "exprs/agg/matrix_multiplication.h"
 #include "exprs/agg/ols.h"
+#include "exprs/agg/quantile_test.h"
 #include "exprs/agg/srm.h"
 #include "exprs/agg/ttest_1samp.h"
 #include "exprs/agg/ttest_2samp.h"
@@ -206,6 +207,34 @@ void AggregateFuncResolver::register_all_in_sql() {
             std::string(AllInSqlFunctions::causal_forest),
             std::vector{TYPE_JSON, TYPE_DOUBLE, TYPE_BOOLEAN, TYPE_DOUBLE, TYPE_ARRAY, TYPE_BOOLEAN}, false,
             std::make_shared<AggregateFunctionCausalForest>());
+
+    // register for quantile test
+    // Y, treatment, percentiles, uin[, num_bootstrap=500[, alpha=0.05[, power=0.8[, mde=0.01]]]]]
+    add_aggregate_mapping<TYPE_JSON, QuantileTestAggregateState>(
+            std::string(AllInSqlFunctions::quantile_test),
+            std::vector{TYPE_DOUBLE, TYPE_VARCHAR, TYPE_ARRAY, TYPE_BIGINT, TYPE_BIGINT, TYPE_DOUBLE, TYPE_DOUBLE,
+                        TYPE_DOUBLE},
+            false, std::make_shared<QuantileTestAggregateFunction>());
+
+    add_aggregate_mapping<TYPE_JSON, QuantileTestAggregateState>(
+            std::string(AllInSqlFunctions::quantile_test),
+            std::vector{TYPE_DOUBLE, TYPE_VARCHAR, TYPE_ARRAY, TYPE_BIGINT, TYPE_BIGINT, TYPE_DOUBLE, TYPE_DOUBLE},
+            false, std::make_shared<QuantileTestAggregateFunction>());
+
+    add_aggregate_mapping<TYPE_JSON, QuantileTestAggregateState>(
+            std::string(AllInSqlFunctions::quantile_test),
+            std::vector{TYPE_DOUBLE, TYPE_VARCHAR, TYPE_ARRAY, TYPE_BIGINT, TYPE_BIGINT, TYPE_DOUBLE}, false,
+            std::make_shared<QuantileTestAggregateFunction>());
+
+    add_aggregate_mapping<TYPE_JSON, QuantileTestAggregateState>(
+            std::string(AllInSqlFunctions::quantile_test),
+            std::vector{TYPE_DOUBLE, TYPE_VARCHAR, TYPE_ARRAY, TYPE_BIGINT, TYPE_BIGINT}, false,
+            std::make_shared<QuantileTestAggregateFunction>());
+
+    add_aggregate_mapping<TYPE_JSON, QuantileTestAggregateState>(
+            std::string(AllInSqlFunctions::quantile_test),
+            std::vector{TYPE_DOUBLE, TYPE_VARCHAR, TYPE_ARRAY, TYPE_BIGINT}, false,
+            std::make_shared<QuantileTestAggregateFunction>());
 }
 
 } // namespace starrocks

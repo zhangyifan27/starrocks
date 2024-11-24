@@ -337,10 +337,10 @@ public:
         vpack::ObjectBuilder obj_builder(&builder);
         builder.add("causal-function", to_json(AllInSqlFunctions::xexpt_ttest_2samp));
         JsonSchemaFormatter schema;
-        schema.add_field("causal-function");
+        schema.add_field("causal-function", "string");
         if (is_uninitialized()) {
             builder.add("error", to_json("ttest agg state is uninitialized."));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -348,7 +348,7 @@ public:
             builder.add("error",
                         to_json(fmt::format("xexpt_ttest_2samp need excatly two groups, but you give ({}) groups.",
                                             _all_stats.size())));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -356,7 +356,7 @@ public:
             if (stats.count() <= 1) {
                 builder.add("error", to_json(fmt::format("count({}) of group({}) should be greater than 1.",
                                                          stats.count(), treatment)));
-                schema.add_field("error");
+                schema.add_field("error", "string");
                 builder.add("schema", to_json(schema.print()));
                 return;
             }
@@ -446,7 +446,7 @@ public:
                                               delta_method_stats_avg_sub_stats.at(group_names[1]), theta_stats_avg,
                                               means_avg[0], means_avg[1], vars_avg[0], vars_avg[1])) {
             builder.add("error", to_json("InvertMatrix failed. some variables in the table are perfectly collinear."));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -466,7 +466,7 @@ public:
                                                   means[0], means[1], vars[0], vars[1])) {
                 builder.add("error",
                             to_json("InvertMatrix failed. some variables in the table are perfectly collinear."));
-                schema.add_field("error");
+                schema.add_field("error", "string");
                 builder.add("schema", to_json(schema.print()));
                 return;
             }
@@ -515,7 +515,7 @@ public:
         if (!std::isfinite(stderr_var) || stderr_var == 0) {
             builder.add("error", to_json(fmt::format("stderr_var({}) is not a finite value, please check your data.",
                                                      stderr_var)));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -556,6 +556,7 @@ public:
 
         std::vector<std::string> titles;
         std::vector<std::vector<vpack::Value>> values(2);
+        std::vector<std::string> types;
 
         auto add_result3 = [&title, &group0, &group1](const std::string& title_, const std::string& group0_,
                                                       const std::string& group1_) {
@@ -567,20 +568,21 @@ public:
             group0 += std::string(max_len - group0.size(), ' ');
             group1 += std::string(max_len - group1.size(), ' ');
         };
-        auto add_result3_json = [&titles, &values](const std::string& title_, auto const& group0_,
-                                                   auto const& group1_) {
+        auto add_result3_json = [&titles, &values, &types](const std::string& title_, auto const& group0_,
+                                                           auto const& group1_, std::string const& type = "double") {
             titles.emplace_back(title_);
             values[0].emplace_back(to_json(group0_));
             values[1].emplace_back(to_json(group1_));
+            types.emplace_back(type);
         };
 
         if constexpr (std::is_same_v<std::string, TreatmentType>) {
             add_result3("groupname", group_names[0], group_names[1]);
-            add_result3_json("groupname", group_names[0], group_names[1]);
+            add_result3_json("groupname", group_names[0], group_names[1], "string");
         } else {
             add_result3("groupname", MathHelpers::to_string_with_precision<false>(group_names[0]),
                         MathHelpers::to_string_with_precision<false>(group_names[1]));
-            add_result3_json("groupname", group_names[0], group_names[1]);
+            add_result3_json("groupname", group_names[0], group_names[1], "int");
         }
         // add_result3("numerator",
         //             MathHelpers::to_string_with_precision<false>(static_cast<uint64_t>(floor(numerators[0] + 0.5))),
@@ -640,24 +642,26 @@ public:
             size_t max_len = std::max({title.size(), group.size()});
             title += std::string(max_len - title.size(), ' ');
             group += std::string(max_len - group.size(), ' ');
-            builder.add(title_, to_json(group_));
         };
 
         DCHECK(titles.size() == values[0].size() && titles.size() == values[1].size());
         for (int i = 0; i < 2; ++i) {
             vpack::ObjectBuilder group_builder(&builder, "group" + std::to_string(i));
-            schema.add_field("group" + std::to_string(i));
+            schema.add_field("group" + std::to_string(i), "object");
             for (int j = 0; j < titles.size(); ++j) {
-                schema.add_field("group" + std::to_string(i), titles[j]);
+                schema.add_field("group" + std::to_string(i), titles[j], types[j]);
                 builder.add(titles[j], values[i][j]);
             }
         }
         titles.clear();
+        types.clear();
         std::vector<vpack::Value> values2;
 
-        auto add_result2_json = [&titles, &values2](const std::string& title_, auto const& value) {
+        auto add_result2_json = [&titles, &values2, &types](const std::string& title_, auto const& value,
+                                                            std::string const& type = "double") {
             titles.emplace_back(title_);
             values2.emplace_back(to_json(value));
+            types.emplace_back(type);
         };
 
         add_result2("diff_relative", std::to_string(diff_relative * 100) + "%");
@@ -665,9 +669,12 @@ public:
         std::string relative_ci =
                 "[" + std::to_string(lower_relative * 100) + "%," + std::to_string(upper_relative * 100) + "%]";
         add_result2(ci_prefix + "%_relative_CI", relative_ci);
-        add_result2_json(ci_prefix + "%_relative_CI_lower", lower_relative);
-        add_result2_json(ci_prefix + "%_relative_CI_upper", upper_relative);
-        add_result2_json(ci_prefix + "%_relative_CI", relative_ci);
+        {
+            vpack::ArrayBuilder relative_ci_arr_builder(&builder, ci_prefix + "%_relative_CI");
+            builder.add(to_json(lower_relative));
+            builder.add(to_json(upper_relative));
+        }
+        schema.add_field(ci_prefix + "%_relative_CI", "array");
 
         add_result2("p-value", MathHelpers::to_string_with_precision<false>(p_value));
         add_result2_json("p-value", p_value);
@@ -679,9 +686,12 @@ public:
             add_result2_json("diff", estimate);
 
             add_result2(ci_prefix + "%_CI", ci);
-            add_result2_json(ci_prefix + "%_CI_lower", lower);
-            add_result2_json(ci_prefix + "%_CI_upper", upper);
-            add_result2_json(ci_prefix + "%_CI", ci);
+            {
+                vpack::ArrayBuilder _ci_arr_builder(&builder, ci_prefix + "%_CI");
+                builder.add(to_json(lower));
+                builder.add(to_json(upper));
+            }
+            schema.add_field(ci_prefix + "%_CI", "array");
         }
         add_result2("power(MDE=" + std::to_string(_ttest_params.mde()) + ")",
                     MathHelpers::to_string_with_precision<false>(power));
@@ -696,15 +706,15 @@ public:
         res += title + '\n' + group + '\n';
         if (!prefix.empty()) {
             builder.add("warning", to_json(prefix));
-            schema.add_field("warning");
+            schema.add_field("warning", "string");
         }
         DCHECK(titles.size() == values2.size());
         for (int j = 0; j < titles.size(); ++j) {
             builder.add(titles[j], values2[j]);
-            schema.add_field(titles[j]);
+            schema.add_field(titles[j], "string", types[j]);
         }
         builder.add("summary", to_json(prefix + res));
-        schema.add_field("summary");
+        schema.add_field("summary", "string");
         builder.add("schema", to_json(schema.print()));
     }
 

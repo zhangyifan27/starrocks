@@ -203,12 +203,12 @@ public:
         DCHECK(!is_uninitialized());
         vpack::ObjectBuilder obj_builder(&builder);
         JsonSchemaFormatter schema;
-        schema.add_field("causal-function");
+        schema.add_field("causal-function", "string");
         builder.add("causal-function", to_json(AllInSqlFunctions::ttest_1samp));
         if (_delta_method_stats.count() <= 1) {
             builder.add("error",
                         to_json(fmt::format("count({}) should be greater than 1.", _delta_method_stats.count())));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -219,7 +219,7 @@ public:
         if (!TtestCommon::calc_cuped_mean_and_var(_ttest_params.Y_expression(), _ttest_params.cuped_expression(),
                                                   _ttest_params.num_variables(), count, means, cov_matrix, mean, var)) {
             builder.add("error", to_json("InvertMatrix failed. some variables in the table are perfectly collinear."));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -227,7 +227,7 @@ public:
         double stderr_var = std::sqrt(var);
         if (!std::isfinite(stderr_var)) {
             builder.add("error", to_json("stderr is an abnormal float value, please check your data."));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -239,7 +239,7 @@ public:
         if (std::isnan(t_stat) || std::isinf(t_stat)) {
             builder.add("warning", to_json("Data are essentially constant (standard error is zero), making "
                                            "t-statistic undefined. Check for variability in your data."));
-            schema.add_field("warning");
+            schema.add_field("warning", "string");
             prefix = "Warning: Data are essentially constant (standard error is zero), making t-statistic undefined. "
                      "Check for variability in your data.\n\n";
             if (std::abs(estimate) < std::numeric_limits<double>::epsilon()) {
@@ -275,13 +275,13 @@ public:
         builder.add("p-value", to_json(p_value));
         builder.add("lower", to_json(lower));
         builder.add("upper", to_json(upper));
-        schema.add_field("estimate");
-        schema.add_field("stderr");
-        schema.add_field("t-statistic");
-        schema.add_field("p-value");
-        schema.add_field("lower");
-        schema.add_field("upper");
-        schema.add_field("summary");
+        schema.add_field("estimate", "double");
+        schema.add_field("stderr", "double");
+        schema.add_field("t-statistic", "double");
+        schema.add_field("p-value", "double");
+        schema.add_field("lower", "double");
+        schema.add_field("upper", "double");
+        schema.add_field("summary", "string");
 
         builder.add("schema", to_json(schema.print()));
         builder.add("summary", to_json(prefix + result_ss.str()));

@@ -109,16 +109,16 @@ public:
         vpack::ObjectBuilder obj_builder(&builder);
         builder.add("causal-function", to_json(AllInSqlFunctions::srm));
         JsonSchemaFormatter schema;
-        schema.add_field("causal-function");
+        schema.add_field("causal-function", "string");
         if (_group2sum.size() != _ratios.size()) {
             builder.add("error", to_json("the number of groups must equal to the number of ratios."));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
         if (_group2sum.empty()) {
             builder.add("error", to_json("empty table"));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -131,7 +131,7 @@ public:
         double ratio_sum = std::reduce(_ratios.begin(), _ratios.end(), 0.);
         if (fabs(ratio_sum) <= 1e-6) {
             builder.add("error", to_json(fmt::format("sum of ratio({}) must not equal to zero!", ratio_sum)));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -139,7 +139,7 @@ public:
             double exp = ratio / ratio_sum * f_obs_sum;
             if (exp <= 1e-6) {
                 builder.add("error", to_json(fmt::format("f_exp({}) should not contain zeros or negative.", exp)));
-                schema.add_field("error");
+                schema.add_field("error", "string");
                 builder.add("schema", to_json(schema.print()));
                 return;
             }
@@ -150,7 +150,7 @@ public:
         for (size_t i = 0; i < f_obs.size(); i++) chisquare += (f_obs[i] - f_exp[i]) * (f_obs[i] - f_exp[i]) / f_exp[i];
         if (chisquare <= 1e-6) {
             builder.add("error", to_json(fmt::format("chisquare({}) should not equal to zero!", chisquare)));
-            schema.add_field("error");
+            schema.add_field("error", "string");
             builder.add("schema", to_json(schema.print()));
             return;
         }
@@ -167,20 +167,20 @@ public:
             result << MathHelpers::to_string_with_precision(group) << MathHelpers::to_string_with_precision(ob)
                    << MathHelpers::to_string_with_precision(_ratios[pos]);
             vpack::ObjectBuilder group_obj_builder(&builder, "group" + std::to_string(pos));
-            schema.add_field("group" + std::to_string(pos));
+            schema.add_field("group" + std::to_string(pos), "object");
             builder.add("groupname", to_json(group));
-            schema.add_field("group" + std::to_string(pos), "groupname");
+            schema.add_field("group" + std::to_string(pos), "groupname", "string");
             builder.add("f_obs", to_json(ob));
-            schema.add_field("group" + std::to_string(pos), "f_obs");
+            schema.add_field("group" + std::to_string(pos), "f_obs", "double");
             builder.add("ratio", to_json(_ratios[pos]));
-            schema.add_field("group" + std::to_string(pos), "ratio");
+            schema.add_field("group" + std::to_string(pos), "ratio", "double");
             if (!pos) {
                 result << MathHelpers::to_string_with_precision(chisquare)
                        << MathHelpers::to_string_with_precision(p_value);
                 builder.add("chisquare", to_json(chisquare));
-                schema.add_field("group" + std::to_string(pos), "chisquare");
+                schema.add_field("group" + std::to_string(pos), "chisquare", "double");
                 builder.add("p-value", to_json(p_value));
-                schema.add_field("group" + std::to_string(pos), "p-value");
+                schema.add_field("group" + std::to_string(pos), "p-value", "double");
             }
             result << "\n";
             pos++;

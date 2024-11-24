@@ -500,6 +500,7 @@ public class FunctionSet {
     public static final String GROUP_SET = "group_set";
     public static final String MANN_WHITNEY_U_TEST = "mann_whitney_u_test";
     public static final String CAUSAL_FOREST = "causal_forest";
+    public static final String QUANTILE_TEST = "quantile_test";
 
     // JSON functions
     public static final Function JSON_QUERY_FUNC = new Function(
@@ -1471,6 +1472,27 @@ public class FunctionSet {
         addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR, 
                         Type.DOUBLE, Type.ARRAY_VARCHAR), Type.JSON, Type.VARBINARY, false, true, false));
+
+        // Y, treatment, percentiles, uin[, num_bootstrap=500[, alpha=0.05[, power=0.8[, mde=0.01]]]]]
+        addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT, 
+                        Type.DOUBLE, Type.DOUBLE, Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT, 
+                        Type.DOUBLE, Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT, 
+                        Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT), 
+                Type.JSON, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT), 
+                Type.JSON, Type.VARBINARY, false, true, false));
 
         // expression, side, treatment, data, [cuped, alpha]
         addBuiltin(AggregateFunction.createBuiltin(TTESTS_2SAMP,
