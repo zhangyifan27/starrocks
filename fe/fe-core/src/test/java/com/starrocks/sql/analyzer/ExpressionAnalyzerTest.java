@@ -14,8 +14,10 @@
 
 package com.starrocks.sql.analyzer;
 
+import com.starrocks.analysis.CastExpr;
 import com.starrocks.analysis.CollectionElementExpr;
 import com.starrocks.analysis.Expr;
+import com.starrocks.analysis.FloatLiteral;
 import com.starrocks.analysis.IntLiteral;
 import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.StringLiteral;
@@ -26,7 +28,9 @@ import com.starrocks.catalog.MapType;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.Type;
+import com.starrocks.common.AnalysisException;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import com.starrocks.sql.parser.NodePosition;
 import com.starrocks.sql.parser.SqlParser;
 import com.starrocks.sql.plan.ExecPlan;
@@ -34,6 +38,8 @@ import com.starrocks.sql.plan.PlanTestBase;
 import com.starrocks.thrift.TExprNodeType;
 import org.junit.Assert;
 import org.junit.Test;
+
+import static com.starrocks.catalog.Type.DECIMAL128_INT;
 
 public class ExpressionAnalyzerTest extends PlanTestBase {
 
@@ -225,5 +231,22 @@ public class ExpressionAnalyzerTest extends PlanTestBase {
         userVariableExpr.setValue(expr);
         UserVariableExpr copy = (UserVariableExpr) userVariableExpr.clone();
         Assert.assertEquals(userVariableExpr, copy);
+    }
+
+    public void testCastToIntAnalyzer() {
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setExperimentalEnableCastToIntRound(true);
+        ConnectContext context = new ConnectContext();
+        context.setSessionVariable(sessionVariable);
+        ExpressionAnalyzer.Visitor visitor = new ExpressionAnalyzer.Visitor(new AnalyzeState(), context);
+        FloatLiteral num = null;
+        try {
+            num = new FloatLiteral(5.5d);
+        } catch (AnalysisException e) {
+            Assert.fail(e.getMessage());
+        }
+        CastExpr cast = new CastExpr(ScalarType.INT, num);
+        visitor.visitCastExpr(cast, new Scope(RelationId.anonymous(), new RelationFields()));
+        Assert.assertEquals(DECIMAL128_INT, cast.getType());
     }
 }

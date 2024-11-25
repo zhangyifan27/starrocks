@@ -3894,6 +3894,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.preferThiveFunctions = preferThiveFunctions;
     }
 
+    @VarAttr(name = EXPERIMENTAL_ENABLE_CAST_TO_INT_ROUND, flag = VariableMgr.INVISIBLE)
+    private boolean experimentalEnableCastToIntRound = false;
+
+    public boolean isExperimentalEnableCastToIntRound() {
+        return experimentalEnableCastToIntRound;
+    }
+
+    public void setExperimentalEnableCastToIntRound(boolean experimentalEnableCastToIntRound) {
+        this.experimentalEnableCastToIntRound = experimentalEnableCastToIntRound;
+    }
+
     public boolean getEnablePlanValidation() {
         return this.enablePlanValidation;
     }

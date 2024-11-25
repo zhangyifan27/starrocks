@@ -126,6 +126,7 @@ import java.util.function.Consumer;
 import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 
+import static com.starrocks.catalog.Type.DECIMAL128_INT;
 import static com.starrocks.connector.thive.ThiveUdfUtils.getThiveUdfFunction;
 import static com.starrocks.sql.analyzer.AnalyticAnalyzer.verifyAnalyticExpression;
 import static com.starrocks.sql.common.ErrorMsgProxy.PARSER_ERROR_MSG;
@@ -1047,6 +1048,10 @@ public class ExpressionAnalyzer {
                         + castType.toSql() + " in sql `" +
                         AstToStringBuilder.toString(cast.getChild(0)).replace("%", "%%") + "`",
                         cast.getPos());
+            }
+
+            if (session.getSessionVariable().isExperimentalEnableCastToIntRound() && castType.isIntegerType()) {
+                castType = DECIMAL128_INT;
             }
 
             cast.setType(castType);
