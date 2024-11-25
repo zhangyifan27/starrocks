@@ -39,6 +39,8 @@ public class AnalyzeTestUtil {
         connectContext = UtFrameUtils.createDefaultCtx();
         starRocksAssert = new StarRocksAssert(connectContext);
         starRocksAssert.withDatabase(DB_NAME).useDatabase(DB_NAME);
+        connectContext.getSessionVariable().setEnableSameAliasInSubquery(false);
+        connectContext.getSessionVariable().setEnableSameColumnNameInSubquery(false);
 
         starRocksAssert.withTable("CREATE TABLE `t0` (\n" +
                 "  `v1` bigint NULL COMMENT \"\",\n" +

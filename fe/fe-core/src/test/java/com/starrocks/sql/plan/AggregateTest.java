@@ -1082,6 +1082,8 @@ public class AggregateTest extends PlanTestBase {
     public void testOnlyFullGroupBy() throws Exception {
         long sqlmode = connectContext.getSessionVariable().getSqlMode();
         connectContext.getSessionVariable().setSqlMode(0);
+        connectContext.getSessionVariable().setEnableSameAliasInSubquery(false);
+        connectContext.getSessionVariable().setEnableSameColumnNameInSubquery(false);
         String sql = "select v1, v2 from t0 group by v1";
         String plan = getFragmentPlan(sql);
         Assert.assertTrue(plan, plan.contains("PLAN FRAGMENT 0\n" +

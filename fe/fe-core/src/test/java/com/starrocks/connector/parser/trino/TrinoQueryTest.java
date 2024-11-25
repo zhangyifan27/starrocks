@@ -1249,4 +1249,15 @@ public class TrinoQueryTest extends TrinoTestBase {
         sql = "select null is not distinct from null";
         analyzeSuccess(sql);
     }
+
+    public void testSameNameInDiffSubQuery() throws Exception {
+        String sql = "select a.* from(select v1 from t0)a left join (select v1 from t0)b on a.v1 = b.v1 order by v1";
+        assertPlanContains(sql, "OUTPUT EXPRS:1: v1");
+    }
+
+    @Test
+    public void testSameAliasInOrderBy() throws Exception {
+        String sql = "select sum(a) as a, v2 from (select sum(v1) as a, v2 from t0 group by v2) group by v2 order by a;";
+        assertPlanContains(sql, "OUTPUT EXPRS:5: sum | 2: v2");
+    }
 }

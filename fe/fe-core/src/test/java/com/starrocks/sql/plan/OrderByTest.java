@@ -34,6 +34,8 @@ class OrderByTest extends PlanTestBase {
     @BeforeAll
     public static void beforeClass() throws Exception {
         PlanTestBase.beforeClass();
+        connectContext.getSessionVariable().setEnableSameAliasInSubquery(false);
+        connectContext.getSessionVariable().setEnableSameColumnNameInSubquery(false);
     }
 
     @Test

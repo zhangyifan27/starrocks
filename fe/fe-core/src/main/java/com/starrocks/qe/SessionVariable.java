@@ -431,6 +431,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String DEFAULT_TABLE_COMPRESSION = "default_table_compression";
 
+    public static final String ENABLE_SAME_ALIAS_IN_SUBQUERY = "enable_same_alias_in_subquery";
+
+    public static final String ENABLE_SAME_COLUMN_NAME_IN_SUBQUERY = "enable_same_column_name_in_subquery";
+
     // In most cases, the partition statistics obtained from the hive metastore are empty.
     // Because we get partition statistics asynchronously for the first query of a table or partition,
     // if the gc of any service is caused, you can set the value to 100 for testing.
@@ -1425,6 +1429,12 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VarAttr(name = DEFAULT_TABLE_COMPRESSION)
     private String defaultTableCompressionAlgorithm = "lz4_frame";
+
+    @VariableMgr.VarAttr(name = ENABLE_SAME_ALIAS_IN_SUBQUERY)
+    private boolean enableSameAliasInSubquery = true;
+
+    @VariableMgr.VarAttr(name = ENABLE_SAME_COLUMN_NAME_IN_SUBQUERY)
+    private boolean enableSameColumnNameInSubquery = true;
 
     @VariableMgr.VarAttr(name = ENABLE_ADAPTIVE_SINK_DOP)
     private boolean enableAdaptiveSinkDop = false;
@@ -2508,6 +2518,22 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setEnableHiveMetadataCacheWithInsert(boolean enableHiveMetadataCacheWithInsert) {
         this.enableHiveMetadataCacheWithInsert = enableHiveMetadataCacheWithInsert;
+    }
+
+    public boolean isEnableSameAliasInSubquery() {
+        return enableSameAliasInSubquery;
+    }
+
+    public void setEnableSameAliasInSubquery(boolean enableSameAliasInSubquery) {
+        this.enableSameAliasInSubquery = enableSameAliasInSubquery;
+    }
+
+    public boolean isEnableSameColumnNameInSubquery() {
+        return enableSameColumnNameInSubquery;
+    }
+
+    public void setEnableSameColumnNameInSubquery(boolean enableSameColumnNameInSubquery) {
+        this.enableSameColumnNameInSubquery = enableSameColumnNameInSubquery;
     }
 
     public int getHivePartitionStatsSampleSize() {

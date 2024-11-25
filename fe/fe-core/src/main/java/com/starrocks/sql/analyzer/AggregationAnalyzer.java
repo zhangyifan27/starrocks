@@ -147,7 +147,11 @@ public class AggregationAnalyzer {
                 return true;
             }
 
-            if (groupingFields.contains(fieldId)) {
+            if (session.getSessionVariable().isEnableSameAliasInSubquery() &&
+                    groupingFields.stream().anyMatch(groupingFieldId ->
+                            groupingFieldId.getRelationId().equals(fieldId.getRelationId()))) {
+                return true;
+            } else if (groupingFields.contains(fieldId)) {
                 return true;
             } else if (!SqlModeHelper.check(session.getSessionVariable().getSqlMode(),
                     SqlModeHelper.MODE_ONLY_FULL_GROUP_BY)) {

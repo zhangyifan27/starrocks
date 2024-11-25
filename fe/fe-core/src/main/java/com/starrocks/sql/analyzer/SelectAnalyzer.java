@@ -29,6 +29,7 @@ import com.starrocks.analysis.LimitElement;
 import com.starrocks.analysis.OrderByElement;
 import com.starrocks.analysis.ParseNode;
 import com.starrocks.analysis.SlotRef;
+import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.FunctionSet;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.Type;
@@ -89,8 +90,14 @@ public class SelectAnalyzer {
         Scope sourceAndOutputScope = computeAndAssignOrderScope(analyzeState, sourceScope, outputScope,
                 selectList.isDistinct());
 
+        List<TableName> tableNames = new ArrayList<>();
+        if (session.getSessionVariable().isEnableSameColumnNameInSubquery()) {
+            tableNames = selectList.getItems().stream().filter(SelectListItem::isStar)
+                    .map(SelectListItem::getTblName).collect(Collectors.toList());
+        }
         List<OrderByElement> orderByElements =
-                analyzeOrderBy(sortClause, analyzeState, sourceAndOutputScope, outputExpressions, selectList.isDistinct());
+                analyzeOrderBy(sortClause, analyzeState, sourceAndOutputScope, outputExpressions,
+                        selectList.isDistinct(), tableNames);
         List<Expr> orderByExpressions =
                 orderByElements.stream().map(OrderByElement::getExpr).collect(Collectors.toList());
 
@@ -314,7 +321,8 @@ public class SelectAnalyzer {
     private List<OrderByElement> analyzeOrderBy(List<OrderByElement> orderByElements, AnalyzeState analyzeState,
                                                 Scope orderByScope,
                                                 List<Expr> outputExpressions,
-                                                boolean isDistinct) {
+                                                boolean isDistinct,
+                                                List<TableName> tableNames) {
         if (orderByElements == null) {
             analyzeState.setOrderBy(Collections.emptyList());
             return Collections.emptyList();
@@ -324,6 +332,15 @@ public class SelectAnalyzer {
             Expr expression = orderByElement.getExpr();
             AnalyzerUtils.verifyNoGroupingFunctions(expression, "ORDER BY");
             AnalyzerUtils.verifyNoSubQuery(expression, "ORDER BY");
+
+            List<Field> outputFields = analyzeState.getOutputScope().getRelationFields()
+                    .getAllFields().stream().collect(Collectors.toList());
+            if (expression instanceof SlotRef && ((SlotRef) expression).getTblNameWithoutAnalyzed() == null &&
+                    tableNames.size() != 0) {
+                SlotRef expr = (SlotRef) expression;
+                outputFields.stream().filter(field -> field.getName().equals(expr.getColumnName()))
+                        .findFirst().ifPresent(field -> expr.setTblName(field.getRelationAlias()));
+            }
 
             if (expression instanceof IntLiteral) {
                 long ordinal = ((IntLiteral) expression).getLongValue();
