@@ -222,7 +222,8 @@ public:
 
     Status init(StreamLoadContext* ctx) override;
     Status assign_partition(StreamLoadContext* ctx, const std::pair<std::string, std::string>& initial_position);
-    Status tmp_assign_partition(StreamLoadContext* ctx, const std::string& partition);
+    Status tmp_assign_partition(StreamLoadContext* ctx, const std::string& partition, bool use_reader);
+    Status acknowledge_cumulative(pulsar::MessageId& message_id);
     // TODO(cmy): currently do not implement single consumer start method, using group_consume
     Status consume(StreamLoadContext* ctx) override { return Status::OK(); }
     Status cancel(StreamLoadContext* ctx) override;
@@ -252,6 +253,8 @@ private:
 
     pulsar::Client* _p_client = nullptr;
     pulsar::Reader _p_reader;
+    pulsar::Consumer _p_consumer;
+    bool _use_consumer = false;  // to check whether _p_consumer is used or not
     std::shared_ptr<PulsarConsumerPipe> _p_consumer_pipe;
 };
 

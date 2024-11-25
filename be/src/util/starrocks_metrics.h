@@ -294,6 +294,8 @@ public:
     METRIC_DEFINE_INT_GAUGE(get_kafka_watermark_offsets_cost_time_ms, MetricUnit::MILLISECONDS);
     METRIC_DEFINE_INT_GAUGE(get_pulsar_partitions_cost_time_ms, MetricUnit::MILLISECONDS);
     METRIC_DEFINE_INT_GAUGE(get_pulsar_last_message_id_cost_time_ms, MetricUnit::MILLISECONDS);
+    METRIC_DEFINE_INT_GAUGE(kafka_ack_offset_failed_num, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_GAUGE(pulsar_ack_offset_failed_num, MetricUnit::NOUNIT);
 
     IntGaugeMetricsMap disks_total_capacity;
     IntGaugeMetricsMap disks_avail_capacity;

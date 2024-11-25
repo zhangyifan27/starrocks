@@ -220,6 +220,8 @@ StarRocksMetrics::StarRocksMetrics() : _metrics(_s_registry_name) {
     REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(tube, idle, idle_tube_consumer_num);
     REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(tube, clean, bg_clean_tube_consumer_num);
     REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(tube, assign_failed, assign_failed_tube_consumer_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(kafka, ack_failed, kafka_ack_offset_failed_num);
+    REGISTER_ROUTINE_LOAD_CONSUMER_METRIC(pulsar, ack_failed, pulsar_ack_offset_failed_num);
 
     // Gauge
     REGISTER_STARROCKS_METRIC(memory_pool_bytes_total);

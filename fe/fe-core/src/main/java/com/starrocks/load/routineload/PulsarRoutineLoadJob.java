@@ -59,13 +59,7 @@ import com.starrocks.transaction.TransactionState;
 import com.starrocks.transaction.TransactionStatus;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.apache.pulsar.client.api.ClientBuilder;
-import org.apache.pulsar.client.api.Consumer;
 import org.apache.pulsar.client.api.MessageId;
-import org.apache.pulsar.client.api.PulsarClient;
-import org.apache.pulsar.client.api.PulsarClientException;
-import org.apache.pulsar.client.api.SubscriptionType;
-import org.apache.pulsar.client.impl.auth.AuthenticationToken;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -107,9 +101,6 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
     private MessageId defaultInitialPosition = null;
     private String authToken = null;
 
-    private PulsarClient pulsarClient = null;
-    private Map<String, Consumer> pulsarConsumers = Maps.newHashMap();
-
     public PulsarRoutineLoadJob() {
         // for serialization, id is dummy
         super(-1, LoadDataSourceType.PULSAR);
@@ -141,78 +132,6 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
 
     public Map<String, String> getConvertedCustomProperties() {
         return convertedCustomProperties;
-    }
-
-    private void startConsumers() {
-        clearConsumers();
-        try {
-            ClientBuilder builder = PulsarClient.builder().serviceUrl(serviceUrl);
-            if (authToken != null) {
-                builder.authentication(new AuthenticationToken(authToken));
-            }
-            pulsarClient = builder.build();
-        } catch (PulsarClientException e) {
-            LOG.warn("Failed to create pulsar client for topic: " + topic);
-        }
-
-        for (String partition : currentPulsarPartitions) {
-            try {
-                Consumer consumer = pulsarClient.newConsumer()
-                        .topic(partition)
-                        .subscriptionName(subscription)
-                        .receiverQueueSize(1)
-                        .subscriptionType(SubscriptionType.Shared)
-                        .subscribe();
-                pulsarConsumers.put(partition, consumer);
-            } catch (PulsarClientException e) {
-                LOG.warn("Failed to subscribe topic: " + partition);
-            }
-        }
-    }
-
-    private void clearConsumers() {
-        pulsarConsumers.entrySet().forEach(entry -> {
-            try {
-                entry.getValue().close();
-            } catch (PulsarClientException e) {
-                LOG.warn("Failed to close pulsar consumer for partition: " + entry.getKey() + ". " + e.getMessage());
-            }
-        });
-        pulsarConsumers.clear();
-
-        if (pulsarClient != null) {
-            try {
-                pulsarClient.close();
-            } catch (PulsarClientException e) {
-                LOG.warn("Failed to close pulsar client for topic: " + topic + ". " + e.getMessage());
-            } finally {
-                pulsarClient = null;
-            }
-        }
-    }
-
-    @Override
-    protected void executeRunning() {
-        super.executeRunning();
-        startConsumers();
-    }
-
-    @Override
-    protected void executePause(ErrorReason reason) {
-        super.executePause(reason);
-        clearConsumers();
-    }
-
-    @Override
-    protected void executeStop() {
-        super.executeStop();
-        clearConsumers();
-    }
-
-    @Override
-    protected void executeCancel(ErrorReason reason) {
-        super.executeCancel(reason);
-        clearConsumers();
     }
 
     @Override
@@ -411,24 +330,6 @@ public class PulsarRoutineLoadJob extends RoutineLoadJob {
         super.updateProgress(attachment);
         this.progress.update(attachment.getProgress());
         this.timestampProgress.update(attachment.getTimestampProgress());
-
-        {
-            // Pulsar reader can't subscribe user defined subscription, so here ack this subscription to update progress.
-            Map<String, MessageId> ackPositions =
-                    ((PulsarProgress) attachment.getProgress()).getPartitionToInitialPosition();
-            for (Map.Entry<String, MessageId> ackPosition : ackPositions.entrySet()) {
-                if (pulsarConsumers.containsKey(ackPosition.getKey())) {
-                    try {
-                        pulsarConsumers.get(ackPosition.getKey()).seek(ackPosition.getValue());
-                    } catch (PulsarClientException e) {
-                        LOG.warn("Failed to ack pulsar partition: " + ackPosition.getKey() + " for position: " +
-                                ackPosition.getValue() + ". " + e.getMessage());
-                    }
-                } else {
-                    LOG.warn("Can't find consumer for partition: " + ackPosition.getKey());
-                }
-            }
-        }
     }
 
     @Override

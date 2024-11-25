@@ -248,7 +248,7 @@ Status RoutineLoadTaskExecutor::get_pulsar_partition_position(const PPulsarPosit
     RETURN_IF_ERROR(_data_consumer_pool.get_consumer(&ctx, &consumer));
     for (const auto& p : partitions) {
         pulsar::MessageId message_id;
-        RETURN_IF_ERROR(std::static_pointer_cast<PulsarDataConsumer>(consumer)->tmp_assign_partition(&ctx, p));
+        RETURN_IF_ERROR(std::static_pointer_cast<PulsarDataConsumer>(consumer)->tmp_assign_partition(&ctx, p, true));
         st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->get_last_message_id(message_id);
         std::static_pointer_cast<PulsarDataConsumer>(consumer).reset();
         message_ids->push_back(message_id);
@@ -453,7 +453,38 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
 
     } break;
     case TLoadSourceType::PULSAR: {
-        // No need to do message confirm for reader mode
+        for (auto& kv : ctx->pulsar_info->ack_offset) {
+            Status st;
+            // get consumer
+            std::shared_ptr<DataConsumer> consumer;
+            st = _data_consumer_pool.get_consumer(ctx, &consumer);
+            if (!st.ok()) {
+                // Pulsar Offset Acknowledgement is idempotent, Failure should not block the normal process
+                // So just print a warning
+                LOG(WARNING) << st.message();
+                break;
+            }
+
+            // assign partition for consumer
+            st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->tmp_assign_partition(ctx, kv.first, false);
+            if (!st.ok()) {
+                // Pulsar Offset Acknowledgement is idempotent, Failure should not block the normal process
+                // So just print a warning
+                LOG(WARNING) << st.message();
+                break;
+            }
+
+            // do ack
+            st = std::static_pointer_cast<PulsarDataConsumer>(consumer)->acknowledge_cumulative(kv.second);
+            if (!st.ok()) {
+                // Pulsar Offset Acknowledgement is idempotent, Failure should not block the normal process
+                // So just print a warning
+                LOG(WARNING) << st.message();
+            }
+
+            // return consumer
+            _data_consumer_pool.return_consumer(consumer);
+        }
     } break;
     default:
         return;

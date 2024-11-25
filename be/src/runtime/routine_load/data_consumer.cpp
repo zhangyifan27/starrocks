@@ -521,6 +521,7 @@ Status KafkaDataConsumer::commit(const std::string& topic, const std::map<int32_
 
     RdKafka::ErrorCode err = _k_consumer->commitSync(topic_partitions);
     if (err != RdKafka::ERR_NO_ERROR) {
+        StarRocksMetrics::instance()->kafka_ack_offset_failed_num.increment(1);
         std::stringstream ss;
         ss << "failed to commit kafka offset, topic: " << topic << ", group id: " << _group_id
            << ", err: " << RdKafka::err2str(err);
@@ -619,24 +620,47 @@ Status PulsarDataConsumer::assign_partition(StreamLoadContext* ctx,
     return Status::OK();
 }
 
-Status PulsarDataConsumer::tmp_assign_partition(StreamLoadContext* ctx, const std::string& partition) {
+Status PulsarDataConsumer::tmp_assign_partition(StreamLoadContext* ctx, const std::string& partition, bool use_reader) {
     std::stringstream ss;
     ss << "consumer: " << _id << ", grp: " << _grp_id << " tmp assign partition: " << partition
        << ", subscription: " << _subscription << ", initial_position: " << pulsar::MessageId::latest();
     LOG(INFO) << ss.str();
 
-    pulsar::Result result;
-    pulsar::ReaderConfiguration config;
-    if (!_subscription.empty()) {
-        config.setSubscriptionRolePrefix(_subscription);
+    pulsar::Result result = pulsar::ResultOk;
+    if (use_reader) {
+        pulsar::ReaderConfiguration config;
+        if (!_subscription.empty()) {
+            config.setSubscriptionRolePrefix(_subscription);
+        }
+        result = _p_client->createReader(partition, pulsar::MessageId::latest(), config, _p_reader);
+    } else {
+        if(!_subscription.empty()) {
+            pulsar::ConsumerConfiguration conf;
+            conf.setConsumerType(pulsar::ConsumerShared);
+            result = _p_client->subscribe(partition, _subscription, conf, _p_consumer);
+            _use_consumer = true;
+        }
     }
-    result = _p_client->createReader(partition, pulsar::MessageId::latest(), config, _p_reader);
     if (result != pulsar::ResultOk) {
-        LOG(WARNING) << "PAUSE: failed to create pulsar reader: " << ctx->brief(true) << ", err: " << result;
-        return Status::InternalError("PAUSE: failed to create pulsar reader: " +
+        std::string type = use_reader ? "reader" : "consumer";
+        StarRocksMetrics::instance()->assign_failed_pulsar_consumer_num.increment(1);
+        LOG(WARNING) << "PAUSE: failed to create pulsar " << type << ":" << ctx->brief(true) << ", err: " << result;
+        return Status::InternalError("PAUSE: failed to create pulsar " + type + ": " +
                                      std::string(pulsar::strResult(result)));
     }
 
+    return Status::OK();
+}
+
+Status PulsarDataConsumer::acknowledge_cumulative(pulsar::MessageId& message_id) {
+    DCHECK(_use_consumer);
+    pulsar::Result res = _p_consumer.seek(message_id);
+    if (res != pulsar::ResultOk) {
+        StarRocksMetrics::instance()->pulsar_ack_offset_failed_num.increment(1);
+        std::stringstream ss;
+        ss << "failed to acknowledge pulsar message : " << res;
+        return Status::InternalError(ss.str());
+    }
     return Status::OK();
 }
 
@@ -756,7 +780,12 @@ Status PulsarDataConsumer::cancel(StreamLoadContext* ctx) {
 Status PulsarDataConsumer::reset() {
     std::unique_lock<std::mutex> l(_lock);
     _cancelled = false;
-    _p_reader.close();
+    if (_use_consumer) {
+        _p_consumer.close();
+        _use_consumer = false;
+    } else {
+        _p_reader.close();
+    }
     return Status::OK();
 }
 
