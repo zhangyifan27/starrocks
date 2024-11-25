@@ -69,17 +69,23 @@ public class RemoteScanRangeLocations {
     private boolean forceScheduleLocal = false;
     private boolean canBackendSplitFile = false;
 
+    private List<RemoteFileInfo> partitions = new ArrayList<>();
+    private long fileNum = 0;
+    private long fileSizeBytes = 0;
+
     public void setup(DescriptorTable descTbl, Table table, HDFSScanNodePredicates scanNodePredicates) {
         Collection<Long> selectedPartitionIds = scanNodePredicates.getSelectedPartitionIds();
         if (selectedPartitionIds.isEmpty()) {
             return;
         }
 
+        List<PartitionKey> partitionKeys = Lists.newArrayList();
         for (long partitionId : selectedPartitionIds) {
             PartitionKey partitionKey = scanNodePredicates.getIdToPartitionKey().get(partitionId);
             DescriptorTable.ReferencedPartitionInfo partitionInfo =
                     new DescriptorTable.ReferencedPartitionInfo(partitionId, partitionKey);
             partitionInfos.add(partitionInfo);
+            partitionKeys.add(partitionKey);
             descTbl.addReferencedPartitions(table, partitionInfo);
         }
 
@@ -87,6 +93,25 @@ public class RemoteScanRangeLocations {
         if (ConnectContext.get() != null) {
             // ConnectContext sometimes will be nullptr, we need to cover it up
             forceScheduleLocal = ConnectContext.get().getSessionVariable().getForceScheduleLocal();
+        }
+
+        HiveMetaStoreTable hiveMetaStoreTable = (HiveMetaStoreTable) table;
+        String catalogName = hiveMetaStoreTable.getCatalogName();
+        try {
+            partitions = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(
+                    catalogName, table, partitionKeys);
+        } catch (Exception e) {
+            LOG.error("Failed to get remote files", e);
+            throw e;
+        }
+
+        for (int i = 0; i < partitions.size(); i++) {
+            for (RemoteFileDesc fileDesc : partitions.get(i).getFiles()) {
+                if (fileDesc.getLength() > 0) {
+                    fileNum++;
+                    fileSizeBytes += fileDesc.getLength();
+                }
+            }
         }
     }
 
@@ -368,15 +393,6 @@ public class RemoteScanRangeLocations {
         Optional<List<DataCacheOptions>> dataCacheOptionsList = generateDataCacheOptions(qualifiedName,
                 hiveMetaStoreTable.getPartitionColumnNames(), partitionKeys);
 
-        List<RemoteFileInfo> partitions;
-
-        try {
-            partitions = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(catalogName, table, partitionKeys);
-        } catch (Exception e) {
-            LOG.error("Failed to get remote files", e);
-            throw e;
-        }
-
         updateCanBackendSplitFile(partitions);
 
         if (table instanceof HiveTable) {
@@ -470,5 +486,13 @@ public class RemoteScanRangeLocations {
 
     public int getScanRangeLocationsSize() {
         return result.size();
+    }
+
+    public long getFileNum() {
+        return fileNum;
+    }
+
+    public long getFileSizeBytes() {
+        return fileSizeBytes;
     }
 }

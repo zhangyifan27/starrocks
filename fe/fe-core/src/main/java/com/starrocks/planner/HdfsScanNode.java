@@ -22,6 +22,7 @@ import com.starrocks.analysis.SlotDescriptor;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.Type;
+import com.starrocks.common.util.DebugUtil;
 import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.RemoteScanRangeLocations;
 import com.starrocks.credential.CloudConfiguration;
@@ -149,6 +150,13 @@ public class HdfsScanNode extends ScanNode {
         }
 
         output.append(prefix).append(String.format("avgRowSize=%s", avgRowSize));
+        output.append("\n");
+
+        output.append(prefix).append(String.format("numFiles=%d", scanRangeLocations.getFileNum()));
+        output.append("\n");
+
+        output.append(prefix).append(String.format("fileSize=%s",
+                DebugUtil.getPrettyStringBytes(scanRangeLocations.getFileSizeBytes())));
         output.append("\n");
 
         if (detailLevel == TExplainLevel.VERBOSE) {
