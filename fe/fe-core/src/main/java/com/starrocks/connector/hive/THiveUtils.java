@@ -18,6 +18,7 @@ package com.starrocks.connector.hive;
 
 import com.google.common.base.Preconditions;
 import com.starrocks.catalog.HiveTable;
+import com.starrocks.common.Config;
 
 public class THiveUtils {
 
@@ -49,5 +50,12 @@ public class THiveUtils {
 
     public static boolean isListPartitionType(HiveTable table, String partitionColumn) {
         return isListPartitionType(getPartitionType(table, partitionColumn));
+    }
+
+    public static String convertToLowerCaseIfNeed(String name) {
+        if (Config.use_lowercase_access_oms) {
+            return name.toLowerCase();
+        }
+        return name;
     }
 }

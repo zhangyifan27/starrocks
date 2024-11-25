@@ -54,6 +54,7 @@ import static com.starrocks.connector.hive.HiveWriteUtils.createDirectory;
 import static com.starrocks.connector.hive.HiveWriteUtils.isDirectory;
 import static com.starrocks.connector.hive.HiveWriteUtils.isEmpty;
 import static com.starrocks.connector.hive.HiveWriteUtils.pathExists;
+import static com.starrocks.connector.hive.THiveUtils.convertToLowerCaseIfNeed;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.toResourceName;
 
 public class HiveMetastoreOperations {
@@ -145,6 +146,8 @@ public class HiveMetastoreOperations {
     public boolean createTable(CreateTableStmt stmt, List<Column> partitionColumns) throws DdlException {
         String dbName = stmt.getDbName();
         String tableName = stmt.getTableName();
+        dbName = convertToLowerCaseIfNeed(dbName);
+        tableName = convertToLowerCaseIfNeed(tableName);
         Map<String, String> properties = stmt.getProperties() != null ? stmt.getProperties() : new HashMap<>();
         checkLocationProperties(properties);
         Path tablePath;

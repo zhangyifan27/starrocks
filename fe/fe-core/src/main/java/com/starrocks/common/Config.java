@@ -3466,4 +3466,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static long remote_file_warn_response_time = 60000;
+
+    @ConfField(mutable = true)
+    public static boolean use_lowercase_access_oms = false;
 }

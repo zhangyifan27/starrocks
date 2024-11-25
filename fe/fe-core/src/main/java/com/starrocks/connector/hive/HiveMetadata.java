@@ -65,6 +65,7 @@ import static com.starrocks.common.profile.Tracers.Module.EXTERNAL;
 import static com.starrocks.connector.PartitionUtil.toHivePartitionName;
 import static com.starrocks.connector.PartitionUtil.toPartitionValues;
 import static com.starrocks.connector.hive.THiveConstants.NON_EXISTS;
+import static com.starrocks.connector.hive.THiveUtils.convertToLowerCaseIfNeed;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.isResourceMappingCatalog;
 
 public class HiveMetadata implements ConnectorMetadata {
@@ -109,6 +110,7 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public void createDb(String dbName, Map<String, String> properties) throws AlreadyExistsException {
+        dbName = convertToLowerCaseIfNeed(dbName);
         if (dbExists(dbName)) {
             throw new AlreadyExistsException("Database Already Exists");
         }
@@ -117,6 +119,7 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public void dropDb(String dbName, boolean isForceDrop) throws MetaNotFoundException {
+        dbName = convertToLowerCaseIfNeed(dbName);
         if (listTableNames(dbName).size() != 0) {
             throw new StarRocksConnectorException("Database %s not empty", dbName);
         }
@@ -126,6 +129,7 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public Database getDb(String dbName) {
+        dbName = convertToLowerCaseIfNeed(dbName);
         Database database;
         try {
             database = hmsOps.getDb(dbName);
@@ -139,6 +143,7 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public List<String> listTableNames(String dbName) {
+        dbName = convertToLowerCaseIfNeed(dbName);
         return hmsOps.getAllTableNames(dbName);
     }
 
@@ -156,6 +161,8 @@ public class HiveMetadata implements ConnectorMetadata {
     public void dropTable(DropTableStmt stmt) throws DdlException {
         String dbName = stmt.getDbName();
         String tableName = stmt.getTableName();
+        dbName = convertToLowerCaseIfNeed(dbName);
+        tableName = convertToLowerCaseIfNeed(tableName);
         if (isResourceMappingCatalog(catalogName)) {
             HiveMetaStoreTable hmsTable = (HiveMetaStoreTable) GlobalStateMgr.getCurrentState()
                     .getMetadata().getTable(dbName, tableName);
@@ -191,6 +198,8 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public Table getTable(String dbName, String tblName) {
+        dbName = convertToLowerCaseIfNeed(dbName);
+        tblName = convertToLowerCaseIfNeed(tblName);
         Table table;
         try {
             table = hmsOps.getTable(dbName, tblName);
@@ -207,17 +216,23 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public boolean tableExists(String dbName, String tblName) {
+        dbName = convertToLowerCaseIfNeed(dbName);
+        tblName = convertToLowerCaseIfNeed(tblName);
         return hmsOps.tableExists(dbName, tblName);
     }
 
     @Override
     public List<String> listPartitionNames(String dbName, String tblName, long snapshotId) {
+        dbName = convertToLowerCaseIfNeed(dbName);
+        tblName = convertToLowerCaseIfNeed(tblName);
         return hmsOps.getPartitionKeys(dbName, tblName);
     }
 
     @Override
     public List<String> listPartitionNamesByValue(String dbName, String tblName,
                                                   List<Optional<String>> partitionValues) {
+        dbName = convertToLowerCaseIfNeed(dbName);
+        tblName = convertToLowerCaseIfNeed(tblName);
         return hmsOps.getPartitionKeysByValue(dbName, tblName, partitionValues);
     }
 
@@ -310,10 +325,11 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public void refreshTable(String srDbName, Table table, List<String> partitionNames, boolean onlyCachedPartitions) {
+        final String processedSrDbName = convertToLowerCaseIfNeed(srDbName);
         if (partitionNames != null && partitionNames.size() > 0) {
             cacheUpdateProcessor.ifPresent(processor -> processor.refreshPartition(table, partitionNames));
         } else {
-            cacheUpdateProcessor.ifPresent(processor -> processor.refreshTable(srDbName, table, onlyCachedPartitions));
+            cacheUpdateProcessor.ifPresent(processor -> processor.refreshTable(processedSrDbName, table, onlyCachedPartitions));
         }
     }
 
@@ -323,6 +339,8 @@ public class HiveMetadata implements ConnectorMetadata {
             LOG.warn("No commit info on {}.{} after hive sink", dbName, tableName);
             return;
         }
+        dbName = convertToLowerCaseIfNeed(dbName);
+        tableName = convertToLowerCaseIfNeed(tableName);
         HiveTable table = (HiveTable) getTable(dbName, tableName);
         String stagingDir = commitInfos.get(0).getStaging_dir();
         boolean isOverwrite = commitInfos.get(0).isIs_overwrite();
@@ -390,6 +408,8 @@ public class HiveMetadata implements ConnectorMetadata {
     @Override
     public Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
                                                         String partitionColumn) {
+        databaseName = convertToLowerCaseIfNeed(databaseName);
+        tableName = convertToLowerCaseIfNeed(tableName);
         return hmsOps.getPartitionValues(databaseName, tableName, partitionColumn);
     }
 
@@ -406,6 +426,8 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public String showCreateTable(String dbName, String tblName) {
+        dbName = convertToLowerCaseIfNeed(dbName);
+        tblName = convertToLowerCaseIfNeed(tblName);
         return hmsOps.showCreateTable(dbName, tblName);
     }
 }
