@@ -74,6 +74,7 @@ public class SessionAction extends WebBaseAction {
 
     @Override
     public void executeGet(BaseRequest request, BaseResponse response) {
+        isAdminUser = isAdminUser();
         getPageHeader(request, response.getContent());
         appendSessionInfo(response.getContent());
         getPageFooter(response.getContent());

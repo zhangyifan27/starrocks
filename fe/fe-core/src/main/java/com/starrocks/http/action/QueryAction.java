@@ -40,6 +40,7 @@ import com.starrocks.http.ActionController;
 import com.starrocks.http.BaseRequest;
 import com.starrocks.http.BaseResponse;
 import com.starrocks.http.IllegalArgException;
+import com.starrocks.qe.ConnectContext;
 import io.netty.handler.codec.http.HttpMethod;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -59,6 +60,8 @@ public class QueryAction extends WebBaseAction {
 
     @Override
     public void executeGet(BaseRequest request, BaseResponse response) {
+        isAdminUser = isAdminUser();
+
         getPageHeader(request, response.getContent());
 
         addFinishedQueryInfo(response.getContent());
@@ -77,13 +80,17 @@ public class QueryAction extends WebBaseAction {
         List<List<String>> finishedQueries = ProfileManager.getInstance().getAllQueries();
         List<String> columnHeaders = ProfileManager.PROFILE_HEADERS;
         int queryIdIndex = 0; // the first column is 'Query ID' by default
+        int userIndex = 0;
         for (int i = 0; i < columnHeaders.size(); ++i) {
             if (columnHeaders.get(i).equals(ProfileManager.QUERY_ID)) {
                 queryIdIndex = i;
             }
+            if (columnHeaders.get(i).equals(ProfileManager.USER)) {
+                userIndex = i;
+            }
         }
         appendFinishedQueryTableHeader(buffer, columnHeaders, queryIdIndex);
-        appendFinishedQueryTableBody(buffer, finishedQueries, columnHeaders, queryIdIndex);
+        appendFinishedQueryTableBody(buffer, finishedQueries, columnHeaders, queryIdIndex, userIndex);
         appendTableFooter(buffer);
     }
 
@@ -108,8 +115,14 @@ public class QueryAction extends WebBaseAction {
             StringBuilder buffer,
             List<List<String>> bodies,
             List<String> columnHeaders,
-            int queryIdIndex) {
+            int queryIdIndex,
+            int userIndex) {
         for (List<String> row : bodies) {
+            String user = row.get(userIndex);
+            if (!isAdminUser && !user.equals(ConnectContext.get().getCurrentUserIdentity().getUser())) {
+                continue;
+            }
+
             buffer.append("<tr>");
             String queryId = row.get(queryIdIndex);
 

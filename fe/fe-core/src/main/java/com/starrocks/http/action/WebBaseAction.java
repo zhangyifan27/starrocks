@@ -48,10 +48,8 @@ import com.starrocks.http.HttpAuthManager;
 import com.starrocks.http.HttpAuthManager.SessionValue;
 import com.starrocks.http.rest.RestBaseResult;
 import com.starrocks.privilege.AccessDeniedException;
-import com.starrocks.privilege.PrivilegeType;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.sql.analyzer.Authorizer;
 import com.starrocks.sql.ast.UserIdentity;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
@@ -128,6 +126,7 @@ public class WebBaseAction extends BaseAction {
                     + "  </nav>"
                     + "  <div class=\"container\">";
 
+    protected boolean isAdminUser = true;
     public WebBaseAction(ActionController controller) {
         super(controller);
     }
@@ -177,11 +176,7 @@ public class WebBaseAction extends BaseAction {
             authInfo = getAuthorizationInfo(request);
             UserIdentity currentUser = checkPassword(authInfo);
             if (needAdmin()) {
-                try {
-                    Authorizer.checkSystemAction(currentUser, null, PrivilegeType.NODE);
-                } catch (AccessDeniedException e) {
-                    checkUserOwnsAdminRole(currentUser);
-                }
+                checkAuthorizer(currentUser);
             }
             request.setAuthorized(true);
             SessionValue value = new SessionValue();
@@ -218,11 +213,7 @@ public class WebBaseAction extends BaseAction {
             boolean authorized = false;
 
             try {
-                try {
-                    Authorizer.checkSystemAction(sessionValue.currentUser, null, PrivilegeType.NODE);
-                } catch (AccessDeniedException e) {
-                    checkUserOwnsAdminRole(sessionValue.currentUser);
-                }
+                checkAuthorizer(sessionValue.currentUser);
                 authorized = true;
             } catch (AccessDeniedException e) {
                 // ignore
@@ -331,6 +322,10 @@ public class WebBaseAction extends BaseAction {
     protected void appendTableBody(StringBuilder buffer, List<List<String>> bodies) {
         buffer.append("<tbody>");
         for (List<String> row : bodies) {
+            String user = row.get(1);
+            if (!isAdminUser && !user.equals(ConnectContext.get().getCurrentUserIdentity().getUser())) {
+                continue;
+            }
             buffer.append("<tr>");
             for (String column : row) {
                 buffer.append("<td>");

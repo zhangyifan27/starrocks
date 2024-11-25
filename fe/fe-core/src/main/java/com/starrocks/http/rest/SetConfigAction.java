@@ -72,7 +72,7 @@ public class SetConfigAction extends RestBaseAction {
     @Override
     protected void executeWithoutPassword(BaseRequest request, BaseResponse response) throws DdlException, AccessDeniedException {
         UserIdentity currentUser = ConnectContext.get().getCurrentUserIdentity();
-        checkUserOwnsAdminRole(currentUser);
+        checkAuthorizer(currentUser);
 
         Map<String, List<String>> configs = request.getAllParameters();
         Map<String, String> setConfigs = Maps.newHashMap();

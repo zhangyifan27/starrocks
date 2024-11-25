@@ -38,13 +38,19 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.util.DebugUtil;
+import com.starrocks.mysql.MysqlPassword;
+import com.starrocks.mysql.security.TdwAuthenticate;
 import com.starrocks.privilege.AccessDeniedException;
 import com.starrocks.privilege.AuthorizationMgr;
 import com.starrocks.privilege.PrivilegeBuiltinConstants;
 import com.starrocks.privilege.PrivilegeException;
+import com.starrocks.privilege.PrivilegeType;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.analyzer.Authorizer;
+import com.starrocks.sql.ast.TDWUserIdentity;
 import com.starrocks.sql.ast.UserIdentity;
+import com.starrocks.utils.TdwUtil;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
 import io.netty.channel.ChannelFuture;
@@ -83,6 +89,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -297,6 +304,15 @@ public abstract class BaseAction implements IAction {
         }
     }
 
+    protected void checkAuthorizer(UserIdentity currentUser) throws AccessDeniedException {
+        Set<Long> userOwnedRoles = new HashSet<>();
+        try {
+            userOwnedRoles = AuthorizationMgr.getOwnedRolesByUser(currentUser);
+        } catch (PrivilegeException ignored) {
+        }
+        Authorizer.checkSystemAction(currentUser, userOwnedRoles, PrivilegeType.NODE);
+    }
+
     // We check whether user owns db_admin and user_admin role in new RBAC privilege framework for
     // operation which checks `PrivPredicate.ADMIN` in global table in old Auth framework.
     protected void checkUserOwnsAdminRole(UserIdentity currentUser) throws AccessDeniedException {
@@ -313,13 +329,33 @@ public abstract class BaseAction implements IAction {
         }
     }
 
+    protected boolean isAdminUser() {
+        try {
+            checkAuthorizer(ConnectContext.get().getCurrentUserIdentity());
+            checkUserOwnsAdminRole(ConnectContext.get().getCurrentUserIdentity());
+        } catch (AccessDeniedException e) {
+            return false;
+        }
+        return true;
+    }
+
     // return currentUserIdentity from StarRocks auth
     public static UserIdentity checkPassword(ActionAuthorizationInfo authInfo)
             throws AccessDeniedException {
         GlobalStateMgr globalStateMgr = GlobalStateMgr.getCurrentState();
-        UserIdentity currentUser =
-                globalStateMgr.getAuthenticationMgr().checkPlainPassword(
-                        authInfo.fullUserName, authInfo.remoteIp, authInfo.password);
+        UserIdentity currentUser = null;
+        if (TdwAuthenticate.useTdwAuthenticate(authInfo.fullUserName)) {
+            String user = TdwUtil.getUserName(authInfo.fullUserName);
+            UserIdentity authUser = TdwAuthenticate.authenticate(globalStateMgr.getAuthenticationMgr(),
+                    user, MysqlPassword.makeScrambledPassword(authInfo.password), null);
+            if (authUser != null) {
+                currentUser = new TDWUserIdentity(authUser);
+            }
+        } else {
+            currentUser =
+                    globalStateMgr.getAuthenticationMgr().checkPlainPassword(
+                            authInfo.fullUserName, authInfo.remoteIp, authInfo.password);
+        }
         if (currentUser == null) {
             throw new AccessDeniedException("Access denied for "
                     + authInfo.fullUserName + "@" + authInfo.remoteIp);
