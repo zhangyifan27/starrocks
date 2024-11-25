@@ -42,6 +42,7 @@ public class ConcurrentDDLTest {
 
     @BeforeClass
     public static void beforeClass() throws Exception {
+        Config.enable_auto_grant_permissions = false;
         Config.sys_log_level = "FATAL";
         Log4jConfig.initLogging();
         UtFrameUtils.createMinStarRocksCluster();

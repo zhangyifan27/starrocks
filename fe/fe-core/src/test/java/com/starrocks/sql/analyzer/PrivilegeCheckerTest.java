@@ -139,6 +139,7 @@ public class PrivilegeCheckerTest {
     @BeforeClass
     public static void beforeClass() throws Exception {
         FeConstants.runningUnitTest = true;
+        Config.enable_auto_grant_permissions = false;
         UtFrameUtils.createMinStarRocksCluster();
         UtFrameUtils.addMockBackend(10002);
         UtFrameUtils.addMockBackend(10003);

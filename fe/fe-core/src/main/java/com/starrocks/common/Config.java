@@ -3352,4 +3352,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true, comment = "Whether to use mysql's bigint type to return Starrocks's largeint type")
     public static boolean use_mysql_bigint_for_largeint = false;
+
+    @ConfField(mutable = true)
+    public static boolean enable_auto_grant_permissions = true;
 }

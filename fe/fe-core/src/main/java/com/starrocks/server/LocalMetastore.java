@@ -58,6 +58,7 @@ import com.starrocks.analysis.StringLiteral;
 import com.starrocks.analysis.TableName;
 import com.starrocks.analysis.TableRef;
 import com.starrocks.analysis.UserVariableHint;
+import com.starrocks.authentication.AuthenticationMgr;
 import com.starrocks.binlog.BinlogConfig;
 import com.starrocks.catalog.CatalogRecycleBin;
 import com.starrocks.catalog.CatalogUtils;
@@ -176,8 +177,13 @@ import com.starrocks.persist.metablock.SRMetaBlockID;
 import com.starrocks.persist.metablock.SRMetaBlockReader;
 import com.starrocks.persist.metablock.SRMetaBlockWriter;
 import com.starrocks.privilege.AccessDeniedException;
+import com.starrocks.privilege.AuthorizationMgr;
+import com.starrocks.privilege.MaterializedViewPEntryObject;
 import com.starrocks.privilege.ObjectType;
+import com.starrocks.privilege.PEntryObject;
+import com.starrocks.privilege.PrivilegeException;
 import com.starrocks.privilege.PrivilegeType;
+import com.starrocks.privilege.TablePEntryObject;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.rpc.ThriftConnectionPool;
@@ -215,6 +221,9 @@ import com.starrocks.sql.ast.DropMaterializedViewStmt;
 import com.starrocks.sql.ast.DropPartitionClause;
 import com.starrocks.sql.ast.DropTableStmt;
 import com.starrocks.sql.ast.ExpressionPartitionDesc;
+import com.starrocks.sql.ast.GrantPrivilegeStmt;
+import com.starrocks.sql.ast.GrantRevokeClause;
+import com.starrocks.sql.ast.GrantRevokePrivilegeObjects;
 import com.starrocks.sql.ast.IntervalLiteral;
 import com.starrocks.sql.ast.PartitionDesc;
 import com.starrocks.sql.ast.PartitionRangeDesc;
@@ -231,11 +240,13 @@ import com.starrocks.sql.ast.SingleRangePartitionDesc;
 import com.starrocks.sql.ast.SystemVariable;
 import com.starrocks.sql.ast.TableRenameClause;
 import com.starrocks.sql.ast.TruncateTableStmt;
+import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.sql.common.MetaUtils;
 import com.starrocks.sql.common.PListCell;
 import com.starrocks.sql.common.SyncPartitionUtils;
 import com.starrocks.sql.optimizer.Utils;
 import com.starrocks.sql.optimizer.statistics.IDictManager;
+import com.starrocks.sql.parser.NodePosition;
 import com.starrocks.sql.util.EitherOr;
 import com.starrocks.system.Backend;
 import com.starrocks.system.ComputeNode;
@@ -854,7 +865,51 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
             }
             throw e;
         }
+        if (table.isNativeTable()) {
+            grantUserPermissionsWithTable(stmt.getCatalogName(), stmt.getDbName(), stmt.getTableName());
+        }
         return true;
+    }
+
+    private void grantUserPermissionsWithTable(String catalog, String dbName, String tableName) throws DdlException {
+        if (!Config.enable_auto_grant_permissions) {
+            return;
+        }
+        if (ConnectContext.get() == null ||
+                ConnectContext.get().getQualifiedUser().equalsIgnoreCase(AuthenticationMgr.ROOT_USER)) {
+            return;
+        }
+        try {
+            List<String> privilegeTypeUnResolved = new ArrayList<>();
+            privilegeTypeUnResolved.add("ALL");
+            String objectTypeUnResolved = "TABLE";
+            UserIdentity userIdentity = new UserIdentity(ConnectContext.get().getQualifiedUser(), "%");
+            GrantRevokeClause grantRevokeClause = new GrantRevokeClause(userIdentity, null);
+            GrantRevokePrivilegeObjects grantRevokePrivilegeObjects = new GrantRevokePrivilegeObjects();
+            GrantPrivilegeStmt grantMVStmt =
+                    new GrantPrivilegeStmt(privilegeTypeUnResolved, objectTypeUnResolved, grantRevokeClause,
+                            grantRevokePrivilegeObjects, false, NodePosition.ZERO);
+
+            grantMVStmt.setObjectType(ObjectType.TABLE);
+            List<PEntryObject> objectList = new ArrayList<>();
+            List<String> tokens = new ArrayList();
+            tokens.add(catalog);
+            tokens.add(dbName);
+            tokens.add(tableName);
+            objectList.add(TablePEntryObject.generate(stateMgr, tokens));
+            grantMVStmt.setObjectList(objectList);
+            List<PrivilegeType> privilegeTypes =
+                    stateMgr.getAuthorizationMgr().getAvailablePrivType(ObjectType.TABLE);
+            grantMVStmt.setPrivilegeTypes(privilegeTypes);
+            AuthorizationMgr manager = stateMgr.getAuthorizationMgr();
+            manager.grant(grantMVStmt);
+            LOG.info("GRANT ALL ON TABLE " + dbName + "." + tableName + " TO USER " +
+                    ConnectContext.get().getQualifiedUser());
+        } catch (Throwable throwable) {
+            LOG.error("GRANT ALL ON TABLE " + dbName + "." + tableName + " TO USER " +
+                            ConnectContext.get().getQualifiedUser() + ", get error",
+                    throwable);
+        }
     }
 
     @Override
@@ -3332,6 +3387,47 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         // NOTE: The materialized view has been added to the database, and the following procedure cannot throw exception.
         createTaskForMaterializedView(dbName, materializedView, optHints);
         DynamicPartitionUtil.registerOrRemovePartitionTTLTable(db.getId(), materializedView);
+        grantUserPermissionsWithMV(dbName, mvName);
+    }
+
+    private void grantUserPermissionsWithMV(String dbName, String mvName) throws DdlException {
+        if (!Config.enable_auto_grant_permissions) {
+            return;
+        }
+        if (ConnectContext.get() == null ||
+                ConnectContext.get().getQualifiedUser().equalsIgnoreCase(AuthenticationMgr.ROOT_USER)) {
+            return;
+        }
+        try {
+            List<String> privilegeTypeUnResolved = new ArrayList<>();
+            privilegeTypeUnResolved.add("ALL");
+            String objectTypeUnResolved = "MATERIALIZED VIEW";
+            UserIdentity userIdentity = new UserIdentity(ConnectContext.get().getQualifiedUser(), "%");
+            GrantRevokeClause grantRevokeClause = new GrantRevokeClause(userIdentity, null);
+            GrantRevokePrivilegeObjects grantRevokePrivilegeObjects = new GrantRevokePrivilegeObjects();
+            GrantPrivilegeStmt grantMVStmt =
+                    new GrantPrivilegeStmt(privilegeTypeUnResolved, objectTypeUnResolved, grantRevokeClause,
+                            grantRevokePrivilegeObjects, false, NodePosition.ZERO);
+
+            grantMVStmt.setObjectType(ObjectType.MATERIALIZED_VIEW);
+            List<PEntryObject> objectList = new ArrayList<>();
+            List<String> tokens = new ArrayList();
+            tokens.add(dbName);
+            tokens.add(mvName);
+            objectList.add(MaterializedViewPEntryObject.generate(stateMgr, tokens));
+            grantMVStmt.setObjectList(objectList);
+            List<PrivilegeType> privilegeTypes =
+                    stateMgr.getAuthorizationMgr().getAvailablePrivType(ObjectType.MATERIALIZED_VIEW);
+            grantMVStmt.setPrivilegeTypes(privilegeTypes);
+            AuthorizationMgr manager = stateMgr.getAuthorizationMgr();
+            manager.grant(grantMVStmt);
+            LOG.info("GRANT ALL ON MATERIALIZED VIEW " + dbName + "." + mvName + " TO USER " +
+                    ConnectContext.get().getQualifiedUser());
+        } catch (PrivilegeException privilegeException) {
+            LOG.error("GRANT ALL ON MATERIALIZED VIEW " + dbName + "." + mvName + " TO USER " +
+                            ConnectContext.get().getQualifiedUser() + ", get error",
+                    privilegeException);
+        }
     }
 
     private long getRandomStart(IntervalLiteral interval, long randomizeStart) throws DdlException {

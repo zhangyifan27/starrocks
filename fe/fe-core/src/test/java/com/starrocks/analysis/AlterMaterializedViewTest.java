@@ -20,6 +20,7 @@ import com.starrocks.alter.AlterJobMgr;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.MaterializedView;
 import com.starrocks.common.AnalysisException;
+import com.starrocks.common.Config;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.scheduler.MVActiveChecker;
@@ -49,6 +50,7 @@ public class AlterMaterializedViewTest {
 
     @BeforeClass
     public static void beforeClass() throws Exception {
+        Config.enable_auto_grant_permissions = false;
         AnalyzeTestUtil.init();
         connectContext = AnalyzeTestUtil.getConnectContext();
         UtFrameUtils.setDefaultConfigForAsyncMVTest(connectContext);
