@@ -187,7 +187,7 @@ TEST_F(AddNullableColumnTest, test_add_boolean) {
     doc = parser.iterate(json);
     val = doc.find_field("f_boolean");
     st = add_nullable_column(column.get(), t, "f_boolean", &val, false);
-    ASSERT_TRUE(st.is_invalid_argument());
+    ASSERT_TRUE(!st.is_invalid_argument());
 
     // array
     column->reset_column();

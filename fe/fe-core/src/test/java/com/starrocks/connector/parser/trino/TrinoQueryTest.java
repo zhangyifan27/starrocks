@@ -19,6 +19,8 @@ import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
+import java.util.List;
+
 public class TrinoQueryTest extends TrinoTestBase {
     @BeforeClass
     public static void beforeClass() throws Exception {
@@ -41,6 +43,25 @@ public class TrinoQueryTest extends TrinoTestBase {
 
         sql = "select default_catalog.test.t0.* from default_catalog.test.t0";
         assertPlanContains(sql, "OUTPUT EXPRS:1: v1 | 2: v2 | 3: v3");
+    }
+
+    @Test
+    public void testDefaultAlias() throws Exception {
+        String sql1 = "select 1 as a, v2, count(v1), 'test' from t0 group by v2";
+        List<String> outputColumnNames1 =  getQueryStmtOutputNames(sql1);
+        Assert.assertTrue(outputColumnNames1.size() == 4);
+        Assert.assertTrue(outputColumnNames1.get(0).equals("a"));
+        Assert.assertTrue(outputColumnNames1.get(1).equals("v2"));
+        Assert.assertTrue(outputColumnNames1.get(2).equals("_col2"));
+        Assert.assertTrue(outputColumnNames1.get(3).equals("_col3"));
+
+        String sql2 = "select *, ifnull(NULL, 0) from t0";
+        List<String> outputColumnNames2 =  getQueryStmtOutputNames(sql2);
+        Assert.assertTrue(outputColumnNames2.size() == 4);
+        Assert.assertTrue(outputColumnNames2.get(0).equals("v1"));
+        Assert.assertTrue(outputColumnNames2.get(1).equals("v2"));
+        Assert.assertTrue(outputColumnNames2.get(2).equals("v3"));
+        Assert.assertTrue(outputColumnNames2.get(3).equals("_col3"));
     }
 
     @Test
@@ -1004,10 +1025,10 @@ public class TrinoQueryTest extends TrinoTestBase {
         analyzeFail(sql);
 
         sql = "select approx_percentile(2.25, 1.79E-10)";
-        assertPlanContains(sql, "percentile_approx(2.25, 1.79E-10)");
+        assertPlanContains(sql, "percentile_disc(2.25, 1.79E-10)");
 
         sql = "select approx_percentile(2.25, 0.4)";
-        assertPlanContains(sql, "percentile_approx(2.25, 0.4)");
+        assertPlanContains(sql, "percentile_disc(2.25, 0.4)");
     }
 
     @Test

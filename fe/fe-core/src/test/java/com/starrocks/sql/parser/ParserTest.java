@@ -420,10 +420,13 @@ class ParserTest {
 
     @Test
     void testModOperator() {
+        ConnectContext ctx = UtFrameUtils.createDefaultCtx();
         String sql = "select 100 MOD 2";
         List<StatementBase> stmts = SqlParser.parse(sql, new SessionVariable());
+        Analyzer.analyze(stmts.get(0), ctx);
         String newSql = AstToSQLBuilder.toSQL(stmts.get(0));
-        assertEquals("SELECT 100 % 2", newSql);
+        //assertEquals("SELECT 100 % 2", newSql);
+        assertEquals("SELECT 100 % 2 AS `100 % 2`", newSql);
     }
 
     @Test

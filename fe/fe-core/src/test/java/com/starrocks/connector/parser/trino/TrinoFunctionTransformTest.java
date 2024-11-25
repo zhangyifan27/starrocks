@@ -32,7 +32,7 @@ public class TrinoFunctionTransformTest extends TrinoTestBase {
         assertPlanContains(sql, "output: any_value(1: v1)");
 
         sql = "select approx_percentile(v1, 0.99) from t0;";
-        assertPlanContains(sql, "output: percentile_approx(CAST(1: v1 AS DOUBLE), 0.99)");
+        assertPlanContains(sql, "output: percentile_disc(1: v1, 0.99)");
 
         sql = "select stddev(v1) from t0;";
         assertPlanContains(sql, "output: stddev_samp(1: v1)");
@@ -307,6 +307,27 @@ public class TrinoFunctionTransformTest extends TrinoTestBase {
 
         sql = "select index('hello', 'l')";
         assertPlanContains(sql, "instr('hello', 'l')");
+
+        sql = "select nvl('abc','b');";
+        assertPlanContains(sql, " OUTPUT EXPRS:2: ifnull\n" +
+                "  PARTITION: UNPARTITIONED\n\n" +
+                "  RESULT SINK\n\n" +
+                "  1:Project\n" +
+                "  |  <slot 2> : 'abc'");
+
+        sql = "select nvl(null,'b');";
+        assertPlanContains(sql, " OUTPUT EXPRS:2: ifnull\n" +
+                "  PARTITION: UNPARTITIONED\n\n" +
+                "  RESULT SINK\n\n" +
+                "  1:Project\n" +
+                "  |  <slot 2> : 'b'");
+
+        sql = "select nvl(null,123);";
+        assertPlanContains(sql, " OUTPUT EXPRS:2: ifnull\n" +
+                "  PARTITION: UNPARTITIONED\n\n" +
+                "  RESULT SINK\n\n" +
+                "  1:Project\n" +
+                "  |  <slot 2> : 123");
     }
 
     @Test

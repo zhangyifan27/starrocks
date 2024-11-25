@@ -212,6 +212,14 @@ public class TrinoTestBase {
         return new Pair<>(LogicalPlanPrinter.print(execPlan.getPhysicalPlan()), execPlan);
     }
 
+    public static List<String> getQueryStmtOutputNames(String sql) throws Exception {
+        List<StatementBase> statements =
+                com.starrocks.sql.parser.SqlParser.parse(sql, connectContext.getSessionVariable());
+        StatementBase statementBase = statements.get(0);
+        ExecPlan execPlan = StatementPlanner.plan(statementBase, connectContext);
+        return execPlan.getColNames();
+    }
+
     protected void assertPlanContains(String sql, String... explain) throws Exception {
         String explainString = getFragmentPlan(sql);
 

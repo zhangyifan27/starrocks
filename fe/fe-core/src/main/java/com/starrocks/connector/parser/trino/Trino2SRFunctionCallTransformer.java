@@ -99,7 +99,7 @@ public class Trino2SRFunctionCallTransformer {
 
         // 3. approx_percentile
         registerFunctionTransformer("approx_percentile", 2,
-                "percentile_approx", List.of(Expr.class, Expr.class));
+                "percentile_disc", List.of(Expr.class, Expr.class));
 
         // 4. stddev
         registerFunctionTransformer("stddev", 1,
@@ -273,8 +273,11 @@ public class Trino2SRFunctionCallTransformer {
                 List.of(new PlaceholderExpr(1, Expr.class), new PlaceholderExpr(2, Expr.class),
                         new StringLiteral(""))));
 
+        // index -> instr
         registerFunctionTransformer("index", 2, "instr",
                 List.of(Expr.class, Expr.class));
+        // nvl -> ifnull
+        registerFunctionTransformer("nvl", 2, "ifnull", List.of(Expr.class, Expr.class));
     }
 
     private static void registerRegexpFunctionTransformer() {

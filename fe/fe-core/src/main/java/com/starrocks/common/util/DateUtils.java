@@ -242,6 +242,7 @@ public class DateUtils {
     public static DateTimeFormatterBuilder unixDatetimeFormatBuilder(String pattern, boolean isOutputFormat) {
         DateTimeFormatterBuilder builder = new DateTimeFormatterBuilder();
         boolean escaped = false;
+        boolean containsDay = false;
         for (int i = 0; i < pattern.length(); i++) {
             char character = pattern.charAt(i);
             if (escaped) {
@@ -262,9 +263,11 @@ public class DateUtils {
                         } else {
                             builder.appendValue(ChronoField.DAY_OF_MONTH, 1, 2, SignStyle.NORMAL);
                         }
+                        containsDay = true;
                         break;
                     case 'e': // %e Day of the month, numeric (0..31)
                         builder.appendValue(ChronoField.DAY_OF_MONTH, 1, 2, SignStyle.NORMAL);
+                        containsDay = true;
                         break;
                     case 'H': // %H Hour (00..23)
                         builder.appendValue(ChronoField.HOUR_OF_DAY, 2);
@@ -284,6 +287,7 @@ public class DateUtils {
                         break;
                     case 'j': // %j Day of year (001..366)
                         builder.appendValue(ChronoField.DAY_OF_YEAR, 3);
+                        containsDay = true;
                         break;
                     case 'S': // %S Seconds (00..59)
                     case 's': // %s Seconds (00..59)
@@ -342,6 +346,9 @@ public class DateUtils {
             } else {
                 builder.appendLiteral(character);
             }
+        }
+        if (!containsDay) {
+            builder.parseDefaulting(ChronoField.DAY_OF_MONTH, 1);
         }
         return builder;
     }

@@ -1185,7 +1185,7 @@ TEST_P(CSVScannerTest, test_get_schema) {
     {
         // sample 1 row
         std::vector<std::pair<std::string, LogicalType>> expected_schema = {
-                {"$1", TYPE_BIGINT}, {"$2", TYPE_DOUBLE}, {"$3", TYPE_DOUBLE}, {"$4", TYPE_BOOLEAN}};
+                {"$1", TYPE_BIGINT}, {"$2", TYPE_BIGINT}, {"$3", TYPE_BIGINT}, {"$4", TYPE_BOOLEAN}};
 
         std::vector<TBrokerRangeDesc> ranges;
         TBrokerRangeDesc range;
@@ -1242,7 +1242,7 @@ TEST_P(CSVScannerTest, test_get_schema) {
     {
         // sample 1 row, skip header 1, enclose ", escape "\"
         std::vector<std::pair<std::string, LogicalType>> expected_schema = {
-                {"$1", TYPE_BIGINT}, {"$2", TYPE_VARCHAR}, {"$3", TYPE_DOUBLE}, {"$4", TYPE_BOOLEAN}};
+                {"$1", TYPE_BIGINT}, {"$2", TYPE_VARCHAR}, {"$3", TYPE_BIGINT}, {"$4", TYPE_BOOLEAN}};
 
         std::vector<TBrokerRangeDesc> ranges;
         TBrokerRangeDesc range;

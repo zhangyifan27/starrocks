@@ -412,7 +412,9 @@ inline T StringParser::string_to_int_no_overflow(const char* s, int len, ParseRe
             T digit = s[i] - '0';
             val = val * 10 + digit;
         } else {
-            if ((UNLIKELY(!is_all_whitespace(s + i, len - i)))) {
+            if (s[i] == '.') {
+                // truncate the number of digits after the decimal point
+            } else if ((UNLIKELY(!is_all_whitespace(s + i, len - i)))) {
                 *result = PARSE_FAILURE;
                 return 0;
             }

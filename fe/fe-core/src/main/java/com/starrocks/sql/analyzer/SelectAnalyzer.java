@@ -206,6 +206,8 @@ public class SelectAnalyzer {
         ImmutableList.Builder<Field> outputFields = ImmutableList.builder();
         List<Integer> outputExprInOrderByScope = new ArrayList<>();
 
+        int columnNumber = 0;
+
         for (SelectListItem item : selectList.getItems()) {
             if (item.isStar()) {
                 List<Field> fields = (item.getTblName() == null ? scope.getRelationFields().getAllFields()
@@ -240,6 +242,7 @@ public class SelectAnalyzer {
                     FieldReference fieldReference = new FieldReference(fieldIndex, item.getTblName());
                     analyzeExpression(fieldReference, analyzeState, scope);
                     outputExpressionBuilder.add(fieldReference);
+                    columnNumber++;
                 }
                 outputFields.addAll(fields);
 
@@ -247,6 +250,8 @@ public class SelectAnalyzer {
                 String name;
                 if (item.getExpr() instanceof SlotRef) {
                     name = item.getAlias() == null ? ((SlotRef) item.getExpr()).getColumnName() : item.getAlias();
+                } else if (session.getSessionVariable().getSqlDialect().equalsIgnoreCase("trino")) {
+                    name = item.getAlias() == null ? ("_col" + columnNumber) : item.getAlias();
                 } else {
                     name = item.getAlias() == null ?
                             AstToStringBuilder.getAliasName(item.getExpr(), false, false) : item.getAlias();
@@ -290,6 +295,7 @@ public class SelectAnalyzer {
                 if (item.getAlias() != null || item.getExpr() instanceof SlotRef) {
                     outputExprInOrderByScope.add(outputFields.build().size() - 1);
                 }
+                columnNumber++;
             }
 
             if (selectList.isDistinct()) {
