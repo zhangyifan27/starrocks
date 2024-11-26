@@ -72,6 +72,7 @@ ${license}
 #include "exprs/map_functions.h"
 #include "exprs/struct_functions.h"
 #include "exprs/math_functions.h"
+#include "exprs/eval_ml_method.h"
 #include "exprs/bit_functions.h"
 #include "exprs/binary_functions.h"
 #include "exprs/string_functions.h"
@@ -88,6 +89,7 @@ ${license}
 #include "exprs/grouping_sets_functions.h"
 #include "exprs/es_functions.h"
 #include "exprs/utility_functions.h"
+#include "exprs/caliper_matching.h"
 
 namespace starrocks {
 

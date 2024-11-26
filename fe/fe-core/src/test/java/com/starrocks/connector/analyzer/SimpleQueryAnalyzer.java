@@ -344,6 +344,14 @@ public class SimpleQueryAnalyzer {
                         columnNames.add("unnest");
                     }
                     node.setColumnOutputNames(columnNames);
+                } else if (tableFunction.getFunctionName().getFunction().equals("boot_strap")) {
+                    // If the boot_strap variadic function does not explicitly specify column name,
+                    // all column names are `boot_strap`. This refers to the return column name of postgresql.
+                    List<String> columnNames = new ArrayList<>();
+                    for (int i = 0; i < tableFunction.getTableFnReturnTypes().size(); ++i) {
+                        columnNames.add("boot_strap");
+                    }
+                    node.setColumnOutputNames(columnNames);
                 } else {
                     node.setColumnOutputNames(new ArrayList<>(tableFunction.getDefaultColumnNames()));
                 }

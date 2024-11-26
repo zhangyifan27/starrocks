@@ -137,8 +137,28 @@ logging.getLogger().addFilter(Filter())
 T_R_DB = "t_r_db"
 T_R_TABLE = "t_r_table"
 
+ARRAY_FLAG = "[ARRAY]"
+LOOSE_FLAG = "[LOOSE]"
+
 SECRET_INFOS = {}
 
+def compare_lists(list1, list2, epsilon=1e-4):
+    if len(list1) != len(list2):
+        log.info(f"{list1} != {list2}")
+        return False
+
+    for i in range(len(list1)):
+        if isinstance(list1[i], list) and isinstance(list2[i], list):
+            if not compare_lists(list1[i], list2[i], epsilon):
+                log.info(f"{list1[i]} != {list2[i]}")
+                return False
+        else:
+            a, b = float(list1[i]), float(list2[i])
+            if abs(a - b) > epsilon * max(epsilon, abs(b)):
+                log.info(f"{a} != {b}")
+                return False
+
+    return True
 
 class StarrocksSQLApiLib(object):
     """api lib"""
@@ -1405,6 +1425,47 @@ class StarrocksSQLApiLib(object):
                     "sql result not match regex:\n- [SQL]: %s\n- [exp]: %s\n- [act]: %s\n---"
                     % (self_print(sql, need_print=False), exp[len(REGEX_FLAG):], act),
                 )
+                return
+
+            if exp.startswith(ARRAY_FLAG):
+                log.info("[check array]: exp(%s), act(%s)" % (exp[len(ARRAY_FLAG) :], act))
+                tools.assert_true(compare_lists(act, eval(exp[len(ARRAY_FLAG) :])))
+                return
+
+            if exp.startswith(LOOSE_FLAG):
+                def extract(s):
+                    # 正则表达式模式
+                    number_pattern = r'-?\d+\.?\d*'
+                    non_number_pattern = r'[^-\d.]+'  # 匹配任何不是数字、负号或小数点的字符序列
+
+                    numbers = []
+                    strings = []
+                    last_end = 0  # 上一个匹配的结束位置
+
+                    # 遍历所有匹配项
+                    for match in re.finditer(number_pattern, s):
+                        start, end = match.span()
+                        if start > last_end:  # 如果匹配之前有非数字字符
+                            tmp = re.sub(r'\s+', '', s[last_end:start])
+                            if tmp:
+                                strings.append(tmp)  # 提取并添加非数字字符串
+                        numbers.append(float(match.group()))  # 提取并添加数字
+                        last_end = end
+
+                    # 处理最后一个匹配之后的非数字字符
+                    if last_end < len(s):
+                        tmp = re.sub(r'\s+', '', s[last_end:])
+                        if tmp:
+                            strings.append(tmp)  # 提取并添加非数字字符串
+                    return numbers, strings
+
+                log.info("[check loose]: exp(%s), act(%s)" % (exp[len(LOOSE_FLAG) :], act))
+                exp_str = str(exp[len(LOOSE_FLAG) :])
+                act_str = str(act)
+                n1, s1 = extract(exp_str)
+                n2, s2 = extract(act_str)
+                tools.assert_true(compare_lists(n1, n2), "sql result not match:\n- [SQL]: %s\n- [exp]: %s\n- [act]: %s\n- [n1]: %s\n- [n2]: %s\n---" % (sql, exp_str, act_str, n1, n2))
+                tools.assert_true(s1 == s2, "sql result not match:\n- [SQL]: %s\n- [exp]: %s\n- [act]: %s\n-[s1]: %s\n-[s2]: %s\n---" % (sql, exp_str, act_str, s1, s2))
                 return
 
             try:

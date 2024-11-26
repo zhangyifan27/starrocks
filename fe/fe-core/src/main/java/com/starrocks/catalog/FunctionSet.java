@@ -43,6 +43,7 @@ import com.starrocks.analysis.ArithmeticExpr;
 import com.starrocks.analysis.FunctionName;
 import com.starrocks.builtins.VectorizedBuiltinFunctions;
 import com.starrocks.sql.analyzer.PolymorphicFunctionAnalyzer;
+import com.starrocks.sql.analyzer.SemanticException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -481,6 +482,23 @@ public class FunctionSet {
     public static final String NGRAM_SEARCH = "ngram_search";
     public static final String NGRAM_SEARCH_CASE_INSENSITIVE = "ngram_search_case_insensitive";
 
+    // all in sql functions:
+    public static final String DELTA_METHOD = "delta_method";
+    public static final String TTEST_1SAMP = "ttest_1samp";
+    public static final String TTEST_2SAMP = "ttest_2samp";
+    public static final String TTESTS_2SAMP = "ttests_2samp";
+    public static final String XEXPT_TTEST_2SAMP = "xexpt_ttest_2samp";
+    public static final String OLS = "ols";
+    public static final String OLS_TRAIN = "ols_train";
+    public static final String WLS = "wls";
+    public static final String WLS_TRAIN = "wls_train";
+    public static final String MATRIX_MULTIPLICATION = "matrix_multiplication";
+    public static final String DISTRIBUTED_NODE_ROW_NUMBER = "distributed_node_row_number";
+    public static final String CALIPER_MATCHING_INFO = "caliper_matching_info";
+    public static final String SRM = "srm";
+    public static final String GROUP_SET = "group_set";
+    public static final String MANN_WHITNEY_U_TEST = "mann_whitney_u_test";
+    public static final String CAUSAL_FOREST = "causal_forest";
 
     // JSON functions
     public static final Function JSON_QUERY_FUNC = new Function(
@@ -1098,6 +1116,9 @@ public class FunctionSet {
         // Percentile
         registerBuiltinPercentileAggFunction();
 
+        // All In Sql
+        registerBuiltinAllInSqlAggFunction();
+
         // HLL_UNION_AGG
         addBuiltin(AggregateFunction.createBuiltin(HLL_UNION_AGG,
                 Lists.newArrayList(Type.HLL), Type.BIGINT, Type.HLL,
@@ -1370,6 +1391,142 @@ public class FunctionSet {
         addBuiltin(AggregateFunction.createBuiltin(AVG,
                 Lists.newArrayList(Type.DATETIME), Type.DATETIME, Type.DATETIME,
                 false, true, false));
+    }
+
+    private void registerBuiltinAllInSqlAggFunction() {
+        addBuiltin(AggregateFunction.createBuiltin(DELTA_METHOD, Lists.newArrayList(Type.VARCHAR, Type.BOOLEAN,
+                Type.ARRAY_DOUBLE), Type.DOUBLE, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(TTEST_1SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.DOUBLE,
+                        Type.ARRAY_DOUBLE, Type.VARCHAR), Type.VARCHAR, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(TTEST_1SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.DOUBLE,
+                        Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true,
+                false));
+
+        addBuiltin(AggregateFunction.createBuiltin(TTEST_1SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.DOUBLE,
+                        Type.ARRAY_DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true, false));
+
+        // expression, side, treatment, data, [cuped, alpha]
+        addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN,
+                        Type.ARRAY_DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN,
+                        Type.ARRAY_DOUBLE, Type.VARCHAR), Type.VARCHAR, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN,
+                        Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true,
+                false));
+
+        // expression, side, treatment, data, [cuped, alpha]
+        addBuiltin(AggregateFunction.createBuiltin(TTESTS_2SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.INT,
+                        Type.ARRAY_DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(TTESTS_2SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.INT,
+                        Type.ARRAY_DOUBLE, Type.VARCHAR), Type.VARCHAR, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(TTESTS_2SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.INT,
+                        Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true,
+                false));
+
+        addBuiltin(AggregateFunction.createBuiltin(XEXPT_TTEST_2SAMP,
+                Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE), Type.VARCHAR, Type.VARBINARY,
+                false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(XEXPT_TTEST_2SAMP,
+                Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.VARCHAR), Type.VARCHAR,
+                Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(XEXPT_TTEST_2SAMP,
+                Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE, Type.DOUBLE,
+                        Type.DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(XEXPT_TTEST_2SAMP,
+                Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE, Type.DOUBLE,
+                        Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE), Type.VARCHAR, Type.VARBINARY, false, true,
+                false));
+
+        addBuiltin(AggregateFunction.createBuiltin(OLS_TRAIN,
+                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN), Type.JSON, Type.VARBINARY, false,
+                true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(OLS,
+                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN), Type.VARCHAR, Type.VARBINARY, false,
+                true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(OLS,
+                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN, Type.VARCHAR), Type.VARCHAR,
+                Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(OLS,
+                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN, Type.VARCHAR, Type.JSON, Type.JSON),
+                Type.VARCHAR, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(WLS_TRAIN,
+                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.DOUBLE, Type.BOOLEAN), Type.JSON,
+                Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(WLS,
+                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.DOUBLE, Type.BOOLEAN), Type.VARCHAR,
+                Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(WLS,
+                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.DOUBLE, Type.BOOLEAN, Type.VARCHAR),
+                Type.VARCHAR,
+                Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(WLS,
+                Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.DOUBLE, Type.BOOLEAN, Type.VARCHAR, Type.JSON,
+                        Type.JSON),
+                Type.VARCHAR, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(MATRIX_MULTIPLICATION,
+                Lists.newArrayList(Type.ARRAY_DOUBLE, Type.BOOLEAN, Type.BOOLEAN), Type.JSON,
+                Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(DISTRIBUTED_NODE_ROW_NUMBER,
+                Lists.newArrayList(Type.INT), Type.JSON, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(CALIPER_MATCHING_INFO,
+                Lists.newArrayList(Type.BOOLEAN, Type.DOUBLE, Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true,
+                false));
+
+        addBuiltin(AggregateFunction.createBuiltin(CALIPER_MATCHING_INFO,
+                Lists.newArrayList(Type.BOOLEAN, Type.DOUBLE, Type.DOUBLE, Type.ARRAY_VARCHAR), Type.JSON,
+                Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(SRM,
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE), Type.VARCHAR,
+                Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(GROUP_SET,
+                Lists.newArrayList(Type.DOUBLE, Type.INT, Type.ARRAY_VARCHAR, Type.ARRAY_VARCHAR), Type.JSON,
+                Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(GROUP_SET,
+                Lists.newArrayList(Type.DOUBLE, Type.INT, Type.ARRAY_VARCHAR), Type.JSON,
+                Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(MANN_WHITNEY_U_TEST,
+                Lists.newArrayList(Type.DOUBLE, Type.BOOLEAN, Type.VARCHAR, Type.BIGINT), Type.JSON,
+                Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(CAUSAL_FOREST,
+                Lists.newArrayList(Type.JSON, Type.DOUBLE, Type.BOOLEAN, Type.DOUBLE, Type.ARRAY_DOUBLE),
+                Type.JSON, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(CAUSAL_FOREST,
+                Lists.newArrayList(Type.JSON, Type.DOUBLE, Type.BOOLEAN, Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN),
+                Type.JSON, Type.VARBINARY, false, true, false));
     }
 
     private void registerBuiltinStddevAggFunction() {

@@ -18,6 +18,7 @@
 #include <memory>
 #include <type_traits>
 #include <variant>
+#include <vector>
 
 #include "column/chunk.h"
 #include "column/column_helper.h"
@@ -29,6 +30,7 @@
 #include "exec/limited_pipeline_chunk_buffer.h"
 #include "exec/pipeline/operator.h"
 #include "exec/spill/spiller.hpp"
+#include "exprs/all_in_sql_functions.h"
 #include "exprs/anyval_util.h"
 #include "gen_cpp/PlanNodes_types.h"
 #include "runtime/current_thread.h"
@@ -419,8 +421,20 @@ Status Aggregator::prepare(RuntimeState* state, ObjectPool* pool, RuntimeProfile
             }
 
             const bool use_nullable_fn = agg_fn_type.use_nullable_fn(_use_intermediate_as_output());
-            auto* func = get_aggregate_function(fn.name.function_name, arg_type.type, return_type.type, use_nullable_fn,
-                                                fn.binary_type, state->func_version());
+
+            const AggregateFunction* func = nullptr;
+            if (AllInSqlFunctions::is_all_in_sql_function(fn.name.function_name)) {
+                std::vector<LogicalType> multi_arg_types;
+                for (auto& single_arg_type : fn.arg_types) {
+                    multi_arg_types.push_back(TypeDescriptor::from_thrift(single_arg_type).type);
+                }
+                func = get_aggregate_function(fn.name.function_name, multi_arg_types, return_type.type,
+                                              use_nullable_fn, fn.binary_type, state->func_version());
+            } else {
+                func = get_aggregate_function(fn.name.function_name, arg_type.type, return_type.type, use_nullable_fn,
+                                              fn.binary_type, state->func_version());
+            }
+
             if (func == nullptr) {
                 return Status::InternalError(strings::Substitute(
                         "Invalid agg function plan: $0 with (arg type $1, serde type $2, result type $3, nullable $4)",

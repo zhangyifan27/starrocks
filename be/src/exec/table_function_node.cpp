@@ -76,6 +76,10 @@ Status TableFunctionNode::init(const TPlanNode& tnode, RuntimeState* state) {
         _table_function = get_table_function(table_function_name, arg_types, return_types, table_fn.binary_type);
     }
 
+    if (table_function_name == "boot_strap") {
+        _table_function = get_table_function(table_function_name, {}, {}, table_fn.binary_type);
+    }
+
     if (_table_function == nullptr) {
         return Status::InternalError("can't find table function " + table_function_name);
     }

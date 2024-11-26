@@ -19,6 +19,7 @@ set(EXECUTABLE_OUTPUT_PATH "${BUILD_DIR}/src/exprs")
 
 set(EXPR_FILES 
   agg/factory/aggregate_factory.cpp
+  agg/factory/aggregate_resolver_all_in_sql.cpp
   agg/factory/aggregate_resolver_approx.cpp
   agg/factory/aggregate_resolver_avg.cpp
   agg/factory/aggregate_resolver_minmaxany.cpp
@@ -31,6 +32,7 @@ set(EXPR_FILES
   jit/ir_helper.cpp
   jit/jit_engine.cpp
   jit/jit_expr.cpp
+  all_in_sql_functions.cpp
   anyval_util.cpp
   base64.cpp
   binary_functions.cpp
@@ -102,6 +104,8 @@ set(EXPR_FILES
   ngram.cpp
   match_expr.cpp
   agg/hll_uniq_combined.h
+  eval_ml_method.cpp
+  caliper_matching.cpp
 )
 
 add_library(Exprs ${EXPR_FILES})

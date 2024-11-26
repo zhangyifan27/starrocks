@@ -17,6 +17,7 @@
 #include <memory>
 #include <tuple>
 #include <unordered_map>
+#include <vector>
 
 #include "column/type_traits.h"
 #include "exprs/agg/aggregate.h"
@@ -38,6 +39,18 @@ using AggregateFuncKey = std::tuple<std::string, int, int, bool, bool>;
 // 2. is_window_function
 // 3. is_nullable
 using GeneralFuncKey = std::tuple<std::string, bool, bool>;
+
+using MultiArgTypesKey = std::vector<LogicalType>;
+
+struct MultiArgTypesMapHash {
+    size_t operator()(const MultiArgTypesKey& key) const {
+        int hash = 0;
+        for (auto& k : key) {
+            hash ^= k;
+        }
+        return hash;
+    }
+};
 
 struct AggregateFuncMapHash {
     size_t operator()(const AggregateFuncKey& key) const {
@@ -63,6 +76,7 @@ public:
     void register_sumcount();
     void register_distinct();
     void register_variance();
+    void register_all_in_sql();
     void register_window();
     void register_utility();
     void register_approx();
@@ -81,6 +95,20 @@ public:
                                                 const LogicalType return_type, const bool is_window_function,
                                                 const bool is_null) const {
         auto pair = _infos_mapping.find(std::make_tuple(name, arg_type, return_type, is_window_function, is_null));
+        if (pair == _infos_mapping.end()) {
+            return nullptr;
+        }
+        return pair->second.get();
+    }
+
+    const AggregateFunction* get_aggregate_info(const std::string& name, const MultiArgTypesKey multi_arg_types,
+                                                const LogicalType return_type, const bool is_window_function,
+                                                const bool is_null) const {
+        auto it = _arg_types_map.find(multi_arg_types);
+        if (it == _arg_types_map.end()) {
+            return nullptr;
+        }
+        auto pair = _infos_mapping.find(std::make_tuple(name, it->second, return_type, is_window_function, is_null));
         if (pair == _infos_mapping.end()) {
             return nullptr;
         }
@@ -144,6 +172,30 @@ public:
             auto nullable_agg = AggregateFactory::MakeNullableAggregateFunctionUnary<StateType, true, IgnoreNull>(
                     fun, std::move(null_pred));
             _infos_mapping.emplace(std::make_tuple(name, ArgType, RetType, true, true), nullable_agg);
+        }
+    }
+
+    template <LogicalType RetType, class StateType, typename SpecificAggFunctionPtr = AggregateFunctionPtr,
+              bool IgnoreNull = true>
+    void add_aggregate_mapping(const std::string& name, const MultiArgTypesKey& multi_arg_types, bool is_window,
+                               SpecificAggFunctionPtr fun) {
+        static int current_lt_max = TYPE_MAX_VALUE;
+        auto it = _arg_types_map.find(multi_arg_types);
+        int arg_types;
+        if (it == _arg_types_map.end()) {
+            arg_types = ++current_lt_max;
+            _arg_types_map[multi_arg_types] = arg_types;
+        } else {
+            arg_types = it->second;
+        }
+        _infos_mapping.emplace(std::make_tuple(name, arg_types, RetType, false, false), fun);
+        auto nullable_agg = AggregateFactory::MakeNullableAggregateFunctionVariadic<StateType>(fun);
+        _infos_mapping.emplace(std::make_tuple(name, arg_types, RetType, false, true), nullable_agg);
+
+        if (is_window) {
+            _infos_mapping.emplace(std::make_tuple(name, arg_types, RetType, true, false), fun);
+            auto nullable_agg = AggregateFactory::MakeNullableAggregateFunctionVariadic<StateType>(fun);
+            _infos_mapping.emplace(std::make_tuple(name, arg_types, RetType, true, true), nullable_agg);
         }
     }
 
@@ -255,6 +307,7 @@ public:
 private:
     std::unordered_map<AggregateFuncKey, AggregateFunctionPtr, AggregateFuncMapHash> _infos_mapping;
     std::unordered_map<GeneralFuncKey, AggregateFunctionPtr, GeneralFuncMapHash> _general_mapping;
+    std::unordered_map<MultiArgTypesKey, int, MultiArgTypesMapHash> _arg_types_map;
 };
 
 } // namespace starrocks

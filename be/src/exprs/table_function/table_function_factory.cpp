@@ -18,6 +18,7 @@
 
 #include "column/column.h"
 #include "column/type_traits.h"
+#include "exprs/table_function/boot_strap.h"
 #include "exprs/table_function/generate_series.h"
 #include "exprs/table_function/json_each.h"
 #include "exprs/table_function/list_rowsets.h"
@@ -26,6 +27,7 @@
 #include "exprs/table_function/table_function.h"
 #include "exprs/table_function/unnest.h"
 #include "exprs/table_function/unnest_bitmap.h"
+#include "types/logical_type.h"
 #include "udf/java/java_function_fwd.h"
 
 namespace starrocks {
@@ -131,6 +133,9 @@ TableFunctionResolver::TableFunctionResolver() {
     add_function_mapping("list_rowsets", {TYPE_BIGINT, TYPE_BIGINT},
                          {TYPE_BIGINT, TYPE_BIGINT, TYPE_BIGINT, TYPE_BIGINT, TYPE_BOOLEAN, TYPE_VARCHAR},
                          std::make_shared<ListRowsets>());
+
+    // boot_strap
+    add_function_mapping("boot_strap", {}, {}, std::make_shared<BootStrap>());
 }
 
 TableFunctionResolver::~TableFunctionResolver() = default;

@@ -398,6 +398,21 @@ public class PolymorphicFunctionAnalyzer {
                 return new TableFunction(fn.getFunctionName(), ((TableFunction) fn).getDefaultColumnNames(),
                         Arrays.asList(paramTypes), realTableFnRetTypes);
             }
+            if (fn.functionName().equals("boot_strap")) {
+                // json, N, B, cols...
+                if (paramTypes.length < 4) {
+                    return null;
+                }
+                List<Type> realParamTypes = Arrays.asList(paramTypes);
+                realParamTypes.set(0, Type.JSON);
+                realParamTypes.set(1, TypeManager.getCommonSuperType(Type.BIGINT, realParamTypes.get(1)));
+                realParamTypes.set(2, TypeManager.getCommonSuperType(Type.BIGINT, realParamTypes.get(2)));
+                List<Type> realTableFnRetTypes =
+                        new ArrayList<>(Arrays.asList(paramTypes).subList(3, paramTypes.length));
+                realTableFnRetTypes.add(0, Type.INT);
+                return new TableFunction(fn.getFunctionName(), ((TableFunction) fn).getDefaultColumnNames(),
+                        realParamTypes, realTableFnRetTypes);
+            }
 
             TableFunction tableFunction = (TableFunction) fn;
             List<Type> tableFnRetTypes = tableFunction.getTableFnReturnTypes();

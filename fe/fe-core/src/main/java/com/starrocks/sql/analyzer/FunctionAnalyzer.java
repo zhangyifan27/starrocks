@@ -451,6 +451,7 @@ public class FunctionAnalyzer {
                 throw new SemanticException(fnName + " function 's args must be column");
             }
         }
+        AllInSqlAnalyzer.analyze(functionCallExpr);
     }
 
     private static Optional<Long> extractIntegerValue(Expr expr) {

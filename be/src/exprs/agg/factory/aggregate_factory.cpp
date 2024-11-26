@@ -17,6 +17,7 @@
 #include <memory>
 #include <tuple>
 #include <unordered_map>
+#include <vector>
 
 #include "column/type_traits.h"
 #include "exprs/agg/aggregate.h"
@@ -35,6 +36,7 @@ AggregateFuncResolver::AggregateFuncResolver() {
     register_sumcount();
     register_distinct();
     register_variance();
+    register_all_in_sql();
     register_window();
     register_utility();
     register_approx();
@@ -156,6 +158,11 @@ static const AggregateFunction* get_function(const std::string& name, LogicalTyp
 const AggregateFunction* get_aggregate_function(const std::string& name, LogicalType arg_type, LogicalType return_type,
                                                 bool is_null, TFunctionBinaryType::type binary_type, int func_version) {
     return get_function(name, arg_type, return_type, false, is_null, binary_type, func_version);
+}
+
+const AggregateFunction* get_aggregate_function(const std::string& name, std::vector<LogicalType> multi_arg_types, LogicalType return_type,
+                                                bool is_null, TFunctionBinaryType::type binary_type, int func_version) {
+     return AggregateFuncResolver::instance()->get_aggregate_info(name, multi_arg_types, return_type, false, is_null);
 }
 
 const AggregateFunction* get_window_function(const std::string& name, LogicalType arg_type, LogicalType return_type,

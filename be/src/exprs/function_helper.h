@@ -14,9 +14,13 @@
 
 #pragma once
 
+#include "column/array_column.h"
 #include "column/column_helper.h"
 #include "column/const_column.h"
 #include "column/type_traits.h"
+#include "column/vectorized_fwd.h"
+#include "gutil/casts.h"
+#include "util/slice.h"
 
 namespace starrocks {
 class FunctionContext;
@@ -35,6 +39,69 @@ public:
             return down_cast<NullableColumn*>(ptr.get())->data_column();
         }
         return ptr;
+    }
+
+    template <typename ToPtrType>
+    static ToPtrType unwrap_if_nullable(const Column* col, int row_num) {
+        if (col->is_nullable()) {
+            if (col->is_null(row_num)) {
+                return nullptr;
+            }
+            auto null_col = dynamic_cast<const NullableColumn*>(col);
+            return dynamic_cast<ToPtrType>(null_col->data_column().get());
+        }
+        return dynamic_cast<ToPtrType>(col);
+    }
+
+    template <typename ToPtrType>
+    static ToPtrType unwrap_if_const(const Column* col) {
+        if (col->is_constant()) {
+            auto const_col = dynamic_cast<const ConstColumn*>(col);
+            return dynamic_cast<ToPtrType>(const_col->data_column().get());
+        }
+        return dynamic_cast<ToPtrType>(col);
+    }
+
+    template <typename ToColumnType>
+    static bool can_cast(const Column* col) {
+        if (col->is_nullable()) {
+            col = down_cast<const NullableColumn*>(col)->data_column().get();
+        }
+        if (col->is_constant()) {
+            col = down_cast<const ConstColumn*>(col)->data_column().get();
+        }
+        return dynamic_cast<const ToColumnType*>(col) != nullptr;
+    }
+
+    template <typename ToPtrType, typename CppType>
+    static bool get_data_of_column(const Column* col, size_t row_num, CppType& data) {
+        col = unwrap_if_nullable<const Column*>(col, row_num);
+        if (col == nullptr) {
+            return false;
+        }
+        if (col->is_constant()) {
+            auto const_col = dynamic_cast<const ConstColumn*>(col);
+            if (const_col == nullptr) {
+                return false;
+            }
+            const auto* column = dynamic_cast<const ToPtrType*>(const_col->data_column().get());
+            data = column->get_data()[0];
+            return true;
+        }
+        const auto* column = dynamic_cast<const ToPtrType*>(col);
+        if (column == nullptr) {
+            return false;
+        }
+        data = column->get_data()[row_num];
+        return true;
+    }
+
+    static std::optional<DatumArray> get_data_of_array(const Column* col, size_t row_num) {
+        const auto* data_column = FunctionHelper::unwrap_if_nullable<const ArrayColumn*>(col, row_num);
+        if (data_column == nullptr) {
+            return {};
+        }
+        return data_column->get(row_num).get_array();
     }
 
     /**

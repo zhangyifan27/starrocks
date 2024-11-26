@@ -39,6 +39,7 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <mutex>
 #include <string>
 #include <string_view>
 #include <unordered_map>
@@ -527,6 +528,9 @@ public:
     const BroadcastJoinRightOffsprings& broadcast_join_right_offsprings() const {
         return this->_broadcast_join_right_offsprings;
     }
+    void*& get_query_level_function_state() { return _query_level_function_state; }
+
+    std::mutex& get_query_level_function_state_lock() { return _query_level_function_state_lock; }
 
 private:
     // Set per-query state.
@@ -672,6 +676,9 @@ private:
     BroadcastJoinRightOffsprings _broadcast_join_right_offsprings;
 
     std::optional<TSpillOptions> _spill_options;
+
+    void* _query_level_function_state = nullptr;
+    std::mutex _query_level_function_state_lock;
 };
 
 #define LIMIT_EXCEEDED(tracker, state, msg)                                                                         \

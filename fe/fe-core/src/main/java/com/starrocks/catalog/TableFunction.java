@@ -101,6 +101,11 @@ public class TableFunction extends Function {
                 Lists.newArrayList(Type.ANY_ARRAY), Lists.newArrayList(Type.ANY_ELEMENT), true);
         functionSet.addBuiltin(unnest);
 
+        TableFunction bootStrap = new TableFunction(new FunctionName("boot_strap"), Lists.newArrayList("boot_strap"),
+                Lists.newArrayList(Type.JSON, Type.BIGINT, Type.BIGINT, Type.ANY_ELEMENT),
+                Lists.newArrayList(Type.ANY_ELEMENT), true);
+        functionSet.addBuiltin(bootStrap);
+
         TableFunction jsonEach = new TableFunction(new FunctionName("json_each"), Lists.newArrayList("key", "value"),
                 Lists.newArrayList(Type.JSON), Lists.newArrayList(Type.VARCHAR, Type.JSON));
         functionSet.addBuiltin(jsonEach);

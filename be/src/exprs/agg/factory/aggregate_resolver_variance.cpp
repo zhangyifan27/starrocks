@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <vector>
+
 #include "exprs/agg/aggregate_factory.h"
 #include "exprs/agg/covariance.h"
 #include "exprs/agg/factory/aggregate_factory.hpp"

@@ -14,12 +14,19 @@
 
 #pragma once
 
+#include <vector>
+
 #include "exprs/agg/aggregate.h"
 #include "types/logical_type.h"
 
 namespace starrocks {
 
 const AggregateFunction* get_aggregate_function(const std::string& name, LogicalType arg_type, LogicalType return_type,
+                                                bool is_null,
+                                                TFunctionBinaryType::type binary_type = TFunctionBinaryType::BUILTIN,
+                                                int func_version = 1);
+
+const AggregateFunction* get_aggregate_function(const std::string& name, std::vector<LogicalType> multi_arg_types, LogicalType return_type,
                                                 bool is_null,
                                                 TFunctionBinaryType::type binary_type = TFunctionBinaryType::BUILTIN,
                                                 int func_version = 1);
