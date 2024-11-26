@@ -388,6 +388,11 @@ void CacheInputStream::_populate_to_cache(const char* p, int64_t offset, int64_t
             // Already populate in CacheInputStream's lifecycle, ignore this time
             return;
         }
+        if (_runtime_state != nullptr && _runtime_state->query_ctx() != nullptr) {
+            if (_runtime_state->query_ctx()->populate_block_cache_bytes() >= populate_block_cache_max_bytes) {
+                return;
+            }
+        }
 
         SCOPED_RAW_TIMER(&_stats.write_cache_ns);
         WriteCacheOptions options;
@@ -413,6 +418,9 @@ void CacheInputStream::_populate_to_cache(const char* p, int64_t offset, int64_t
             _stats.write_cache_bytes += size;
             _stats.write_mem_cache_bytes += options.stats.write_mem_bytes;
             _stats.write_disk_cache_bytes += options.stats.write_disk_bytes;
+            if (_runtime_state != nullptr && _runtime_state->query_ctx() != nullptr) {
+                _runtime_state->query_ctx()->incr_populate_block_cache_bytes(size);
+            }
         } else if (!_can_ignore_populate_error(r)) {
             _stats.write_cache_fail_count += 1;
             _stats.write_cache_fail_bytes += size;

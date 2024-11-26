@@ -19,7 +19,9 @@
 
 #include "block_cache/block_cache.h"
 #include "block_cache/io_buffer.h"
+#include "exec/pipeline/query_context.h"
 #include "io/shared_buffered_input_stream.h"
+#include "runtime/runtime_state.h"
 
 namespace starrocks::io {
 
@@ -86,6 +88,13 @@ public:
         return _sb_stream->skip(count);
     }
 
+    void set_runtime_state(RuntimeState* runtime_state) {
+        _runtime_state = runtime_state;
+        if (_runtime_state != nullptr && _runtime_state->query_options().__isset.populate_block_cache_max_bytes) {
+            populate_block_cache_max_bytes = _runtime_state->query_options().populate_block_cache_max_bytes;
+        }
+    }
+
 protected:
     struct BlockBuffer {
         int64_t offset;
@@ -124,6 +133,8 @@ private:
     inline int64_t _calculate_remote_latency_per_block(int64_t io_bytes, int64_t read_time_ns);
     // Record already populated blocks, avoid duplicate populate
     std::unordered_set<int64_t> _already_populated_blocks{};
+    RuntimeState* _runtime_state = nullptr;
+    int64_t populate_block_cache_max_bytes = INT64_MAX;
 };
 
 } // namespace starrocks::io

@@ -253,6 +253,7 @@ StatusOr<std::unique_ptr<RandomAccessFile>> HdfsScanner::create_random_access_fi
         }
         cache_input_stream->set_priority(datacache_options.datacache_priority);
         cache_input_stream->set_ttl_seconds(datacache_options.datacache_ttl_seconds);
+        cache_input_stream->set_runtime_state(options.runtime_state);
         shared_buffered_input_stream->set_align_size(cache_input_stream->get_align_size());
     }
 
@@ -283,6 +284,7 @@ Status HdfsScanner::open_random_access_file() {
                             .file_size = _scanner_params.file_size,
                             .fs_stats = &_fs_stats,
                             .app_stats = &_app_stats,
+                            .runtime_state = _runtime_state,
                             .datacache_options = _scanner_params.datacache_options,
                             .compression_type = _compression_type};
 

@@ -335,6 +335,7 @@ struct OpenFileOptions {
     int64_t file_size = -1;
     HdfsScanStats* fs_stats = nullptr;
     HdfsScanStats* app_stats = nullptr;
+    RuntimeState* runtime_state = nullptr;
 
     // for datacache
     DataCacheOptions datacache_options;

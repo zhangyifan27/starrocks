@@ -235,6 +235,14 @@ public:
         return _connector_scan_operator_mem_share_arbitrator;
     }
 
+    void incr_populate_block_cache_bytes(int64_t cache_bytes) {
+        _populate_block_cache_bytes += cache_bytes;
+    }
+
+    int64_t populate_block_cache_bytes() const {
+        return _populate_block_cache_bytes;
+    }
+
 public:
     static constexpr int DEFAULT_EXPIRE_SECONDS = 300;
 
@@ -305,6 +313,8 @@ private:
 
     int64_t _static_query_mem_limit = 0;
     ConnectorScanOperatorMemShareArbitrator* _connector_scan_operator_mem_share_arbitrator = nullptr;
+
+    std::atomic<int64_t> _populate_block_cache_bytes = 0;
 };
 
 // TODO: use brpc::TimerThread refactor QueryContext

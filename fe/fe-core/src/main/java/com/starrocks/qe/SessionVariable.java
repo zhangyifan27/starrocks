@@ -517,6 +517,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String QUERY_CACHE_ENTRY_MAX_BYTES = "query_cache_entry_max_bytes";
     public static final String QUERY_CACHE_ENTRY_MAX_ROWS = "query_cache_entry_max_rows";
 
+    public static final String POPULATE_BLOCK_CACHE_MAX_BYTES = "populate_block_cache_max_bytes";
+
     // We assume that for PRIMARY_KEYS and UNIQUE_KEYS, the latest partitions are hot partitions that are updated
     // frequently, so it should not be cached in query cache since its disruptive cache invalidation.
     public static final String QUERY_CACHE_HOT_PARTITION_NUM = "query_cache_hot_partition_num";
@@ -1781,6 +1783,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_FILE_METACACHE)
     private boolean enableFileMetaCache = true;
+
+    @VariableMgr.VarAttr(name = POPULATE_BLOCK_CACHE_MAX_BYTES)
+    private long populateBlockCacheMaxBytes = Long.MAX_VALUE;
 
     @VariableMgr.VarAttr(name = HUDI_MOR_FORCE_JNI_READER)
     private boolean hudiMORForceJNIReader = false;
@@ -4369,6 +4374,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         tResult.setDatacache_ttl_seconds(datacacheTTLSeconds);
         tResult.setEnable_cache_select(enableCacheSelect);
         tResult.setEnable_file_metacache(enableFileMetaCache);
+        tResult.setPopulate_block_cache_max_bytes(populateBlockCacheMaxBytes);
         tResult.setHudi_mor_force_jni_reader(hudiMORForceJNIReader);
         tResult.setIo_tasks_per_scan_operator(ioTasksPerScanOperator);
         tResult.setConnector_io_tasks_per_scan_operator(connectorIoTasksPerScanOperator);
