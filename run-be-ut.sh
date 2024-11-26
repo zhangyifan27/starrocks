@@ -261,7 +261,7 @@ if [ -n "$EXCLUDING_TEST_SUIT" ]; then
     excluding_test_suit=$EXCLUDING_TEST_SUIT
     excluding_test_suit_array=("${excluding_test_suit//|/ }")
     for element in ${excluding_test_suit_array[*]}; do
-        append_negative_case "*.${element}_*"
+        append_negative_case "${element}"
     done
 fi
 
