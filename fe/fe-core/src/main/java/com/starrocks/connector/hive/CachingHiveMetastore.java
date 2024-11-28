@@ -218,8 +218,10 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                 Collectors.toSet());
         Set<DatabaseTableName> setInPartitionValuesCache = partitionValuesCache.asMap().keySet().stream()
                 .map(hiveTablePartitionColumn -> hiveTablePartitionColumn.getHiveTableName()).collect(Collectors.toSet());
+        Set<DatabaseTableName> setInTableCache = tableCache.asMap().keySet().stream().collect(Collectors.toSet());
         setInPartitionCache.addAll(setInPartitionKeysCache);
         setInPartitionCache.addAll(setInPartitionValuesCache);
+        setInPartitionCache.addAll(setInTableCache);
         return setInPartitionCache;
     }
 
@@ -246,7 +248,9 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         Set<DatabaseTableName> setInPartitionValuesCache = partitionValuesCache.asMap().keySet().stream()
                 .map(hiveTablePartitionColumn -> hiveTablePartitionColumn.getHiveTableName())
                 .collect(Collectors.toSet());
+        Set<DatabaseTableName> setInTableCache = tableCache.asMap().keySet().stream().collect(Collectors.toSet());
         setInPartitionKeysCache.addAll(setInPartitionValuesCache);
+        setInPartitionKeysCache.addAll(setInTableCache);
         return setInPartitionKeysCache;
     }
 
@@ -657,12 +661,24 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
 
     @Override
     public void refreshTableKeyInfoBackground(String hiveDbName, String hiveTblName) {
+        DatabaseTableName databaseTableName = DatabaseTableName.of(hiveDbName, hiveTblName);
+        try {
+            Table updatedTable = loadTable(databaseTableName);
+            tableCache.put(databaseTableName, updatedTable);
+        } catch (StarRocksConnectorException e) {
+            Throwable cause = e.getCause();
+            if (cause instanceof InvocationTargetException &&
+                    ((InvocationTargetException) cause).getTargetException() instanceof NoSuchObjectException) {
+                invalidateTable(hiveDbName, hiveTblName);
+                throw new StarRocksConnectorException(e.getMessage() + ", invalidated cache.");
+            } else {
+                throw e;
+            }
+        }
         if (enableListNameCache) {
-            DatabaseTableName hiveTableName = DatabaseTableName.of(hiveDbName, hiveTblName);
-
             // refresh table need to refresh partitionKeysCache with all partition values
             HivePartitionValue hivePartitionValue =
-                    HivePartitionValue.of(hiveTableName, HivePartitionValue.ALL_PARTITION_VALUES);
+                    HivePartitionValue.of(databaseTableName, HivePartitionValue.ALL_PARTITION_VALUES);
             List<String> updatedPartitionKeys = loadPartitionKeys(hivePartitionValue);
             partitionKeysCache.put(hivePartitionValue, updatedPartitionKeys);
 
@@ -724,6 +740,7 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         List<HiveTablePartitionColumn> presentHiveTablePartitionColumns =
                 getPresentHiveTablePartitionColumns(partitionValuesCache, dbName, tableName);
         presentHiveTablePartitionColumns.forEach(p -> partitionValuesCache.invalidate(p));
+        tableNameLockMap.remove(databaseTableName);
     }
 
     public synchronized void invalidatePartition(HivePartitionName partitionName) {

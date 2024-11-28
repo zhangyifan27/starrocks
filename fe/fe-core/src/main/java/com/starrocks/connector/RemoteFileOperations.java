@@ -181,7 +181,11 @@ public class RemoteFileOperations {
                     } catch (Throwable throwable) {
                         LOG.warn("Failed to cancel future", throwable);
                     }
-                    throw new StarRocksConnectorException("Failed to get remote files, msg: %s", e.getMessage());
+                    String errMsg = e.getMessage();
+                    if (errMsg == null) {
+                        errMsg = "timeout with " + remoteFilePullTimeout + " ms.";
+                    }
+                    throw new StarRocksConnectorException("Failed to get remote files, msg: %s", errMsg);
                 }
             }
         }
