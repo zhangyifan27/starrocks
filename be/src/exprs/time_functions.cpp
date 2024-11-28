@@ -1675,7 +1675,19 @@ StatusOr<ColumnPtr> TimeFunctions::_t_from_unix_with_format_general(FunctionCont
             result.append_null();
             continue;
         }
-        result.append(Slice(buf));
+        Slice slice(buf);
+        if ((new_fmt.size() == slice.size) &&
+            (strncmp((const char*)new_fmt.c_str(), (const char*)Slice(buf).get_data(), new_fmt.size()) ==
+             0)) {
+            char joda_buf[128];
+            if (!dtv.to_joda_format_string((const char*)new_fmt.c_str(), new_fmt.size(), joda_buf)) {
+                result.append(slice);
+            } else {
+                result.append(Slice(joda_buf));
+            }
+            continue;
+        }
+        result.append(slice);
     }
 
     return result.build(ColumnHelper::is_all_const(columns));
@@ -1715,7 +1727,19 @@ StatusOr<ColumnPtr> TimeFunctions::_t_from_unix_with_format_const(std::string& f
             result.append_null();
             continue;
         }
-        result.append(Slice(buf));
+        Slice slice(buf);
+        if ((format_content.size() == slice.size) &&
+            (strncmp((const char*)format_content.c_str(), (const char*)Slice(buf).get_data(), format_content.size()) ==
+             0)) {
+            char joda_buf[128];
+            if (!dtv.to_joda_format_string((const char*)format_content.c_str(), format_content.size(), joda_buf)) {
+                result.append(slice);
+            } else {
+                result.append(Slice(joda_buf));
+            }
+            continue;
+        }
+        result.append(slice);
     }
 
     return result.build(ColumnHelper::is_all_const(columns));

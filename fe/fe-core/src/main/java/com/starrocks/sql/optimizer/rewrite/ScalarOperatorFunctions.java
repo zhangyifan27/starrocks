@@ -411,7 +411,7 @@ public class ScalarOperatorFunctions {
             return ConstantOperator.createNull(Type.VARCHAR);
         }
         // unix style
-        if (!SUPPORT_JAVA_STYLE_DATETIME_FORMATTER.contains(format.trim())) {
+        if (format.trim().contains("%")) {
             DateTimeFormatter builder = DateUtils.unixDatetimeFormatter(fmtLiteral.getVarchar());
             return ConstantOperator.createVarchar(builder.format(date.getDatetime()));
         } else {
