@@ -25,6 +25,10 @@ public class THiveUtils {
         return fieldName + THiveConstants.SUFFIX;
     }
 
+    public static String toOriginalKey(String partitionKey) {
+        return partitionKey.replaceAll(THiveConstants.SUFFIX + "$", "");
+    }
+
     public static String getPartitionType(HiveTable table, String partitionColumn) {
         String thivePartitionColumns = table.getProperties().get(THiveConstants.THIVE_PARTITION_COLUMNS);
         String thivePartitionTypesStr = table.getProperties().get(THiveConstants.THIVE_PARTITION_TYPES);

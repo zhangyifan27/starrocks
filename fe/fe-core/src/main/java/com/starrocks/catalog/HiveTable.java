@@ -68,6 +68,7 @@ import com.starrocks.thrift.TTableType;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -251,6 +252,7 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
         return Joiner.on(":").join(name, createTime);
     }
 
+
     public HiveTableType getHiveTableType() {
         return hiveTableType;
     }
@@ -279,6 +281,32 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
     public boolean isThiveTable() {
         return hiveProperties.containsKey(THiveConstants.TABLE_TYPE) &&
                 hiveProperties.get(THiveConstants.TABLE_TYPE).equalsIgnoreCase(THiveConstants.THIVE);
+    }
+
+    /*
+     * tHive flag in table properties
+     * The difference between hive and tHive is that the partition type is different
+     */
+    public boolean isTHivePartitionRangeType() {
+        String partitionType = hiveProperties.get(THiveConstants.THIVE_PARTITION_TYPES);
+        return partitionType != null && partitionType.equalsIgnoreCase(THiveConstants.RANGE);
+    }
+
+    public boolean isTHivePartitionListType() {
+        String partitionType = hiveProperties.get(THiveConstants.THIVE_PARTITION_TYPES);
+        return partitionType != null && partitionType.equalsIgnoreCase(THiveConstants.LIST);
+    }
+
+    public boolean isTHivePartitionRangeType(int idx) {
+        String partitionType = hiveProperties.get(THiveConstants.THIVE_PARTITION_TYPES);
+        List<String> columnPartitionTypes = Arrays.asList(partitionType.split(","));
+        return partitionType != null && columnPartitionTypes.get(idx).equalsIgnoreCase(THiveConstants.RANGE);
+    }
+
+    public boolean isTHivePartitionListType(int idx) {
+        String partitionType = hiveProperties.get(THiveConstants.THIVE_PARTITION_TYPES);
+        List<String> columnPartitionTypes = Arrays.asList(partitionType.split(","));
+        return partitionType != null && columnPartitionTypes.get(idx).equalsIgnoreCase(THiveConstants.LIST);
     }
 
     public List<String> getThivePartitionColumnsStr() {

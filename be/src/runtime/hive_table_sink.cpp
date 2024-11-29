@@ -36,7 +36,7 @@ Status HiveTableSink::prepare(RuntimeState* state) {
     RETURN_IF_ERROR(DataSink::prepare(state));
     RETURN_IF_ERROR(Expr::prepare(_output_expr_ctxs, state));
     std::stringstream title;
-    title << "IcebergTableSink (frag_id=" << state->fragment_instance_id() << ")";
+    title << "HiveTableSink (frag_id=" << state->fragment_instance_id() << ")";
     _profile = _pool->add(new RuntimeProfile(title.str()));
     return Status::OK();
 }

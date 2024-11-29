@@ -36,4 +36,6 @@ public class THiveConstants {
     public static final String RANGE = "RANGE";
     public static final String HASH = "HASH";
 
+    public static final String NON_EXISTS = "__non_exists__";
+
 }

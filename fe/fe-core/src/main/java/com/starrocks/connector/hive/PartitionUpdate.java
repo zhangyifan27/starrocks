@@ -25,8 +25,10 @@ import org.apache.hadoop.fs.Path;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.StringJoiner;
 
 import static com.starrocks.connector.PartitionUtil.getPathWithSlash;
+import static com.starrocks.connector.PartitionUtil.toThivePartName;
 
 public class PartitionUpdate {
     private final String name;
@@ -91,6 +93,10 @@ public class PartitionUpdate {
     }
 
     public static PartitionUpdate get(THiveFileInfo fileInfo, String stagingDir, String tableLocation) {
+        return get(fileInfo, stagingDir, tableLocation, false);
+    }
+
+    public static PartitionUpdate get(THiveFileInfo fileInfo, String stagingDir, String tableLocation, boolean isThiveTable) {
         Preconditions.checkState(fileInfo.isSetPartition_path() && !Strings.isNullOrEmpty(fileInfo.getPartition_path()),
                 "Missing partition path");
 
@@ -101,6 +107,11 @@ public class PartitionUpdate {
 
         String writePath = stagingDirWithSlash + partitionName + "/";
         String targetPath = tableLocationWithSlash + partitionName + "/";
+
+        if (isThiveTable) {
+            String thivePartitionName = toThivePartName(partitionName);
+            targetPath = tableLocationWithSlash + thivePartitionName + "/";
+        }
 
         return new PartitionUpdate(partitionName, new Path(writePath), new Path(targetPath),
                 Lists.newArrayList(fileInfo.getFile_name()), fileInfo.getRecord_count(), fileInfo.getFile_size_in_bytes());
@@ -129,5 +140,20 @@ public class PartitionUpdate {
                     fileSizeInBytes));
         }
         return partitionUpdates.build();
+    }
+
+    @Override
+    public String toString() {
+        StringJoiner joiner = new StringJoiner("\n");
+        StringJoiner subJoiner = new StringJoiner(", ");
+        subJoiner.add("name=" + name);
+        subJoiner.add("updateMode=" + updateMode);
+        subJoiner.add("writePath=" + writePath);
+        subJoiner.add("targetPath=" + targetPath);
+        subJoiner.add("fileNames=" + fileNames);
+        subJoiner.add("rowCount=" + rowCount);
+        subJoiner.add("totalSizeInBytes=" + totalSizeInBytes);
+        joiner.add(subJoiner.toString());
+        return joiner.toString();
     }
 }

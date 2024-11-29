@@ -321,6 +321,12 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
     }
 
     @Override
+    public Map<String, List<String>> getPartitionValues(String databaseName, String tableName,
+                                                         String partitionColumn) {
+        return normal.getPartitionValues(databaseName, tableName, partitionColumn);
+    }
+
+    @Override
     public CloudConfiguration getCloudConfiguration() {
         return normal.getCloudConfiguration();
     }

@@ -55,6 +55,7 @@ import java.io.InterruptedIOException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Enumeration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -438,6 +439,11 @@ public class HdfsFsManager {
                                            THdfsProperties tProperties) throws UserException {
         WildcardURI pathUri = new WildcardURI(path);
         String host = scheme + "://" + pathUri.getAuthority();
+
+        if (loadProperties == null) {
+            loadProperties = new HashMap<>();
+        }
+
         if (Strings.isNullOrEmpty(pathUri.getAuthority())) {
             if (loadProperties.containsKey(FS_DEFAULTFS_KEY)) {
                 host = loadProperties.get(FS_DEFAULTFS_KEY);

@@ -84,7 +84,9 @@ Status ConnectorChunkSink::add(Chunk* chunk) {
 
 Status ConnectorChunkSink::finish() {
     for (auto& [_, writer_and_stream] : _writer_stream_pairs) {
-        callback_on_commit(writer_and_stream.first->commit());
+        if (writer_and_stream.first != nullptr) {
+            callback_on_commit(writer_and_stream.first->commit());
+        }
     }
     return Status::OK();
 }

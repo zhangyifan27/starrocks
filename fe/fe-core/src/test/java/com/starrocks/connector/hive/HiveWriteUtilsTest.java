@@ -32,6 +32,12 @@ import java.util.Map;
 import static com.starrocks.connector.hive.MockedRemoteFileSystem.HDFS_HIVE_TABLE;
 
 public class HiveWriteUtilsTest {
+    static {
+        System.setProperty("TQ_PLATFORM_USER_NAME", "olap_metadata");
+        System.setProperty("TQ_PLATFORM_USER_CMK", "xxx");
+        System.setProperty("TDW_PRI_USER_NAME", "tdwadmin");
+    }
+
     @Test
     public void testIsS3Url() {
         Assert.assertTrue(HiveWriteUtils.isS3Url("obs://"));
@@ -82,13 +88,9 @@ public class HiveWriteUtilsTest {
     @Test
     public void testCreateDirectory() {
         Path path = new Path("hdfs://127.0.0.1:9000/user/hive/warehouse/db");
-        ExceptionChecker.expectThrowsWithMsg(StarRocksConnectorException.class,
-                "Failed to create directory",
-                () -> HiveWriteUtils.createDirectory(path, new Configuration()));
-
-        new MockUp<FileSystem>() {
+        new MockUp<HiveWriteUtils>() {
             @Mock
-            public FileSystem get(URI uri, Configuration conf) {
+            public FileSystem getTAuthFileSystem(Path path, Configuration conf) {
                 return new MockedRemoteFileSystem(HDFS_HIVE_TABLE);
             }
         };

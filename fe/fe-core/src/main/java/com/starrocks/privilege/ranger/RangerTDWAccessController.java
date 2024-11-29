@@ -95,8 +95,12 @@ public class RangerTDWAccessController implements AccessController, AccessTypeCo
                 && currentUser.getUser().equals(AuthenticationMgr.ROOT_USER))) {
             return;
         }
+        String privilegeTypeName = privilegeType.name().toLowerCase(Locale.ROOT);
+        if (privilegeTypeName.equals("insert")) {
+            privilegeTypeName = "update";
+        }
         DorisPrivilege privilege = new DorisPrivilege(tableName.getDb(), tableName.getTbl(),
-                Lists.newArrayList(privilegeType.name().toLowerCase(Locale.ROOT)));
+                Lists.newArrayList(privilegeTypeName));
         UserGroupInformation ugi = UserGroupInformation.createUserForTesting(currentUser.getUser(),
                 currentUser instanceof TDWUserIdentity ?
                         ((TDWUserIdentity) currentUser).getUserGroup().toArray(new String[0]) : new String[0]);

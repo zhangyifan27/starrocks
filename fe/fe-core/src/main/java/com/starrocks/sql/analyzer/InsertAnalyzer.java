@@ -41,6 +41,8 @@ import com.starrocks.sql.ast.PartitionNames;
 import com.starrocks.sql.ast.QueryRelation;
 import com.starrocks.sql.ast.ValuesRelation;
 import com.starrocks.sql.common.MetaUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -54,6 +56,7 @@ import static com.starrocks.catalog.OlapTable.OlapTableState.NORMAL;
 import static com.starrocks.sql.common.UnsupportedException.unsupportedException;
 
 public class InsertAnalyzer {
+    private static final Logger LOG = LogManager.getLogger(InsertAnalyzer.class);
 
     /**
      * Normal path of analyzer
@@ -156,7 +159,7 @@ public class InsertAnalyzer {
             if (insertStmt.getTargetColumnNames() != null) {
                 for (String partitionColName : tablePartitionColumnNames) {
                     // case-insensitive match. refer to AstBuilder#getColumnNames
-                    if (!insertStmt.getTargetColumnNames().contains(partitionColName.toLowerCase())) {
+                    if (!insertStmt.getTargetColumnNames().contains(partitionColName.toLowerCase()) && !table.isHiveTable()) {
                         throw new SemanticException("Must include partition column %s", partitionColName);
                     }
                 }
@@ -240,15 +243,37 @@ public class InsertAnalyzer {
         }
 
         int mentionedColumnSize = mentionedColumns.size();
-        if ((table.isIcebergTable() || table.isHiveTable()) && insertStmt.isStaticKeyPartitionInsert()) {
+        if (table.isIcebergTable() && insertStmt.isStaticKeyPartitionInsert()) {
             // full column size = mentioned column size + partition column size for static partition insert
             mentionedColumnSize -= table.getPartitionColumnNames().size();
         }
 
-        if (query.getRelationFields().size() != mentionedColumnSize) {
-            ErrorReport.reportSemanticException(ErrorCode.ERR_INSERTED_COLUMN_MISMATCH, mentionedColumnSize,
-                    query.getRelationFields().size());
+        int relationFieldsSize = query.getRelationFields().size();
+        if (relationFieldsSize != mentionedColumnSize) {
+            if (table.isHiveTable()) {
+                // full column size = mentioned column size + partition column size for static partition insert
+                List<String> partitionColumnNames = table.getPartitionColumnNames();
+                for (String mentionedColumn : mentionedColumns) {
+                    if (partitionColumnNames.contains(mentionedColumn)) {
+                        mentionedColumnSize -= 1;
+                    }
+                }
+
+                List<Field> fields = query.getRelationFields().getAllFields();
+                for (Field field : fields) {
+                    if (partitionColumnNames.contains(field.getName())) {
+                        relationFieldsSize -= 1;
+                    }
+                }
+            }
+            if (relationFieldsSize != mentionedColumnSize) {
+                LOG.warn("relationFields's size: {} != mentionedColumns: {}",
+                        query.getRelationFields().getAllFields(), mentionedColumns);
+                ErrorReport.reportSemanticException(ErrorCode.ERR_INSERTED_COLUMN_MISMATCH, mentionedColumnSize,
+                        query.getRelationFields().size());
+            }
         }
+
         // check default value expr
         if (query instanceof ValuesRelation) {
             ValuesRelation valuesRelation = (ValuesRelation) query;

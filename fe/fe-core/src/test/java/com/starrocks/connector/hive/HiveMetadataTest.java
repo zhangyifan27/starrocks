@@ -450,7 +450,8 @@ public class HiveMetadataTest {
         hiveMetadata.finishSink("hive_db", "hive_table", Lists.newArrayList(tSinkCommitInfo));
     }
 
-    @Test(expected = StarRocksConnectorException.class)
+    //@Test(expected = StarRocksConnectorException.class) already ignore hive commit error
+    @Test
     public void testAppendPartition() {
         String stagingDir = "hdfs://127.0.0.1:10000/tmp/starrocks/queryid";
         THiveFileInfo fileInfo = new THiveFileInfo();

@@ -89,6 +89,11 @@ public class HiveCommitter {
         this.refreshOthersFeExecutor = refreshOthersFeExecutor;
         this.table = table;
         this.stagingDir = stagingDir;
+        // set user to request to hdfs
+        if (ConnectContext.get() == null) {
+            ConnectContext context = new ConnectContext();
+            context.setThreadLocalInfo();
+        }
     }
 
     public void commit(List<PartitionUpdate> partitionUpdates) {
@@ -152,7 +157,12 @@ public class HiveCommitter {
         try (Timer ignored = Tracers.watchScope(EXTERNAL, "HIVE.SINK.do_commit")) {
             waitAsyncFsTasks();
             runAddPartitionsTask();
-            runUpdateStatsTasks();
+            try {
+                runUpdateStatsTasks();
+            }  catch (StarRocksConnectorException e) {
+                LOG.warn("Ignore hive alter error", e);
+                e.printStackTrace();
+            }
         }
     }
 
@@ -221,12 +231,14 @@ public class HiveCommitter {
     private void prepareAddPartition(PartitionUpdate pu, HivePartitionStats updateStats) {
         Path writePath = pu.getWritePath();
         Path targetPath = pu.getTargetPath();
+        ConnectContext context = ConnectContext.get();
         fsTaskFutures.add(CompletableFuture.runAsync(() -> {
             if (fsTaskCancelled.get()) {
                 return;
             }
 
             if (!pu.isS3Url()) {
+                context.setThreadLocalInfo();
                 fileOps.renameDirectory(
                         writePath,
                         targetPath,

@@ -25,6 +25,7 @@ import com.starrocks.connector.hive.HiveWriteUtils;
 import com.starrocks.connector.hive.Partition;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
 import com.starrocks.utils.TdwUtil;
+import com.tencent.tdw.security.exceptions.SecureException;
 import jline.internal.Log;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
@@ -244,7 +245,7 @@ public class RemoteFileOperations {
             List<String> fileNames) {
         FileSystem fileSystem;
         try {
-            fileSystem = FileSystem.get(writePath.toUri(), conf);
+            fileSystem = HiveWriteUtils.getTAuthFileSystem(writePath, conf);
         } catch (Exception e) {
             Log.error("Failed to get fileSystem", e);
             throw new StarRocksConnectorException("Failed to move data files to target location. " +
@@ -262,6 +263,11 @@ public class RemoteFileOperations {
                     if (fileSystem.exists(target)) {
                         throw new StarRocksConnectorException("Failed to move data files from %s to target location %s. msg:" +
                                 " target location already exists", source, target);
+                    }
+
+                    if (source.toUri().toString().equals(target.toUri().toString())) {
+                        LOG.info("source {}} = target {}, skip rename", source.toUri(), target.toUri());
+                        return;
                     }
 
                     if (!fileSystem.rename(source, target)) {
@@ -290,11 +296,20 @@ public class RemoteFileOperations {
         runWhenPathNotExist.run();
 
         try {
-            if (!FileSystem.get(source.toUri(), conf).rename(source, target)) {
+            if (source.toUri().toString().equals(target.toUri().toString())) {
+                LOG.info("source {} = target {}, skip rename", source.toUri(), target.toUri());
+                return;
+            }
+            FileSystem fileSystem = HiveWriteUtils.getTAuthFileSystem(source, conf);
+            if (!fileSystem.rename(source, target)) {
                 throw new StarRocksConnectorException("Failed to rename %s to %s: rename returned false", source, target);
             }
         } catch (IOException e) {
             throw new StarRocksConnectorException("Failed to rename %s to %s, msg: %s", source, target, e.getMessage());
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (SecureException e) {
+            throw new RuntimeException(e);
         }
     }
 

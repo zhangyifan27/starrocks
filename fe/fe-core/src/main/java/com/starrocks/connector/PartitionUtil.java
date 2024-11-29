@@ -177,6 +177,22 @@ public class PartitionUtil {
         return name.toString();
     }
 
+    public static String toThivePartName(String partitionName) {
+        List<String> partitionValues = toPartitionValues(partitionName);
+        return makePartName(partitionValues, null);
+    }
+
+    public static String makePartName(List<String> vals, String defaultStr) {
+        StringBuilder name = new StringBuilder();
+        for (int i = 0; i < vals.size(); i++) {
+            if (i > 0) {
+                name.append(Path.SEPARATOR);
+            }
+            name.append(escapePathName(vals.get(i), defaultStr));
+        }
+        return name.toString();
+    }
+
     public static List<String> fromPartitionKey(PartitionKey key) {
         // get string value from partitionKey
         List<LiteralExpr> literalValues = key.getKeys();

@@ -33,6 +33,7 @@ import com.starrocks.thrift.TDataSink;
 import com.starrocks.thrift.TDataSinkType;
 import com.starrocks.thrift.TExplainLevel;
 import com.starrocks.thrift.THiveTableSink;
+import com.starrocks.utils.TdwUtil;
 
 import java.util.List;
 import java.util.Optional;
@@ -52,7 +53,7 @@ public class HiveTableSink extends DataSink {
     private final long targetMaxFileSize;
     private final boolean isStaticPartitionSink;
     private final String tableIdentifier;
-    private final CloudConfiguration cloudConfiguration;
+    private CloudConfiguration cloudConfiguration;
 
     public HiveTableSink(HiveTable hiveTable, TupleDescriptor desc, boolean isStaticPartitionSink, SessionVariable sessionVariable) {
         this.desc = desc;
@@ -80,6 +81,8 @@ public class HiveTableSink extends DataSink {
                 String.format("connector of catalog %s should not be null", catalogName));
 
         this.cloudConfiguration = connector.getMetadata().getCloudConfiguration();
+        String username = TdwUtil.getTdwUserName();
+        this.cloudConfiguration = this.cloudConfiguration.cloneWithNewUsername(username);
 
         Preconditions.checkState(cloudConfiguration != null,
                 String.format("cloudConfiguration of catalog %s should not be null", catalogName));

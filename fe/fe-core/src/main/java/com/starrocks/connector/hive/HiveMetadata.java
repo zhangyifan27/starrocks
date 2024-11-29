@@ -64,6 +64,7 @@ import static com.starrocks.catalog.Table.TableType.HIVE;
 import static com.starrocks.common.profile.Tracers.Module.EXTERNAL;
 import static com.starrocks.connector.PartitionUtil.toHivePartitionName;
 import static com.starrocks.connector.PartitionUtil.toPartitionValues;
+import static com.starrocks.connector.hive.THiveConstants.NON_EXISTS;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.isResourceMappingCatalog;
 
 public class HiveMetadata implements ConnectorMetadata {
@@ -326,10 +327,19 @@ public class HiveMetadata implements ConnectorMetadata {
         String stagingDir = commitInfos.get(0).getStaging_dir();
         boolean isOverwrite = commitInfos.get(0).isIs_overwrite();
 
+        boolean isThiveTable = table.isThiveTable();
         List<PartitionUpdate> partitionUpdates = commitInfos.stream()
                 .map(TSinkCommitInfo::getHive_file_info)
-                .map(fileInfo -> PartitionUpdate.get(fileInfo, stagingDir, table.getTableLocation()))
+                .map(fileInfo -> PartitionUpdate.get(fileInfo, stagingDir, table.getTableLocation(), isThiveTable))
                 .collect(Collectors.collectingAndThen(Collectors.toList(), PartitionUpdate::merge));
+        LOG.info("partition updates {}", partitionUpdates);
+        for (PartitionUpdate partitionUpdate : partitionUpdates) {
+            if (partitionUpdate.getName().contains(NON_EXISTS)) {
+                LOG.warn("partition update {} write to non exist partition, default {}",
+                        partitionUpdate.getName(), partitionUpdate);
+                throw new RuntimeException("some rows couldn't find partition");
+            }
+        }
 
         List<String> partitionColNames = table.getPartitionColumnNames();
         for (PartitionUpdate partitionUpdate : partitionUpdates) {

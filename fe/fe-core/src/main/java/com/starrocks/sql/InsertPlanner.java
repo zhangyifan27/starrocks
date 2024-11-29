@@ -48,6 +48,8 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
+import com.starrocks.connector.hive.THiveUtils;
+import com.starrocks.persist.ColumnIdExpr;
 import com.starrocks.planner.BlackHoleTableSink;
 import com.starrocks.planner.DataSink;
 import com.starrocks.planner.HiveTableSink;
@@ -58,6 +60,7 @@ import com.starrocks.planner.PlanFragment;
 import com.starrocks.planner.TableFunctionTableSink;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
+import com.starrocks.qe.SqlModeHelper;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.AnalyzeState;
 import com.starrocks.sql.analyzer.ExpressionAnalyzer;
@@ -103,6 +106,7 @@ import com.starrocks.sql.optimizer.transformer.LogicalPlan;
 import com.starrocks.sql.optimizer.transformer.OptExprBuilder;
 import com.starrocks.sql.optimizer.transformer.RelationTransformer;
 import com.starrocks.sql.optimizer.transformer.SqlToScalarOperatorTranslator;
+import com.starrocks.sql.parser.SqlParser;
 import com.starrocks.sql.plan.ExecPlan;
 import com.starrocks.sql.plan.PlanFragmentBuilder;
 import com.starrocks.thrift.TPartialUpdateMode;
@@ -121,12 +125,17 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.starrocks.catalog.DefaultExpr.SUPPORTED_DEFAULT_FNS;
+import static com.starrocks.connector.hive.THiveConstants.DEFAULT;
+import static com.starrocks.connector.hive.THiveConstants.NON_EXISTS;
 import static com.starrocks.sql.optimizer.rule.mv.MVUtils.MATERIALIZED_VIEW_NAME_PREFIX;
 
 public class InsertPlanner {
@@ -251,6 +260,78 @@ public class InsertPlanner {
         QueryRelation queryRelation = insertStmt.getQueryStatement().getQueryRelation();
         List<ColumnRefOperator> outputColumns = new ArrayList<>();
         Table targetTable = insertStmt.getTargetTable();
+
+        // convert partition keys to generated-columns
+        if (targetTable.isHiveTable()) {
+            HiveTable hiveTable = (HiveTable) targetTable;
+            GlobalStateMgr.getCurrentState().getMetadataMgr().refreshTable(
+                    hiveTable.getCatalogName(), hiveTable.getDbName(), hiveTable, new ArrayList<>(), false);
+
+            int idx = 0;
+            for (Column partitionColumn : hiveTable.getPartitionColumns()) {
+                String originColumnName = THiveUtils.toOriginalKey(partitionColumn.getName());
+                Map<String, List<String>> partitionValues = GlobalStateMgr.getCurrentState().getMetadataMgr().getPartitionValues(
+                        hiveTable.getCatalogName(), hiveTable.getDbName(),
+                        hiveTable.getTableName(), partitionColumn.getName());
+
+                Column originColumn = hiveTable.getColumn(originColumnName);
+
+                SortedSet<String> keys = new TreeSet<>(partitionValues.keySet());
+                String partitionExpr;
+                long notDefaultCount = keys.stream().filter(key -> !key.equalsIgnoreCase(DEFAULT)).count();
+                if (notDefaultCount > 0) {
+                    StringBuilder builder = new StringBuilder("case ");
+                    for (String key : keys) {
+                        LOG.info("partition key: {}, value: {}", key, partitionValues.get(key));
+                        if (key.equalsIgnoreCase(DEFAULT)) {
+                            continue;
+                        }
+
+                        String value = partitionValues.get(key).get(0);
+                        String when;
+                        if (hiveTable.isTHivePartitionRangeType(idx)) {
+                            if (originColumn.getPrimitiveType().isNumericType()) {
+                                when = String.format("when `%s` < %s then \"%s\" ", originColumnName, value, key);
+                            } else {
+                                when = String.format("when `%s` < \"%s\" then \"%s\" ", originColumnName, value, key);
+                            }
+                            builder.append(when);
+                        } else if (hiveTable.isTHivePartitionListType(idx)) {
+                            String values;
+                            if (originColumn.getPrimitiveType().isNumericType()) {
+                                values = partitionValues.get(key).stream()
+                                        .map(item -> String.format("%s", item)).collect(Collectors.joining(","));
+                            } else {
+                                values = partitionValues.get(key).stream()
+                                        .map(item -> String.format("\"%s\"", item)).collect(Collectors.joining(","));
+                            }
+                            builder.append(String.format("when `%s` in (%s) then \"%s\" ",
+                                    originColumnName, values, key));
+                        } else {
+                            throw new RuntimeException("unknown partition type");
+                        }
+                    }
+                    if (partitionValues.containsKey(DEFAULT)) {
+                        builder.append("else \"" + DEFAULT + "\" ");
+                    } else {
+                        builder.append("else \"" + NON_EXISTS + "\" ");
+                    }
+                    builder.append("end");
+                    partitionExpr = builder.toString();
+                } else {
+                    partitionExpr = "'" + DEFAULT + "'";
+                }
+                LOG.info("partition expr: {}", partitionExpr);
+                Expr generatedColumnExpr = SqlParser.parseSqlToExpr(partitionExpr, SqlModeHelper.MODE_DEFAULT);
+
+                for (Column column : targetTable.getBaseSchema()) {
+                    if (Objects.equals(column.getName(), partitionColumn.getName())) {
+                        column.setGeneratedColumnExpr(ColumnIdExpr.create(generatedColumnExpr));
+                    }
+                }
+                idx += 1;
+            }
+        }
 
         if (insertStmt.usePartialUpdate()) {
             inferOutputSchemaForPartialUpdate(insertStmt);
@@ -553,6 +634,9 @@ public class InsertPlanner {
                         throw new SemanticException(" `NULL` value is not supported for an AUTO_INCREMENT column: " +
                                 targetColumn.getName() + " You can use `default` for an" +
                                 " AUTO INCREMENT column");
+                    }
+                    if (columnIdx >= row.size() && targetColumn.isGeneratedColumn()) {
+                        continue;
                     }
                     if (row.get(columnIdx) instanceof DefaultValueExpr) {
                         if (isAutoIncrement) {

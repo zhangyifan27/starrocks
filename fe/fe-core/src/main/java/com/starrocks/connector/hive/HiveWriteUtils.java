@@ -18,14 +18,20 @@ import com.google.common.base.Preconditions;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.common.DdlException;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.utils.TAuthUtils;
+import com.tencent.tdw.security.exceptions.SecureException;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.hadoop.security.UserGroupInformation;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.parquet.Strings;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
+import java.security.PrivilegedExceptionAction;
 import java.util.Map;
 import java.util.UUID;
 
@@ -77,9 +83,25 @@ public class HiveWriteUtils {
         }
     }
 
+    public static FileSystem getTAuthFileSystem(Path path, Configuration conf) throws IOException, InterruptedException,
+            SecureException {
+        String proxyUser = "";
+        if (ConnectContext.get() != null && !Strings.isNullOrEmpty(ConnectContext.get().getQualifiedUser())) {
+            proxyUser = ConnectContext.get().getQualifiedUser();
+        }
+        if (proxyUser.equals("root")) {
+            proxyUser = TAuthUtils.getDefaultTdwUser();
+        }
+        UserGroupInformation ugi = TAuthUtils.getPlatformUser();
+        UserGroupInformation proxyUgi = UserGroupInformation.createProxyUser(proxyUser, ugi);
+        conf.set("hadoop.security.authentication", "TAUTH");
+        return proxyUgi.doAs((PrivilegedExceptionAction<FileSystem>) () ->
+                FileSystem.get(path.toUri(), conf));
+    }
+
     public static void createDirectory(Path path, Configuration conf) {
         try {
-            FileSystem fileSystem = FileSystem.get(path.toUri(), conf);
+            FileSystem fileSystem = getTAuthFileSystem(path, conf);
             if (!fileSystem.mkdirs(path)) {
                 LOG.error("Mkdir {} returned false", path);
                 throw new IOException("mkdirs returned false");
@@ -87,6 +109,10 @@ public class HiveWriteUtils {
         } catch (IOException e) {
             LOG.error("Failed to create directory: {}", path);
             throw new StarRocksConnectorException("Failed to create directory: " + path, e);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (SecureException e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -96,7 +122,7 @@ public class HiveWriteUtils {
         if (isS3Url(location)) {
             stagingDir = location;
         } else {
-            Path tempRoot = new Path(location, tempStagingDir);
+            Path tempRoot = Path.mergePaths(new Path(location).getParent(), new Path(tempStagingDir));
             Path tempStagingPath = new Path(tempRoot, UUID.randomUUID().toString());
             stagingDir = tempStagingPath.toString();
         }

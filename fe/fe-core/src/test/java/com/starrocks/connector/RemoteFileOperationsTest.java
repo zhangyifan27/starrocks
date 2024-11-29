@@ -48,6 +48,12 @@ import static com.starrocks.connector.hive.MockedRemoteFileSystem.HDFS_HIVE_TABL
 import static io.airlift.concurrent.MoreFutures.getFutureValue;
 
 public class RemoteFileOperationsTest {
+    static {
+        System.setProperty("TQ_PLATFORM_USER_NAME", "olap_metadata");
+        System.setProperty("TQ_PLATFORM_USER_CMK", "xxx");
+        System.setProperty("TDW_PRI_USER_NAME", "tdwadmin");
+    }
+
     @Test
     public void testGetHiveRemoteFiles() {
         HiveRemoteFileIO hiveRemoteFileIO = new HiveRemoteFileIO(new Configuration());
@@ -141,9 +147,9 @@ public class RemoteFileOperationsTest {
             }
         };
 
-        new MockUp<FileSystem>() {
+        new MockUp<HiveWriteUtils>() {
             @Mock
-            public FileSystem get(URI uri, Configuration conf) throws IOException {
+            public FileSystem getTAuthFileSystem(Path path, Configuration conf) {
                 return mockedFs;
             }
         };
@@ -158,9 +164,9 @@ public class RemoteFileOperationsTest {
                     getFutureValue(futures.get(0), StarRocksConnectorException.class);
                 });
 
-        new MockUp<FileSystem>() {
+        new MockUp<HiveWriteUtils>() {
             @Mock
-            public FileSystem get(URI uri, Configuration conf) throws IOException {
+            public FileSystem getTAuthFileSystem(Path path, Configuration conf) {
                 return fs;
             }
         };
@@ -234,6 +240,13 @@ public class RemoteFileOperationsTest {
         new MockUp<FileSystem>() {
             @Mock
             public FileSystem get(URI uri, Configuration conf) throws IOException {
+                return mockedFs;
+            }
+        };
+
+        new MockUp<HiveWriteUtils>() {
+            @Mock
+            public FileSystem getTAuthFileSystem(Path path, Configuration conf) {
                 return mockedFs;
             }
         };
