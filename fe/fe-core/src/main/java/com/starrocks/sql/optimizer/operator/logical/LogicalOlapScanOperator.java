@@ -37,7 +37,6 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
     private DistributionSpec distributionSpec;
     private long selectedIndexId;
     private List<Long> selectedPartitionId;
-    private PartitionNames partitionNames;
     private boolean hasTableHints;
     private List<Long> selectedTabletId;
     private List<Long> hintsTabletIds;
@@ -118,10 +117,6 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
 
     public List<Long> getSelectedPartitionId() {
         return selectedPartitionId;
-    }
-
-    public PartitionNames getPartitionNames() {
-        return partitionNames;
     }
 
     public List<Long> getSelectedTabletId() {

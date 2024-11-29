@@ -257,9 +257,33 @@ public class OptThivePartitionPruner {
         thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
                 hivePartColumnToNullPartitions);
 
+        // PARTITION(p_20241125) specify partition
+        thiveComputeSpecifyPartition(operator, hivePartPartitionColumnRefOperators.get(0),
+                hivePartColumnToPartitionValuesMap);
+
         addConjunctsForThive(operator);
         computeMinMaxConjuncts(operator, columnToPartitionValuesMap.keySet(),
                 hivePartColumnToPartitionValuesMap.keySet(), context);
+    }
+
+    public static void thiveComputeSpecifyPartition(LogicalScanOperator operator,
+                                                    ColumnRefOperator hivePartColumnRefOperator,
+                                                    Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr,
+                                                            Set<Long>>> hivePartColumnToPartitionValuesMap)
+            throws AnalysisException {
+        if (operator.getPartitionNames() != null) {
+            ConcurrentNavigableMap<LiteralExpr, Set<Long>> partitionValueMap =
+                    hivePartColumnToPartitionValuesMap.get(hivePartColumnRefOperator);
+            Set<Long> selectedPartitionIds = new HashSet<>();
+            for (String partName : operator.getPartitionNames().getPartitionNames()) {
+                LiteralExpr literal = LiteralExpr.create(partName, Type.STRING);
+                selectedPartitionIds.addAll(partitionValueMap.get(literal));
+            }
+            ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
+            Collection<Long> oldSelectedPartitionIds = scanOperatorPredicates.getSelectedPartitionIds();
+            //change oldSelectedPartitionIds
+            oldSelectedPartitionIds.retainAll(selectedPartitionIds);
+        }
     }
 
     public static void computeMinMaxConjuncts(LogicalScanOperator operator,
@@ -411,6 +435,10 @@ public class OptThivePartitionPruner {
         thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
         thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
                 hivePartColumnToNullPartitions);
+
+        // PARTITION(par_20241030) specify partition
+        thiveComputeSpecifyPartition(operator, hivePartPartitionColumnRefOperators.get(0),
+                hivePartColumnToPartitionValuesMap);
 
         addConjunctsForThive(operator);
         List<ColumnRefOperator> partitionColumnRefOperators = new ArrayList<>();

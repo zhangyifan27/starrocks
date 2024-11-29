@@ -22,6 +22,7 @@ import com.starrocks.catalog.ColumnAccessPath;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.planner.PartitionColumnFilter;
+import com.starrocks.sql.ast.PartitionNames;
 import com.starrocks.sql.optimizer.ExpressionContext;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
@@ -61,6 +62,7 @@ public abstract class LogicalScanOperator extends LogicalOperator {
     protected ScanOptimzeOption scanOptimzeOption;
     protected boolean isHybridScan = false;
     private boolean hasSplited = false;
+    protected PartitionNames partitionNames;
 
     public LogicalScanOperator(
             OperatorType type,
@@ -192,6 +194,14 @@ public abstract class LogicalScanOperator extends LogicalOperator {
         throw new AnalysisException("Operation setScanOperatorPredicates(...) is not supported by this ScanOperator.");
     }
 
+    public void setPartitionNames(PartitionNames partitionNames) {
+        this.partitionNames = partitionNames;
+    }
+
+    public PartitionNames getPartitionNames() {
+        return partitionNames;
+    }
+
     @Override
     public <R, C> R accept(OptExpressionVisitor<R, C> visitor, OptExpression optExpression, C context) {
         return visitor.visitLogicalTableScan(optExpression, context);
@@ -229,6 +239,7 @@ public abstract class LogicalScanOperator extends LogicalOperator {
             builder.columnAccessPaths = scanOperator.columnAccessPaths;
             builder.scanOptimzeOption = scanOperator.scanOptimzeOption;
             builder.partitionColumns = scanOperator.partitionColumns;
+            builder.partitionNames = scanOperator.partitionNames;
             return (B) this;
         }
 

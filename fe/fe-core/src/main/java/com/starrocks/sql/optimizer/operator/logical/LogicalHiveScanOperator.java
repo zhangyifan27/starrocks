@@ -18,6 +18,7 @@ import com.google.common.base.Preconditions;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.Table;
+import com.starrocks.sql.ast.PartitionNames;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.OperatorVisitor;
 import com.starrocks.sql.optimizer.operator.Projection;
@@ -30,6 +31,16 @@ import java.util.Map;
 public class LogicalHiveScanOperator extends LogicalScanOperator {
     private ScanOperatorPredicates predicates = new ScanOperatorPredicates();
     private boolean hasUnknownColumn;
+
+    public LogicalHiveScanOperator(Table table,
+                                   Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
+                                   Map<Column, ColumnRefOperator> columnMetaToColRefMap,
+                                   long limit,
+                                   ScalarOperator predicate,
+                                   PartitionNames partitionNames) {
+        this(table, colRefToColumnMetaMap, columnMetaToColRefMap, limit, predicate);
+        this.partitionNames = partitionNames;
+    }
 
     public LogicalHiveScanOperator(Table table,
                                    Map<ColumnRefOperator, Column> colRefToColumnMetaMap,
