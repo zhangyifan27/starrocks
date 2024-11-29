@@ -977,6 +977,7 @@ public class QueryAnalyzer {
                 // For hive view, relation alias is case-insensitive
                 if (node.getView().isHiveView()) {
                     ConnectContext.get().setRelationAliasCaseInSensitive(true);
+                    ConnectContext.get().setIsHiveView(true);
                 }
             }
             Scope queryOutputScope;

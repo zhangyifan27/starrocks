@@ -238,6 +238,7 @@ public class ConnectContext {
     private ConnectContext parent;
 
     private boolean relationAliasCaseInsensitive = false;
+    private boolean isHiveView = false;
 
     private final Map<String, PrepareStmtContext> preparedStmtCtxs = Maps.newHashMap();
 
@@ -1060,6 +1061,14 @@ public class ConnectContext {
 
     public String getSupersqlTraceId() {
         return supersqlTraceId;
+    }
+
+    public void setIsHiveView(boolean isHiveView) {
+        this.isHiveView = isHiveView;
+    }
+
+    public boolean isHiveView() {
+        return isHiveView;
     }
 
     public boolean enableSSL() throws IOException {

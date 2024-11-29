@@ -60,7 +60,8 @@ public class TdwTokenAuthClient implements InvocationHandler {
 
     private void preRun(Method method) throws SecureException, TException {
         String user = TdwUtil.getConnectionTdwUserName(ConnectContext.get());
-        if (user == null || user.equalsIgnoreCase(AuthenticationMgr.ROOT_USER)) {
+        if (user == null || user.equalsIgnoreCase(AuthenticationMgr.ROOT_USER) ||
+                (ConnectContext.get() != null && ConnectContext.get().isHiveView())) {
             // use starrocks root
             user = TAuthUtils.getDefaultTdwUser();
         }
