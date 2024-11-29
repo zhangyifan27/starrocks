@@ -118,6 +118,10 @@ public class StatementPlanner {
                 OptimizerTraceUtil.logQueryStatement("after analyze:\n%s", (QueryStatement) stmt);
             }
 
+            if (stmt.isExplain() && stmt.getExplainLevel().equals(StatementBase.ExplainLevel.VALID)) {
+                return null;
+            }
+
             // Note: we only could get the olap table after Analyzing phase
             if (stmt instanceof QueryStatement) {
                 QueryStatement queryStmt = (QueryStatement) stmt;

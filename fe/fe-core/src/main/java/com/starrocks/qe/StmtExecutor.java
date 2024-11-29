@@ -568,6 +568,11 @@ public class StmtExecutor {
                         }
                     } else {
                         execPlan = StatementPlanner.plan(parsedStmt, context);
+                        if (execPlan == null && parsedStmt.isExplain() && parsedStmt.getExplainLevel().equals(
+                                StatementBase.ExplainLevel.VALID)) {
+                            context.getState().setOk();
+                            return;
+                        }
                         if (parsedStmt instanceof QueryStatement && context.shouldDumpQuery()) {
                             context.getDumpInfo().setExplainInfo(execPlan.getExplainString(TExplainLevel.COSTS));
                         }
