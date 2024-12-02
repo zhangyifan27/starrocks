@@ -40,12 +40,13 @@ StatusOr<std::string> HiveUtils::make_partition_name(
     return ss.str();
 }
 
-std::vector<formats::FileColumnId> IcebergUtils::generate_parquet_field_ids(
+std::vector<formats::FileColumnId> IcebergUtils::generate_iceberg_field_ids(
         const std::vector<TIcebergSchemaField>& fields) {
     std::vector<formats::FileColumnId> file_column_ids(fields.size());
     for (int i = 0; i < fields.size(); ++i) {
         file_column_ids[i].field_id = fields[i].field_id;
-        file_column_ids[i].children = generate_parquet_field_ids(fields[i].children);
+        file_column_ids[i].is_required = fields[i].is_required;
+        file_column_ids[i].children = generate_iceberg_field_ids(fields[i].children);
     }
     return file_column_ids;
 }

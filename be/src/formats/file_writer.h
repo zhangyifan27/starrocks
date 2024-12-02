@@ -26,6 +26,12 @@
 
 namespace starrocks::formats {
 
+struct FileColumnId {
+    int32_t field_id = -1;
+    bool is_required = false;
+    std::vector<FileColumnId> children;
+};
+
 struct FileWriterOptions {
     virtual ~FileWriterOptions() = default;
 };

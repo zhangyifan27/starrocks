@@ -75,6 +75,7 @@ public class IcebergTable extends Table {
     private static final String JSON_KEY_RESOURCE_NAME = "resource";
     private static final String JSON_KEY_ICEBERG_PROPERTIES = "icebergProperties";
     private static final String PARQUET_FORMAT = "parquet";
+    private static final String ORC_FORMAT = "orc";
 
     private String catalogName;
     @SerializedName(value = "dn")
@@ -393,8 +394,8 @@ public class IcebergTable extends Table {
     @Override
     public boolean supportInsert() {
         // for now, only support writing iceberg table with parquet file format
-        return getNativeTable().properties().getOrDefault(DEFAULT_FILE_FORMAT, DEFAULT_FILE_FORMAT_DEFAULT)
-                .equalsIgnoreCase(PARQUET_FORMAT);
+        String format = getNativeTable().properties().getOrDefault(DEFAULT_FILE_FORMAT, DEFAULT_FILE_FORMAT_DEFAULT);
+        return format.equalsIgnoreCase(PARQUET_FORMAT) || format.equalsIgnoreCase(ORC_FORMAT);
     }
 
     @Override

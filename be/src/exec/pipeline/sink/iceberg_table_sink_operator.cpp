@@ -192,7 +192,7 @@ Status IcebergTableSinkOperatorFactory::prepare(RuntimeState* state) {
 
     const TIcebergSchema* t_iceberg_schema = _iceberg_table->get_iceberg_schema();
     if (_file_format == "parquet") {
-        std::vector<parquet::FileColumnId> field_ids = generate_parquet_field_ids(t_iceberg_schema->fields);
+        std::vector<parquet::FileColumnId> field_ids = generate_iceberg_field_ids(t_iceberg_schema->fields);
         auto result = parquet::ParquetBuildHelper::make_schema(_iceberg_table->full_column_names(), _output_expr_ctxs,
                                                                field_ids);
         if (!result.ok()) {
@@ -210,12 +210,12 @@ void IcebergTableSinkOperatorFactory::close(RuntimeState* state) {
     OperatorFactory::close(state);
 }
 
-std::vector<parquet::FileColumnId> IcebergTableSinkOperatorFactory::generate_parquet_field_ids(
+std::vector<parquet::FileColumnId> IcebergTableSinkOperatorFactory::generate_iceberg_field_ids(
         const std::vector<TIcebergSchemaField>& fields) {
     std::vector<parquet::FileColumnId> file_column_ids(fields.size());
     for (int i = 0; i < fields.size(); ++i) {
         file_column_ids[i].field_id = fields[i].field_id;
-        file_column_ids[i].children = generate_parquet_field_ids(fields[i].children);
+        file_column_ids[i].children = generate_iceberg_field_ids(fields[i].children);
     }
 
     return file_column_ids;

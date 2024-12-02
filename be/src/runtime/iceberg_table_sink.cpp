@@ -75,8 +75,8 @@ Status IcebergTableSink::decompose_to_pipeline(pipeline::OpFactories prev_operat
     if (t_iceberg_sink.__isset.target_max_file_size) {
         sink_ctx->max_file_size = t_iceberg_sink.target_max_file_size;
     }
-    sink_ctx->parquet_field_ids =
-            connector::IcebergUtils::generate_parquet_field_ids(iceberg_table_desc->get_iceberg_schema()->fields);
+    sink_ctx->iceberg_field_ids =
+            connector::IcebergUtils::generate_iceberg_field_ids(iceberg_table_desc->get_iceberg_schema()->fields);
     sink_ctx->column_evaluators = ColumnExprEvaluator::from_exprs(this->get_output_expr(), runtime_state);
     sink_ctx->fragment_context = fragment_ctx;
 

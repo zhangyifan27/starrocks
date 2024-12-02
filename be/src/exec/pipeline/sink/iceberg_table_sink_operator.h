@@ -118,7 +118,7 @@ public:
 
 private:
     void _increment_num_sinkers_no_barrier() { _num_sinkers.fetch_add(1, std::memory_order_relaxed); }
-    std::vector<parquet::FileColumnId> generate_parquet_field_ids(const std::vector<TIcebergSchemaField>& fields);
+    std::vector<parquet::FileColumnId> generate_iceberg_field_ids(const std::vector<TIcebergSchemaField>& fields);
 
 private:
     std::vector<TExpr> _t_output_expr;

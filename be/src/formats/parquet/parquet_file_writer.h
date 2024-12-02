@@ -43,11 +43,6 @@
 
 namespace starrocks::formats {
 
-struct FileColumnId {
-    int32_t field_id = -1;
-    std::vector<FileColumnId> children;
-};
-
 struct ParquetWriterOptions : FileWriterOptions {
     int64_t dictionary_pagesize = 1024 * 1024; // 1MB
     int64_t page_size = 1024 * 1024;           // 1MB

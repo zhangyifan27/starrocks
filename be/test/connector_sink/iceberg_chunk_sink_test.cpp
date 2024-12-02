@@ -95,7 +95,7 @@ TEST_F(IcebergChunkSinkTest, test_factory) {
         sink_ctx->format = formats::PARQUET; // iceberg sink only supports parquet
         sink_ctx->compression_type = TCompressionType::NO_COMPRESSION;
         sink_ctx->options = {}; // default for now
-        sink_ctx->parquet_field_ids = {};
+        sink_ctx->iceberg_field_ids = {};
         sink_ctx->max_file_size = 1 << 30;
         sink_ctx->column_evaluators = ColumnSlotIdEvaluator::from_types(
                 {TypeDescriptor::from_logical_type(TYPE_VARCHAR), TypeDescriptor::from_logical_type(TYPE_INT)});
@@ -115,7 +115,7 @@ TEST_F(IcebergChunkSinkTest, test_factory) {
         sink_ctx->format = "unknown";
         sink_ctx->compression_type = TCompressionType::NO_COMPRESSION;
         sink_ctx->options = {};
-        sink_ctx->parquet_field_ids = {};
+        sink_ctx->iceberg_field_ids = {};
         sink_ctx->max_file_size = 1 << 30;
         sink_ctx->column_evaluators = ColumnSlotIdEvaluator::from_types(
                 {TypeDescriptor::from_logical_type(TYPE_VARCHAR), TypeDescriptor::from_logical_type(TYPE_INT)});

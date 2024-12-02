@@ -484,6 +484,9 @@ struct TIcebergSchemaField {
     // Refer to field name
     2: optional string name
 
+    // Refer to field attribute required
+    3: optional bool is_required
+
     // You can fill other field properties here if you needed
     // .......
 

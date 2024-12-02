@@ -65,7 +65,9 @@ private:
     bool _is_closed = false;
 };
 
-struct ORCWriterOptions : public FileWriterOptions {};
+struct ORCWriterOptions : public FileWriterOptions {
+    std::optional<std::vector<FileColumnId>> column_ids = std::nullopt;
+};
 
 class ORCFileWriter final : public FileWriter {
 public:
@@ -91,7 +93,8 @@ private:
     static StatusOr<orc::CompressionKind> _convert_compression_type(TCompressionType::type type);
 
     static StatusOr<std::unique_ptr<orc::Type>> _make_schema(const std::vector<std::string>& column_names,
-                                                             const std::vector<TypeDescriptor>& type_descs);
+                                                             const std::vector<TypeDescriptor>& type_descs,
+                                                             const std::vector<FileColumnId>& file_column_ids);
 
     static StatusOr<std::unique_ptr<orc::Type>> _make_schema_node(const TypeDescriptor& type_desc);
 
@@ -137,6 +140,12 @@ public:
                          std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
                          PriorityThreadPool* executors, RuntimeState* runtime_state);
 
+    ORCFileWriterFactory(std::shared_ptr<FileSystem> fs, TCompressionType::type compression_type,
+                         std::map<std::string, std::string> options, std::vector<std::string> column_names,
+                         std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
+                         std::optional<std::vector<formats::FileColumnId>> field_ids,
+                         PriorityThreadPool* executors, RuntimeState* runtime_state);
+
     Status init() override;
 
     StatusOr<WriterAndStream> create(const std::string& path) const override;
@@ -149,6 +158,7 @@ private:
 
     std::vector<std::string> _column_names;
     std::vector<std::unique_ptr<ColumnEvaluator>> _column_evaluators;
+    std::optional<std::vector<FileColumnId>> _field_ids = std::nullopt;
     PriorityThreadPool* _executors = nullptr;
     RuntimeState* _runtime_state = nullptr;
 };

@@ -125,7 +125,7 @@ ORCFileWriter::ORCFileWriter(std::string location, std::shared_ptr<orc::OutputSt
 
 Status ORCFileWriter::init() {
     RETURN_IF_ERROR(ColumnEvaluator::init(_column_evaluators));
-    ASSIGN_OR_RETURN(_schema, _make_schema(_column_names, _type_descs));
+    ASSIGN_OR_RETURN(_schema, _make_schema(_column_names, _type_descs, _writer_options->column_ids.value()));
     auto options = orc::WriterOptions();
     ASSIGN_OR_RETURN(auto compression, _convert_compression_type(_compression_type));
     options.setCompression(compression);
@@ -402,10 +402,17 @@ StatusOr<orc::CompressionKind> ORCFileWriter::_convert_compression_type(TCompres
 }
 
 StatusOr<std::unique_ptr<orc::Type>> ORCFileWriter::_make_schema(const std::vector<std::string>& column_names,
-                                                                 const std::vector<TypeDescriptor>& type_descs) {
+                                                                 const std::vector<TypeDescriptor>& type_descs,
+                                                                 const std::vector<FileColumnId>& file_column_ids) {
     auto schema = orc::createStructType();
     for (size_t i = 0; i < type_descs.size(); ++i) {
         ASSIGN_OR_RETURN(std::unique_ptr<orc::Type> field_type, _make_schema_node(type_descs[i]));
+        if (!file_column_ids.empty()) {
+            auto field_id = std::to_string(file_column_ids.at(i).field_id);
+            auto is_required = std::to_string(file_column_ids.at(i).is_required);
+            field_type->setAttribute("iceberg.id", field_id);
+            field_type->setAttribute("iceberg.required", is_required);
+        }
         schema->addStructField(column_names[i], std::move(field_type));
     }
     return schema;
@@ -494,6 +501,7 @@ Status ORCFileWriterFactory::init() {
         RETURN_IF_ERROR(e->init());
     }
     _parsed_options = std::make_shared<ORCWriterOptions>();
+    _parsed_options->column_ids = _field_ids;
     return Status::OK();
 }
 
@@ -515,5 +523,20 @@ StatusOr<WriterAndStream> ORCFileWriterFactory::create(const string& path) const
             .stream = std::move(async_output_stream),
     };
 }
+
+ORCFileWriterFactory::ORCFileWriterFactory(std::shared_ptr<FileSystem> fs, TCompressionType::type compression_type,
+                                           std::map<std::string, std::string> options,
+                                           std::vector<std::string> column_names,
+                                           std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
+                                           std::optional<std::vector<FileColumnId>> field_ids,
+                                           PriorityThreadPool* executors, RuntimeState* runtime_state)
+        : _fs(std::move(fs)),
+          _compression_type(compression_type),
+          _options(std::move(options)),
+          _column_names(std::move(column_names)),
+          _column_evaluators(std::move(column_evaluators)),
+          _field_ids(std::move(field_ids)),
+          _executors(executors),
+          _runtime_state(runtime_state) {}
 
 } // namespace starrocks::formats
