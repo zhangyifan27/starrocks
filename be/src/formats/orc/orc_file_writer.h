@@ -66,7 +66,8 @@ private:
 };
 
 struct ORCWriterOptions : public FileWriterOptions {
-    std::optional<std::vector<FileColumnId>> column_ids = std::nullopt;
+    std::optional<std::vector<FileColumnId>> column_ids =
+            std::optional<std::vector<FileColumnId>>(std::vector<FileColumnId>());
 };
 
 class ORCFileWriter final : public FileWriter {
