@@ -59,6 +59,7 @@ python run.py [-d dirname/file] [-r] [-l] [-c ${concurrency}] [-t ${time}] [-a $
               --config             Config path, default conf/sr.conf
               --keep_alive         Check cluster status before each case, only works with sequential mode(-c=1)
               --run_info           Extra info
+              --skip_files         Comma-separated list of files to skip
         """
     )
 
@@ -78,6 +79,7 @@ if __name__ == "__main__":
     config = "conf/sr.conf"
     keep_alive = False
     run_info = ""
+    skip_files = ""
 
     args = "hld:rvc:t:x:y:pa:C:"
     detail_args = [
@@ -97,7 +99,8 @@ if __name__ == "__main__":
         "config=",
         "keep_alive",
         "run_info=",
-        "log_filtered"
+        "log_filtered",
+        "skip_files="
     ]
 
     case_dir = None
@@ -169,6 +172,9 @@ if __name__ == "__main__":
         if opt == "--run_info":
             run_info = arg
 
+        if opt == "--skip_files":
+            skip_files = arg
+
         if opt == "--log_filtered":
             log_filtered = True
 
@@ -194,6 +200,7 @@ if __name__ == "__main__":
     os.environ["keep_alive"] = str(keep_alive)
     os.environ['run_info'] = run_info
     os.environ['log_filtered'] = str(log_filtered)
+    os.environ['skip_files'] = skip_files
 
     argv = [
         "nosetests",

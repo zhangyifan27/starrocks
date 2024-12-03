@@ -151,6 +151,8 @@ class ChooseCase(object):
 
         for file in file_list:
             base_file = os.path.basename(file)
+            skip_files_str = os.environ.get("skip_files")
+            skip.skip_files.update(skip_files_str.split(',') if skip_files_str else [])
             if base_file in skip.skip_files:
                 sr_sql_lib.self_print(f'skip file {file} because it is in skip_files', color=ColorEnum.YELLOW)
                 continue
