@@ -1359,11 +1359,13 @@ vectorized_functions = [
     # eval machine learning functions
     [200000, 'eval_ml_method', True, False, 'DOUBLE', ['JSON', 'ARRAY_DOUBLE'], 'EvalMLMethod::eval_ml_method', 'EvalMLMethod::eval_prepare',
      'EvalMLMethod::eval_close'],
-    
+
     # caliper matching
     [200010, "caliper_matching", True, False, "BIGINT", ['JSON', 'BOOLEAN', 'DOUBLE', 'DOUBLE'], 'CaliperMatchingFunction::caliper_matching', 
      'CaliperMatchingFunction::prepare', 'CaliperMatchingFunction::close'],
     [200011, "caliper_matching", True, False, "BIGINT", ['JSON', 'BOOLEAN', 'DOUBLE', 'DOUBLE', 'ARRAY_VARCHAR'], 'CaliperMatchingFunction::caliper_matching', 
      'CaliperMatchingFunction::prepare', 'CaliperMatchingFunction::close'],
 
+    [180001, 'has_any', True, False, 'BOOLEAN', ['ANY_ARRAY', 'ANY_ARRAY'], 'ArrayFunctions::array_contains_any'],
+    [180002, 'has_all', True, False, 'BOOLEAN', ['ANY_ARRAY', 'ANY_ARRAY'], 'ArrayFunctions::array_contains_all'],
 ]
