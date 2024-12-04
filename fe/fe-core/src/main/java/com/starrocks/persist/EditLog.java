@@ -1915,6 +1915,18 @@ public class EditLog {
         logEdit(OperationType.OP_STARMGR, journal);
     }
 
+    public void logCreateWarehouse(Warehouse warehouse) {
+        logEdit(OperationType.OP_CREATE_WAREHOUSE, warehouse);
+    }
+
+    public void logDropWarehouse(DropWarehouseLog log) {
+        logEdit(OperationType.OP_DROP_WAREHOUSE, log);
+    }
+
+    public void logAlterWarehouse(Warehouse wh) {
+        logEdit(OperationType.OP_ALTER_WAREHOUSE, wh);
+    }
+
     public JournalTask logStarMgrOperationNoWait(StarMgrJournal journal) {
         return submitLog(OperationType.OP_STARMGR, journal, -1);
     }

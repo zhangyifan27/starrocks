@@ -21,6 +21,7 @@ import com.staros.proto.ShardInfo;
 import com.staros.util.LockCloseable;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
+import com.starrocks.common.ErrorReport;
 import com.starrocks.common.ErrorReportException;
 import com.starrocks.common.UserException;
 import com.starrocks.common.io.Text;
@@ -28,11 +29,14 @@ import com.starrocks.common.io.Writable;
 import com.starrocks.lake.LakeTablet;
 import com.starrocks.lake.StarOSAgent;
 import com.starrocks.persist.DropWarehouseLog;
+import com.starrocks.persist.EditLog;
 import com.starrocks.persist.ImageWriter;
 import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.persist.metablock.SRMetaBlockEOFException;
 import com.starrocks.persist.metablock.SRMetaBlockException;
+import com.starrocks.persist.metablock.SRMetaBlockID;
 import com.starrocks.persist.metablock.SRMetaBlockReader;
+import com.starrocks.persist.metablock.SRMetaBlockWriter;
 import com.starrocks.sql.ast.warehouse.CreateWarehouseStmt;
 import com.starrocks.sql.ast.warehouse.DropWarehouseStmt;
 import com.starrocks.sql.ast.warehouse.ResumeWarehouseStmt;
@@ -40,6 +44,7 @@ import com.starrocks.sql.ast.warehouse.SuspendWarehouseStmt;
 import com.starrocks.system.ComputeNode;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.warehouse.DefaultWarehouse;
+import com.starrocks.warehouse.LocalWarehouse;
 import com.starrocks.warehouse.Warehouse;
 import org.apache.commons.collections.CollectionUtils;
 import org.apache.logging.log4j.LogManager;
@@ -302,41 +307,145 @@ public class WarehouseManager implements Writable {
     }
 
     public void createWarehouse(CreateWarehouseStmt stmt) throws DdlException {
-        throw new DdlException("Multi-Warehouse is not implemented");
+        String warehouseName = stmt.getWarehouseName();
+
+        try (LockCloseable ignored = new LockCloseable(rwLock.writeLock())) {
+            if (nameToWh.containsKey(warehouseName)) {
+                if (stmt.isSetIfNotExists()) {
+                    LOG.info("Warehouse {} already exists", warehouseName);
+                    return;
+                }
+                ErrorReport.reportDdlException(ErrorCode.ERR_WAREHOUSE_EXISTS, warehouseName);
+            }
+
+            long id = GlobalStateMgr.getCurrentState().getNextId();
+            long clusterId = GlobalStateMgr.getCurrentState().getNextId();
+            String comment = stmt.getComment();
+            LocalWarehouse wh = new LocalWarehouse(id, warehouseName, clusterId, comment);
+
+            if (RunMode.isSharedDataMode()) {
+                for (com.starrocks.warehouse.Cluster cluster : wh.getClusters().values()) {
+                    try {
+                        StarOSAgent starOSAgent = GlobalStateMgr.getCurrentState().getStarOSAgent();
+                        cluster.setWorkerGroupId(starOSAgent.createWorkerGroup("x0"));
+                    } catch (DdlException e) {
+                        LOG.warn(e);
+                        throw new DdlException("create warehouse " + wh.getName() + " failed, reason: " + e);
+                    }
+                }
+            }
+
+            nameToWh.put(wh.getName(), wh);
+            idToWh.put(wh.getId(), wh);
+            EditLog editLog = GlobalStateMgr.getCurrentState().getEditLog();
+            editLog.logCreateWarehouse(wh);
+            LOG.info("createWarehouse whName = " + warehouseName + ", id = " + id + ", " +
+                    "comment = " + comment);
+        }
     }
 
     public void dropWarehouse(DropWarehouseStmt stmt) throws DdlException {
-        throw new DdlException("Multi-Warehouse is not implemented");
+        String warehouseName = stmt.getWarehouseName();
+        try (LockCloseable ignored = new LockCloseable(rwLock.writeLock())) {
+            LocalWarehouse warehouse = (LocalWarehouse) nameToWh.get(warehouseName);
+            if (warehouse == null) {
+                if (stmt.isSetIfExists()) {
+                    return;
+                }
+                ErrorReport.reportDdlException(ErrorCode.ERR_UNKNOWN_WAREHOUSE, warehouseName);
+            }
+
+            nameToWh.remove(warehouseName);
+            idToWh.remove(warehouse.getId());
+            warehouse.dropSelf();
+            EditLog editLog = GlobalStateMgr.getCurrentState().getEditLog();
+            editLog.logDropWarehouse(new DropWarehouseLog(warehouseName));
+        }
     }
 
     public void suspendWarehouse(SuspendWarehouseStmt stmt) throws DdlException {
-        throw new DdlException("Multi-Warehouse is not implemented");
+        String warehouseName = stmt.getWarehouseName();
+        try (LockCloseable ignored = new LockCloseable(rwLock.writeLock())) {
+            Preconditions.checkState(nameToWh.containsKey(warehouseName),
+                    "Warehouse '%s' doesn't exist", warehouseName);
+
+            LocalWarehouse warehouse = (LocalWarehouse) nameToWh.get(warehouseName);
+            if (warehouse.getState() == LocalWarehouse.WarehouseState.SUSPENDED) {
+                ErrorReport.reportDdlException(ErrorCode.ERR_WAREHOUSE_SUSPENDED, warehouseName);
+            }
+            warehouse.suspendSelf();
+            EditLog editLog = GlobalStateMgr.getCurrentState().getEditLog();
+            editLog.logAlterWarehouse(warehouse);
+        }
     }
 
     public void resumeWarehouse(ResumeWarehouseStmt stmt) throws DdlException {
-        throw new DdlException("Multi-Warehouse is not implemented");
+        String warehouseName = stmt.getWarehouseName();
+        try (LockCloseable ignored = new LockCloseable(rwLock.writeLock())) {
+            Preconditions.checkState(nameToWh.containsKey(warehouseName),
+                    "Warehouse '%s' doesn't exist", warehouseName);
+            LocalWarehouse warehouse = (LocalWarehouse) nameToWh.get(warehouseName);
+            if (warehouse.getState() == LocalWarehouse.WarehouseState.AVAILABLE) {
+                throw new DdlException("Can't resume an available warehouse");
+            }
+            warehouse.resumeSelf();
+            EditLog editLog = GlobalStateMgr.getCurrentState().getEditLog();
+            editLog.logAlterWarehouse(warehouse);
+        }
     }
 
     public Set<String> getAllWarehouseNames() {
         return Sets.newHashSet(DEFAULT_WAREHOUSE_NAME);
     }
 
-    public void replayCreateWarehouse(Warehouse warehouse) {
 
+    public void replayCreateWarehouse(Warehouse warehouse) {
+        String whName = warehouse.getName();
+        try (LockCloseable ignored = new LockCloseable(rwLock.writeLock())) {
+            Preconditions.checkState(!nameToWh.containsKey(whName), "Warehouse '%s' already exists", whName);
+            nameToWh.put(whName, warehouse);
+            idToWh.put(warehouse.getId(), warehouse);
+        }
     }
 
     public void replayDropWarehouse(DropWarehouseLog log) {
-
+        try (LockCloseable ignored = new LockCloseable(rwLock.writeLock())) {
+            String warehouseName = log.getWarehouseName();
+            if (nameToWh.containsKey(warehouseName)) {
+                Warehouse warehouse = nameToWh.remove(warehouseName);
+                idToWh.remove(warehouse.getId());
+                if (warehouse instanceof LocalWarehouse) {
+                    ((LocalWarehouse) warehouse).dropSelf();
+                }
+            }
+        } catch (DdlException e) {
+            e.printStackTrace();
+        }
     }
 
     public void replayAlterWarehouse(Warehouse warehouse) {
-
+        try (LockCloseable ignored = new LockCloseable(rwLock.writeLock())) {
+            nameToWh.put(warehouse.getName(), warehouse);
+            idToWh.put(warehouse.getId(), warehouse);
+        }
     }
 
     public void save(ImageWriter imageWriter) throws IOException, SRMetaBlockException {
+        SRMetaBlockWriter writer = imageWriter.getBlockWriter(SRMetaBlockID.WAREHOUSE_MGR, nameToWh.size() + 1);
+        writer.writeInt(nameToWh.size());
+        for (Warehouse warehouse : nameToWh.values()) {
+            writer.writeJson(warehouse);
+        }
+        writer.close();
     }
 
     public void load(SRMetaBlockReader reader)
             throws SRMetaBlockEOFException, IOException, SRMetaBlockException {
+        int nameToWhSize = reader.readInt();
+        for (int i = 0; i != nameToWhSize; ++i) {
+            Warehouse warehouse = reader.readJson(Warehouse.class);
+            this.nameToWh.put(warehouse.getName(), warehouse);
+            this.idToWh.put(warehouse.getId(), warehouse);
+        }
     }
 }

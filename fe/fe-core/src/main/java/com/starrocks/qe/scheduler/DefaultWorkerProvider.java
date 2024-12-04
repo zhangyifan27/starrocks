@@ -364,8 +364,15 @@ public class DefaultWorkerProvider implements WorkerProvider {
         Map<Long, ComputeNode> computeNodes = new HashMap<>();
 
         //get CN and BE from systemInfoService
-        ImmutableMap<Long, ComputeNode> idToComputeNode
-                = ImmutableMap.copyOf(systemInfoService.getIdComputeNode());
+        ImmutableMap<Long, ComputeNode> allIdToComputeNode = ImmutableMap.copyOf(systemInfoService.getIdComputeNode());
+        Map<Long, ComputeNode> warehouseComputes = new HashMap<>();
+        for (ComputeNode computeNode : allIdToComputeNode.values()) {
+            if (warehouseId == computeNode.getWarehouseId()) {
+                warehouseComputes.put(computeNode.getId(), computeNode);
+            }
+        }
+
+        ImmutableMap<Long, ComputeNode> idToComputeNode = ImmutableMap.copyOf(warehouseComputes);
         ImmutableMap<Long, ComputeNode> idToBackend
                 = ImmutableMap.copyOf(systemInfoService.getIdToBackend());
 

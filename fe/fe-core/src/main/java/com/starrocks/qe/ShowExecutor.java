@@ -84,7 +84,6 @@ import com.starrocks.common.ConfigBase;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
-import com.starrocks.common.ErrorReportException;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.Pair;
 import com.starrocks.common.PatternMatcher;
@@ -2719,10 +2718,6 @@ public class ShowExecutor {
         public ShowResultSet visitShowWarehousesStatement(ShowWarehousesStmt statement, ConnectContext context) {
             GlobalStateMgr globalStateMgr = GlobalStateMgr.getCurrentState();
             WarehouseManager warehouseMgr = globalStateMgr.getWarehouseMgr();
-
-            if (RunMode.getCurrentRunMode() == RunMode.SHARED_NOTHING) {
-                throw ErrorReportException.report(ErrorCode.ERR_NOT_SUPPORTED_STATEMENT_IN_SHARED_NOTHING_MODE);
-            }
 
             PatternMatcher matcher = null;
             if (!statement.getPattern().isEmpty()) {
