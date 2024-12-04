@@ -49,8 +49,6 @@ import com.starrocks.common.UserException;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.util.LogBuilder;
 import com.starrocks.common.util.LogKey;
-import com.starrocks.common.util.concurrent.lock.LockType;
-import com.starrocks.common.util.concurrent.lock.Locker;
 import com.starrocks.load.BrokerFileGroup;
 import com.starrocks.load.BrokerFileGroupAggInfo;
 import com.starrocks.load.FailMsg;
@@ -171,16 +169,10 @@ public abstract class BulkLoadJob extends LoadJob {
 
     private void checkAndSetDataSourceInfo(Database db, List<DataDescription> dataDescriptions) throws DdlException {
         // check data source info
-        Locker locker = new Locker();
-        locker.lockDatabase(db, LockType.READ);
-        try {
-            for (DataDescription dataDescription : dataDescriptions) {
-                BrokerFileGroup fileGroup = new BrokerFileGroup(dataDescription);
-                fileGroup.parse(db, dataDescription);
-                fileGroupAggInfo.addFileGroup(fileGroup);
-            }
-        } finally {
-            locker.unLockDatabase(db, LockType.READ);
+        for (DataDescription dataDescription : dataDescriptions) {
+            BrokerFileGroup fileGroup = new BrokerFileGroup(dataDescription);
+            fileGroup.parse(db, dataDescription);
+            fileGroupAggInfo.addFileGroup(fileGroup);
         }
     }
 
