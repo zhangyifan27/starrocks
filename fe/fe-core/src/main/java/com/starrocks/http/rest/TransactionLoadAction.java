@@ -38,6 +38,7 @@ import com.codahale.metrics.Histogram;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.starrocks.catalog.Database;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.LabelAlreadyUsedException;
 import com.starrocks.common.StarRocksHttpException;
@@ -116,7 +117,8 @@ public class TransactionLoadAction extends RestBaseAction {
         @Override
         protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
             return size() > (GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getTotalBackendNumber() +
-                    GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getTotalComputeNodeNumber()) * 512;
+                    GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getTotalComputeNodeNumber()) *
+                    Config.max_txn_backend_map_capacity;
         }
     };
 

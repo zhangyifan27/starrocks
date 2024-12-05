@@ -3289,6 +3289,8 @@ public class Config extends ConfigBase {
     @ConfField(mutable = false)
     public static boolean enable_replication_num_restriction = false;
     @ConfField(mutable = true)
+    public static int max_txn_backend_map_capacity = 1024;
+    @ConfField(mutable = true)
     public static boolean jdbc_meta_default_cache_enable = false;
 
     @ConfField(mutable = true)
