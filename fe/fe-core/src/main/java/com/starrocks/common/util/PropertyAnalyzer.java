@@ -552,6 +552,10 @@ public class PropertyAnalyzer {
             } catch (Exception e) {
                 throw new AnalysisException(e.getMessage());
             }
+            if (RunMode.getCurrentRunMode() == RunMode.SHARED_NOTHING
+                    && Config.enable_replication_num_restriction && replicationNum < 3) {
+                throw new AnalysisException("Value of `replication_num` should not be less than 3!");
+            }
             checkReplicationNum(replicationNum);
             properties.remove(PROPERTIES_REPLICATION_NUM);
         }
@@ -566,6 +570,10 @@ public class PropertyAnalyzer {
             key = PropertyAnalyzer.PROPERTIES_REPLICATION_NUM;
         }
         short replicationNum = Short.parseShort(properties.get(key));
+        if (RunMode.getCurrentRunMode() == RunMode.SHARED_NOTHING &&
+                Config.enable_replication_num_restriction && replicationNum < 3) {
+            throw new SemanticException("Value of `replication_num` should not be less than 3!");
+        }
         checkReplicationNum(replicationNum);
         return replicationNum;
     }

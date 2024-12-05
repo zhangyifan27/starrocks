@@ -3279,7 +3279,8 @@ public class Config extends ConfigBase {
     public static int replication_transaction_timeout_sec = 24 * 60 * 60; // 24hour
     @ConfField(mutable = true)
     public static boolean enable_legacy_compatibility_for_replication = false;
-
+    @ConfField(mutable = false)
+    public static boolean enable_replication_num_restriction = false;
     @ConfField(mutable = true)
     public static boolean jdbc_meta_default_cache_enable = false;
 

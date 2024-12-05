@@ -2220,4 +2220,30 @@ public class CreateTableTest {
                     "value in partition[p1]."));
         }
     }
+
+    @Test
+    public void testCreateTableWithReplicaCheck() throws Exception {
+        boolean originValue = Config.enable_replication_num_restriction;
+        Config.enable_replication_num_restriction = true;
+        try {
+            ExceptionChecker.expectThrowsWithMsg(AnalysisException.class,
+                    "should not be less than 3",
+                    () -> createTable(
+                            "CREATE TABLE test.test_replica_check1 (\n" +
+                                    "                    `k1`  date not null, `k2`  datetime,`k3`  char(20), " +
+                                    "`k4`  varchar(20), `k5`  boolean, `k6`  tinyint, `k7`  smallint, `k8`  int, " +
+                                    "`k9`  bigint, `k10` largeint, `k11` float, `k12` double, `k13` decimal(27,9)\n" +
+                                    "                )\n" +
+                                    "                DUPLICATE KEY(k1)\n" +
+                                    "                PARTITION BY LIST (k1) (\n" +
+                                    "                   PARTITION p1 VALUES IN (\"2020-01-01\",\"2020-01-02\"),\n" +
+                                    "                   PARTITION p2 VALUES IN (\"2021-01-01\")\n" +
+                                    "                )\n" +
+                                    "                DISTRIBUTED BY HASH(k1)\n" +
+                                    "    PROPERTIES (\"replication_num\" = \"1\");"
+                    ));
+        } finally {
+            Config.enable_replication_num_restriction = originValue;
+        }
+    }
 }
