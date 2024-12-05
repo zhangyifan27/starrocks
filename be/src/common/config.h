@@ -677,6 +677,8 @@ CONF_String_enum(brpc_connection_type, "single", "single,pooled,short");
 // In the future we need to count the memory on each channel of the rpc. To do application layer rpc flow limiting.
 CONF_mBool(brpc_query_ignore_overcrowded, "false");
 CONF_mBool(brpc_load_ignore_overcrowded, "true");
+// Min brpc timeout second.
+CONF_mInt32(_brpc_timeout_seconds, "3600");
 
 // Max number of txns for every txn_partition_map in txn manager.
 // this is a self-protection to avoid too many txns saving in manager.
