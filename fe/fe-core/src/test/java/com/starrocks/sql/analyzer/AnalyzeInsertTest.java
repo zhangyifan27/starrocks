@@ -231,12 +231,11 @@ public class AnalyzeInsertTest {
 
                 icebergTable.getType();
                 result = Table.TableType.ICEBERG;
-                minTimes = 1;
+                minTimes = 0;
             }
         };
 
-        analyzeFail("insert into iceberg_catalog.db.tbl select 1, 2, \"2023-01-01 12:34:45\"",
-                "Unsupported partition column type [DATETIME] for ICEBERG table sink.");
+        analyzeSuccess("insert into iceberg_catalog.db.tbl select 1, 2, \"2023-01-01 12:34:45\"");
     }
 
     @Test

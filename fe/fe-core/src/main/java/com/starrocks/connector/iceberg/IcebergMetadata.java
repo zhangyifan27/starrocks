@@ -1005,7 +1005,7 @@ public class IcebergMetadata implements ConnectorMetadata {
                         nativeTbl.location(), dataFile.partition_path);
 
                 PartitionData partitionData = partitionDataFromPath(
-                        relativePartitionLocation, partitionSpec);
+                        relativePartitionLocation, partitionSpec, table);
                 builder.withPartition(partitionData);
             }
             batchWrite.addFile(builder.build());
@@ -1045,16 +1045,20 @@ public class IcebergMetadata implements ConnectorMetadata {
         return isOverwrite ? new DynamicOverwrite(transaction) : new Append(transaction);
     }
 
-    public static PartitionData partitionDataFromPath(String relativePartitionPath, PartitionSpec spec) {
+    public static PartitionData partitionDataFromPath(String relativePartitionPath, PartitionSpec spec, IcebergTable table) {
         PartitionData data = new PartitionData(spec.fields().size());
         String[] partitions = relativePartitionPath.split("/", -1);
         List<PartitionField> partitionFields = spec.fields();
 
+        Schema schema = table.getNativeTable().schema();
         for (int i = 0; i < partitions.length; i++) {
             PartitionField field = partitionFields.get(i);
+            Column originalColumn = table.getColumn(table.getPartitionSourceName(schema, field));
+            String name = IcebergTable.generatePartitionFieldName(field, originalColumn);
+
             String[] parts = partitions[i].split("=", 2);
             Preconditions.checkArgument(parts.length == 2 && parts[0] != null &&
-                    field.name().equals(parts[0]), "Invalid partition: %s", partitions[i]);
+                    name.equals(parts[0]), "Invalid partition: %s", partitions[i]);
 
             org.apache.iceberg.types.Type sourceType = spec.partitionType().fields().get(i).type();
             // apply url decoding for string/fixed type

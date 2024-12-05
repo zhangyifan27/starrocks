@@ -340,6 +340,11 @@ public class InsertPlanner {
             outputFullSchema = targetTable.getFullSchema();
         }
 
+        if (targetTable.isIcebergTable()) {
+            IcebergTable icebergTable = (IcebergTable) targetTable;
+            outputFullSchema.addAll(icebergTable.getGeneratedPartitionColumns());
+        }
+
         //1. Process the literal value of the insert values type and cast it into the type of the target table
         if (queryRelation instanceof ValuesRelation) {
             castLiteralToTargetColumnsType(insertStmt);

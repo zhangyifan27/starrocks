@@ -67,7 +67,9 @@ Status IcebergTableSink::decompose_to_pipeline(pipeline::OpFactories prev_operat
     auto sink_ctx = std::make_shared<connector::IcebergChunkSinkContext>();
     sink_ctx->path = t_iceberg_sink.location + connector::IcebergUtils::DATA_DIRECTORY;
     sink_ctx->cloud_conf = t_iceberg_sink.cloud_configuration;
-    sink_ctx->column_names = iceberg_table_desc->full_column_names();
+    sink_ctx->partition_column_names = iceberg_table_desc->partition_column_names();
+    auto full_column_names = iceberg_table_desc->full_column_names();
+    sink_ctx->column_names = std::vector(full_column_names.begin(), full_column_names.end() - sink_ctx->partition_column_names.size());
     sink_ctx->partition_column_indices = iceberg_table_desc->partition_index_in_schema();
     sink_ctx->executor = ExecEnv::GetInstance()->pipeline_sink_io_pool();
     sink_ctx->format = t_iceberg_sink.file_format; // iceberg sink only supports parquet
@@ -77,7 +79,11 @@ Status IcebergTableSink::decompose_to_pipeline(pipeline::OpFactories prev_operat
     }
     sink_ctx->iceberg_field_ids =
             connector::IcebergUtils::generate_iceberg_field_ids(iceberg_table_desc->get_iceberg_schema()->fields);
-    sink_ctx->column_evaluators = ColumnExprEvaluator::from_exprs(this->get_output_expr(), runtime_state);
+    auto exprs = this->get_output_expr();
+    auto column_exprs = vector(exprs.begin(), exprs.end() - sink_ctx->partition_column_names.size());
+    auto partition_column_exprs = vector(exprs.end() - sink_ctx->partition_column_names.size(), exprs.end());
+    sink_ctx->partition_column_evaluators = ColumnExprEvaluator::from_exprs(partition_column_exprs, runtime_state);
+    sink_ctx->column_evaluators = ColumnExprEvaluator::from_exprs(column_exprs, runtime_state);
     sink_ctx->fragment_context = fragment_ctx;
 
     auto connector = connector::ConnectorManager::default_instance()->get(connector::Connector::ICEBERG);
@@ -93,14 +99,8 @@ Status IcebergTableSink::decompose_to_pipeline(pipeline::OpFactories prev_operat
         ops.emplace_back(std::move(op));
         context->add_pipeline(std::move(ops));
     } else {
-        std::vector<TExpr> partition_expr;
         std::vector<ExprContext*> partition_expr_ctxs;
-        auto output_expr = this->get_output_expr();
-        for (const auto& index : iceberg_table_desc->partition_index_in_schema()) {
-            partition_expr.push_back(output_expr[index]);
-        }
-
-        RETURN_IF_ERROR(Expr::create_expr_trees(runtime_state->obj_pool(), partition_expr, &partition_expr_ctxs,
+        RETURN_IF_ERROR(Expr::create_expr_trees(runtime_state->obj_pool(), partition_column_exprs, &partition_expr_ctxs,
                                                 runtime_state));
         auto ops = context->interpolate_local_key_partition_exchange(
                 runtime_state, pipeline::Operator::s_pseudo_plan_node_id_for_final_sink, prev_operators,

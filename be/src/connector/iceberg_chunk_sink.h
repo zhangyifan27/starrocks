@@ -52,6 +52,8 @@ struct IcebergChunkSinkContext : public ConnectorChunkSinkContext {
     std::string path;
     std::vector<std::string> column_names;
     std::vector<std::unique_ptr<ColumnEvaluator>> column_evaluators;
+    std::vector<std::string> partition_column_names;
+    std::vector<std::unique_ptr<ColumnEvaluator>> partition_column_evaluators;
     std::vector<int32_t> partition_column_indices;
     int64_t max_file_size = 128L * 1024 * 1024;
     std::string format;

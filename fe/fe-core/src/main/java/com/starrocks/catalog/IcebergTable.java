@@ -29,9 +29,12 @@ import com.starrocks.common.util.Util;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.iceberg.IcebergApiConverter;
 import com.starrocks.connector.iceberg.IcebergCatalogType;
+import com.starrocks.persist.ColumnIdExpr;
+import com.starrocks.qe.SqlModeHelper;
 import com.starrocks.rpc.ConfigurableSerDesFactory;
 import com.starrocks.server.CatalogMgr;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.parser.SqlParser;
 import com.starrocks.thrift.TColumn;
 import com.starrocks.thrift.TCompressedPartitionMap;
 import com.starrocks.thrift.THdfsPartition;
@@ -89,6 +92,7 @@ public class IcebergTable extends Table {
 
     private org.apache.iceberg.Table nativeTable; // actual iceberg table
     private List<Column> partitionColumns;
+    private List<Column> icebergPartitionColumns;
 
     private final AtomicLong partitionIdGen = new AtomicLong(0L);
 
@@ -158,6 +162,28 @@ public class IcebergTable extends Table {
         }
         return partitionColumns;
     }
+
+    public List<String> getIcebergPartitionColumnNames() {
+        return getIcebergPartitionColumns().stream().filter(java.util.Objects::nonNull).map(Column::getName)
+                .collect(Collectors.toList());
+    }
+
+    // get iceberg partition field as column, ex: dteventtime_day
+    public List<Column> getIcebergPartitionColumns() {
+        if (icebergPartitionColumns == null) {
+            List<PartitionField> partitionFields = this.getNativeTable().spec().fields();
+            icebergPartitionColumns = new ArrayList<>();
+            Schema schema = this.getNativeTable().schema();
+            for (PartitionField partitionField : partitionFields) {
+                Column originalColumn = getColumn(getPartitionSourceName(schema, partitionField));
+                String columnName = generatePartitionFieldName(partitionField, originalColumn);
+                Column partitionColumn = new Column(columnName, Type.STRING);
+                icebergPartitionColumns.add(partitionColumn);
+            }
+        }
+        return icebergPartitionColumns;
+    }
+
     public List<Column> getPartitionColumnsIncludeTransformed() {
         List<Column> allPartitionColumns = new ArrayList<>();
         for (PartitionField field : getNativeTable().spec().fields()) {
@@ -338,7 +364,7 @@ public class IcebergTable extends Table {
         tIcebergTable.setColumns(tColumns);
 
         tIcebergTable.setIceberg_schema(IcebergApiConverter.getTIcebergSchema(nativeTable.schema()));
-        tIcebergTable.setPartition_column_names(getPartitionColumnNames());
+        tIcebergTable.setPartition_column_names(getIcebergPartitionColumnNames());
 
         Set<Integer> identifierIds = nativeTable.schema().identifierFieldIds();
         if (identifierIds.isEmpty()) {
@@ -384,6 +410,66 @@ public class IcebergTable extends Table {
                 fullSchema.size(), 0, remoteTableName, remoteDbName);
         tTableDescriptor.setIcebergTable(tIcebergTable);
         return tTableDescriptor;
+    }
+
+    public static String generatePartitionFieldName(PartitionField field, Column originalColumn) {
+        String transformName = field.transform().toString().split("\\[")[0];
+        String fieldName;
+        switch (transformName) {
+            case "day":
+                fieldName = originalColumn.getName() + "_day";
+                break;
+            case "identity":
+                fieldName = originalColumn.getName() + "_identity";
+                break;
+            case "bucket":
+                fieldName = originalColumn.getName() + "_bucket";
+                break;
+            default:
+                throw new RuntimeException("Unsupported partition transform type: " + transformName);
+        }
+        return fieldName;
+    }
+
+    public List<Column> getGeneratedPartitionColumns() {
+        List<Column> columns = Lists.newArrayList();
+        PartitionSpec spec = this.getNativeTable().spec();
+        if (spec == null) {
+            return columns;
+        }
+        List<PartitionField> partitionFields = spec.fields();
+        if (partitionFields.isEmpty()) {
+            return columns;
+        }
+        Schema schema = this.getNativeTable().schema();
+        for (PartitionField partitionField : partitionFields) {
+            Column originColumn = this.getColumn(this.getPartitionSourceName(schema, partitionField));
+            String transformName = partitionField.transform().toString().split("\\[")[0];
+            String partitionExpr;
+            switch (transformName) {
+                case "day":
+                    partitionExpr = "date_format(`" + originColumn.getName() + "`, \"%Y-%m-%d\")";
+                    break;
+                case "identity":
+                    partitionExpr = "`" + originColumn.getName() + "`";
+                    break;
+                case "bucket":
+                    long bucket = Long.parseLong(partitionField.transform().dedupName()
+                            .replace("bucket[", "").replace("]", ""));
+                    partitionExpr = "murmur_hash3_32(`" + originColumn.getName() + "`) % " + bucket;
+                    break;
+                default:
+                    throw new RuntimeException("Unsupported partition transform type: " + transformName);
+            }
+            LOG.info("partition expr: {}", partitionExpr);
+            Expr generatedColumnExpr = SqlParser.parseSqlToExpr(partitionExpr, SqlModeHelper.MODE_DEFAULT);
+
+            String fieldName = generatePartitionFieldName(partitionField, originColumn);
+            Column newColumn = new Column(fieldName, Type.STRING);
+            newColumn.setGeneratedColumnExpr(ColumnIdExpr.create(generatedColumnExpr));
+            columns.add(newColumn);
+        }
+        return columns;
     }
 
     @Override

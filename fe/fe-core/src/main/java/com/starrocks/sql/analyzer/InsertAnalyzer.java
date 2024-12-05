@@ -170,7 +170,6 @@ public class InsertAnalyzer {
             List<Column> partitionColumns = tablePartitionColumnNames.stream()
                     .map(table::getColumn)
                     .collect(Collectors.toList());
-
             for (Column column : partitionColumns) {
                 if (isUnSupportedPartitionColumnType(column.getType())) {
                     throw new SemanticException("Unsupported partition column type [%s] for %s table sink",
@@ -406,6 +405,6 @@ public class InsertAnalyzer {
     }
 
     public static boolean isUnSupportedPartitionColumnType(Type type) {
-        return type.isFloat() || type.isDecimalOfAnyVersion() || type.isDatetime();
+        return type.isFloat() || type.isDecimalOfAnyVersion();
     }
 }

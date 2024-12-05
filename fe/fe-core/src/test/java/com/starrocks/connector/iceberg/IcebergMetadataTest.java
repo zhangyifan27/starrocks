@@ -612,6 +612,13 @@ public class IcebergMetadataTest extends TableTestBase {
             }
         };
 
+        new MockUp<Table>() {
+            @Mock
+            public Column getColumn(String name) {
+                return new Column("data", STRING);
+            }
+        };
+
         TSinkCommitInfo tSinkCommitInfo = new TSinkCommitInfo();
         TIcebergDataFile tIcebergDataFile = new TIcebergDataFile();
         String path = mockedNativeTableA.location() + "/data/data_bucket=0/c.parquet";
@@ -709,6 +716,13 @@ public class IcebergMetadataTest extends TableTestBase {
                 metadata.getBatchWrite((Transaction) any, anyBoolean);
                 result = append;
                 minTimes = 0;
+            }
+        };
+
+        new MockUp<Table>() {
+            @Mock
+            public Column getColumn(String name) {
+                return new Column("data", STRING);
             }
         };
 
