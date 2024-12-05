@@ -755,8 +755,59 @@ void DataDir::_process_garbage_path(const std::string& path) {
 Status DataDir::update_capacity() {
     ASSIGN_OR_RETURN(auto space_info, FileSystem::Default()->space(_path));
     _available_bytes = space_info.available;
+    _shadow_available_bytes = space_info.available;
     _disk_capacity_bytes = space_info.capacity;
     return Status::OK();
+}
+
+Status DataDir::prepare_shadow() {
+    std::lock_guard<std::mutex> l(_shadow_mutex);
+    if (_clone_task_counter == 0) {
+        RETURN_IF_ERROR(update_capacity());
+        _shadow_available_bytes = _available_bytes;
+    }
+    _clone_task_counter++;
+    return Status::OK();
+}
+
+bool DataDir::check_and_update_shadow_capacity(int64_t incoming_data_size) {
+    std::lock_guard<std::mutex> l(_shadow_mutex);
+    double used_pct =
+            (_disk_capacity_bytes - _shadow_available_bytes + incoming_data_size) / (double)_disk_capacity_bytes;
+    int64_t left_bytes = _disk_capacity_bytes - _shadow_available_bytes - incoming_data_size;
+    int64_t storage_flood_stage_usage_percent = config::storage_shadow_flood_stage_usage_percent == 0
+                                                        ? config::storage_flood_stage_usage_percent
+                                                        : config::storage_shadow_flood_stage_usage_percent;
+    int64_t storage_flood_stage_left_capacity_bytes = config::storage_shadow_flood_stage_left_capacity_bytes == 0
+                                                              ? config::storage_flood_stage_left_capacity_bytes
+                                                              : config::storage_shadow_flood_stage_left_capacity_bytes;
+    if (used_pct >= storage_flood_stage_usage_percent / 100.0 &&
+        left_bytes <= storage_flood_stage_left_capacity_bytes) {
+        LOG(WARNING) << "reach capacity limit. used pct: " << used_pct << ", left bytes: " << left_bytes
+                     << ", path: " << _path;
+        return true;
+    }
+    _shadow_available_bytes -= incoming_data_size;
+    return false;
+}
+
+Status DataDir::commit_shadow() {
+    std::lock_guard<std::mutex> l(_shadow_mutex);
+    RETURN_IF_ERROR(update_capacity());
+    if (_clone_task_counter == 1) {
+        _shadow_available_bytes = _available_bytes;
+    }
+    _clone_task_counter--;
+    return Status::OK();
+}
+
+void DataDir::unsafe_rollback_shadow() {
+    std::lock_guard<std::mutex> l(_shadow_mutex);
+    // maybe unnecessary, _available_bytes may be updated by
+    if (_clone_task_counter == 1) {
+        _shadow_available_bytes = _available_bytes;
+    }
+    _clone_task_counter--;
 }
 
 bool DataDir::capacity_limit_reached(int64_t incoming_data_size) {

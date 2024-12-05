@@ -655,6 +655,12 @@ CONF_mInt64(storage_flood_stage_left_capacity_bytes, "107374182400"); // 100GB
 // When choosing storage root path for tablet creation, disks with usage larger than the
 // average value by `storage_high_usage_disk_protect_ratio` won't be chosen at first.
 CONF_mDouble(storage_high_usage_disk_protect_ratio, "0.1"); // 10%
+// The following 2 configs limit the max usage of disk capacity of a data dir.
+// If both of these 2 threshold reached, no more data can be writen into that data dir.
+// The percent of max used capacity of a data dir
+CONF_mInt32(storage_shadow_flood_stage_usage_percent, "0");
+// The min bytes that should be left of a data dir
+CONF_mInt64(storage_shadow_flood_stage_left_capacity_bytes, "0");
 
 // Number of thread for flushing memtable per store.
 CONF_mInt32(flush_thread_num_per_store, "2");

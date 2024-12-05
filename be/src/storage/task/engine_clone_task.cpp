@@ -585,6 +585,17 @@ Status EngineCloneTask::_download_files(DataDir* data_dir, const std::string& re
     uint64_t total_file_size = 0;
     MonotonicStopWatch watch;
     watch.start();
+    // Make sure capacity is correct
+    RETURN_IF_ERROR(data_dir->prepare_shadow());
+
+    // Try to commit update shadow, rollback to
+    DeferOp defer([&]() {
+        auto st = data_dir->commit_shadow();
+        if (!st.ok()) {
+            data_dir->unsafe_rollback_shadow();
+        }
+    });
+
     for (int i = 0; i < file_name_list.size(); ++i) {
         std::string& file_name = file_name_list[i];
         auto remote_file_url = remote_url_prefix + file_name;
@@ -604,7 +615,7 @@ Status EngineCloneTask::_download_files(DataDir* data_dir, const std::string& re
         }
 
         // check disk capacity
-        if (data_dir->capacity_limit_reached(file_size)) {
+        if (data_dir->check_and_update_shadow_capacity(file_size) && data_dir->capacity_limit_reached(file_size)) {
             return Status::InternalError("Disk reach capacity limit");
         }
 

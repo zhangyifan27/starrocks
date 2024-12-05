@@ -37,6 +37,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <mutex>
+#include <queue>
 #include <set>
 #include <shared_mutex>
 #include <string>
@@ -167,6 +168,29 @@ public:
 
     size_t get_all_crm_files_cnt() const { return _all_check_crm_files.size(); };
 
+    // Thread-safe memory estimation procedure to ensure clone tasks not to consume overhead memory.
+    // The main idea is to maintain the shadow memory to simulate the memory changes during concurrent clone tasks,
+    // we make a procedure, which contains three main stages:
+    // prepare_shadow, check_and_update_shadow_capacity, commit_shadow, unsafe_rollback_shadow.
+    // firstly, prepare_shadow update and reset the shadow available memory to the real,
+    // then we check incoming files size and add them to the shadow, after all download task end,
+    // update the capacity of real, and reset to the shadow.
+    // all functions below are thread-safe
+
+    // make sure the first one task of concurrent queue which download files into this data_dir should be
+    // in charge of updating the shadow available memory
+    Status prepare_shadow();
+
+    bool check_and_update_shadow_capacity(int64_t incoming_data_size);
+
+    // we make sure only the last clone task of concurrent queue can commit and update shadow to real
+    Status commit_shadow();
+
+    // if commit_shadow fail, reset _shadow_available_bytes to real _available_bytes, which is unsafe,
+    // but we already made sure only the last one task can update shadow memory, so the changes of the shadow would not
+    // affect running download task.
+    void unsafe_rollback_shadow();
+
 private:
     Status _init_data_dir();
     Status _init_tmp_dir();
@@ -188,6 +212,10 @@ private:
     int64_t _available_bytes;
     // the actual capacity of the disk of this data dir
     int64_t _disk_capacity_bytes;
+    // the shadow capacity of disk of this data dir
+    int64_t _shadow_available_bytes;
+    uint32_t _clone_task_counter;
+    std::mutex _shadow_mutex;
     TStorageMedium::type _storage_medium;
     DiskState _state;
 
