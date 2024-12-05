@@ -886,7 +886,10 @@ public class TabletChecker extends FrontendDaemon {
             }
             stats.incrAliveAndVersionCompleteCnt();
 
-            if (backend.isDecommissioned()) {
+            // replica is alive, backend is decommissioned
+            // for some scenes, we want decommission backend live for a while,
+            // no new tablet assign to it and old tablet not move to other backends
+            if (backend.isDecommissioned() && Config.enable_decommission_replica_relocating) {
                 // this replica is alive, version complete, but backend is not available
                 continue;
             }

@@ -3373,4 +3373,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean enable_check_distribution_column = false;
+
+    @ConfField(mutable = true)
+    public static boolean enable_decommission_replica_relocating = true;
 }
