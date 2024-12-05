@@ -58,6 +58,8 @@ public class RoutineLoadsProcDir implements ProcDirInterface {
                     .add("Name")
                     .add("Id")
                     .add("DbName")
+                    .add("State")
+                    .add("DataSourceType")
                     .add("Statistic")
                     .add("TaskStatistic")
                     .build();

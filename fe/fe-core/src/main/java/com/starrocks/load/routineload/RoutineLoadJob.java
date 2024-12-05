@@ -1613,6 +1613,8 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
             row.add(name);
             row.add(String.valueOf(id));
             row.add(db == null ? String.valueOf(dbId) : db.getFullName());
+            row.add(getState().name());
+            row.add(getDataSourceTypeName());
             row.add(getStatistic());
             row.add(getTaskStatistic());
             return row;

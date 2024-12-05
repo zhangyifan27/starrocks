@@ -582,7 +582,9 @@ public class ConnectProcessor {
                 handleStmtClose();
                 break;
             case COM_FIELD_LIST:
-                handleFieldList();
+                if (!Config.tdw_skip_com_field_list) {
+                    handleFieldList();
+                }
                 break;
             case COM_CHANGE_USER:
                 handleChangeUser();

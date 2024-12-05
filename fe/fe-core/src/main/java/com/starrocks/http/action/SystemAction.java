@@ -80,7 +80,9 @@ public class SystemAction extends WebBaseAction {
         }
         // HTML encode the path to prevent XSS
         String encodePath = Encode.forHtml(currentPath);
-        appendSystemInfo(response.getContent(), encodePath, encodePath);
+        if (checkSystemAction(request, response)) {
+            appendSystemInfo(response.getContent(), encodePath, encodePath);
+        }
 
         getPageFooter(response.getContent());
         writeResponse(request, response);

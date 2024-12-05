@@ -61,8 +61,10 @@ public class LogAction extends WebBaseAction {
         delVerboseName = Encode.forHtml(request.getSingleParameter("del_verbose"));
         LOG.info("add verbose name: {}, del verbose name: {}", addVerboseName, delVerboseName);
 
-        appendLogConf(response.getContent());
-        appendLogInfo(response.getContent());
+        if (checkSystemAction(request, response)) {
+            appendLogConf(response.getContent());
+            appendLogInfo(response.getContent());
+        }
 
         getPageFooter(response.getContent());
         writeResponse(request, response);

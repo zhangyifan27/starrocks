@@ -69,7 +69,9 @@ public class BackendAction extends WebBaseAction {
     public void executeGet(BaseRequest request, BaseResponse response) {
         getPageHeader(request, response.getContent());
 
-        appendKnownBackendsInfo(response.getContent());
+        if (checkSystemAction(request, response)) {
+            appendKnownBackendsInfo(response.getContent());
+        }
 
         getPageFooter(response.getContent());
         writeResponse(request, response);

@@ -43,8 +43,10 @@ public class VariableAction extends WebBaseAction {
     public void executeGet(BaseRequest request, BaseResponse response) {
         getPageHeader(request, response.getContent());
 
-        appendConfigureInfo(response.getContent());
-        appendVariableInfo(response.getContent());
+        if (checkSystemAction(request, response)) {
+            appendConfigureInfo(response.getContent());
+            appendVariableInfo(response.getContent());
+        }
 
         getPageFooter(response.getContent());
         writeResponse(request, response);

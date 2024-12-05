@@ -1944,6 +1944,10 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean enable_hdfs_tauth_authentication = true;
 
+    @ConfField
+    public static boolean tdw_skip_com_field_list = false;
+    @ConfField
+    public static boolean tdw_check_admin_visit_web = true;
     /**
      * When set to true, we cannot drop user named 'admin' or grant/revoke role to/from user named 'admin',
      * except that we're root user.

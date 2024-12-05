@@ -247,6 +247,16 @@ public class WebBaseAction extends BaseAction {
 
     // return true if this Action need Admin privilege.
     public boolean needAdmin() {
+        return Config.tdw_check_admin_visit_web;
+    }
+
+    public boolean checkSystemAction(BaseRequest request, BaseResponse response) {
+        try {
+            checkAuthorizer(ConnectContext.get().getCurrentUserIdentity());
+        } catch (AccessDeniedException e) {
+            response.appendContent("Authentication Failed. <br/> " + e.getMessage());
+            return false;
+        }
         return true;
     }
 

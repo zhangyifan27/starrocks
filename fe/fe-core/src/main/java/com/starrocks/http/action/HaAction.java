@@ -68,14 +68,16 @@ public class HaAction extends WebBaseAction {
     public void executeGet(BaseRequest request, BaseResponse response) {
         getPageHeader(request, response.getContent());
 
-        appendRoleInfo(response.getContent());
-        appendJournalInfo(response.getContent());
-        appendCanReadInfo(response.getContent());
-        appendNodesInfo(response.getContent());
-        appendImageInfo(response.getContent());
-        appendDbNames(response.getContent());
-        appendFe(response.getContent());
-        appendRemovedFe(response.getContent());
+        if (checkSystemAction(request, response)) {
+            appendRoleInfo(response.getContent());
+            appendJournalInfo(response.getContent());
+            appendCanReadInfo(response.getContent());
+            appendNodesInfo(response.getContent());
+            appendImageInfo(response.getContent());
+            appendDbNames(response.getContent());
+            appendFe(response.getContent());
+            appendRemovedFe(response.getContent());
+        }
 
         getPageFooter(response.getContent());
         writeResponse(request, response);
