@@ -20,7 +20,8 @@ create table xexpt_ttest_2samp_test_tbl
     `X7_needcut` bigint,
     `X8_needcut` bigint,
     `weight` double,
-    `distance` double
+    `distance` double,
+    `uin` bigint
 )
 properties (
     "replication_num"="1"
@@ -31,8 +32,8 @@ sync;
 
 select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from xexpt_ttest_2samp_test_tbl;
 
-select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from xexpt_ttest_2samp_test_tbl;
+select xexpt_ttest_2samp(uin, treatment, [numerator, denominator, X1, X2], 'X=x3/x4', 0.03, 0.004, 0.6) from xexpt_ttest_2samp_test_tbl;
 
-select xexpt_ttest_2samp(X3, treatment, [numerator, denominator, X1], 'X=x3', 0.3, 0.4, 0.12) from xexpt_ttest_2samp_test_tbl;
+select xexpt_ttest_2samp(uin, treatment, [numerator, denominator, X1], 'X=x3', 0.01, 0.005, 0.8) from xexpt_ttest_2samp_test_tbl;
 
-select xexpt_ttest_2samp(X1, treatment, [numerator, denominator], 'X=', 0.3, 0.4, 0.12) from xexpt_ttest_2samp_test_tbl;
+select xexpt_ttest_2samp(uin, treatment, [numerator, denominator], 'X=', 0.3, 0.4, 0.12) from xexpt_ttest_2samp_test_tbl;

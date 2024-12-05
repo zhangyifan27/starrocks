@@ -1,0 +1,72 @@
+-- name: test_quantile
+
+drop database if exists quantile_test_db;
+-- result:
+-- !result
+create database quantile_test_db;
+-- result:
+-- !result
+use quantile_test_db;
+-- result:
+-- !result
+drop table if exists quantile_test_tbl;
+-- result:
+-- !result
+create table quantile_test_tbl
+(
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean,
+    `numerator_pre` bigint,
+    `denominator_pre` boolean,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `X3_string` string,
+    `X7_needcut` bigint,
+    `X8_needcut` bigint,
+    `weight` double,
+    `distance` double,
+    `uin` bigint
+)
+properties (
+    "replication_num"="1"
+);
+-- result:
+-- !result
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test.csv -XPUT -H column_separator:, ${url}/api/quantile_test_db/quantile_test_tbl/_stream_load
+-- result:
+-- !result
+sync;
+-- result:
+-- !result
+select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from quantile_test_tbl;
+-- result:
+[LOOSE]793200 646026213 323166914
+-- !result
+select quantile_test(numerator, treatment, [0.80, 0.96, 0.99], uin, 500, 0.05, 0.8, 0.01)
+from quantile_test_tbl;
+-- result:
+[LOOSE]{"causal-function": "quantile_test", "metrics": [{"abs_diff": "", "abs_diff_confidence_interval": "", "p-value": "", "percentile": 0.8, "quantile": 18, "recom_sample_size": "", "rela_diff": "", "rela_diff_confidence_interval": "", "std_samp": 42.518368678595344, "test_power": "", "treatment": "0"}, {"abs_diff": 8, "abs_diff_confidence_interval": [7.831401856380427, 8.168598143619574], "p-value": 0, "percentile": 0.8, "quantile": 26, "recom_sample_size": 710615, "rela_diff": 0.4444444444444444, "rela_diff_confidence_interval": [0.43507788091002364, 0.4538110079788652], "std_samp": 33.57343463942387, "test_power": 0.5527496307571695, "treatment": "1"}, {"abs_diff": "", "abs_diff_confidence_interval": "", "p-value": "", "percentile": 0.96, "quantile": 322, "recom_sample_size": "", "rela_diff": "", "rela_diff_confidence_interval": "", "std_samp": 1621.9812299049634, "test_power": "", "treatment": "0"}, {"abs_diff": 11, "abs_diff_confidence_interval": [3.0810150162672896, 18.91898498373271], "p-value": 0.00647858931740064, "percentile": 0.96, "quantile": 333, "recom_sample_size": 4898927, "rela_diff": 0.03416149068322971, "rela_diff_confidence_interval": [0.009568369615736823, 0.0587546117507226], "std_samp": 1960.3532304249643, "test_power": 0.125330597946581, "treatment": "1"}, {"abs_diff": "", "abs_diff_confidence_interval": "", "p-value": "", "percentile": 0.99, "quantile": 2924.25, "recom_sample_size": "", "rela_diff": "", "rela_diff_confidence_interval": "", "std_samp": 1.3517645248353618e+5, "test_power": "", "treatment": "0"}, {"abs_diff": 77.74199999999246, "abs_diff_confidence_interval": [-434.5642330613223, 590.0482330613072], "p-value": 0.766143789917727, "percentile": 0.99, "quantile": 3001.9919999999925, "recom_sample_size": 248601592, "rela_diff": 0.026585278276478608, "rela_diff_confidence_interval": [-0.14860707294565176, 0.20177762949860897], "std_samp": 9.395811787677613e+4, "test_power": 0.05143496473260653, "treatment": "1"}], "schema": "{\n    causal-function(string),\n    metrics(array): [{\n      percentile(double),\n      treatment(string),\n      quantile(double),\n      std_samp(double),\n      p-value(double),\n      abs_diff(double),\n      abs_diff_confidence_interval(array),\n      rela_diff(double),\n      rela_diff_confidence_interval(array),\n      test_power(double),\n      recom_sample_size(int)\n    }]\n  }"}
+-- !result
+select quantile_test(numerator, treatment, [0.80, 0.96, 0.99], uin, 10000, 0.05, 0.8, 0.01)
+from quantile_test_tbl;
+-- result:
+[LOOSE]{"causal-function": "quantile_test", "metrics": [{"abs_diff": "", "abs_diff_confidence_interval": "", "p-value": "", "percentile": 0.8, "quantile": 18, "recom_sample_size": "", "rela_diff": "", "rela_diff_confidence_interval": "", "std_samp": 42.0408118287153, "test_power": "", "treatment": "0"}, {"abs_diff": 8, "abs_diff_confidence_interval": [7.835351696723403, 8.164648303276598], "p-value": 0, "percentile": 0.8, "quantile": 26, "recom_sample_size": 677709, "rela_diff": 0.4444444444444444, "rela_diff_confidence_interval": [0.43529731648463343, 0.4535915724042554], "std_samp": 32.11988669083955, "test_power": 0.5725216498335313, "treatment": "1"}, {"abs_diff": "", "abs_diff_confidence_interval": "", "p-value": "", "percentile": 0.96, "quantile": 322, "recom_sample_size": "", "rela_diff": "", "rela_diff_confidence_interval": "", "std_samp": 1627.76793056105, "test_power": "", "treatment": "0"}, {"abs_diff": 11, "abs_diff_confidence_interval": [2.847010747516899, 19.152989252483103], "p-value": 0.008184065738297663, "percentile": 0.96, "quantile": 333, "recom_sample_size": 5192729, "rela_diff": 0.03416149068322971, "rela_diff_confidence_interval": [0.008841648284213872, 0.059481333082245555], "std_samp": 2052.391200686959, "test_power": 0.12096256124136213, "treatment": "1"}, {"abs_diff": "", "abs_diff_confidence_interval": "", "p-value": "", "percentile": 0.99, "quantile": 2924.25, "recom_sample_size": "", "rela_diff": "", "rela_diff_confidence_interval": "", "std_samp": 1.2892066583122102e+5, "test_power": "", "treatment": "0"}, {"abs_diff": 77.74199999999246, "abs_diff_confidence_interval": [-418.42928949772687, 573.9132894977117], "p-value": 0.7587713733424617, "percentile": 0.99, "quantile": 3001.9919999999925, "recom_sample_size": 233188908, "rela_diff": 0.026585278276478608, "rela_diff_confidence_interval": [-0.14308943814575592, 0.19625999469871314], "std_samp": 9.380631609191341e+4, "test_power": 0.05152989699965749, "treatment": "1"}], "schema": "{\n    causal-function(string),\n    metrics(array): [{\n      percentile(double),\n      treatment(string),\n      quantile(double),\n      std_samp(double),\n      p-value(double),\n      abs_diff(double),\n      abs_diff_confidence_interval(array),\n      rela_diff(double),\n      rela_diff_confidence_interval(array),\n      test_power(double),\n      recom_sample_size(int)\n    }]\n  }"}
+-- !result
+select quantile_test(numerator, treatment, [0], uin, 500, 0.05, 0.8, 0.01)
+from quantile_test_tbl;
+-- result:
+[LOOSE]E: (1064, '`percentiles` should be in (0, 1), but get `0`.')
+-- !result
+select quantile_test(numerator, treatment, [], uin, 500, 0.05, 0.8, 0.01)
+from quantile_test_tbl;
+-- result:
+[LOOSE]E: (1064, 'percentiles should not be empty.')
+-- !result
+select quantile_test(numerator, treatment, [NULL], uin, 500, 0.05, 0.8, 0.01)
+from quantile_test_tbl;
+-- result:
+[LOOSE]E: (1064, 'Error: `percentiles` should not contain null.')
+-- !result

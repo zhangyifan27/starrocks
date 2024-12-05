@@ -17,6 +17,7 @@
 #include <velocypack/Builder.h>
 #include <velocypack/Value.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <ios>
@@ -36,6 +37,7 @@
 #include "exprs/helpers/serialize_helpers.hpp"
 #include "exprs/math_functions.h"
 #include "gutil/casts.h"
+#include "gutil/integral_types.h"
 #include "types/logical_type.h"
 #include "util/json.h"
 
@@ -59,10 +61,20 @@ public:
         }
     }
 
-    void merge(MannWhitneyAggState const& other) {
+    void merge(MannWhitneyAggState& other) {
         DCHECK(_alternative == other._alternative);
         for (size_t idx = 0; idx < 2; ++idx) {
-            _stats[idx].insert(_stats[idx].end(), other._stats[idx].begin(), other._stats[idx].end());
+            if (!std::is_sorted(_stats[idx].begin(), _stats[idx].end())) {
+                std::sort(_stats[idx].begin(), _stats[idx].end());
+            }
+            if (!std::is_sorted(other._stats[idx].begin(), other._stats[idx].end())) {
+                std::sort(other._stats[idx].begin(), other._stats[idx].end());
+            }
+            std::vector<double> tmp;
+            tmp.reserve(_stats[idx].size() + other._stats[idx].size());
+            std::merge(_stats[idx].begin(), _stats[idx].end(), other._stats[idx].begin(), other._stats[idx].end(),
+                       std::back_inserter(tmp));
+            _stats[idx] = std::move(tmp);
         }
     }
 
@@ -82,7 +94,27 @@ public:
                                                      _continuity_correction);
     }
 
-    void build_result(vpack::Builder& builder) const {
+    class RangeIterator {
+    public:
+        using iterator_category = std::forward_iterator_tag;
+        using value_type = uint64_t;
+        using difference_type = std::ptrdiff_t;
+        using pointer = uint64_t*;
+        using reference = uint64_t&;
+
+        RangeIterator(uint64_t now) : _now(now) {}
+
+        uint64_t operator*() const { return _now; }
+
+        void operator++() { ++_now; }
+
+        bool operator!=(RangeIterator const& other) const { return _now != other._now; }
+
+    private:
+        uint64_t _now;
+    };
+
+    void build_result(vpack::Builder& builder) {
         JsonSchemaFormatter schema;
         vpack::ObjectBuilder obj_builder(&builder);
         schema.add_field("causal-function", "string");
@@ -93,15 +125,25 @@ public:
             return;
         }
         size_t size = _stats[0].size() + _stats[1].size();
-        std::vector<size_t> index(size);
-        std::iota(index.begin(), index.end(), 0);
+        std::vector<size_t> index;
+        index.reserve(size);
         auto data = [this](size_t idx) {
             if (idx < this->_stats[0].size()) {
                 return this->_stats[0][idx];
             }
             return this->_stats[1][idx - this->_stats[0].size()];
         };
-        std::sort(index.begin(), index.end(), [data](size_t lhs, size_t rhs) { return data(lhs) < data(rhs); });
+        for (size_t idx = 0; idx < 2; ++idx) {
+            // in case there is only one state.
+            if (!std::is_sorted(_stats[idx].begin(), _stats[idx].end())) {
+                std::sort(_stats[idx].begin(), _stats[idx].end());
+            }
+        }
+        std::merge(RangeIterator(0), RangeIterator(_stats[0].size()), RangeIterator(_stats[0].size()),
+                   RangeIterator(_stats[0].size() + _stats[1].size()), std::back_inserter(index),
+                   [data](size_t lhs, size_t rhs) { return data(lhs) < data(rhs); });
+        DCHECK(std::is_sorted(index.begin(), index.end(),
+                              [data](size_t lhs, size_t rhs) { return data(lhs) < data(rhs); }));
 
         const double n1 = _stats[0].size();
         const double n2 = _stats[1].size();
@@ -112,7 +154,7 @@ public:
             double tie_numenator = 0;
             while (left < size) {
                 size_t right = left;
-                while (right < size && data(index[left]) == data(index[right])) {
+                while (right < size && std::abs(data(index[left]) - data(index[right])) < 1e-6) {
                     ++right;
                 }
                 auto adjusted = (left + right + 1.) / 2.;
@@ -177,13 +219,11 @@ public:
             p_value = 1 - cdf;
         }
 
-        builder.add("staticstic", to_json(u1));
-        builder.add("u1", to_json(u1));
-        builder.add("u2", to_json(u2));
+        double statistic = n1 * n2 - 2 * u2;
+
+        builder.add("statistic", to_json(statistic));
         builder.add("p-value", to_json(p_value));
-        schema.add_field("staticstic", "double");
-        schema.add_field("u1", "double");
-        schema.add_field("u2", "double");
+        schema.add_field("statistic", "double");
         schema.add_field("p-value", "double");
         builder.add("schema", to_json(schema.print()));
     }
@@ -293,7 +333,7 @@ public:
             return;
         }
         vpack::Builder result_builder;
-        this->data(state).build_result(result_builder);
+        const_cast<MannWhitneyAggState&>(this->data(state)).build_result(result_builder);
         auto slice = result_builder.slice();
         JsonValue result_json(slice);
         down_cast<MannWhitneyResultColumn*>(to)->append(std::move(result_json));

@@ -1435,7 +1435,7 @@ class StarrocksSQLApiLib(object):
             if exp.startswith(LOOSE_FLAG):
                 def extract(s):
                     # 正则表达式模式
-                    number_pattern = r'-?\d+\.?\d*'
+                    number_pattern = r'-?\d+\.?\d*e?-?\+?\d*'
                     non_number_pattern = r'[^-\d.]+'  # 匹配任何不是数字、负号或小数点的字符序列
 
                     numbers = []

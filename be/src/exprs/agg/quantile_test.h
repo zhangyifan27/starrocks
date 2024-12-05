@@ -93,28 +93,6 @@ public:
         return Status::OK();
     }
 
-    bool is_sorted() const {
-        for (auto&& [treatment, buckets] : _groups) {
-            for (uint32_t bucket_id = 0; bucket_id < kNumBuckets; ++bucket_id) {
-                if (!std::is_sorted(buckets[bucket_id].begin(), buckets[bucket_id].end())) {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-
-    void sort_if_not_sorted() {
-        for (auto&& [treatment, buckets] : _groups) {
-            for (uint32_t bucket_id = 0; bucket_id < kNumBuckets; ++bucket_id) {
-                if (std::is_sorted(buckets[bucket_id].begin(), buckets[bucket_id].end())) {
-                    continue;
-                }
-                pdqsort(buckets[bucket_id].begin(), buckets[bucket_id].end());
-            }
-        }
-    }
-
     Status finalize() {
         sort_if_not_sorted();
         if (_groups.size() < 2) {
@@ -127,22 +105,36 @@ public:
             auto const& treatment = p.first;
             auto const& buckets = p.second;
             uint64_t index = 0;
+            std::vector<BucketIterator> bucket_iterators;
             for (uint32_t bucket_id = 0; bucket_id < kNumBuckets; ++bucket_id) {
                 auto& bucket = buckets[bucket_id];
                 if (bucket.empty()) {
-                    return Status::InvalidArgument("Some of the buckets are empty.");
+                    return Status::InvalidArgument("Some of the buckets is empty.");
                 }
                 _start_index[treatment].emplace_back(index);
+                bucket_iterators.emplace_back(bucket.begin(), bucket.end(), index);
                 index += bucket.size();
             }
-            DCHECK(_start_index[treatment].size() == kNumBuckets);
-            _sorted_index[treatment].resize(index);
-            std::iota(_sorted_index[treatment].begin(), _sorted_index[treatment].end(), 0);
-            pdqsort(_sorted_index[treatment].begin(), _sorted_index[treatment].end(),
-                    [&](uint64_t lhs, uint64_t rhs) { return get_data(treatment, lhs) < get_data(treatment, rhs); });
+            _sorted_index[treatment].reserve(index);
+            merge_buckets(bucket_iterators, _sorted_index[treatment]);
             _count[treatment] = index;
+            DCHECK(std::is_sorted(
+                    _sorted_index[treatment].begin(), _sorted_index[treatment].end(),
+                    [&](uint64_t a, uint64_t b) { return get_data(treatment, a) < get_data(treatment, b); }));
         }
         return Status::OK();
+    }
+
+    double get_count(std::string const& treatment) { return _count[treatment]; }
+
+    std::array<std::string, 2> get_treatments() {
+        DCHECK(_groups.size() == 2);
+        std::array<std::string, 2> result;
+        auto it = _groups.begin();
+        result[0] = it->first;
+        ++it;
+        result[1] = it->first;
+        return result;
     }
 
     std::vector<double> get_quantiles(std::string const& treatment, std::vector<double> const& percentiles) {
@@ -169,6 +161,40 @@ public:
         return result;
     }
 
+private:
+    MathHelpers::MurmurHash3 _hash{0};
+
+    // treatment -> bucket -> values
+    std::map<std::string, std::vector<std::vector<double>>> _groups;
+
+    std::map<std::string, std::vector<uint64_t>> _start_index; // only works when querying quantiles
+
+    std::map<std::string, std::vector<uint64_t>> _sorted_index; // only works when querying quantiles
+
+    std::map<std::string, uint64_t> _count; // only works when querying quantiles
+
+    bool is_sorted() const {
+        for (auto&& [treatment, buckets] : _groups) {
+            for (uint32_t bucket_id = 0; bucket_id < kNumBuckets; ++bucket_id) {
+                if (!std::is_sorted(buckets[bucket_id].begin(), buckets[bucket_id].end())) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    void sort_if_not_sorted() {
+        for (auto&& [treatment, buckets] : _groups) {
+            for (uint32_t bucket_id = 0; bucket_id < kNumBuckets; ++bucket_id) {
+                if (std::is_sorted(buckets[bucket_id].begin(), buckets[bucket_id].end())) {
+                    continue;
+                }
+                pdqsort(buckets[bucket_id].begin(), buckets[bucket_id].end());
+            }
+        }
+    }
+
     double get_data(std::string const& treatment, uint64_t pos) {
         auto it = std::upper_bound(_start_index[treatment].begin(), _start_index[treatment].end(), pos);
         DCHECK(it != _start_index[treatment].begin());
@@ -180,19 +206,49 @@ public:
         return _groups[treatment][bucket_index][index];
     }
 
-    double get_count(std::string const& treatment) { return _count[treatment]; }
+    class BucketIterator {
+    public:
+        BucketIterator(std::vector<double>::const_iterator begin, std::vector<double>::const_iterator end,
+                       uint64_t begin_index)
+                : _begin(begin), _end(end), _now(begin), _begin_index(begin_index) {}
 
-    std::array<std::string, 2> get_treatments() {
-        DCHECK(_groups.size() == 2);
-        std::array<std::string, 2> result;
-        auto it = _groups.begin();
-        result[0] = it->first;
-        ++it;
-        result[1] = it->first;
-        return result;
+        double operator*() const { return *_now; }
+
+        uint64_t index() const { return std::distance(_begin, _now) + _begin_index; }
+
+        bool end() const { return _now == _end; }
+
+        BucketIterator& operator++() {
+            ++_now;
+            return *this;
+        }
+
+        bool operator<(BucketIterator const& other) const {
+            DCHECK(_now != other._end);
+            DCHECK(other._now != other._end);
+            return *_now > *other;
+        }
+
+    private:
+        std::vector<double>::const_iterator _begin;
+        std::vector<double>::const_iterator _end;
+        std::vector<double>::const_iterator _now;
+        uint64_t _begin_index;
+    };
+
+    void merge_buckets(std::vector<BucketIterator> const& iterators, std::vector<uint64_t>& result) {
+        std::priority_queue<BucketIterator> pq(iterators.begin(), iterators.end());
+        while (!pq.empty()) {
+            auto top = pq.top();
+            pq.pop();
+            result.emplace_back(top.index());
+            ++top;
+            if (!top.end()) {
+                pq.push(top);
+            }
+        }
     }
 
-private:
     template <typename F>
     double get_quantile(double percentile, uint64_t size, F&& f) {
         DCHECK(std::isfinite(percentile) && percentile > 0 && percentile < 1);
@@ -210,17 +266,6 @@ private:
         // R6 linear interpolation
         return now + (h - n) * (next - now);
     }
-
-    MathHelpers::MurmurHash3 _hash{0};
-
-    // treatment -> bucket -> values
-    std::map<std::string, std::vector<std::vector<double>>> _groups;
-
-    std::map<std::string, std::vector<uint64_t>> _start_index; // only works when querying quantiles
-
-    std::map<std::string, std::vector<uint64_t>> _sorted_index; // only works when querying quantiles
-
-    std::map<std::string, uint64_t> _count; // only works when querying quantiles
 };
 
 class QuantileTtestCalculator {
@@ -237,7 +282,7 @@ public:
               _power(power),
               _mde(mde) {}
 
-    double abs_diff() const { return std::abs(_ctrl_quant - _treat_quant); }
+    double abs_diff() const { return _treat_quant - _ctrl_quant; }
 
     double rela_diff() const {
         if (std::abs(_ctrl_quant) > 1e-6) {
@@ -254,7 +299,7 @@ public:
         if (!std::isfinite(rela_diff_)) {
             return std::numeric_limits<double>::infinity();
         }
-        return std::sqrt(_ctrl_se * _ctrl_se + _treat_se * _treat_se) * (rela_diff_ + 1);
+        return std::sqrt(_ctrl_se * _ctrl_se + _treat_se * _treat_se) / _ctrl_quant;
     }
 
     double pvalue() const {
@@ -445,8 +490,6 @@ public:
         }
         return _container.merge(other._container);
     }
-
-    Status finalize() { return _container.finalize(); }
 
     std::vector<double> get_quantiles(std::string const& treatment, std::vector<double> const& percentiles) {
         return _container.get_quantiles(treatment, percentiles);

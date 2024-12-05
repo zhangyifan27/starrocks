@@ -20,7 +20,8 @@ create table wls_test_tbl
     `X7_needcut` bigint,
     `X8_needcut` bigint,
     `weight` double,
-    `distance` double
+    `distance` double,
+    `uin` bigint
 )
 properties (
     "replication_num"="1"
