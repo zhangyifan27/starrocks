@@ -116,7 +116,12 @@ std::string MemInfo::debug_string() {
 void MemInfo::set_memlimit_if_container() {
     // check if application is in docker container or not via /.dockerenv file
     bool running_in_docker = fs::path_exist("/.dockerenv");
-    if (!running_in_docker) {
+
+    // check via env
+    const char* running_env = std::getenv(CpuInfo::fengluan_env_var.first.c_str());
+    bool running_in_containerd = running_env && std::string(running_env) == CpuInfo::fengluan_env_var.second;
+
+    if (!running_in_docker && !running_in_containerd) {
         return;
     }
     struct statfs fs;

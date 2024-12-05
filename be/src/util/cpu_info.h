@@ -41,6 +41,7 @@ public:
     static const int64_t AVX2 = (1 << 6);
     static const int64_t AVX512F = (1 << 7);
     static const int64_t AVX512BW = (1 << 8);
+    static const std::pair<std::string, std::string> fengluan_env_var;
 
     /// Cache enums for L1 (data), L2 and L3
     enum CacheLevel {

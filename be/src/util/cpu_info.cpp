@@ -94,6 +94,7 @@ std::vector<vector<int>> CpuInfo::numa_node_to_cores_;
 std::vector<size_t> CpuInfo::cpuset_cores_;
 std::set<size_t> CpuInfo::offline_cores_;
 std::vector<int> CpuInfo::numa_node_core_idx_;
+const std::pair<std::string, std::string> CpuInfo::fengluan_env_var = std::make_pair("RUNNING_ENV", "containerd");
 
 static struct {
     string name;
@@ -268,7 +269,11 @@ std::vector<size_t> CpuInfo::parse_cpus(const std::string& cpus_str) {
 
 void CpuInfo::_init_num_cores_with_cgroup() {
     bool running_in_docker = fs::path_exist("/.dockerenv");
-    if (!running_in_docker) {
+    // check via env
+    const char* running_env = std::getenv(fengluan_env_var.first.c_str());
+    bool running_in_containerd = running_env && std::string(running_env) == fengluan_env_var.second;
+
+    if (!running_in_docker && !running_in_containerd) {
         return;
     }
     struct statfs fs;
