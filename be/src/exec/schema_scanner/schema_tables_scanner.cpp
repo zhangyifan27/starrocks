@@ -46,6 +46,8 @@ SchemaScanner::ColumnDesc SchemaTablesScanner::_s_tbls_columns[] = {
         {"CHECKSUM", TypeDescriptor::from_logical_type(TYPE_BIGINT), sizeof(int64_t), true},
         {"CREATE_OPTIONS", TypeDescriptor::create_varchar_type(sizeof(StringValue)), sizeof(StringValue), true},
         {"TABLE_COMMENT", TypeDescriptor::create_varchar_type(sizeof(StringValue)), sizeof(StringValue), false},
+        {"SESSION_ID", TypeDescriptor::create_varchar_type(sizeof(StringValue)), sizeof(StringValue), false},
+        {"TABLE_ID", TypeDescriptor::from_logical_type(TYPE_BIGINT), sizeof(int64_t), true},
 };
 
 SchemaTablesScanner::SchemaTablesScanner()
@@ -361,6 +363,28 @@ Status SchemaTablesScanner::fill_chunk(ChunkPtr* chunk) {
                 const std::string* str = &table_info.table_comment;
                 Slice value(str->c_str(), str->length());
                 fill_column_with_slot<TYPE_VARCHAR>(column.get(), (void*)&value);
+            }
+            break;
+        }
+        case 22: {
+            // session_id
+            {
+                ColumnPtr column = (*chunk)->get_column_by_slot_id(22);
+                const std::string* str = &table_info.table_comment;
+                Slice value(str->c_str(), str->length());
+                fill_column_with_slot<TYPE_VARCHAR>(column.get(), (void*)&value);
+            }
+            break;
+        }
+        case 23: {
+            // table_id
+            {
+                ColumnPtr column = (*chunk)->get_column_by_slot_id(23);
+                if (table_info.table_id == DEF_NULL_NUM) {
+                    fill_data_column_with_null(column.get());
+                } else {
+                    fill_column_with_slot<TYPE_BIGINT>(column.get(), (void*)&table_info.table_id);
+                }
             }
             break;
         }

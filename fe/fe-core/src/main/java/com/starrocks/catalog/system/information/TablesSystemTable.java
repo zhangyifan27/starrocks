@@ -51,6 +51,7 @@ public class TablesSystemTable {
                 .column("CHECKSUM", ScalarType.createType(PrimitiveType.BIGINT))
                 .column("CREATE_OPTIONS", ScalarType.createVarchar(255))
                 .column("TABLE_COMMENT", ScalarType.createVarchar(2048))
+                .column("TABLE_ID", ScalarType.createType(PrimitiveType.BIGINT))
                 .build(), TSchemaTableType.SCH_TABLES);
     }
 }

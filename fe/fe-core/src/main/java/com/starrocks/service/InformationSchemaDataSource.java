@@ -603,6 +603,7 @@ public class InformationSchemaDataSource {
         info.setData_length(olapTable.getDataSize());
         // UPDATE_TIME
         info.setUpdate_time(lastUpdateTime / 1000);
+        info.setTable_id(olapTable.getId());
         return info;
     }
 
