@@ -3365,4 +3365,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean enable_auto_grant_permissions = true;
+
+    @ConfField(mutable = true)
+    public static boolean enable_check_distribution_column = false;
 }

@@ -58,6 +58,7 @@ import com.starrocks.sql.ast.KeysDesc;
 import com.starrocks.sql.ast.ListPartitionDesc;
 import com.starrocks.sql.ast.PartitionDesc;
 import com.starrocks.sql.ast.RandomDistributionDesc;
+import com.starrocks.sql.ast.RangePartitionDesc;
 import com.starrocks.sql.common.EngineType;
 import com.starrocks.sql.common.MetaUtils;
 import org.apache.commons.collections.CollectionUtils;
@@ -104,6 +105,7 @@ public class CreateTableAnalyzer {
         analyzePartitionDesc(statement);
         analyzeDistributionDesc(statement);
         analyzeColumnRef(statement, catalogName);
+        analyzePartitionAndDistributionDesc(statement);
 
         if (statement.isHasGeneratedColumn()) {
             analyzeGeneratedColumn(statement, context);
@@ -693,5 +695,30 @@ public class CreateTableAnalyzer {
         }
 
         statement.setIndexes(indexes);
+    }
+
+    public static void analyzePartitionAndDistributionDesc(CreateTableStmt stmt) {
+        PartitionDesc partitionDesc = stmt.getPartitionDesc();
+        DistributionDesc distributionDesc = stmt.getDistributionDesc();
+        if (!Config.enable_check_distribution_column ||
+                partitionDesc == null ||
+                distributionDesc == null ||
+                distributionDesc instanceof RandomDistributionDesc ||
+                !stmt.isOlapEngine()) {
+            return;
+        }
+        List<String> distributionColumnNames = ((HashDistributionDesc) distributionDesc).getDistributionColumnNames();
+        List<String> partitionColumnNames = new ArrayList<>();
+        if (partitionDesc instanceof ListPartitionDesc) {
+            partitionColumnNames = ((ListPartitionDesc) partitionDesc).getPartitionColNames();
+        } else if (partitionDesc instanceof RangePartitionDesc) {
+            partitionColumnNames = ((RangePartitionDesc) partitionDesc).getPartitionColNames();
+        } else if (partitionDesc instanceof ExpressionPartitionDesc
+                && ((ExpressionPartitionDesc) partitionDesc).getRangePartitionDesc() != null) {
+            partitionColumnNames = ((ExpressionPartitionDesc) partitionDesc).getRangePartitionDesc().getPartitionColNames();
+        }
+        if (CollectionUtils.isEqualCollection(partitionColumnNames, distributionColumnNames)) {
+            throw new SemanticException("distribution columns same with partition columns is not allowed.");
+        }
     }
 }
