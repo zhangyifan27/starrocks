@@ -14,6 +14,8 @@
 
 #include "exec/hdfs_scanner.h"
 
+#include <cstdint>
+
 #include "block_cache/block_cache_hit_rate_counter.hpp"
 #include "column/column_helper.h"
 #include "exec/exec_node.h"
@@ -87,9 +89,31 @@ Status HdfsScanner::init(RuntimeState* runtime_state, const HdfsScannerParams& s
     _scanner_params = scanner_params;
 
     RETURN_IF_ERROR(_init_mor_processor(runtime_state, scanner_params.mor_params));
+    RETURN_IF_ERROR(_build_scanner_context());
     RETURN_IF_ERROR(do_init(runtime_state, scanner_params));
 
     return Status::OK();
+}
+
+std::string HdfsScanner::_build_metacache_key(std::string file_name, uint32_t file_size, int64_t mtime) {
+    std::string metacache_key;
+    metacache_key.resize(14);
+    char* data = metacache_key.data();
+    const std::string footer_suffix = "ft";
+    uint64_t hash_value = HashUtil::hash64(file_name.data(), file_name.size(), 0);
+    memcpy(data, &hash_value, sizeof(hash_value));
+    memcpy(data + 8, footer_suffix.data(), footer_suffix.length());
+    // The modification time is more appropriate to indicate the different file versions.
+    // While some data source, such as Hudi, have no modification time because their files
+    // cannot be overwritten. So, if the modification time is unsupported, we use file size instead.
+    // Also, to reduce memory usage, we only use the high four bytes to represent the second timestamp.
+    if (mtime > 0) {
+        uint32_t mtime_s = (mtime >> 9) & 0x00000000FFFFFFFF;
+        memcpy(data + 10, &mtime_s, sizeof(mtime_s));
+    } else {
+        memcpy(data + 10, &file_size, sizeof(file_size));
+    }
+    return metacache_key;
 }
 
 Status HdfsScanner::_build_scanner_context() {
@@ -190,7 +214,6 @@ Status HdfsScanner::open(RuntimeState* runtime_state) {
     if (_opened) {
         return Status::OK();
     }
-    RETURN_IF_ERROR(_build_scanner_context());
     RETURN_IF_ERROR(do_open(runtime_state));
     RETURN_IF_ERROR(_mor_processor->build_hash_table(runtime_state));
     _opened = true;

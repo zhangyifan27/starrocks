@@ -65,8 +65,6 @@ private:
     // get footer of parquet file from cache or parquet file
     Status _get_footer();
 
-    std::string _build_metacache_key();
-
     std::shared_ptr<MetaHelper> _build_meta_helper();
 
     Status _parse_footer(FileMetaDataPtr* file_metadata, int64_t* file_metadata_size);
