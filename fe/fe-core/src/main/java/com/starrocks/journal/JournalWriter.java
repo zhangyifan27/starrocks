@@ -15,10 +15,12 @@
 
 package com.starrocks.journal;
 
+import com.google.common.collect.ImmutableList;
 import com.starrocks.common.Config;
 import com.starrocks.common.util.Daemon;
 import com.starrocks.common.util.Util;
 import com.starrocks.metric.MetricRepo;
+import com.starrocks.server.GlobalStateMgr;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -103,6 +105,7 @@ public class JournalWriter {
         // waiting if necessary until an element becomes available
         currentJournal = journalQueue.take();
         long nextJournalId = nextVisibleJournalId;
+        long startJournalId = nextVisibleJournalId;
         initBatch();
 
         try {
@@ -130,6 +133,8 @@ public class JournalWriter {
                 LOG.debug("batch write commit success, from {} - {}", nextVisibleJournalId, nextJournalId);
                 nextVisibleJournalId = nextJournalId;
                 markCurrentBatchSucceed();
+                GlobalStateMgr.getCurrentState().getEditLogProcessor().sendJournalAsync(
+                        ImmutableList.copyOf(currentBatchTasks), startJournalId);
             } catch (JournalException e) {
                 // abort
                 LOG.warn("failed to commit batch, will abort current {} journals.",

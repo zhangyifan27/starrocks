@@ -34,6 +34,7 @@
 
 package com.starrocks.persist;
 
+import com.starrocks.catalog.Table;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -54,7 +55,7 @@ public class DropInfoTest {
         DropInfo info1 = new DropInfo();
         info1.write(dos);
 
-        DropInfo info2 = new DropInfo(1, 2, -1, true);
+        DropInfo info2 = new DropInfo(1, 2, -1, "", Table.TableType.OLAP, true);
         info2.write(dos);
 
         dos.flush();
@@ -75,10 +76,10 @@ public class DropInfoTest {
 
         Assert.assertTrue(rInfo2.equals(rInfo2));
         Assert.assertFalse(rInfo2.equals(this));
-        Assert.assertFalse(info2.equals(new DropInfo(0, 2, -1L, true)));
-        Assert.assertFalse(info2.equals(new DropInfo(1, 0, -1L, true)));
-        Assert.assertFalse(info2.equals(new DropInfo(1, 2, -1L, false)));
-        Assert.assertTrue(info2.equals(new DropInfo(1, 2, -1L, true)));
+        Assert.assertFalse(info2.equals(new DropInfo(0, 2, -1L, "", Table.TableType.OLAP, true)));
+        Assert.assertFalse(info2.equals(new DropInfo(1, 0, -1L, "", Table.TableType.OLAP, true)));
+        Assert.assertFalse(info2.equals(new DropInfo(1, 2, -1L, "", Table.TableType.OLAP, false)));
+        Assert.assertTrue(info2.equals(new DropInfo(1, 2, -1L, "", Table.TableType.OLAP, true)));
 
         // 3. delete files
         dis.close();

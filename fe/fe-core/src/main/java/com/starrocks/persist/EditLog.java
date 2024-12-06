@@ -53,6 +53,7 @@ import com.starrocks.catalog.Function;
 import com.starrocks.catalog.FunctionSearchDesc;
 import com.starrocks.catalog.MetaVersion;
 import com.starrocks.catalog.Resource;
+import com.starrocks.catalog.Table;
 import com.starrocks.common.Config;
 import com.starrocks.common.FeConstants;
 import com.starrocks.common.Pair;
@@ -397,8 +398,8 @@ public class EditLog {
                     BatchDropInfo batchDropInfo = (BatchDropInfo) journal.getData();
                     for (long indexId : batchDropInfo.getIndexIdSet()) {
                         globalStateMgr.getRollupHandler().replayDropRollup(
-                                new DropInfo(batchDropInfo.getDbId(), batchDropInfo.getTableId(), indexId, false),
-                                globalStateMgr);
+                                new DropInfo(batchDropInfo.getDbId(), batchDropInfo.getTableId(), indexId, "",
+                                        Table.TableType.OLAP, false), globalStateMgr);
                     }
                     break;
                 }
@@ -1233,6 +1234,10 @@ public class EditLog {
                     new JournalInconsistentException(opCode, "failed to load journal type " + opCode);
             exception.initCause(e);
             throw exception;
+        }
+        if (null != globalStateMgr) {
+            GlobalStateMgr.getCurrentState().getEditLogProcessor()
+                    .sendReplayLogAsync(journal, globalStateMgr.getReplayedJournalId());
         }
     }
 

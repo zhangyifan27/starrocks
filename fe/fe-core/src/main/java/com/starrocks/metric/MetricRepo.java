@@ -164,6 +164,7 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_ROUTINE_LOAD_PAUSED;
     public static LongCounterMetric COUNTER_SHORTCIRCUIT_QUERY;
     public static LongCounterMetric COUNTER_SHORTCIRCUIT_RPC;
+    public static LongCounterMetric COUNTER_LOST_TQ_METADATA_NUM;
 
     public static Histogram HISTO_QUERY_LATENCY;
     public static Histogram HISTO_EDIT_LOG_WRITE_LATENCY;
@@ -517,6 +518,11 @@ public final class MetricRepo {
         COUNTER_UNFINISHED_RESTORE_JOB = new LongCounterMetric("unfinished_restore_job", MetricUnit.REQUESTS,
                 "current unfinished restore job");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_UNFINISHED_RESTORE_JOB);
+
+        COUNTER_LOST_TQ_METADATA_NUM = new LongCounterMetric("sr_lost_tq_metadata_num", MetricUnit.NOUNIT,
+                "sr lost metadata record size");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_LOST_TQ_METADATA_NUM);
+
         List<Database> dbs = Lists.newArrayList();
         if (GlobalStateMgr.getCurrentState().getLocalMetastore().getIdToDb() != null) {
             for (Map.Entry<Long, Database> entry : GlobalStateMgr.getCurrentState().getLocalMetastore().getIdToDb().entrySet()) {

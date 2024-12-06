@@ -36,6 +36,7 @@ package com.starrocks.persist;
 
 import com.google.common.base.Objects;
 import com.google.gson.annotations.SerializedName;
+import com.starrocks.catalog.Table.TableType;
 import com.starrocks.common.io.Writable;
 
 import java.io.DataInput;
@@ -51,14 +52,20 @@ public class DropInfo implements Writable {
     private long indexId;
     @SerializedName("fd")
     private boolean forceDrop = false;
+    @SerializedName("tbn")
+    private String tableName;
+    @SerializedName("type")
+    private TableType type;
 
     public DropInfo() {
     }
 
-    public DropInfo(long dbId, long tableId, long indexId, boolean forceDrop) {
+    public DropInfo(long dbId, long tableId, long indexId, String tableName, TableType type, boolean forceDrop) {
         this.dbId = dbId;
         this.tableId = tableId;
         this.indexId = indexId;
+        this.tableName = tableName;
+        this.type = type;
         this.forceDrop = forceDrop;
     }
 
@@ -76,6 +83,14 @@ public class DropInfo implements Writable {
 
     public boolean isForceDrop() {
         return forceDrop;
+    }
+
+    public String getTableName() {
+        return tableName;
+    }
+
+    public TableType getType() {
+        return type;
     }
 
     @Override

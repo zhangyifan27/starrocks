@@ -3704,7 +3704,7 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         inactiveRelatedMaterializedView(db, olapTable,
                 MaterializedViewExceptions.inactiveReasonForBaseTableRenamed(oldTableName));
 
-        TableInfo tableInfo = TableInfo.createForTableRename(db.getId(), olapTable.getId(), newTableName);
+        TableInfo tableInfo = TableInfo.createForTableRename(db.getId(), olapTable.getId(), oldTableName, newTableName);
         GlobalStateMgr.getCurrentState().getEditLog().logTableRename(tableInfo);
         LOG.info("rename table[{}] to {}, tableId: {}", oldTableName, newTableName, olapTable.getId());
     }
@@ -3796,7 +3796,7 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
 
         // log
         TableInfo tableInfo = TableInfo.createForPartitionRename(db.getId(), olapTable.getId(), partition.getId(),
-                newPartitionName);
+                partitionName, newPartitionName);
         GlobalStateMgr.getCurrentState().getEditLog().logPartitionRename(tableInfo);
         LOG.info("rename partition[{}] to {} for table {}.{}", partitionName, newPartitionName, db.getFullName(),
                 olapTable.getName());

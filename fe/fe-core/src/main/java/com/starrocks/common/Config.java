@@ -3400,4 +3400,7 @@ public class Config extends ConfigBase {
     // resource limit.
     @ConfField(mutable = true)
     public static String cluster_default_resource_group = "";
+
+    @ConfField
+    public static int max_queue_size_for_report_metadata = 100000;
 }

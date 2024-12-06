@@ -772,7 +772,8 @@ public class MaterializedViewHandler extends AlterHandler {
             long mvIndexId = dropMaterializedView(mvName, olapTable);
             // Step3: log drop mv operation
             EditLog editLog = GlobalStateMgr.getCurrentState().getEditLog();
-            editLog.logDropRollup(new DropInfo(db.getId(), olapTable.getId(), mvIndexId, false));
+            editLog.logDropRollup(
+                    new DropInfo(db.getId(), olapTable.getId(), mvIndexId, mvName, olapTable.getType(), false));
             LOG.info("finished drop materialized view [{}] in table [{}]", mvName, olapTable.getName());
         } catch (MetaNotFoundException e) {
             if (dropMaterializedViewStmt.isSetIfExists()) {

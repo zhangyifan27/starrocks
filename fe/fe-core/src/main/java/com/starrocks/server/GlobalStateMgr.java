@@ -230,6 +230,8 @@ import com.starrocks.thrift.TRefreshTableRequest;
 import com.starrocks.thrift.TRefreshTableResponse;
 import com.starrocks.thrift.TStatus;
 import com.starrocks.thrift.TStatusCode;
+import com.starrocks.tqmeta.EditLogProcessor;
+import com.starrocks.tqmeta.replay.ReplayData;
 import com.starrocks.transaction.GlobalTransactionMgr;
 import com.starrocks.transaction.GtidGenerator;
 import com.starrocks.transaction.PublishVersionDaemon;
@@ -324,6 +326,7 @@ public class GlobalStateMgr {
     private final MetastoreEventsProcessor metastoreEventsProcessor;
     private final ConnectorTableMetadataProcessor connectorTableMetadataProcessor;
     private final ConnectorTableMetadataKeyInfoProcessor connectorTableMetadataKeyInfoProcessor;
+    private EditLogProcessor editLogProcessor;
 
     // set to true after finished replay all meta and ready to serve
     // set to false when globalStateMgr is not ready.
@@ -718,6 +721,7 @@ public class GlobalStateMgr {
 
         this.pluginMgr = new PluginMgr();
         this.auditEventProcessor = new AuditEventProcessor(this.pluginMgr);
+        this.editLogProcessor = new EditLogProcessor(this.pluginMgr);
         this.analyzeMgr = new AnalyzeMgr();
         this.localMetastore = new LocalMetastore(this, recycleBin, colocateTableIndex);
         this.temporaryTableMgr = new TemporaryTableMgr();
@@ -899,6 +903,10 @@ public class GlobalStateMgr {
 
     public AuditEventProcessor getAuditEventProcessor() {
         return auditEventProcessor;
+    }
+
+    public EditLogProcessor getEditLogProcessor() {
+        return editLogProcessor;
     }
 
     public static int getCurrentStateStarRocksMetaVersion() {
@@ -1241,6 +1249,7 @@ public class GlobalStateMgr {
                 throw new Exception("fencing failed. will exit");
             }
             long maxJournalId = journal.getMaxJournalId();
+            editLogProcessor.sendReplayLogAsync(new ReplayData((short) -1, null), replayedJournalId.get());
             replayJournal(maxJournalId);
             nodeMgr.checkCurrentNodeExist();
             journalWriter.init(maxJournalId);
@@ -1412,6 +1421,8 @@ public class GlobalStateMgr {
         pipeListener.start();
         pipeScheduler.start();
         mvActiveChecker.start();
+
+        editLogProcessor.start();
 
         // start daemon thread to report the progress of RunningTaskRun to the follower by editlog
         taskRunStateSynchronizer = new TaskRunStateSynchronizer();
