@@ -144,6 +144,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -1384,6 +1385,12 @@ public class OlapTable extends Table {
         physicalPartitionNameToPartitionId.keySet().removeAll(partition.getSubPartitions()
                 .stream().map(PhysicalPartition::getName)
                 .collect(Collectors.toList()));
+        if (isForceDrop) {
+            try {
+                dropExtraPartitions(partitionName, reserveTablets);
+            } catch (Throwable e) {
+            }
+        }
     }
 
     protected RecyclePartitionInfo buildRecyclePartitionInfo(long dbId, Partition partition) {
@@ -1409,6 +1416,21 @@ public class OlapTable extends Table {
                     partitionInfo.getDataCacheInfo(partition.getId()));
         } else {
             throw new RuntimeException("Unknown partition type: " + partitionInfo.getType());
+        }
+    }
+
+    private void dropExtraPartitions(String partitionName, boolean reserveTablets) {
+        Iterator<Map.Entry<Long, Partition>> iterator = idToPartition.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<Long, Partition> entry = iterator.next();
+            if (entry.getValue().getName().equals(partitionName)) {
+                iterator.remove();
+                LOG.info("Partition in idToPartition and name not in nameToPartition, " + entry.getValue());
+                if (!reserveTablets) {
+                    GlobalStateMgr.getCurrentState().getLocalMetastore().onErasePartition(entry.getValue());
+                }
+                partitionInfo.dropPartition(entry.getValue().getId());
+            }
         }
     }
 
