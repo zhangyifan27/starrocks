@@ -151,6 +151,9 @@ public class DateUtils {
             } else if (str.length() == 8) {
                 // 20200202
                 formatter = STRICT_DATE_NO_SPLIT_FORMATTER;
+            } else if (str.length() == 10) {
+                // 2020020214
+                formatter = HOUR_FORMATTER_UNIX;
             } else {
                 formatter = STRICT_DATE_FORMATTER;
             }
@@ -174,7 +177,11 @@ public class DateUtils {
         if (dateTimeStr.length() == 8) {
             return DATEKEY_FORMATTER;
         } else if (dateTimeStr.length() == 10) {
-            return DATE_FORMATTER_UNIX;
+            if (dateTimeStr.split("-").length == 3) {
+                return DATE_FORMATTER_UNIX;
+            }
+            // 2020020214
+            return HOUR_FORMATTER_UNIX;
         } else if (dateTimeStr.length() == 19) {
             return DATE_TIME_FORMATTER_UNIX;
         } else if (dateTimeStr.length() == 26) {
