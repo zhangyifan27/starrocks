@@ -659,6 +659,7 @@ public class ReportHandler extends Daemon implements MemoryTrackable {
                 List<Long> tabletIds = allTabletIds.subList(offset, allTabletIds.size());
                 Locker locker = new Locker();
                 locker.lockDatabase(db, LockType.WRITE);
+                List<ReplicaPersistInfo> persistInfos = new ArrayList<>();
                 try {
                     List<TabletMeta> tabletMetaList = invertedIndex.getTabletMetaList(tabletIds);
                     for (int i = 0; i < tabletMetaList.size(); i++) {
@@ -763,7 +764,7 @@ public class ReportHandler extends Daemon implements MemoryTrackable {
                                             replica.getLastFailedVersion(),
                                             replica.getLastSuccessVersion(),
                                             replica.getMinReadableVersion());
-                                    GlobalStateMgr.getCurrentState().getEditLog().logUpdateReplica(info);
+                                    persistInfos.add(info);
                                     ++logSyncCounter;
                                 }
 
@@ -777,13 +778,10 @@ public class ReportHandler extends Daemon implements MemoryTrackable {
                                         backendVersion);
                             }
                         }
-                        // update replica operation is heavy, couldn't do much in db write lock
-                        if (logSyncCounter > 10) {
-                            break;
-                        }
                     } // end for tabletMetaSyncMap
                 } finally {
                     locker.unLockDatabase(db, LockType.WRITE);
+                    persistInfos.forEach(info -> GlobalStateMgr.getCurrentState().getEditLog().logUpdateReplica(info));
                 }
                 LOG.info("sync {} update {} in {} tablets in db[{}]. backend[{}]", syncCounter, logSyncCounter,
                         offset, dbId, backendId);
