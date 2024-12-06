@@ -117,6 +117,11 @@ public class Config extends ConfigBase {
             " truncate string values longer than this specified limit. Default: 100MB")
     public static int sys_log_json_profile_max_string_length = 104857600;
 
+    @ConfField
+    public static boolean sys_log_size_based_rollover = true;
+    @ConfField
+    public static int sys_log_size_based_roll_num = 10;
+
     /**
      * audit_log_dir:
      * This specifies FE audit log dir.

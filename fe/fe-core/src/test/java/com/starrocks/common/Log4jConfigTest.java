@@ -42,6 +42,7 @@ public class Log4jConfigTest {
     @Before
     public void setUp() throws IOException {
         FeConstants.runningUnitTest = true;
+        Config.sys_log_size_based_rollover = false;
         logFormat = Config.sys_log_format;
         Log4jConfig.initLogging();
     }
