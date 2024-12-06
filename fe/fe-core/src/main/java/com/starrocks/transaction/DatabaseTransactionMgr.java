@@ -93,6 +93,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
@@ -131,10 +132,10 @@ public class DatabaseTransactionMgr {
     private final ReentrantReadWriteLock transactionLock = new ReentrantReadWriteLock(true);
 
     // count the number of running transactions of database, except for shapeless.the routine load txn
-    private int runningTxnNums = 0;
+    private AtomicInteger runningTxnNums = new AtomicInteger(0);
 
     // count only the number of running routine load transactions of database
-    private int runningRoutineLoadTxnNums = 0;
+    private AtomicInteger runningRoutineLoadTxnNums = new AtomicInteger(0);
 
     /*
      * idToRunningTransactionState: transactionId -> running TransactionState
@@ -636,12 +637,11 @@ public class DatabaseTransactionMgr {
     }
 
     public int getRunningTxnNums() {
-        return runningTxnNums;
+        return runningTxnNums.get();
     }
 
-    @VisibleForTesting
-    protected int getRunningRoutineLoadTxnNums() {
-        return runningRoutineLoadTxnNums;
+    public int getRunningRoutineLoadTxnNums() {
+        return runningRoutineLoadTxnNums.get();
     }
 
     @VisibleForTesting
@@ -1349,9 +1349,9 @@ public class DatabaseTransactionMgr {
         if (!transactionState.getTransactionStatus().isFinalStatus()) {
             if (idToRunningTransactionState.put(transactionState.getTransactionId(), transactionState) == null) {
                 if (transactionState.getSourceType() == TransactionState.LoadJobSourceType.ROUTINE_LOAD_TASK) {
-                    runningRoutineLoadTxnNums++;
+                    runningRoutineLoadTxnNums.incrementAndGet();
                 } else {
-                    runningTxnNums++;
+                    runningTxnNums.incrementAndGet();
                 }
             }
             if ((Config.enable_new_publish_mechanism || RunMode.isSharedDataMode()) &&
@@ -1361,9 +1361,9 @@ public class DatabaseTransactionMgr {
         } else {
             if (idToRunningTransactionState.remove(transactionState.getTransactionId()) != null) {
                 if (transactionState.getSourceType() == TransactionState.LoadJobSourceType.ROUTINE_LOAD_TASK) {
-                    runningRoutineLoadTxnNums--;
+                    runningRoutineLoadTxnNums.decrementAndGet();
                 } else {
-                    runningTxnNums--;
+                    runningTxnNums.decrementAndGet();
                 }
             }
             transactionGraph.remove(transactionState.getTransactionId());
@@ -1406,9 +1406,9 @@ public class DatabaseTransactionMgr {
         for (TransactionState transactionState : stateBatch.getTransactionStates()) {
             if (idToRunningTransactionState.remove(transactionState.getTransactionId()) != null) {
                 if (transactionState.getSourceType() == TransactionState.LoadJobSourceType.ROUTINE_LOAD_TASK) {
-                    runningRoutineLoadTxnNums--;
+                    runningRoutineLoadTxnNums.decrementAndGet();
                 } else {
-                    runningTxnNums--;
+                    runningTxnNums.decrementAndGet();
                 }
             }
             transactionGraph.remove(transactionState.getTransactionId());
@@ -1659,9 +1659,9 @@ public class DatabaseTransactionMgr {
                 // high frequency and small batch loads may cause compaction execute rarely.
                 break;
             default:
-                if (runningTxnNums >= Config.max_running_txn_num_per_db) {
+                if (runningTxnNums.get() >= Config.max_running_txn_num_per_db) {
                     throw new RunningTxnExceedException("current running txns on db " + dbId + " is "
-                            + runningTxnNums + ", larger than limit " + Config.max_running_txn_num_per_db);
+                            + runningTxnNums.get() + ", larger than limit " + Config.max_running_txn_num_per_db);
                 }
                 break;
         }
@@ -1830,7 +1830,7 @@ public class DatabaseTransactionMgr {
         readLock();
         try {
             infos.add(Lists.newArrayList("running", String.valueOf(
-                    runningTxnNums + runningRoutineLoadTxnNums)));
+                    runningTxnNums.get() + runningRoutineLoadTxnNums.get())));
             long finishedNum = getFinishedTxnNums();
             infos.add(Lists.newArrayList("finished", String.valueOf(finishedNum)));
         } finally {

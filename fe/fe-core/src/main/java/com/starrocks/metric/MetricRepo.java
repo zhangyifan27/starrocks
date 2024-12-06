@@ -47,6 +47,7 @@ import com.starrocks.backup.RestoreJob;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.TabletInvertedIndex;
+import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ThreadPoolManager;
@@ -75,6 +76,7 @@ import com.starrocks.staros.StarMgrServer;
 import com.starrocks.system.Backend;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.transaction.DatabaseTransactionMgr;
+import com.starrocks.transaction.GlobalTransactionMgr;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -881,21 +883,39 @@ public final class MetricRepo {
 
     private static void collectDatabaseMetrics(MetricVisitor visitor) {
         GlobalStateMgr globalStateMgr = GlobalStateMgr.getCurrentState();
-        List<String> dbNames = globalStateMgr.getLocalMetastore().listDbNames();
+        GlobalTransactionMgr transactionMgr = globalStateMgr.getGlobalTransactionMgr();
+        List<Long> dbIds = globalStateMgr.getLocalMetastore().getDbIds();
         GaugeMetricImpl<Integer> databaseNum = new GaugeMetricImpl<>(
                 "database_num", MetricUnit.OPERATIONS, "count of database");
         int dbNum = 0;
-        for (String dbName : dbNames) {
-            Database db = GlobalStateMgr.getCurrentState().getDb(dbName);
+        for (Long dbId : dbIds) {
+            Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
             if (null == db) {
                 continue;
             }
+            String dbName = db.getFullName();
             dbNum++;
             GaugeMetricImpl<Integer> tableNum = new GaugeMetricImpl<>(
                     "table_num", MetricUnit.OPERATIONS, "count of table");
             tableNum.setValue(db.getTableNumber());
             tableNum.addLabel(new MetricLabel("db_name", dbName));
             visitor.visit(tableNum);
+
+            try {
+                DatabaseTransactionMgr dbTransactionMgr = transactionMgr.getDatabaseTransactionMgr(dbId);
+                GaugeMetricImpl<Integer> txnNum =
+                        new GaugeMetricImpl<>("txn_num", MetricUnit.OPERATIONS, "count of transaction");
+                txnNum.setValue(dbTransactionMgr.getRunningTxnNums());
+                txnNum.addLabel(new MetricLabel("db_name", dbName));
+                visitor.visit(txnNum);
+
+                GaugeMetricImpl<Integer> rlTxnNum = new GaugeMetricImpl<>("rl_txn_num", MetricUnit.OPERATIONS,
+                        "count of routine load transaction");
+                rlTxnNum.setValue(dbTransactionMgr.getRunningRoutineLoadTxnNums());
+                rlTxnNum.addLabel(new MetricLabel("db_name", dbName));
+                visitor.visit(rlTxnNum);
+            } catch (AnalysisException ignored) {
+            }
         }
         databaseNum.setValue(dbNum);
         visitor.visit(databaseNum);

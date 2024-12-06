@@ -65,6 +65,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -474,7 +475,7 @@ public class DatabaseTransactionMgrTest {
 
     @Test
     public void testCheckRunningTxnExceedLimit() {
-        int maxRunningTxnNumPerDb = Config.max_running_txn_num_per_db;
+        AtomicInteger maxRunningTxnNumPerDb = new AtomicInteger(Config.max_running_txn_num_per_db);
         DatabaseTransactionMgr mgr = new DatabaseTransactionMgr(0, masterGlobalStateMgr);
         Deencapsulation.setField(mgr, "runningTxnNums", maxRunningTxnNumPerDb);
         ExceptionChecker.expectThrowsNoException(
