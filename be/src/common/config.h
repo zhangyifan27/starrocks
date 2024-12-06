@@ -1468,4 +1468,8 @@ CONF_mInt32(apply_version_slow_log_sec, "30");
 // default batch size for simdjson lib
 CONF_mInt32(json_parse_many_batch_size, "1000000");
 CONF_mBool(enable_dynamic_batch_size_for_json_parse_many, "true");
+
+// The number of elements to preallocate for each row in an array column
+// before reading data from disk block or page cache.
+CONF_mInt32(preallocate_array_elements_per_row, "0");
 } // namespace starrocks::config

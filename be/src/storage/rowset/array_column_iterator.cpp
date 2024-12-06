@@ -18,6 +18,7 @@
 #include "column/column_access_path.h"
 #include "column/const_column.h"
 #include "column/nullable_column.h"
+#include "common/config.h"
 #include "storage/rowset/scalar_column_iterator.h"
 
 namespace starrocks {
@@ -101,6 +102,14 @@ Status ArrayColumnIterator::next_batch(size_t* n, Column* dst) {
         down_cast<NullableColumn*>(dst)->update_has_null();
     }
 
+    // preallocate memory for array columns
+    if (config::preallocate_array_elements_per_row > 0 &&
+        config::preallocate_array_elements_per_row <= 4096 // avoid allocating too much memory
+    ) {
+        array_column->elements_column().get()->reserve(config::vector_chunk_size *
+                                                       config::preallocate_array_elements_per_row);
+    }
+
     // 3. Read elements
     if (_access_values) {
         RETURN_IF_ERROR(_element_iterator->next_batch(&num_to_read, array_column->elements_column().get()));
@@ -177,6 +186,14 @@ Status ArrayColumnIterator::next_batch(const SparseRange<>& range, Column* dst) 
 
     if (_null_iterator != nullptr) {
         down_cast<NullableColumn*>(dst)->update_has_null();
+    }
+
+    // preallocate memory for array columns
+    if (config::preallocate_array_elements_per_row > 0 &&
+        config::preallocate_array_elements_per_row <= 4096 // avoid allocating too much memory
+    ) {
+        array_column->elements_column().get()->reserve(config::vector_chunk_size *
+                                                       config::preallocate_array_elements_per_row);
     }
 
     if (_access_values) {
