@@ -1944,6 +1944,12 @@ public class Config extends ConfigBase {
     public static String tdw_supersql_platform_name = "";
 
     /**
+     *  The maximum number of tables that can be created in a database.
+     */
+    @ConfField(mutable = true)
+    public static int max_table_count_limit_per_db = 500;
+
+    /**
      * If set to true, access hdfs use tauth Authentication
      */
     @ConfField(mutable = true)

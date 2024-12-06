@@ -2246,4 +2246,30 @@ public class CreateTableTest {
             Config.enable_replication_num_restriction = originValue;
         }
     }
+
+    @Test
+    public void testCreateTableWithTableNumCheck() throws Exception {
+        int originValue = Config.max_table_count_limit_per_db;
+        Config.max_table_count_limit_per_db = 0;
+        try {
+            ExceptionChecker.expectThrowsWithMsg(DdlException.class,
+                    "Reached the limit of table count in database 10001, " +
+                    "please try to increace the 'max_table_count_limit_per_db' configuration in the frontend.Current limit: 0",
+                    () -> createTable(
+                            "CREATE TABLE test.test_max_table_num_limit_check (\n" +
+                                    "                    `k1`  date not null, `k2`  datetime,`k3`  char(20), " +
+                                    "`k4`  varchar(20), `k5`  boolean, `k6`  tinyint, `k7`  smallint, `k8`  int, " +
+                                    "`k9`  bigint, `k10` largeint, `k11` float, `k12` double, `k13` decimal(27,9)\n" +
+                                    "                )\n" +
+                                    "                DUPLICATE KEY(k1)\n" +
+                                    "                PARTITION BY LIST (k1) (\n" +
+                                    "                   PARTITION p1 VALUES IN (\"2020-01-01\",\"2020-01-02\"),\n" +
+                                    "                   PARTITION p2 VALUES IN (\"2021-01-01\")\n" +
+                                    "                )\n" +
+                                    "                DISTRIBUTED BY HASH(k1);"
+                    ));
+        } finally {
+            Config.max_table_count_limit_per_db = originValue;
+        }
+    }
 }

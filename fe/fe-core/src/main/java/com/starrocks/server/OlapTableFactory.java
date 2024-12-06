@@ -111,6 +111,13 @@ public class OlapTableFactory implements AbstractTableFactory {
         List<Column> baseSchema = stmt.getColumns();
         metastore.validateColumns(baseSchema);
 
+        //check if reached the limit of tables in this db
+        if (db.getTables().size() >= Config.max_table_count_limit_per_db) {
+            throw new DdlException("Reached the limit of table count in database " + db.getId() + ", " +
+            "please try to increace the 'max_table_count_limit_per_db' configuration in the frontend."
+            + "Current limit: " + Config.max_table_count_limit_per_db);
+        }
+
         // create partition info
         PartitionDesc partitionDesc = stmt.getPartitionDesc();
         PartitionInfo partitionInfo;
