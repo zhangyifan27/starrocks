@@ -983,7 +983,7 @@ public class SchemaChangeHandler extends AlterHandler {
                 Column col = targetIndexSchema.get(sortKeyIdx);
                 Type t = col.getType();
                 if (!(t.isBoolean() || t.isIntegerType() || t.isLargeint() || t.isVarchar() || t.isDate() ||
-                        t.isDatetime())) {
+                        t.isDatetime() || t.isChar())) {
                     throw new DdlException("Sort key column[" + col.getName() + "] type not supported: " + t +
                             " in PrimaryKey table");
                 }

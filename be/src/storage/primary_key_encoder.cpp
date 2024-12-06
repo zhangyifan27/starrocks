@@ -267,6 +267,7 @@ bool PrimaryKeyEncoder::is_supported(const Field& f) {
     case TYPE_INT:
     case TYPE_BIGINT:
     case TYPE_LARGEINT:
+    case TYPE_CHAR:
     case TYPE_VARCHAR:
     case TYPE_DATE:
     case TYPE_DATETIME:
@@ -351,6 +352,7 @@ Status PrimaryKeyEncoder::create_column(const Schema& schema, std::unique_ptr<Co
         case TYPE_LARGEINT:
             *pcolumn = Int128Column::create_mutable();
             break;
+        case TYPE_CHAR:
         case TYPE_VARCHAR:
             if (large_column) {
                 *pcolumn = std::make_unique<LargeBinaryColumn>();

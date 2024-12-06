@@ -360,7 +360,7 @@ public class CreateTableAnalyzer {
                 }
                 Type t = cd.getType();
                 if (!(t.isBoolean() || t.isIntegerType() || t.isLargeint() || t.isVarchar() || t.isDate() ||
-                        t.isDatetime())) {
+                        t.isDatetime() || t.isChar())) {
                     throw new SemanticException("primary key column[" + colName + "] type not supported: " + t.toSql());
                 }
             }
@@ -420,7 +420,7 @@ public class CreateTableAnalyzer {
                     ColumnDef cd = columnDefs.get(idx);
                     Type t = cd.getType();
                     if (!(t.isBoolean() || t.isIntegerType() || t.isLargeint() || t.isVarchar() || t.isDate() ||
-                            t.isDatetime())) {
+                            t.isDatetime() || t.isChar())) {
                         throw new SemanticException("sort key column[" + cd.getName() + "] type not supported: " + t.toSql());
                     }
                 }

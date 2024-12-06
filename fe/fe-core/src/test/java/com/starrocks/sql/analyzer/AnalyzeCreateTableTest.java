@@ -226,7 +226,7 @@ public class AnalyzeCreateTableTest {
         String sql =
                 "create table table1 (col1 char(10) not null ) engine=olap primary key(col1)" +
                         " distributed by hash(col1) buckets 10";
-        analyzeFail(sql);
+        analyzeSuccess(sql);
     }
 
     @Test
