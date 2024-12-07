@@ -45,12 +45,14 @@ import com.google.gson.Gson;
 import com.starrocks.alter.AlterJobException;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.HintNode;
+import com.starrocks.analysis.InformationFunction;
 import com.starrocks.analysis.Parameter;
 import com.starrocks.analysis.RedirectStatus;
 import com.starrocks.analysis.SetVarHint;
 import com.starrocks.analysis.StringLiteral;
 import com.starrocks.analysis.TableName;
 import com.starrocks.analysis.UserVariableHint;
+import com.starrocks.analysis.VariableExpr;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.ExternalOlapTable;
@@ -612,6 +614,12 @@ public class StmtExecutor {
             }
 
             if (parsedStmt instanceof QueryStatement) {
+                if (isSystemSelect()) {
+                    context.getState().setIsQuery(false);
+                } else {
+                    context.getState().setRequestType(QueryState.RequestType.SELECT);
+                }
+
                 final boolean isStatisticsJob = AnalyzerUtils.isStatisticsJob(context, parsedStmt);
                 context.setStatisticsJob(isStatisticsJob);
 
@@ -691,6 +699,7 @@ public class StmtExecutor {
                     }
                 }
             } else if (parsedStmt instanceof SetStmt) {
+                context.getState().setRequestType(QueryState.RequestType.SET);
                 handleSetStmt();
             } else if (parsedStmt instanceof UseDbStmt) {
                 handleUseDbStmt();
@@ -904,6 +913,16 @@ public class StmtExecutor {
         }
     }
 
+    private boolean isSystemSelect() {
+        if (parsedStmt instanceof QueryStatement) {
+            return ((QueryStatement) parsedStmt).getQueryRelation()
+                    .getOutputExpression()
+                    .stream()
+                    .anyMatch(o -> (o instanceof VariableExpr || o instanceof InformationFunction));
+        }
+        return false;
+    }
+
     private void handleCreateTableAsSelectStmt(long beginTimeInNanoSecond) throws Exception {
         CreateTableAsSelectStmt createTableAsSelectStmt = (CreateTableAsSelectStmt) parsedStmt;
 
@@ -928,6 +947,7 @@ public class StmtExecutor {
     }
 
     private void dumpException(Exception e) {
+        context.getAuditEventBuilder().addException(ExceptionUtils.getStackTrace(e));
         if (context.isHTTPQueryDump()) {
             context.getDumpInfo().addException(ExceptionUtils.getStackTrace(e));
         } else if (context.getSessionVariable().getEnableQueryDump()) {
@@ -2123,6 +2143,7 @@ public class StmtExecutor {
         // special handling for delete of non-primary key table, using old handler
         if (stmt instanceof DeleteStmt && ((DeleteStmt) stmt).shouldHandledByDeleteHandler()) {
             try {
+                context.getState().setRequestType(QueryState.RequestType.DELETE);
                 context.getGlobalStateMgr().getDeleteMgr().process((DeleteStmt) stmt);
                 context.getState().setOk();
             } catch (QueryStateException e) {
@@ -2155,8 +2176,17 @@ public class StmtExecutor {
 
         if (dmlType == DmlType.INSERT_OVERWRITE && !((InsertStmt) parsedStmt).hasOverwriteJob() &&
                 !(targetTable.isIcebergTable() || targetTable.isHiveTable())) {
+            context.getState().setRequestType(QueryState.RequestType.INSERT);
             handleInsertOverwrite((InsertStmt) parsedStmt);
             return;
+        }
+
+        if (stmt instanceof InsertStmt) {
+            context.getState().setRequestType(QueryState.RequestType.INSERT);
+        } else if (stmt instanceof UpdateStmt) {
+            context.getState().setRequestType(QueryState.RequestType.UPDATE);
+        } else if (stmt instanceof DeleteStmt) {
+            context.getState().setRequestType(QueryState.RequestType.DELETE);
         }
 
         MetricRepo.COUNTER_LOAD_ADD.increase(1L);

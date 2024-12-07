@@ -35,11 +35,15 @@
 package com.starrocks.plugin;
 
 import com.google.common.base.Joiner;
+import com.starrocks.qe.QueryState;
 import com.starrocks.server.WarehouseManager;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /*
  * AuditEvent contains all information about audit log info.
@@ -87,6 +91,8 @@ public class AuditEvent {
     public String catalog = "";
     @AuditField(value = "Db")
     public String db = "";
+    @AuditField(value = "Table")
+    public String table = "";
     @AuditField(value = "State")
     public String state = "";
     @AuditField(value = "ErrorCode")
@@ -109,6 +115,10 @@ public class AuditEvent {
     public String queryId = "";
     @AuditField(value = "IsQuery")
     public boolean isQuery = false;
+    @AuditField(value = "DataSource")
+    public String dataSource = "";
+    @AuditField(value = "RequestType")
+    public String requestType = "";
     @AuditField(value = "feIp")
     public String feIp = "";
     @AuditField(value = "Stmt")
@@ -143,7 +153,16 @@ public class AuditEvent {
     @AuditField(value = "IsForwardToLeader")
     public boolean isForwardToLeader = false;
 
+    @AuditField(value = "Exception")
+    public String exception = "";
+    @AuditField(value = "ErrorMessage")
+    public String errorMessage = "";
+    @AuditField(value = "stmtType")
+    public String stmtType = "";
+
     public static class AuditEventBuilder {
+        private List<String> tables = new ArrayList<>();
+        private Set<String> exceptions = new HashSet<>();
 
         private AuditEvent auditEvent = new AuditEvent();
 
@@ -152,6 +171,8 @@ public class AuditEvent {
 
         public void reset() {
             auditEvent = new AuditEvent();
+            tables = new ArrayList<>();
+            exceptions = new HashSet<>();
         }
 
         public AuditEventBuilder setEventType(EventType eventType) {
@@ -262,6 +283,16 @@ public class AuditEvent {
             return this;
         }
 
+        public AuditEventBuilder setDataSource(String dataSource) {
+            auditEvent.dataSource = dataSource;
+            return this;
+        }
+
+        public AuditEventBuilder setRequestType(QueryState.RequestType requestType) {
+            auditEvent.requestType = requestType.name();
+            return this;
+        }
+
         public AuditEventBuilder setFeIp(String feIp) {
             auditEvent.feIp = feIp;
             return this;
@@ -331,7 +362,38 @@ public class AuditEvent {
             return this;
         }
 
+        public AuditEventBuilder setException(String exception) {
+            auditEvent.exception = exception;
+            return this;
+        }
+
+        public AuditEventBuilder setErrorMessage(String errorMessage) {
+            auditEvent.errorMessage = errorMessage;
+            return this;
+        }
+
+        public AuditEventBuilder setStmtType(String stmtType) {
+            auditEvent.stmtType = stmtType;
+            return this;
+        }
+
+        public AuditEventBuilder addTable(String table) {
+            tables.add(table);
+            return this;
+        }
+
+        public AuditEventBuilder addException(String exception) {
+            exceptions.add(exception);
+            return this;
+        }
+
         public AuditEvent build() {
+            if (!tables.isEmpty()) {
+                auditEvent.table = String.join(",", tables);
+            }
+            if (!exceptions.isEmpty()) {
+                auditEvent.exception = String.join(",", exceptions);
+            }
             return this.auditEvent;
         }
     }

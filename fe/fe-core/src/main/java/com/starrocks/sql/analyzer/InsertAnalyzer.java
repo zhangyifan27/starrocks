@@ -294,6 +294,7 @@ public class InsertAnalyzer {
         }
 
         insertStmt.setTargetTable(table);
+        session.getAuditEventBuilder().addTable(insertStmt.getTableName().toString());
         if (session.getDumpInfo() != null) {
             session.getDumpInfo().addTable(insertStmt.getTableName().getDb(), table);
         }

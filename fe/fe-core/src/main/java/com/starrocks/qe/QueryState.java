@@ -76,12 +76,22 @@ public class QueryState {
         UNKNOWN
     }
 
+    public enum RequestType {
+        SELECT,
+        INSERT,
+        DELETE,
+        UPDATE,
+        SET,
+        UNKNOWN
+    }
+
     private MysqlStateType stateType = MysqlStateType.OK;
     private String errorMessage = "";
     private ErrorCode errorCode;
     private String infoMessage;
     private ErrType errType = ErrType.UNKNOWN;
     private boolean isQuery = false;
+    private RequestType requestType = RequestType.UNKNOWN;
     private long affectedRows = 0;
     private int warningRows = 0;
     // make it public for easy to use
@@ -102,6 +112,7 @@ public class QueryState {
         warningRows = 0;
         serverStatus = 0;
         isFinished = false;
+        requestType = RequestType.UNKNOWN;
     }
 
     public MysqlStateType getStateType() {
@@ -157,6 +168,14 @@ public class QueryState {
 
     public void setIsQuery(boolean isQuery) {
         this.isQuery = isQuery;
+    }
+
+    public RequestType getRequestType() {
+        return requestType;
+    }
+
+    public void setRequestType(RequestType requestType) {
+        this.requestType = requestType;
     }
 
     public boolean isQuery() {

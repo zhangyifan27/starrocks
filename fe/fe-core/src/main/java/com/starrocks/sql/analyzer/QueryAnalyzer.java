@@ -627,6 +627,7 @@ public class QueryAnalyzer {
 
             node.setColumns(columns.build());
             String dbName = node.getName().getDb();
+            session.getAuditEventBuilder().addTable(node.getName().toString());
             if (session.getDumpInfo() != null) {
                 session.getDumpInfo().addTable(dbName, table);
 

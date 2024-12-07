@@ -102,6 +102,7 @@ public final class MetricRepo {
     public static final String TABLET_MAX_COMPACTION_SCORE = "tablet_max_compaction_score";
 
     public static LongCounterMetric COUNTER_REQUEST_ALL;
+    public static LongCounterMetric COUNTER_REQUEST_ERR;
     public static LongCounterMetric COUNTER_QUERY_ALL;
     public static LongCounterMetric COUNTER_QUERY_ERR;
     public static LongCounterMetric COUNTER_QUERY_TIMEOUT;
@@ -146,6 +147,10 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_UNFINISHED_BACKUP_JOB;
     public static LongCounterMetric COUNTER_UNFINISHED_RESTORE_JOB;
 
+    public static LongCounterMetric COUNTER_INSERT_ALL;
+    public static LongCounterMetric COUNTER_INSERT_ERR;
+    public static LongCounterMetric COUNTER_INSERT_SUCCESS;
+    public static LongCounterMetric COUNTER_SLOW_INSERT;
     public static LongCounterMetric COUNTER_LOAD_ADD;
     public static LongCounterMetric COUNTER_LOAD_FINISHED;
     public static LongCounterMetric COUNTER_LOAD_PUBLISH_TIMEOUT;
@@ -167,6 +172,8 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_LOST_TQ_METADATA_NUM;
 
     public static Histogram HISTO_QUERY_LATENCY;
+    public static Histogram HISTO_INSERT_LATENCY;
+
     public static Histogram HISTO_EDIT_LOG_WRITE_LATENCY;
     public static Histogram HISTO_JOURNAL_WRITE_LATENCY;
     public static Histogram HISTO_JOURNAL_WRITE_BATCH;
@@ -426,6 +433,8 @@ public final class MetricRepo {
         // 2. counter
         COUNTER_REQUEST_ALL = new LongCounterMetric("request_total", MetricUnit.REQUESTS, "total request");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REQUEST_ALL);
+        COUNTER_REQUEST_ERR = new LongCounterMetric("request_err", MetricUnit.REQUESTS, "total err request");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REQUEST_ERR);
         COUNTER_QUERY_ALL = new LongCounterMetric("query_total", MetricUnit.REQUESTS, "total query");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_ALL);
         COUNTER_QUERY_ERR = new LongCounterMetric("query_err", MetricUnit.REQUESTS, "total error query");
@@ -453,6 +462,16 @@ public final class MetricRepo {
         COUNTER_QUERY_QUEUE_TIMEOUT = new LongCounterMetric("query_queue_timeout", MetricUnit.REQUESTS,
                 "total history query for timeout in queue");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_QUERY_QUEUE_TIMEOUT);
+
+        COUNTER_INSERT_ALL = new LongCounterMetric("insert_total", MetricUnit.REQUESTS, "total insert");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_INSERT_ALL);
+        COUNTER_INSERT_ERR = new LongCounterMetric("insert_err", MetricUnit.REQUESTS, "total error insert");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_INSERT_ERR);
+        COUNTER_INSERT_SUCCESS = new LongCounterMetric("insert_success", MetricUnit.REQUESTS, "total success insert");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_INSERT_SUCCESS);
+        COUNTER_SLOW_INSERT = new LongCounterMetric("slow_insert", MetricUnit.REQUESTS, "total slow insert");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_SLOW_INSERT);
+
         COUNTER_LOAD_ADD = new LongCounterMetric("load_add", MetricUnit.REQUESTS, "total load submit");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_LOAD_ADD);
         COUNTER_ROUTINE_LOAD_PAUSED =
@@ -542,6 +561,7 @@ public final class MetricRepo {
 
         // 3. histogram
         HISTO_QUERY_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("query", "latency", "ms"));
+        HISTO_INSERT_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("insert", "latency", "ms"));
         HISTO_EDIT_LOG_WRITE_LATENCY =
                 METRIC_REGISTER.histogram(MetricRegistry.name("editlog", "write", "latency", "ms"));
         HISTO_JOURNAL_WRITE_LATENCY =
