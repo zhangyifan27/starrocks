@@ -233,6 +233,8 @@ public class ConnectContext {
 
     protected SSLContext sslContext;
 
+    protected String supersqlTraceId;
+
     private ConnectContext parent;
 
     private boolean relationAliasCaseInsensitive = false;
@@ -1050,6 +1052,14 @@ public class ConnectContext {
 
     public void setPlatformUser(String platformUser) {
         this.platformUser = platformUser;
+    }
+
+    public void setSupersqlTraceId(String supersqlTraceId) {
+        this.supersqlTraceId = supersqlTraceId;
+    }
+
+    public String getSupersqlTraceId() {
+        return supersqlTraceId;
     }
 
     public boolean enableSSL() throws IOException {

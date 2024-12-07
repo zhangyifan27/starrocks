@@ -160,6 +160,9 @@ public class AuditEvent {
     @AuditField(value = "stmtType")
     public String stmtType = "";
 
+    @AuditField(value = "supersqlTraceId")
+    public String supersqlTraceId = "";
+
     public static class AuditEventBuilder {
         private List<String> tables = new ArrayList<>();
         private Set<String> exceptions = new HashSet<>();
@@ -384,6 +387,11 @@ public class AuditEvent {
 
         public AuditEventBuilder addException(String exception) {
             exceptions.add(exception);
+            return this;
+        }
+
+        public AuditEventBuilder setSupersqlTraceId(String supersqlTraceId) {
+            auditEvent.supersqlTraceId = supersqlTraceId;
             return this;
         }
 

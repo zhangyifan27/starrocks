@@ -274,6 +274,7 @@ public class ConnectProcessor {
 
         ctx.getAuditEventBuilder().setRequestType(ctx.getState().getRequestType());
         ctx.getAuditEventBuilder().setFeIp(FrontendOptions.getLocalHostAddress());
+        ctx.getAuditEventBuilder().setSupersqlTraceId(ctx.getSupersqlTraceId());
 
         if (parsedStmt != null && AuditEncryptionChecker.needEncrypt(parsedStmt)) {
             // Some information like username, password in the stmt should not be printed.
@@ -338,6 +339,7 @@ public class ConnectProcessor {
             if (Config.enable_print_sql) {
                 LOG.info("Begin to execute sql, type: query，query id:{}, sql:{}", ctx.getQueryId(), originStmt);
             }
+            ctx.setSupersqlTraceId(null);
             List<StatementBase> stmts;
             try (Timer ignored = Tracers.watchScope(Tracers.Module.PARSER, "Parser")) {
                 stmts = com.starrocks.sql.parser.SqlParser.parse(originStmt, ctx.getSessionVariable());
@@ -350,12 +352,20 @@ public class ConnectProcessor {
                 if (i > 0) {
                     ctx.resetReturnRows();
                     ctx.setQueryId(UUIDUtil.genUUID());
+                    ctx.setSupersqlTraceId(null);
                 }
                 parsedStmt = stmts.get(i);
                 // from jdbc no params like that. COM_STMT_PREPARE + select 1
                 if (ctx.getCommand() == MysqlCommand.COM_STMT_PREPARE && !(parsedStmt instanceof PrepareStmt)) {
                     parsedStmt = new PrepareStmt("", parsedStmt, new ArrayList<>());
                 }
+
+                if (stmts.size() == 1) {
+                    ctx.setSupersqlTraceId(SQLUtils.extractSupersqlTraceId(originStmt));
+                } else {
+                    ctx.setSupersqlTraceId(SQLUtils.extractSupersqlTraceId(originStmt, i, stmts.size()));
+                }
+
                 // only for JDBC, COM_STMT_PREPARE bundled with jdbc
                 if (ctx.getCommand() == MysqlCommand.COM_STMT_PREPARE && (parsedStmt instanceof PrepareStmt)) {
                     ((PrepareStmt) parsedStmt).setName(String.valueOf(ctx.getStmtId()));
