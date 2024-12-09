@@ -188,6 +188,9 @@ Status KafkaDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                 RETURN_IF_ERROR(kafka_pipe->finish());
                 ctx->kafka_info->cmt_offset = std::move(cmt_offset);
                 ctx->receive_bytes = ctx->max_batch_size - left_bytes;
+                ctx->rltask_statistics = RoutineLoadTaskStatistics(
+                        ctx->max_interval_s * 1000 - left_time, _queue.total_get_wait_time() / 1000,
+                        _queue.total_put_wait_time() / 1000, received_rows, ctx->receive_bytes);
                 return Status::OK();
             }
         }
@@ -392,6 +395,9 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                 RETURN_IF_ERROR(pulsar_pipe->finish());
                 ctx->pulsar_info->ack_offset = std::move(ack_offset);
                 ctx->receive_bytes = ctx->max_batch_size - left_bytes;
+                ctx->rltask_statistics = RoutineLoadTaskStatistics(
+                        ctx->max_interval_s * 1000 - left_time, _queue.total_get_wait_time() / 1000,
+                        _queue.total_put_wait_time() / 1000, received_rows, ctx->receive_bytes);
                 get_backlog_nums(ctx);
                 return Status::OK();
             }

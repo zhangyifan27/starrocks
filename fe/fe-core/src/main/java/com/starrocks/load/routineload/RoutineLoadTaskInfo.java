@@ -88,6 +88,8 @@ public abstract class RoutineLoadTaskInfo {
     // the be id of this task
     protected long beId = INVALID_BE_ID;
 
+    protected RoutineLoadTaskStatistics statistics;
+
     // last time this task being scheduled by RoutineLoadTaskScheduler
     protected long lastScheduledTime = -1;
 
@@ -117,10 +119,11 @@ public abstract class RoutineLoadTaskInfo {
         this.timeToExecuteMs = timeToExecuteMs;
     }
 
-    public RoutineLoadTaskInfo(UUID id, RoutineLoadJob job, long taskSchedulerIntervalMs,
-                               long timeToExecuteMs, long previousBeId, long taskTimeoutMs) {
+    public RoutineLoadTaskInfo(UUID id, RoutineLoadJob job, long taskSchedulerIntervalMs, long timeToExecuteMs,
+                               long previousBeId, long taskTimeoutMs, RoutineLoadTaskStatistics previousStatistics) {
         this(id, job, taskSchedulerIntervalMs, timeToExecuteMs, taskTimeoutMs);
         this.previousBeId = previousBeId;
+        this.statistics = previousStatistics;
     }
 
     public UUID getId() {
@@ -206,6 +209,14 @@ public abstract class RoutineLoadTaskInfo {
         return warehouseId;
     }
 
+    public RoutineLoadTaskStatistics getStatistics() {
+        return this.statistics;
+    }
+
+    public void setStatistics(RoutineLoadTaskStatistics statistics) {
+        this.statistics = statistics;
+    }
+
     public boolean isRunningTimeout() {
         if (txnStatus == TransactionStatus.COMMITTED || txnStatus == TransactionStatus.VISIBLE) {
             // the corresponding txn is already finished, this task can not be treated as timeout.
@@ -286,6 +297,11 @@ public abstract class RoutineLoadTaskInfo {
         }
         row.add(String.valueOf(timeoutMs / 1000));
         row.add(String.valueOf(beId));
+        if (statistics == null) {
+            row.add("NULL");
+        } else {
+            row.add(statistics.toString());
+        }
         row.add(getTaskDataSourceProperties());
         if (msg == null) {
             row.add("NULL");

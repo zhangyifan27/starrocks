@@ -132,6 +132,45 @@ public:
     std::map<std::string, std::string> properties;
 };
 
+class RoutineLoadTaskStatistics {
+public:
+    explicit RoutineLoadTaskStatistics() {}
+    explicit RoutineLoadTaskStatistics(int64_t consume_time, int64_t blocking_get_time, int64_t blocking_put_time,
+                                    int64_t received_rows, int64_t received_bytes)
+            : _consume_time(consume_time),
+              _blocking_get_time(blocking_get_time),
+              _blocking_put_time(blocking_put_time),
+              _received_rows(received_rows),
+              _received_bytes(received_bytes) {}
+
+    int64_t get_consume_time() {
+        return _consume_time;
+    }
+
+    int64_t get_blocking_get_time() {
+        return _blocking_get_time;
+    }
+
+    int64_t get_blocking_put_time() {
+        return _blocking_put_time;
+    }
+
+    int64_t get_received_rows() {
+        return _received_rows;
+    }
+
+    int64_t get_received_bytes() {
+        return _received_bytes;
+    }
+
+private:
+    int64_t _consume_time;
+    int64_t _blocking_get_time;
+    int64_t _blocking_put_time;
+    int64_t _received_rows;
+    int64_t _received_bytes;
+};
+
 class MessageBodySink;
 
 const std::string TXN_BEGIN = "begin";
@@ -251,6 +290,7 @@ public:
 
     std::unique_ptr<KafkaLoadInfo> kafka_info;
     std::unique_ptr<PulsarLoadInfo> pulsar_info;
+    RoutineLoadTaskStatistics rltask_statistics;
 
     std::vector<TTabletCommitInfo> commit_infos;
     std::vector<TTabletFailInfo> fail_infos;

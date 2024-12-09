@@ -87,7 +87,7 @@ public class KafkaTaskInfo extends RoutineLoadTaskInfo {
     public KafkaTaskInfo(long timeToExecuteMs, KafkaTaskInfo kafkaTaskInfo, Map<Integer, Long> partitionIdToOffset,
                          long tastTimeoutMs) {
         super(UUID.randomUUID(), kafkaTaskInfo.getJob(), kafkaTaskInfo.getTaskScheduleIntervalMs(), timeToExecuteMs,
-                kafkaTaskInfo.getBeId(), tastTimeoutMs);
+                kafkaTaskInfo.getBeId(), tastTimeoutMs, kafkaTaskInfo.getStatistics());
         this.partitionIdToOffset = partitionIdToOffset;
     }
 
