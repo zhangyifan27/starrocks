@@ -3264,7 +3264,7 @@ public class Config extends ConfigBase {
     public static boolean ranger_user_ugi = false;
 
     @ConfField(mutable = true)
-    public static int catalog_metadata_cache_size = 500;
+    public static int catalog_metadata_cache_size = 5000;
 
     /**
      * mv plan cache expire interval in seconds
