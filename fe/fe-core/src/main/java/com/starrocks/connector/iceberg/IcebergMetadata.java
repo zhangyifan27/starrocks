@@ -946,6 +946,11 @@ public class IcebergMetadata implements ConnectorMetadata {
     private void refreshTableWithResource(Table table) {
         IcebergTable icebergTable = (IcebergTable) table;
         org.apache.iceberg.Table nativeTable = icebergTable.getNativeTable();
+        refreshTable(((IcebergTable) table).getNativeTable());
+        icebergTable.resetSnapshot();
+    }
+
+    public static void refreshTable(org.apache.iceberg.Table nativeTable) {
         try {
             if (nativeTable instanceof BaseTable) {
                 BaseTable baseTable = (BaseTable) nativeTable;
@@ -966,8 +971,6 @@ public class IcebergMetadata implements ConnectorMetadata {
                     " may have been dropped. You should re-create the external table. cause %s",
                     nativeTable.name(), ei.getMessage());
         }
-
-        icebergTable.resetSnapshot();
     }
 
     @Override

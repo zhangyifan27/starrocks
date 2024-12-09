@@ -229,7 +229,7 @@ public class CreateRoutineLoadStmtTest {
                 + "\"kafka_topic\" = \"topictest\"\n"
                 + ");";
         List<StatementBase> stmts = com.starrocks.sql.parser.SqlParser.parse(sql, 32);
-        CreateRoutineLoadStmt createRoutineLoadStmt = (CreateRoutineLoadStmt)stmts.get(0);
+        CreateRoutineLoadStmt createRoutineLoadStmt = (CreateRoutineLoadStmt) stmts.get(0);
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
         Assert.assertNotNull(createRoutineLoadStmt.getRoutineLoadDesc());
         Assert.assertEquals(0, createRoutineLoadStmt.getLoadPropertyList().size());
@@ -300,7 +300,7 @@ public class CreateRoutineLoadStmtTest {
                 "\"kafka_broker_list\" = \"kafkahost1:9092,kafkahost2:9092\"" +
                 ")";
         List<StatementBase> stmts = com.starrocks.sql.parser.SqlParser.parse(sql, 32);
-        CreateRoutineLoadStmt createRoutineLoadStmt = (CreateRoutineLoadStmt)stmts.get(0);
+        CreateRoutineLoadStmt createRoutineLoadStmt = (CreateRoutineLoadStmt) stmts.get(0);
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
         Assert.assertEquals(6, createRoutineLoadStmt.getRoutineLoadDesc().getColumnsInfo().getColumns().size());
 
@@ -311,7 +311,7 @@ public class CreateRoutineLoadStmtTest {
                 "\"kafka_broker_list\" = \"kafkahost1:9092,kafkahost2:9092\"" +
                 ")";
         stmts = com.starrocks.sql.parser.SqlParser.parse(sql, 32);
-        createRoutineLoadStmt = (CreateRoutineLoadStmt)stmts.get(0);
+        createRoutineLoadStmt = (CreateRoutineLoadStmt) stmts.get(0);
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
         Assert.assertEquals(5, createRoutineLoadStmt.getRoutineLoadDesc().getColumnsInfo().getColumns().size());
 
@@ -326,7 +326,7 @@ public class CreateRoutineLoadStmtTest {
                 "\"kafka_broker_list\" = \"kafkahost1:9092,kafkahost2:9092\"" +
                 ")";
         stmts = com.starrocks.sql.parser.SqlParser.parse(sql, 32);
-        createRoutineLoadStmt = (CreateRoutineLoadStmt)stmts.get(0);
+        createRoutineLoadStmt = (CreateRoutineLoadStmt) stmts.get(0);
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
         Assert.assertEquals(5, createRoutineLoadStmt.getRoutineLoadDesc().getColumnsInfo().getColumns().size());
 
@@ -342,7 +342,7 @@ public class CreateRoutineLoadStmtTest {
                 "\"kafka_broker_list\" = \"kafkahost1:9092,kafkahost2:9092\"" +
                 ")";
         stmts = com.starrocks.sql.parser.SqlParser.parse(sql, 32);
-        createRoutineLoadStmt = (CreateRoutineLoadStmt)stmts.get(0);
+        createRoutineLoadStmt = (CreateRoutineLoadStmt) stmts.get(0);
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
         Assert.assertEquals(10, createRoutineLoadStmt.getRoutineLoadDesc().getColumnsInfo().getColumns().size());
 
@@ -357,7 +357,7 @@ public class CreateRoutineLoadStmtTest {
                 "\"kafka_broker_list\" = \"kafkahost1:9092,kafkahost2:9092\"" +
                 ")";
         stmts = com.starrocks.sql.parser.SqlParser.parse(sql, 32);
-        createRoutineLoadStmt = (CreateRoutineLoadStmt)stmts.get(0);
+        createRoutineLoadStmt = (CreateRoutineLoadStmt) stmts.get(0);
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
         Assert.assertEquals(10, createRoutineLoadStmt.getRoutineLoadDesc().getColumnsInfo().getColumns().size());
 
@@ -373,7 +373,7 @@ public class CreateRoutineLoadStmtTest {
                 "\"kafka_broker_list\" = \"kafkahost1:9092,kafkahost2:9092\"" +
                 ")";
         stmts = com.starrocks.sql.parser.SqlParser.parse(sql, 32);
-        createRoutineLoadStmt = (CreateRoutineLoadStmt)stmts.get(0);
+        createRoutineLoadStmt = (CreateRoutineLoadStmt) stmts.get(0);
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
         Assert.assertEquals(10, createRoutineLoadStmt.getRoutineLoadDesc().getColumnsInfo().getColumns().size());
     }
@@ -407,7 +407,8 @@ public class CreateRoutineLoadStmtTest {
 
         CreateRoutineLoadStmt createRoutineLoadStmt = new CreateRoutineLoadStmt(labelName, tableNameString,
                 loadPropertyList, properties,
-                typeName, customProperties);
+                typeName, customProperties, null);
+
         try {
             CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
             Assert.fail();
@@ -448,7 +449,7 @@ public class CreateRoutineLoadStmtTest {
 
         CreateRoutineLoadStmt createRoutineLoadStmt = new CreateRoutineLoadStmt(labelName, tableNameString,
                 loadPropertyList, properties,
-                typeName, customProperties);
+                typeName, customProperties, null);
 
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
 
@@ -547,7 +548,7 @@ public class CreateRoutineLoadStmtTest {
         LabelName labelName = new LabelName(dbName, jobName);
         CreateRoutineLoadStmt createRoutineLoadStmt = new CreateRoutineLoadStmt(
                 labelName, tableNameString, loadPropertyList, Maps.newHashMap(),
-                LoadDataSourceType.KAFKA.name(), customProperties);
+                LoadDataSourceType.KAFKA.name(), customProperties, null);
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
         List<Pair<Integer, Long>> partitionOffsets = createRoutineLoadStmt.getKafkaPartitionOffsets();
         Assert.assertEquals(2, partitionOffsets.size());
@@ -561,7 +562,7 @@ public class CreateRoutineLoadStmtTest {
         labelName = new LabelName(dbName, jobName);
         createRoutineLoadStmt =
                 new CreateRoutineLoadStmt(labelName, tableNameString, loadPropertyList, Maps.newHashMap(),
-                        LoadDataSourceType.KAFKA.name(), customProperties);
+                        LoadDataSourceType.KAFKA.name(), customProperties, null);
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
         partitionOffsets = createRoutineLoadStmt.getKafkaPartitionOffsets();
         Assert.assertEquals(2, partitionOffsets.size());
@@ -576,7 +577,7 @@ public class CreateRoutineLoadStmtTest {
         labelName = new LabelName(dbName, jobName);
         createRoutineLoadStmt =
                 new CreateRoutineLoadStmt(labelName, tableNameString, loadPropertyList, Maps.newHashMap(),
-                        LoadDataSourceType.KAFKA.name(), customProperties);
+                        LoadDataSourceType.KAFKA.name(), customProperties, null);
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
         partitionOffsets = createRoutineLoadStmt.getKafkaPartitionOffsets();
         Assert.assertEquals(2, partitionOffsets.size());
@@ -592,7 +593,7 @@ public class CreateRoutineLoadStmtTest {
         labelName = new LabelName(dbName, jobName);
         createRoutineLoadStmt =
                 new CreateRoutineLoadStmt(labelName, tableNameString, loadPropertyList, Maps.newHashMap(),
-                        LoadDataSourceType.KAFKA.name(), customProperties);
+                        LoadDataSourceType.KAFKA.name(), customProperties, null);
         CreateRoutineLoadAnalyzer.analyze(createRoutineLoadStmt, connectContext);
         partitionOffsets = createRoutineLoadStmt.getKafkaPartitionOffsets();
         Assert.assertEquals(3, partitionOffsets.size());
@@ -608,7 +609,7 @@ public class CreateRoutineLoadStmtTest {
         labelName = new LabelName(dbName, jobName);
         createRoutineLoadStmt =
                 new CreateRoutineLoadStmt(labelName, tableNameString, loadPropertyList, Maps.newHashMap(),
-                        LoadDataSourceType.KAFKA.name(), customProperties);
+                        LoadDataSourceType.KAFKA.name(), customProperties, null);
         CreateRoutineLoadStmt finalCreateRoutineLoadStmt = createRoutineLoadStmt;
         ExceptionChecker.expectThrowsWithMsg(SemanticException.class,
                 "Invalid kafka partition: '1 2 3'. Expected values should be an integer",
@@ -622,7 +623,7 @@ public class CreateRoutineLoadStmtTest {
         labelName = new LabelName(dbName, jobName);
         createRoutineLoadStmt =
                 new CreateRoutineLoadStmt(labelName, tableNameString, loadPropertyList, Maps.newHashMap(),
-                        LoadDataSourceType.KAFKA.name(), customProperties);
+                        LoadDataSourceType.KAFKA.name(), customProperties, null);
         CreateRoutineLoadStmt finalCreateRoutineLoadStmt2 = createRoutineLoadStmt;
         ExceptionChecker.expectThrowsWithMsg(SemanticException.class,
                 "Invalid kafka offset: 'a'. Expected values should be an integer, OFFSET_BEGINNING, or OFFSET_END",

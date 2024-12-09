@@ -296,6 +296,9 @@ public class RoutineLoadMgr implements Writable, MemoryTrackable {
             case PULSAR:
                 routineLoadJob = PulsarRoutineLoadJob.fromCreateStmt(createRoutineLoadStmt);
                 break;
+            case ICEBERG:
+                routineLoadJob = IcebergRoutineLoadJob.fromCreateStmt(createRoutineLoadStmt);
+                break;
             default:
                 throw new UserException("Unknown data source type: " + type);
         }

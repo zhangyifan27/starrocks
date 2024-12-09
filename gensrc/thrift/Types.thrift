@@ -468,7 +468,8 @@ enum TLoadType {
 enum TLoadSourceType {
     RAW,
     KAFKA,
-    PULSAR
+    PULSAR,
+    ICEBERG
 }
 
 enum TOpType {

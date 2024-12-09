@@ -41,6 +41,7 @@ import com.google.common.collect.Maps;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Pair;
+import com.starrocks.load.routineload.IcebergCreateRoutineLoadStmtConfig;
 import com.starrocks.load.routineload.LoadDataSourceType;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
 import com.starrocks.sql.parser.NodePosition;
@@ -64,6 +65,9 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
             .add(CreateRoutineLoadStmt.PULSAR_INITIAL_POSITIONS_PROPERTY)
             .build();
 
+    private static final ImmutableSet<String> CONFIGURABLE_ICEBERG_PROPERTIES_SET = new ImmutableSet.Builder<String>()
+            .build();
+
     @SerializedName(value = "type")
     private String type = "KAFKA";
     // origin properties, no need to persist
@@ -80,6 +84,8 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
     private List<Pair<String, MessageId>> pulsarPartitionInitialPositions = Lists.newArrayList();
     @SerializedName(value = "customPulsarProperties")
     private Map<String, String> customPulsarProperties = Maps.newHashMap();
+    @SerializedName(value = "customIcebergProperties")
+    private Map<String, String> customIcebergProperties = Maps.newHashMap();
     @SerializedName(value = "confluentSchemaRegistryUrl")
     private String confluentSchemaRegistryUrl;
 
@@ -110,6 +116,8 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
         } else if (type.equals("PULSAR")) {
             return !pulsarSubscription.isEmpty() || !pulsarPartitionInitialPositions.isEmpty() ||
                     !customPulsarProperties.isEmpty();
+        } else if (type.equals("ICEBERG")) {
+            return !customIcebergProperties.isEmpty();
         } else {
             return false;
         }
@@ -143,6 +151,10 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
         return customPulsarProperties;
     }
 
+    public Map<String, String> getCustomIcebergProperties() {
+        return customIcebergProperties;
+    }
+
     private void checkDataSourceProperties() throws AnalysisException {
         LoadDataSourceType sourceType;
         try {
@@ -156,6 +168,9 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
                 break;
             case PULSAR:
                 checkPulsarProperties();
+                break;
+            case ICEBERG:
+                checkIcebergProperties();
                 break;
             default:
                 break;
@@ -236,6 +251,17 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
         }
     }
 
+    private void checkIcebergProperties() throws AnalysisException {
+        Optional<String> optional = properties.keySet().stream().filter(
+                entity -> !CONFIGURABLE_ICEBERG_PROPERTIES_SET.contains(entity)).filter(
+                entity -> !entity.startsWith("property.")).findFirst();
+        if (optional.isPresent()) {
+            throw new AnalysisException(optional.get() + " is invalid iceberg custom property");
+        }
+
+        IcebergCreateRoutineLoadStmtConfig.analyzeIcebergCustomProperties(properties, customIcebergProperties);
+    }
+
     @Override
     public String toString() {
         if (!hasAnalyzedProperties()) {
@@ -253,6 +279,8 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
                 sb.append(", pulsar partition initial positions: ").append(pulsarPartitionInitialPositions);
             }
             sb.append(", custom properties: ").append(customPulsarProperties);
+        } else if (type.equals("ICEBERG")) {
+            sb.append(", custom properties: ").append(customIcebergProperties);
         }
         return sb.toString();
     }

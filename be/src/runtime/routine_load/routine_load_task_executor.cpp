@@ -319,6 +319,9 @@ Status RoutineLoadTaskExecutor::submit_task(const TRoutineLoadTask& task) {
     case TLoadSourceType::PULSAR:
         ctx->pulsar_info = std::make_unique<PulsarLoadInfo>(task.pulsar_load_info);
         break;
+    case TLoadSourceType::ICEBERG:
+        ctx->iceberg_info = std::make_unique<IcebergLoadInfo>(task.iceberg_load_info);
+        break;
     default:
         LOG(WARNING) << "unknown load source type: " << task.type;
         delete ctx;
@@ -374,7 +377,11 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
 
     // create data consumer group
     std::shared_ptr<DataConsumerGroup> consumer_grp;
-    HANDLE_ERROR(consumer_pool->get_consumer_grp(ctx, &consumer_grp), "failed to get consumers")
+    if (ctx->load_src_type == TLoadSourceType::ICEBERG) {
+        // nothing to do
+    } else {
+        HANDLE_ERROR(consumer_pool->get_consumer_grp(ctx, &consumer_grp), "failed to get consumers");
+    }
 
     // create and set pipe
     std::shared_ptr<StreamLoadPipe> pipe;
@@ -399,6 +406,10 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
         }
         break;
     }
+    case TLoadSourceType::ICEBERG: {
+        // nothing to do
+        break;
+    }
     default: {
         std::stringstream ss;
         ss << "unknown routine load task type: " << ctx->load_type;
@@ -415,17 +426,25 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
     // execute plan fragment, async
     HANDLE_ERROR(_exec_env->stream_load_executor()->execute_plan_fragment(ctx), "failed to execute plan fragment")
 
-    // start to consume, this may block a while
-    HANDLE_ERROR(consumer_grp->start_all(ctx), "consuming failed")
+    if (ctx->load_src_type == TLoadSourceType::ICEBERG) {
+        // nothing to do
+    } else {
+        // start to consume, this may block a while
+        HANDLE_ERROR(consumer_grp->start_all(ctx), "consuming failed")
+    }
 
     // wait for all consumers finished
     HANDLE_ERROR(ctx->future.get(), "consume failed")
 
     ctx->load_cost_nanos = MonotonicNanos() - ctx->start_nanos;
 
-    // return the consumer back to pool
-    // call this before commit txn, in case the next task can come very fast
-    consumer_pool->return_consumers(consumer_grp.get());
+    if (ctx->load_src_type == TLoadSourceType::ICEBERG) {
+        // nothing to do
+    } else {
+        // return the consumer back to pool
+        // call this before commit txn, in case the next task can come very fast
+        consumer_pool->return_consumers(consumer_grp.get());
+    }
 
     // commit txn
     HANDLE_ERROR(_exec_env->stream_load_executor()->commit_txn(ctx), "commit failed")
@@ -485,6 +504,9 @@ void RoutineLoadTaskExecutor::exec_task(StreamLoadContext* ctx, DataConsumerPool
             // return consumer
             _data_consumer_pool.return_consumer(consumer);
         }
+    } break;
+    case TLoadSourceType::ICEBERG: {
+        // nothing to do
     } break;
     default:
         return;

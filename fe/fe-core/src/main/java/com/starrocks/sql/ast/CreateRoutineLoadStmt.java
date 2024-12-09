@@ -19,6 +19,7 @@ import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.LabelName;
 import com.starrocks.analysis.ParseNode;
 import com.starrocks.common.AnalysisException;
@@ -31,6 +32,7 @@ import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.Util;
 import com.starrocks.load.RoutineLoadDesc;
+import com.starrocks.load.routineload.IcebergCreateRoutineLoadStmtConfig;
 import com.starrocks.load.routineload.KafkaProgress;
 import com.starrocks.load.routineload.LoadDataSourceType;
 import com.starrocks.load.routineload.PulsarRoutineLoadJob;
@@ -89,7 +91,8 @@ import java.util.stream.Collectors;
 
       type of routine load:
           KAFKA,
-          PULSAR
+          PULSAR,
+          ICEBERG
 */
 public class CreateRoutineLoadStmt extends DdlStmt {
     private static final Logger LOG = LogManager.getLogger(CreateRoutineLoadStmt.class);
@@ -147,7 +150,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     private static final String NAME_TYPE = "ROUTINE LOAD NAME";
     // from: https://github.com/apache/kafka/blob/trunk/clients/src/main/java/org/apache/kafka/common/utils/Utils.java#L97
-    private static final String ENDPOINT_REGEX = ".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:(\\d+)";
+    public static final String ENDPOINT_REGEX = ".*?\\[?([0-9a-zA-Z\\-%._:]*)\\]?:(\\d+)";
+    //public static final String ENDPOINT_REGEX = "[-A-Za-z0-9+&@#/%?=~_|!:,.;]+[-A-Za-z0-9+&@#/%=~_|]";
 
     private static final ImmutableSet<String> PROPERTIES_SET = new ImmutableSet.Builder<String>()
             .add(DESIRED_CONCURRENT_NUMBER_PROPERTY)
@@ -177,6 +181,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
             .add(TASK_TIMEOUT_SECOND)
             .add(PropertyAnalyzer.PROPERTIES_WAREHOUSE)
             .add(SessionVariable.EXEC_MEM_LIMIT)
+            .add(LoadStmt.FLEXIBLE_COLUMN_MAPPING)
             .build();
 
     private static final ImmutableSet<String> KAFKA_PROPERTIES_SET = new ImmutableSet.Builder<String>()
@@ -226,6 +231,9 @@ public class CreateRoutineLoadStmt extends DdlStmt {
     private String jobThatRecoverOffsetsFrom;
     private String mergeConditionStr;
     private String partialUpdateMode = "row";
+    private BrokerDesc brokerDesc;
+    private boolean flexibleColumnMapping = false;
+
     /**
      * RoutineLoad support json data.
      * Require Params:
@@ -259,6 +267,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     // custom pulsar property map<key, value>
     private Map<String, String> customPulsarProperties = Maps.newHashMap();
+    // iceberg related
+    private IcebergCreateRoutineLoadStmtConfig icebergCreateRoutineLoadStmtConfig;
 
     public static final Predicate<Long> DESIRED_CONCURRENT_NUMBER_PRED = (v) -> v > 0L;
     public static final Predicate<Long> MAX_ERROR_NUMBER_PRED = (v) -> v >= 0L;
@@ -268,15 +278,15 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     public CreateRoutineLoadStmt(LabelName labelName, String tableName, List<ParseNode> loadPropertyList,
                                  Map<String, String> jobProperties,
-                                 String typeName, Map<String, String> dataSourceProperties) {
+                                 String typeName, Map<String, String> dataSourceProperties, BrokerDesc brokerDesc) {
         this(labelName, tableName, loadPropertyList, jobProperties, typeName,
-                dataSourceProperties, NodePosition.ZERO);
+                dataSourceProperties, NodePosition.ZERO, brokerDesc);
     }
 
     public CreateRoutineLoadStmt(LabelName labelName, String tableName, List<ParseNode> loadPropertyList,
                                  Map<String, String> jobProperties,
                                  String typeName, Map<String, String> dataSourceProperties,
-                                 NodePosition pos) {
+                                 NodePosition pos, BrokerDesc brokerDesc) {
         super(pos);
         this.labelName = labelName;
         this.tableName = tableName;
@@ -284,6 +294,7 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         this.jobProperties = jobProperties == null ? Maps.newHashMap() : jobProperties;
         this.typeName = typeName.toUpperCase();
         this.dataSourceProperties = dataSourceProperties;
+        this.brokerDesc = brokerDesc;
     }
 
     public String getConfluentSchemaRegistryUrl() {
@@ -394,6 +405,10 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         return taskNumExceedBeNum;
     }
 
+    public boolean isFlexibleColumnMapping() {
+        return flexibleColumnMapping;
+    }
+
     public String getTimezone() {
         return timezone;
     }
@@ -416,6 +431,10 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     public String getMergeConditionStr() {
         return mergeConditionStr;
+    }
+
+    public BrokerDesc getBrokerDesc() {
+        return brokerDesc;
     }
 
     public String getFormat() {
@@ -472,6 +491,10 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
     public Map<String, String> getCustomPulsarProperties() {
         return customPulsarProperties;
+    }
+
+    public IcebergCreateRoutineLoadStmtConfig getCreateIcebergRoutineLoadStmtConfig() {
+        return icebergCreateRoutineLoadStmtConfig;
     }
 
     public List<ParseNode> getLoadPropertyList() {
@@ -629,6 +652,10 @@ public class CreateRoutineLoadStmt extends DdlStmt {
 
         partialUpdateMode = jobProperties.get(LoadStmt.PARTIAL_UPDATE_MODE);
 
+        flexibleColumnMapping = Util.getBooleanPropertyOrDefault(jobProperties.get(LoadStmt.FLEXIBLE_COLUMN_MAPPING),
+                RoutineLoadJob.DEFAULT_FLEXIBLE_COLUMN_MAPPING,
+                LoadStmt.FLEXIBLE_COLUMN_MAPPING + " should be a boolean");
+
         if (ConnectContext.get() != null) {
             timezone = ConnectContext.get().getSessionVariable().getTimeZone();
         }
@@ -720,6 +747,11 @@ public class CreateRoutineLoadStmt extends DdlStmt {
                 break;
             case PULSAR:
                 checkPulsarProperties();
+                break;
+            case ICEBERG:
+                icebergCreateRoutineLoadStmtConfig =
+                        new IcebergCreateRoutineLoadStmtConfig(dataSourceProperties, brokerDesc);
+                icebergCreateRoutineLoadStmtConfig.checkIcebergProperties();
                 break;
             default:
                 break;
@@ -850,20 +882,26 @@ public class CreateRoutineLoadStmt extends DdlStmt {
         return offset;
     }
 
-    public static void analyzeKafkaCustomProperties(Map<String, String> dataSourceProperties,
-                                                    Map<String, String> customKafkaProperties) throws AnalysisException {
+    public static void setCustomProperties(Map<String, String> dataSourceProperties,
+                                           Map<String, String> customProperties) throws AnalysisException {
         for (Map.Entry<String, String> dataSourceProperty : dataSourceProperties.entrySet()) {
             if (dataSourceProperty.getKey().startsWith("property.")) {
                 String propertyKey = dataSourceProperty.getKey();
                 String propertyValue = dataSourceProperty.getValue();
                 String[] propertyValueArr = propertyKey.split("\\.");
                 if (propertyValueArr.length < 2) {
-                    throw new AnalysisException("kafka property value could not be a empty string");
+                    throw new AnalysisException("property value could not be a empty string");
                 }
-                customKafkaProperties.put(propertyKey.substring(propertyKey.indexOf(".") + 1), propertyValue);
+                customProperties.put(propertyKey.substring(propertyKey.indexOf(".") + 1), propertyValue);
             }
             // can be extended in the future which other prefix
         }
+    }
+
+    public static void analyzeKafkaCustomProperties(Map<String, String> dataSourceProperties,
+                                                    Map<String, String> customKafkaProperties)
+            throws AnalysisException {
+        setCustomProperties(dataSourceProperties, customKafkaProperties);
 
         // check kafka_default_offsets
         if (customKafkaProperties.containsKey(KAFKA_DEFAULT_OFFSETS)) {

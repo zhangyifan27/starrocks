@@ -112,6 +112,7 @@ public class LoadStmt extends DdlStmt {
     public static final String BOS_ENDPOINT = "bos_endpoint";
     public static final String BOS_ACCESSKEY = "bos_accesskey";
     public static final String BOS_SECRET_ACCESSKEY = "bos_secret_accesskey";
+    public static final String FLEXIBLE_COLUMN_MAPPING = "flexible_column_mapping";
 
     public static final String STRIP_OUTER_ARRAY = "strip_outer_array";
     public static final String JSONPATHS = "jsonpaths";
@@ -157,6 +158,7 @@ public class LoadStmt extends DdlStmt {
             .add(JSONPATHS)
             .add(JSONROOT)
             .add(PropertyAnalyzer.PROPERTIES_WAREHOUSE)
+            .add(FLEXIBLE_COLUMN_MAPPING)
             .build();
 
     public LoadStmt(LabelName label, List<DataDescription> dataDescriptions, BrokerDesc brokerDesc,

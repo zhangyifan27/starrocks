@@ -346,7 +346,9 @@ public class OlapTableSink extends DataSink {
         TOlapTableSchemaParam schemaParam = new TOlapTableSchemaParam();
         schemaParam.setDb_id(dbId);
         schemaParam.setTable_id(table.getId());
-        schemaParam.setVersion(table.getIndexMetaByIndexId(table.getBaseIndexId()).getSchemaVersion());
+
+        MaterializedIndexMeta meta = table.getIndexMetaByIndexId(table.getBaseIndexId());
+        schemaParam.setVersion(meta != null ? meta.getSchemaVersion() : 0);
 
         schemaParam.tuple_desc = tupleDescriptor.toThrift();
         for (SlotDescriptor slotDesc : tupleDescriptor.getSlots()) {

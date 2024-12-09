@@ -129,7 +129,7 @@ import static com.starrocks.common.ErrorCode.ERR_TOO_MANY_ERROR_ROWS;
  * This function is suitable for streaming load job which loading data continuously
  * The properties include stream load properties and job properties.
  * The desireTaskConcurrentNum means that user expect the number of concurrent stream load
- * The routine load job support different streaming medium such as KAFKA and Pulsar
+ * The routine load job support different streaming medium such as KAFKA, Pulsar and iceberg
  */
 public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         implements Writable, GsonPostProcessable, LoadJobWithWarehouse {
@@ -143,6 +143,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
     public static final boolean DEFAULT_IGNORE_TAIL_COLUMNS = false; // default is false
     public static final boolean DEFAULT_SKIP_UTF8_CHECK = false; // default is false
     public static final boolean DEFAULT_TASK_NUM_EXCEED_BE_NUM = false; // default is false
+    public static final boolean DEFAULT_FLEXIBLE_COLUMN_MAPPING = false; // default is false
 
     protected static final String STAR_STRING = "*";
     private Map<String, Long> timeConsumeLags = Maps.newHashMap();
@@ -393,6 +394,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         jobProperties.put(LoadStmt.IGNORE_TAIL_COLUMNS, String.valueOf(stmt.isIgnoreTailColumns()));
         jobProperties.put(LoadStmt.SKIP_UTF8_CHECK, String.valueOf(stmt.isSkipUtf8Check()));
         jobProperties.put(LoadStmt.TASK_NUM_EXCEED_BE_NUM, String.valueOf(stmt.isTaskNumExceedBeNum()));
+        jobProperties.put(LoadStmt.FLEXIBLE_COLUMN_MAPPING, String.valueOf(stmt.isFlexibleColumnMapping()));
         if (Strings.isNullOrEmpty(stmt.getFormat()) || stmt.getFormat().equals("csv")) {
             jobProperties.put(CreateRoutineLoadStmt.FORMAT, "csv");
             jobProperties.put(CreateRoutineLoadStmt.STRIP_OUTER_ARRAY, "false");
@@ -644,6 +646,14 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         String value = jobProperties.get(LoadStmt.TASK_NUM_EXCEED_BE_NUM);
         if (value == null) {
             return DEFAULT_TASK_NUM_EXCEED_BE_NUM;
+        }
+        return Boolean.valueOf(value);
+    }
+
+    public boolean isFlexibleColumnMapping() {
+        String value = jobProperties.get(LoadStmt.FLEXIBLE_COLUMN_MAPPING);
+        if (value == null) {
+            return DEFAULT_FLEXIBLE_COLUMN_MAPPING;
         }
         return Boolean.valueOf(value);
     }
@@ -920,7 +930,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
     public void prepare() throws UserException {
     }
 
-    private Coordinator.Factory getCoordinatorFactory() {
+    protected Coordinator.Factory getCoordinatorFactory() {
         return new DefaultCoordinator.Factory();
     }
 
@@ -1347,7 +1357,8 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         if (state == JobState.RUNNING) {
             if (txnStatus == TransactionStatus.ABORTED) {
                 RoutineLoadTaskInfo newRoutineLoadTaskInfo = unprotectRenewTask(
-                        System.currentTimeMillis() + taskSchedIntervalS * 1000, routineLoadTaskInfo);
+                        getAbortedTaskNextScheduleTime(routineLoadTaskInfo, txnStatusChangeReasonStr),
+                        routineLoadTaskInfo);
                 newRoutineLoadTaskInfo.setMsg("previous task aborted because of " + txnStatusChangeReasonStr, true);
                 GlobalStateMgr.getCurrentState().getRoutineLoadMgr()
                         .releaseBeTaskSlot(routineLoadTaskInfo.getWarehouseId(),
@@ -1361,6 +1372,10 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
                 // or if publish version task has some error, there will be lots of COMMITTED txns in GlobalTransactionMgr
             }
         }
+    }
+
+    protected long getAbortedTaskNextScheduleTime(RoutineLoadTaskInfo taskInfo, String txnStatusChangeReasonStr) {
+        return System.currentTimeMillis() + taskSchedIntervalS * 1000;
     }
 
     protected static void unprotectedCheckMeta(Database db, String tblName, RoutineLoadDesc routineLoadDesc)
@@ -1489,7 +1504,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         WarehouseIdleChecker.updateJobLastFinishTime(warehouseId);
     }
 
-    private void clearTasks() {
+    protected void clearTasks() {
         for (RoutineLoadTaskInfo task : routineLoadTaskInfoList) {
             if (task.getBeId() != RoutineLoadTaskInfo.INVALID_BE_ID) {
                 GlobalStateMgr.getCurrentState().getRoutineLoadMgr().
@@ -1609,9 +1624,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
             row.add(customPropertiesJsonToString());
             row.add(getStatistic());
             row.add(getProgress().toJsonString());
-            if (getTimestampProgress() != null) {
-                row.add(getTimestampProgress().toJsonString());
-            }
+            row.add(getTimestampProgress() != null ? getTimestampProgress().toJsonString() : "");
             switch (state) {
                 case PAUSED:
                     row.add(pauseReason == null ? "" : pauseReason.toString());
@@ -1830,6 +1843,8 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
             job = new KafkaRoutineLoadJob();
         } else if (type == LoadDataSourceType.PULSAR) {
             job = new PulsarRoutineLoadJob();
+        } else if (type == LoadDataSourceType.ICEBERG) {
+            job = new IcebergRoutineLoadJob();
         } else {
             throw new IOException("Unknown load data source type: " + type.name());
         }
@@ -1916,6 +1931,11 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
             case PULSAR: {
                 progress = new PulsarProgress();
                 timestampProgress = new PulsarProgress();
+                progress.readFields(in);
+                break;
+            }
+            case ICEBERG: {
+                progress = new IcebergProgress();
                 progress.readFields(in);
                 break;
             }

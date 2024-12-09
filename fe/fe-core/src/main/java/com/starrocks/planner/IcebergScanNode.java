@@ -21,6 +21,7 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import com.starrocks.analysis.DescriptorTable;
+import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.SlotDescriptor;
 import com.starrocks.analysis.SlotId;
 import com.starrocks.analysis.TupleDescriptor;
@@ -36,6 +37,7 @@ import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.PartitionUtil;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.connector.iceberg.ExpressionConverter;
 import com.starrocks.connector.iceberg.IcebergApiConverter;
 import com.starrocks.connector.iceberg.IcebergRemoteFileDesc;
 import com.starrocks.credential.CloudConfiguration;
@@ -69,6 +71,9 @@ import org.apache.iceberg.Schema;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.StructLike;
 import org.apache.iceberg.types.Types;
+import org.apache.iceberg.exceptions.ValidationException;
+import org.apache.iceberg.expressions.Binder;
+import org.apache.iceberg.expressions.Expression;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -134,6 +139,24 @@ public class IcebergScanNode extends ScanNode {
 
     public void setHybridScanTable(Table hybridScanTable) {
         this.hybridScanTable = hybridScanTable;
+    }
+
+    public static List<Expression> preProcessConjuncts(org.apache.iceberg.Table table, List<Expr> conjuncts) {
+        List<Expression> expressions = new ArrayList<>(conjuncts.size());
+        ExpressionConverter convertor = new ExpressionConverter();
+        for (Expr expr : conjuncts) {
+            Expression filterExpr = convertor.convert(expr);
+            if (filterExpr != null) {
+                try {
+                    Binder.bind(table.schema().asStruct(), filterExpr, false);
+                    expressions.add(filterExpr);
+                } catch (ValidationException e) {
+                    LOG.debug("binding to the table schema failed, cannot be pushed down expression: {}",
+                            expr.toSql());
+                }
+            }
+        }
+        return expressions;
     }
 
     @Override

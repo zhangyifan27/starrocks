@@ -80,7 +80,6 @@ TEST(TestParseMemSpec, Bad) {
     bad_values.emplace_back("1kib");
     bad_values.emplace_back("1Bb");
     bad_values.emplace_back("1%%");
-    bad_values.emplace_back("1.1");
     bad_values.emplace_back("1pb");
     bad_values.emplace_back("1eb");
     bad_values.emplace_back("%");

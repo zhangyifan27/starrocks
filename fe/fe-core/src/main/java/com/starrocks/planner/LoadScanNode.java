@@ -57,12 +57,16 @@ public abstract class LoadScanNode extends ScanNode {
     }
 
     protected void initWhereExpr(Expr whereExpr, Analyzer analyzer) throws UserException {
+        initWhereExpr(this, whereExpr, analyzer);
+    }
+
+    protected void initWhereExpr(ScanNode scanNode, Expr whereExpr, Analyzer analyzer) throws UserException {
         if (whereExpr == null) {
             return;
         }
 
         Map<String, SlotDescriptor> dstDescMap = Maps.newTreeMap(String.CASE_INSENSITIVE_ORDER);
-        for (SlotDescriptor slotDescriptor : desc.getSlots()) {
+        for (SlotDescriptor slotDescriptor : scanNode.desc.getSlots()) {
             dstDescMap.put(slotDescriptor.getColumn().getName(), slotDescriptor);
         }
 
@@ -82,12 +86,12 @@ public abstract class LoadScanNode extends ScanNode {
             smap.getRhs().add(slotRef);
         }
         whereExpr = whereExpr.clone(smap);
-        whereExpr = Expr.analyzeAndCastFold(whereExpr);
+        whereExpr = scanNode.analyzeAndCastFold(whereExpr);
 
         if (!whereExpr.getType().isBoolean()) {
             throw new UserException("where statement is not a valid statement return bool");
         }
-        addConjuncts(AnalyzerUtils.extractConjuncts(whereExpr));
+        scanNode.addConjuncts(AnalyzerUtils.extractConjuncts(whereExpr));
     }
 
     protected void checkBitmapCompatibility(Analyzer analyzer, SlotDescriptor slotDesc, Expr expr)

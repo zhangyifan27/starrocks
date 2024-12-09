@@ -60,6 +60,7 @@ import com.starrocks.http.rest.MetricsAction;
 import com.starrocks.load.EtlJobType;
 import com.starrocks.load.loadv2.JobState;
 import com.starrocks.load.loadv2.LoadMgr;
+import com.starrocks.load.routineload.IcebergRoutineLoadJob;
 import com.starrocks.load.routineload.KafkaProgress;
 import com.starrocks.load.routineload.KafkaRoutineLoadJob;
 import com.starrocks.load.routineload.RoutineLoadJob;
@@ -1098,7 +1099,7 @@ public final class MetricRepo {
 
         // collect routine load process metrics
         if (Config.enable_routine_load_lag_metrics) {
-            collectRoutineLoadProcessMetrics(visitor);
+            collectKafkaRoutineLoadProcessMetrics(visitor);
         }
 
         collectRoutineLoadIngestMetrics(visitor);
@@ -1109,6 +1110,8 @@ public final class MetricRepo {
         if (Config.memory_tracker_enable) {
             collectMemoryUsageMetrics(visitor);
         }
+
+        collectIcebergRoutineLoadProcessMetrics(visitor);
 
         // collect http metrics
         HttpMetricRegistry.getInstance().visit(visitor);
@@ -1202,7 +1205,7 @@ public final class MetricRepo {
         visitor.visit(databaseNum);
     }
 
-    private static void collectRoutineLoadProcessMetrics(MetricVisitor visitor) {
+    private static void collectKafkaRoutineLoadProcessMetrics(MetricVisitor visitor) {
         for (GaugeMetricImpl<Long> metric : GAUGE_ROUTINE_LOAD_LAGS) {
             visitor.visit(metric);
         }
@@ -1213,6 +1216,24 @@ public final class MetricRepo {
             visitor.visit(metric);
         }
         for (GaugeMetricImpl<Long> metric : GAUGE_OBJECT_COUNT_STATS) {
+            visitor.visit(metric);
+        }
+    }
+
+    private static void collectIcebergRoutineLoadProcessMetrics(MetricVisitor visitor) {
+        List<RoutineLoadJob> jobs = GlobalStateMgr.getCurrentState().getRoutineLoadMgr().getRoutineLoadJobByState(
+                Sets.newHashSet(RoutineLoadJob.JobState.NEED_SCHEDULE, RoutineLoadJob.JobState.RUNNING));
+
+        for (RoutineLoadJob job : jobs) {
+            if (!(job instanceof IcebergRoutineLoadJob)) {
+                continue;
+            }
+            IcebergRoutineLoadJob iJob = (IcebergRoutineLoadJob) job;
+            GaugeMetricImpl<Integer> metric =
+                    new GaugeMetricImpl<>("routine_load_iceberg_pending_and_running_tasks", MetricUnit.NOUNIT,
+                            "routine load iceberg pending and running tasks");
+            metric.addLabel(new MetricLabel("job_name", iJob.getName()));
+            metric.setValue(iJob.pendingAndRunningTasks());
             visitor.visit(metric);
         }
     }

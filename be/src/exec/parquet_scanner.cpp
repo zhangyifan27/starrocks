@@ -77,17 +77,22 @@ Status ParquetScanner::initialize_src_chunk(ChunkPtr* chunk) {
     SCOPED_RAW_TIMER(&_counter->init_chunk_ns);
     _pool.clear();
     (*chunk) = std::make_shared<Chunk>();
-    size_t column_pos = 0;
     _chunk_filter.clear();
     for (auto i = 0; i < _num_of_columns_from_file; ++i) {
         SlotDescriptor* slot_desc = _src_slot_descriptors[i];
         if (slot_desc == nullptr) {
             continue;
         }
-        auto* array = _batch->column(column_pos++).get();
         ColumnPtr column;
-        RETURN_IF_ERROR(new_column(array->type().get(), slot_desc, &column, _conv_funcs[i].get(), &_cast_exprs[i],
-                                   _pool, _strict_mode));
+        auto* array = _batch->GetColumnByName(slot_desc->col_name()).get();
+        if (array != nullptr) {
+            RETURN_IF_ERROR(new_column(array->type().get(), slot_desc, &column, _conv_funcs[i].get(), &_cast_exprs[i],
+                                       _pool, _strict_mode));
+        } else {
+            // There's no such name field in file, so we don't need any cast.
+            _cast_exprs[i] = _pool.add(new ColumnRef(slot_desc));
+            column = ColumnHelper::create_column(slot_desc->type(), slot_desc->is_nullable());
+        }
         column->reserve(_max_chunk_size);
         (*chunk)->append_column(column, slot_desc->id());
     }
@@ -98,7 +103,6 @@ Status ParquetScanner::append_batch_to_src_chunk(ChunkPtr* chunk) {
     SCOPED_RAW_TIMER(&_counter->fill_ns);
     size_t num_elements =
             std::min<size_t>((_max_chunk_size - _chunk_start_idx), (_batch->num_rows() - _batch_start_idx));
-    size_t column_pos = 0;
     _chunk_filter.resize(_chunk_filter.size() + num_elements, 1);
     for (auto i = 0; i < _num_of_columns_from_file; ++i) {
         SlotDescriptor* slot_desc = _src_slot_descriptors[i];
@@ -106,8 +110,21 @@ Status ParquetScanner::append_batch_to_src_chunk(ChunkPtr* chunk) {
             continue;
         }
         _conv_ctx.current_slot = slot_desc;
-        auto* array = _batch->column(column_pos++).get();
+        auto* array = _batch->GetColumnByName(slot_desc->col_name()).get();
         auto& column = (*chunk)->get_column_by_slot_id(slot_desc->id());
+
+        // The column name is not found in the parquet file
+        if (array == nullptr) {
+            // append null.
+            column->append_default(num_elements);
+            if (_strict_mode) {
+                // filter all.
+                filter_all(num_elements, &_chunk_filter, _chunk_start_idx);
+                _conv_ctx.report_error_message(
+                        strings::Substitute("column '$0' is not found in file", slot_desc->col_name()), "");
+            }
+            continue;
+        }
         RETURN_IF_ERROR(convert_array_to_column(_conv_funcs[i].get(), num_elements, array, column, _batch_start_idx,
                                                 _chunk_start_idx, &_chunk_filter, &_conv_ctx));
     }
@@ -435,6 +452,11 @@ Status ParquetScanner::next_batch() {
                     _state->update_num_bytes_scan_from_source(incr_bytes);
                 }
             }
+            // If there is an error reading the file, add it to the error log and generate
+            // an error URL to allow the frontend to quickly perceive the cause of the problem.
+            if (!status.ok() && !status.is_end_of_file() && !_state->has_reached_max_error_msg_num()) {
+                _state->append_error_msg_to_file("", status.to_string());
+            }
             return status;
         }
     }
@@ -460,6 +482,7 @@ Status ParquetScanner::open_next_reader() {
         auto parquet_file = std::make_shared<ParquetChunkFile>(file, 0, _counter);
         auto parquet_reader = std::make_shared<ParquetReaderWrap>(std::move(parquet_file), _num_of_columns_from_file,
                                                                   range_desc.start_offset, range_desc.size);
+        if (_scan_range.params.flexible_column_mapping) parquet_reader->enable_flexible_column_mapping();
         _next_file++;
         int64_t file_size;
         RETURN_IF_ERROR(parquet_reader->size(&file_size));

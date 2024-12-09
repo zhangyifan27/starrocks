@@ -202,7 +202,7 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
 
         long checkTaskReadyStartTime = System.currentTimeMillis();
         try {
-            // for kafka/pulsar routine load, readyToExecute means there is new data in kafka/pulsar stream
+            // for kafka/pulsar/iceberg routine load, readyToExecute means there is new data in kafka/pulsar/iceberg stream
             if (!routineLoadTaskInfo.readyToExecute()) {
                 String msg = String.format("there is no new data in %s, wait for %d seconds to schedule again",
                         routineLoadTaskInfo.dataSourceType(), routineLoadTaskInfo.getTaskScheduleIntervalMs() / 1000);
@@ -316,6 +316,8 @@ public class RoutineLoadTaskScheduler extends FrontendDaemon {
                 LOG.debug("send pulsar routine load task {} with partitions: {}, job: {}",
                         tRoutineLoadTask.label, tRoutineLoadTask.pulsar_load_info.initial_positions.keySet(),
                         tRoutineLoadTask.getJob_id());
+            } else if (tRoutineLoadTask.isSetIceberg_load_info()) {
+                LOG.debug("send iceberg routine load task {}", tRoutineLoadTask.getJob_id());
             }
         } catch (LoadException e) {
             // submit task failed (such as TOO_MANY_TASKS error), but txn has already begun.

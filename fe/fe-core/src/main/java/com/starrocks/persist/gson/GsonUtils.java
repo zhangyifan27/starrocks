@@ -141,6 +141,8 @@ import com.starrocks.load.loadv2.ManualLoadTxnCommitAttachment;
 import com.starrocks.load.loadv2.MiniLoadTxnCommitAttachment;
 import com.starrocks.load.loadv2.SparkLoadJob;
 import com.starrocks.load.loadv2.SparkLoadJob.SparkLoadJobStateUpdateInfo;
+import com.starrocks.load.routineload.IcebergProgress;
+import com.starrocks.load.routineload.IcebergRoutineLoadJob;
 import com.starrocks.load.routineload.KafkaProgress;
 import com.starrocks.load.routineload.KafkaRoutineLoadJob;
 import com.starrocks.load.routineload.PulsarProgress;
@@ -372,12 +374,14 @@ public class GsonUtils {
     public static final RuntimeTypeAdapterFactory<RoutineLoadProgress> ROUTINE_LOAD_PROGRESS_TYPE_RUNTIME_ADAPTER_FACTORY =
             RuntimeTypeAdapterFactory.of(RoutineLoadProgress.class, "clazz")
                     .registerSubtype(KafkaProgress.class, "KafkaProgress")
-                    .registerSubtype(PulsarProgress.class, "PulsarProgress");
+                    .registerSubtype(PulsarProgress.class, "PulsarProgress")
+                    .registerSubtype(IcebergProgress.class, "IcebergProgress");
 
     public static final RuntimeTypeAdapterFactory<RoutineLoadJob> ROUTINE_LOAD_JOB_TYPE_RUNTIME_ADAPTER_FACTORY =
             RuntimeTypeAdapterFactory.of(RoutineLoadJob.class, "clazz")
                     .registerSubtype(KafkaRoutineLoadJob.class, "KafkaRoutineLoadJob")
-                    .registerSubtype(PulsarRoutineLoadJob.class, "PulsarRoutineLoadJob");
+                    .registerSubtype(PulsarRoutineLoadJob.class, "PulsarRoutineLoadJob")
+                    .registerSubtype(IcebergRoutineLoadJob.class, "IcebergRoutineLoadJob");
 
     public static final RuntimeTypeAdapterFactory<AbstractJob> ABSTRACT_JOB_TYPE_RUNTIME_ADAPTER_FACTORY =
             RuntimeTypeAdapterFactory.of(AbstractJob.class, "clazz")

@@ -1352,6 +1352,17 @@ PARALLEL_TEST(ArrowConverterTest, test_map_to_json) {
     }
 }
 
+PARALLEL_TEST(ArrowConverterTest, test_filter_all) {
+    Filter filter;
+    filter.resize(32, 1);
+
+    filter_all(32, &filter, 0);
+
+    for (int i = 0; i < 32; i++) {
+        EXPECT_EQ(filter[i], 0);
+    }
+}
+
 static std::shared_ptr<arrow::Array> create_list_array(int64_t num_elements, ssize_t& counter, bool add_null = false) {
     auto value_builder = std::make_shared<arrow::Int32Builder>();
     int fix_size = 10;

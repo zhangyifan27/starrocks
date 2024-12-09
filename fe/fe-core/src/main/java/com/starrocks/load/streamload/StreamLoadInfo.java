@@ -76,6 +76,7 @@ public class StreamLoadInfo {
     private boolean strictMode = false; // default is false
     private boolean ignoreTailColumns = false; // default is false
     private boolean skipUtf8Check = false; // default is false
+    private boolean flexibleColumnMapping = false; // default is false
     private String timezone = TimeUtils.DEFAULT_TIME_ZONE;
     private int timeout = Config.stream_load_default_timeout_second;
     private long execMemLimit = 0;
@@ -146,6 +147,10 @@ public class StreamLoadInfo {
         return whereExpr;
     }
 
+    public void setWhereExpr(Expr whereExpr) {
+        this.whereExpr = whereExpr;
+    }
+
     public String getMergeConditionStr() {
         return mergeConditionStr;
     }
@@ -204,6 +209,10 @@ public class StreamLoadInfo {
 
     public boolean isSkipUtf8Check() {
         return skipUtf8Check;
+    }
+
+    public boolean isFlexibleColumnMapping() {
+        return flexibleColumnMapping;
     }
 
     public String getTimezone() {
@@ -501,6 +510,10 @@ public class StreamLoadInfo {
         return streamLoadInfo;
     }
 
+    public void setTimeout(int timeout) {
+        this.timeout = timeout;
+    }
+
     private void setOptionalFromRoutineLoadJob(RoutineLoadJob routineLoadJob) throws UserException {
         // copy the columnExprDescs, cause it may be changed when planning.
         // so we keep the columnExprDescs in routine load job as origin.
@@ -515,6 +528,7 @@ public class StreamLoadInfo {
         strictMode = routineLoadJob.isStrictMode();
         ignoreTailColumns = routineLoadJob.isIgnoreTailColumns();
         skipUtf8Check = routineLoadJob.isSkipUtf8Check();
+        flexibleColumnMapping = routineLoadJob.isFlexibleColumnMapping();
         timezone = routineLoadJob.getTimezone();
         timeout = (int) routineLoadJob.getTaskTimeoutSecond();
         if (!routineLoadJob.getJsonPaths().isEmpty()) {

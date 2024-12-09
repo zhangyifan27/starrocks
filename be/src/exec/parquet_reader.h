@@ -74,6 +74,9 @@ public:
     int64_t num_rows() { return _num_rows; }
 
     Status get_schema(std::vector<SlotDescriptor>* schema);
+    // When enable_flexible_column_mapping is on, the file columns and table columns
+    // do not need to correspond strictly one-to-one
+    void enable_flexible_column_mapping() { _enable_flexible_column_mapping = true; }
 
 private:
     Status column_indices(const std::vector<SlotDescriptor*>& tuple_slot_descs);
@@ -107,6 +110,7 @@ private:
     int64_t _read_size;
 
     std::string _filename;
+    bool _enable_flexible_column_mapping = false;
 };
 
 // Reader of broker parquet file

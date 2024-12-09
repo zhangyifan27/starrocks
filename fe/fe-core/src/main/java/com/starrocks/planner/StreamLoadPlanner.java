@@ -95,12 +95,12 @@ public class StreamLoadPlanner {
     // destination Db and table get from request
     // Data will load to this table
     private Database db;
-    private OlapTable destTable;
-    private StreamLoadInfo streamLoadInfo;
+    protected OlapTable destTable;
+    protected StreamLoadInfo streamLoadInfo;
 
     private TExecPlanFragmentParams execPlanFragmentParams;
 
-    private Analyzer analyzer;
+    protected Analyzer analyzer;
     private DescriptorTable descTable;
 
     // just for using session variable
@@ -188,12 +188,7 @@ public class StreamLoadPlanner {
         }
 
         // create scan node
-        StreamLoadScanNode scanNode =
-                new StreamLoadScanNode(loadId, new PlanNodeId(0), tupleDesc, destTable, streamLoadInfo);
-        scanNode.setUseVectorizedLoad(true);
-        scanNode.init(analyzer);
-        scanNode.finalizeStats(analyzer);
-        scanNode.setWarehouseId(streamLoadInfo.getWarehouseId());
+        StreamLoadScanNode scanNode = createScanNode(loadId, tupleDesc);
 
         descTable.computeMemLayout();
 
@@ -339,6 +334,17 @@ public class StreamLoadPlanner {
         }
 
         return partitionIds;
+    }
+
+    protected StreamLoadScanNode createScanNode(TUniqueId loadId, TupleDescriptor tupleDesc)
+            throws UserException {
+        StreamLoadScanNode scanNode =
+                new StreamLoadScanNode(loadId, new PlanNodeId(0), tupleDesc, destTable, streamLoadInfo);
+        scanNode.setUseVectorizedLoad(true);
+        scanNode.init(analyzer);
+        scanNode.finalizeStats(analyzer);
+        scanNode.setWarehouseId(streamLoadInfo.getWarehouseId());
+        return scanNode;
     }
 
     public TExecPlanFragmentParams getExecPlanFragmentParams() {

@@ -1085,6 +1085,7 @@ createRoutineLoadStatement
         jobProperties?
         FROM source=identifier
         dataSourceProperties?
+        broker=brokerDesc?
     ;
 
 alterRoutineLoadStatement

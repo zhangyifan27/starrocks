@@ -93,7 +93,7 @@ import static com.starrocks.catalog.DefaultExpr.SUPPORTED_DEFAULT_FNS;
 public class StreamLoadScanNode extends LoadScanNode {
     private static final Logger LOG = LogManager.getLogger(StreamLoadScanNode.class);
 
-    private TUniqueId loadId;
+    protected TUniqueId loadId;
     // TODO(zc): now we use scanRange
     // input parameter
     private Table dstTable;
@@ -125,12 +125,12 @@ public class StreamLoadScanNode extends LoadScanNode {
     private long txnId;
     private int curChannelId;
 
-    private static class ParamCreateContext {
+    protected static class ParamCreateContext {
         public TBrokerScanRangeParams params;
         public TupleDescriptor tupleDescriptor;
     }
 
-    private ParamCreateContext paramCreateContext;
+    protected ParamCreateContext paramCreateContext;
     private boolean nullExprInAutoIncrement;
 
 
@@ -235,6 +235,7 @@ public class StreamLoadScanNode extends LoadScanNode {
         }
         params.setIgnore_tail_columns(streamLoadInfo.isIgnoreTailColumns());
         params.setSkip_utf8_check(streamLoadInfo.isSkipUtf8Check());
+        params.setFlexible_column_mapping(streamLoadInfo.isFlexibleColumnMapping());
         initColumns();
         initWhereExpr(streamLoadInfo.getWhereExpr(), analyzer);
     }
@@ -355,51 +356,55 @@ public class StreamLoadScanNode extends LoadScanNode {
         createScanRange();
     }
 
+    protected void addToBrokerScanRange(TBrokerScanRange brokerScanRange) throws UserException {
+        TBrokerRangeDesc rangeDesc = new TBrokerRangeDesc();
+        rangeDesc.setFile_type(streamLoadInfo.getFileType());
+        rangeDesc.setFormat_type(streamLoadInfo.getFormatType());
+        if (rangeDesc.format_type == TFileFormatType.FORMAT_JSON) {
+            if (!streamLoadInfo.getJsonPaths().isEmpty()) {
+                rangeDesc.setJsonpaths(streamLoadInfo.getJsonPaths());
+            }
+            if (!streamLoadInfo.getJsonRoot().isEmpty()) {
+                rangeDesc.setJson_root(streamLoadInfo.getJsonRoot());
+            }
+            rangeDesc.setStrip_outer_array(streamLoadInfo.isStripOuterArray());
+        }
+        if (rangeDesc.format_type == TFileFormatType.FORMAT_AVRO) {
+            if (!streamLoadInfo.getJsonPaths().isEmpty()) {
+                rangeDesc.setJsonpaths(streamLoadInfo.getJsonPaths());
+            }
+        }
+        rangeDesc.setSplittable(false);
+        switch (streamLoadInfo.getFileType()) {
+            case FILE_LOCAL:
+                rangeDesc.setPath(streamLoadInfo.getPath());
+                break;
+            case FILE_STREAM:
+                rangeDesc.setPath("Invalid Path");
+                if (needAssignBE) {
+                    UUID uuid = UUID.randomUUID();
+                    rangeDesc.setLoad_id(new TUniqueId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits()));
+                } else {
+                    rangeDesc.setLoad_id(loadId);
+                }
+                break;
+            default:
+                throw new UserException("unsupported file type, type=" + streamLoadInfo.getFileType());
+        }
+        rangeDesc.setStart_offset(0);
+        rangeDesc.setSize(-1);
+        rangeDesc.setNum_of_columns_from_file(paramCreateContext.tupleDescriptor.getSlots().size());
+        rangeDesc.setCompression_type(streamLoadInfo.getPayloadCompressionType());
+        brokerScanRange.addToRanges(rangeDesc);
+        brokerScanRange.setBroker_addresses(Lists.newArrayList());
+    }
+
     private void createScanRange() throws UserException {
         for (int i = 0; i < this.numInstances; i++) {
             TBrokerScanRange brokerScanRange = new TBrokerScanRange();
             brokerScanRange.setParams(paramCreateContext.params);
 
-            TBrokerRangeDesc rangeDesc = new TBrokerRangeDesc();
-            rangeDesc.setFile_type(streamLoadInfo.getFileType());
-            rangeDesc.setFormat_type(streamLoadInfo.getFormatType());
-            if (rangeDesc.format_type == TFileFormatType.FORMAT_JSON) {
-                if (!streamLoadInfo.getJsonPaths().isEmpty()) {
-                    rangeDesc.setJsonpaths(streamLoadInfo.getJsonPaths());
-                }
-                if (!streamLoadInfo.getJsonRoot().isEmpty()) {
-                    rangeDesc.setJson_root(streamLoadInfo.getJsonRoot());
-                }
-                rangeDesc.setStrip_outer_array(streamLoadInfo.isStripOuterArray());
-            }
-            if (rangeDesc.format_type == TFileFormatType.FORMAT_AVRO) {
-                if (!streamLoadInfo.getJsonPaths().isEmpty()) {
-                    rangeDesc.setJsonpaths(streamLoadInfo.getJsonPaths());
-                }
-            }
-            rangeDesc.setSplittable(false);
-            switch (streamLoadInfo.getFileType()) {
-                case FILE_LOCAL:
-                    rangeDesc.setPath(streamLoadInfo.getPath());
-                    break;
-                case FILE_STREAM:
-                    rangeDesc.setPath("Invalid Path");
-                    if (needAssignBE) {
-                        UUID uuid = UUID.randomUUID();
-                        rangeDesc.setLoad_id(new TUniqueId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits()));
-                    } else {
-                        rangeDesc.setLoad_id(loadId);
-                    }
-                    break;
-                default:
-                    throw new UserException("unsupported file type, type=" + streamLoadInfo.getFileType());
-            }
-            rangeDesc.setStart_offset(0);
-            rangeDesc.setSize(-1);
-            rangeDesc.setNum_of_columns_from_file(paramCreateContext.tupleDescriptor.getSlots().size());
-            rangeDesc.setCompression_type(streamLoadInfo.getPayloadCompressionType());
-            brokerScanRange.addToRanges(rangeDesc);
-            brokerScanRange.setBroker_addresses(Lists.newArrayList());
+            addToBrokerScanRange(brokerScanRange);
             if (needAssignBE) {
                 brokerScanRange.setChannel_id(curChannelId++);
             }

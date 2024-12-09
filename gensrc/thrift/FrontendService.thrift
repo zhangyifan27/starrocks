@@ -986,6 +986,21 @@ struct TRLTaskStatistics {
     6: optional map<string, i64> consumeLags
 }
 
+struct TIcebergRLTaskProgressSplit {
+    1: required i64 start_snapshot_id;
+    2: required i64 end_snapshot_id;
+    3: required i64 end_snapshot_timestamp;
+    4: required i32 total_splits;
+    5: required i64 offset;
+    6: required i64 length;
+    7: required i64 fileSize;
+    8: required string path;
+}
+
+struct TIcebergRLTaskProgress {
+    1: required list<TIcebergRLTaskProgressSplit> splits
+}
+
 struct TRLTaskTxnCommitAttachment {
     1: required Types.TLoadSourceType loadSourceType
     2: required Types.TUniqueId id
@@ -1000,6 +1015,7 @@ struct TRLTaskTxnCommitAttachment {
     11: optional string errorLogUrl
     12: optional TPulsarRLTaskProgress pulsarRLTaskProgress
     14: optional TRLTaskStatistics statistics
+    13: optional TIcebergRLTaskProgress icebergRLTaskProgress
 }
 
 struct TMiniLoadTxnCommitAttachment {

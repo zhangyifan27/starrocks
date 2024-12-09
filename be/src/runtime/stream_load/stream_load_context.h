@@ -140,7 +140,7 @@ class RoutineLoadTaskStatistics {
 public:
     explicit RoutineLoadTaskStatistics() {}
     explicit RoutineLoadTaskStatistics(int64_t consume_time, int64_t blocking_get_time, int64_t blocking_put_time,
-                                    int64_t received_rows, int64_t received_bytes)
+                                       int64_t received_rows, int64_t received_bytes)
             : _consume_time(consume_time),
               _blocking_get_time(blocking_get_time),
               _blocking_put_time(blocking_put_time),
@@ -156,25 +156,15 @@ public:
               _received_bytes(received_bytes),
               _consume_lags(consume_lags) {}
 
-    int64_t get_consume_time() {
-        return _consume_time;
-    }
+    int64_t get_consume_time() { return _consume_time; }
 
-    int64_t get_blocking_get_time() {
-        return _blocking_get_time;
-    }
+    int64_t get_blocking_get_time() { return _blocking_get_time; }
 
-    int64_t get_blocking_put_time() {
-        return _blocking_put_time;
-    }
+    int64_t get_blocking_put_time() { return _blocking_put_time; }
 
-    int64_t get_received_rows() {
-        return _received_rows;
-    }
+    int64_t get_received_rows() { return _received_rows; }
 
-    int64_t get_received_bytes() {
-        return _received_bytes;
-    }
+    int64_t get_received_bytes() { return _received_bytes; }
 
     std::map<std::string, int64_t> get_consume_lags() { return _consume_lags; }
 
@@ -185,6 +175,17 @@ private:
     int64_t _received_rows;
     int64_t _received_bytes;
     std::map<std::string, int64_t> _consume_lags;
+};
+
+// iceberg related info
+class IcebergLoadInfo {
+public:
+    explicit IcebergLoadInfo(const TIcebergLoadInfo& t_info)
+            : splits(t_info.splits) {
+    }
+
+public:
+    std::vector<TIcebergSplit> splits;
 };
 
 class MessageBodySink;
@@ -307,6 +308,7 @@ public:
     std::unique_ptr<KafkaLoadInfo> kafka_info;
     std::unique_ptr<PulsarLoadInfo> pulsar_info;
     RoutineLoadTaskStatistics rltask_statistics;
+    std::unique_ptr<IcebergLoadInfo> iceberg_info;
 
     std::vector<TTabletCommitInfo> commit_infos;
     std::vector<TTabletFailInfo> fail_infos;

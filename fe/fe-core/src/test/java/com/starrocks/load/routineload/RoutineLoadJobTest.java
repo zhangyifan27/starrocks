@@ -508,6 +508,7 @@ public class RoutineLoadJobTest {
         String jsonRoot = "$.RECORDS";
         String taskTimeout = "20";
         String taskConsumeTime = "3";
+        String flexibleColumnMapping = "true";
         String originStmt = "alter routine load for db.job1 " +
                 "properties (" +
                 "   \"desired_concurrent_number\" = \"" + desiredConcurrentNumber + "\"," +
@@ -521,7 +522,8 @@ public class RoutineLoadJobTest {
                 "   \"timezone\" = \"" + timeZone + "\"," +
                 "   \"jsonpaths\" = \"" + jsonPaths + "\"," +
                 "   \"strip_outer_array\" = \"" + stripOuterArray + "\"," +
-                "   \"json_root\" = \"" + jsonRoot + "\"" +
+                "   \"json_root\" = \"" + jsonRoot + "\"," +
+                "   \"flexible_column_mapping\" = \"" + flexibleColumnMapping + "\"" +
                 ")";
         AlterRoutineLoadStmt stmt = (AlterRoutineLoadStmt) UtFrameUtils.parseStmtWithNewParser(originStmt, connectContext);
         for (String key : stmt.getAnalyzedJobProperties().keySet()) {
@@ -549,6 +551,7 @@ public class RoutineLoadJobTest {
         Assert.assertEquals(jsonPaths.replace("\\", ""), routineLoadJob.getJsonPaths());
         Assert.assertEquals(Boolean.parseBoolean(stripOuterArray), routineLoadJob.isStripOuterArray());
         Assert.assertEquals(jsonRoot, routineLoadJob.getJsonRoot());
+        Assert.assertEquals(Boolean.parseBoolean(flexibleColumnMapping), routineLoadJob.isFlexibleColumnMapping());
     }
 
     @Test

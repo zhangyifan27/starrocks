@@ -63,6 +63,7 @@ public class AlterRoutineLoadStmt extends DdlStmt {
             .add(LoadStmt.TASK_NUM_EXCEED_BE_NUM)
             .add(LoadStmt.TIMEZONE)
             .add(SessionVariable.EXEC_MEM_LIMIT)
+            .add(LoadStmt.FLEXIBLE_COLUMN_MAPPING)
             .build();
 
     private LabelName labelName;
@@ -304,6 +305,11 @@ public class AlterRoutineLoadStmt extends DdlStmt {
 
         if (jobProperties.containsKey(SessionVariable.EXEC_MEM_LIMIT)) {
             analyzedJobProperties.put(SessionVariable.EXEC_MEM_LIMIT, jobProperties.get(SessionVariable.EXEC_MEM_LIMIT));
+        }
+
+        if (jobProperties.containsKey(LoadStmt.FLEXIBLE_COLUMN_MAPPING)) {
+            boolean flexibleColumnMapping = Boolean.valueOf(jobProperties.get(LoadStmt.FLEXIBLE_COLUMN_MAPPING));
+            analyzedJobProperties.put(LoadStmt.FLEXIBLE_COLUMN_MAPPING, String.valueOf(flexibleColumnMapping));
         }
     }
 

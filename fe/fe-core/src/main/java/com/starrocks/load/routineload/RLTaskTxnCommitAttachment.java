@@ -95,6 +95,9 @@ public class RLTaskTxnCommitAttachment extends TxnCommitAttachment {
                 this.progress = new PulsarProgress(rlTaskTxnCommitAttachment.getPulsarRLTaskProgress());
                 this.timestampProgress = new PulsarProgress();
                 break;
+            case ICEBERG:
+                this.progress = new IcebergProgress(rlTaskTxnCommitAttachment.getIcebergRLTaskProgress());
+                break;
             default:
                 break;
         }
