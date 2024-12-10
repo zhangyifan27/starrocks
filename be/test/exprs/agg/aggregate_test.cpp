@@ -1311,6 +1311,128 @@ TEST_F(AggregateTest, test_bitmap_nullable) {
     ASSERT_EQ(50, result_data.get_data()[0]);
 }
 
+TEST_F(AggregateTest, test_group_array) {
+    std::vector<FunctionContext::TypeDesc> arg_types = {
+            AnyValUtil::column_type_to_type_desc(TypeDescriptor::from_logical_type(TYPE_VARCHAR)),
+            AnyValUtil::column_type_to_type_desc(TypeDescriptor::from_logical_type(TYPE_INT))};
+
+    auto return_type = AnyValUtil::column_type_to_type_desc(TypeDescriptor::from_logical_type(TYPE_ARRAY));
+    std::unique_ptr<FunctionContext> local_ctx(FunctionContext::create_test_context(std::move(arg_types), return_type));
+    MemPool* mem_pool = new MemPool();
+    local_ctx->_mem_pool = mem_pool;
+
+    const AggregateFunction* group_array_function =
+            get_aggregate_function("group_array", TYPE_VARCHAR, TYPE_ARRAY, false);
+    auto state = ManagedAggrState::create(ctx, group_array_function);
+
+    auto data_column = BinaryColumn::create();
+
+    data_column->append("abc");
+    data_column->append("bcd");
+    data_column->append("cde");
+    data_column->append("def");
+
+    auto limit_size_column = ColumnHelper::create_const_column<TYPE_INT>(0, 1);
+
+    std::vector<const Column*> raw_columns;
+    raw_columns.resize(2);
+    raw_columns[0] = data_column.get();
+    raw_columns[1] = limit_size_column.get();
+
+    Columns const_columns;
+    const_columns.emplace_back(data_column);
+    const_columns.emplace_back(limit_size_column);
+    local_ctx->set_constant_columns(const_columns);
+
+    for (int i = 0; i < data_column->size(); ++i) {
+        group_array_function->update(local_ctx.get(), raw_columns.data(), state->state(), i);
+    }
+    group_array_function->process_null(local_ctx.get(), state->state());
+
+    auto nullable_column = NullableColumn::create(BinaryColumn::create(), NullColumn::create());
+    auto result_column = ArrayColumn::create(nullable_column, UInt32Column::create());
+    group_array_function->finalize_to_column(local_ctx.get(), state->state(), result_column.get());
+    delete mem_pool;
+    ASSERT_EQ("[['abc','bcd','cde','def',NULL]]", result_column->debug_string());
+}
+
+TEST_F(AggregateTest, test_group_array_with_convert_to_serialize_format) {
+    std::vector<FunctionContext::TypeDesc> arg_types = {
+            AnyValUtil::column_type_to_type_desc(TypeDescriptor::from_logical_type(TYPE_VARCHAR)),
+            AnyValUtil::column_type_to_type_desc(TypeDescriptor::from_logical_type(TYPE_INT))};
+
+    auto return_type = AnyValUtil::column_type_to_type_desc(TypeDescriptor::from_logical_type(TYPE_ARRAY));
+    std::unique_ptr<FunctionContext> local_ctx(FunctionContext::create_test_context(std::move(arg_types), return_type));
+    MemPool* mem_pool = new MemPool();
+    local_ctx->_mem_pool = mem_pool;
+
+    const AggregateFunction* group_array_function =
+            get_aggregate_function("group_array", TYPE_VARCHAR, TYPE_ARRAY, false);
+    auto state = ManagedAggrState::create(ctx, group_array_function);
+
+    auto data_column = BinaryColumn::create();
+    data_column->append("abc");
+
+    auto limit_size_column = ColumnHelper::create_const_column<TYPE_INT>(0, 1);
+
+    std::vector<const Column*> raw_columns;
+    raw_columns.resize(2);
+    raw_columns[0] = data_column.get();
+    raw_columns[1] = limit_size_column.get();
+
+    Columns const_columns;
+    const_columns.emplace_back(data_column);
+    const_columns.emplace_back(limit_size_column);
+    local_ctx->set_constant_columns(const_columns);
+
+    for (int i = 0; i < data_column->size(); ++i) {
+        group_array_function->update(local_ctx.get(), raw_columns.data(), state->state(), i);
+    }
+
+    auto varchar_column = BinaryColumn::create();
+    std::vector<Slice> strings{{"aaa"}, {""}};
+    varchar_column->append_strings(strings);
+    Columns columns1;
+    columns1.emplace_back(varchar_column);
+
+    // case 1
+    ColumnPtr serde_column1 = BinaryColumn::create();
+    group_array_function->convert_to_serialize_format(local_ctx.get(), columns1, 2, &serde_column1);
+    group_array_function->merge(local_ctx.get(), serde_column1.get(), state->state(), 0);
+    group_array_function->merge(local_ctx.get(), serde_column1.get(), state->state(), 1);
+    
+    auto nullable_column1 = NullableColumn::create(BinaryColumn::create(), NullColumn::create());
+    auto result_column1 = ArrayColumn::create(nullable_column1, UInt32Column::create());
+    group_array_function->finalize_to_column(local_ctx.get(), state->state(), result_column1.get());
+
+    ASSERT_EQ("[['abc','aaa','']]", result_column1->debug_string());
+
+    // case 2
+    varchar_column->append_strings(strings);
+    auto null_column = NullColumn::create();
+    null_column->append(false);
+    null_column->append(false);
+    null_column->append(true);
+    null_column->append(true);
+    auto serialize_nullable_column = NullableColumn::create(varchar_column, null_column);
+    Columns columns2;
+    columns2.emplace_back(serialize_nullable_column);
+    ColumnPtr serde_column2 = BinaryColumn::create();
+    
+    group_array_function->convert_to_serialize_format(local_ctx.get(), columns2, 4, &serde_column2);
+    group_array_function->merge(local_ctx.get(), serde_column2.get(), state->state(), 0);
+    group_array_function->merge(local_ctx.get(), serde_column2.get(), state->state(), 1);
+    group_array_function->merge(local_ctx.get(), serde_column2.get(), state->state(), 2);
+    group_array_function->merge(local_ctx.get(), serde_column2.get(), state->state(), 3);
+
+    auto nullable_column2 = NullableColumn::create(BinaryColumn::create(), NullColumn::create());
+    auto result_column2 = ArrayColumn::create(nullable_column2, UInt32Column::create());
+    group_array_function->finalize_to_column(local_ctx.get(), state->state(), result_column2.get());
+    delete mem_pool;
+    ASSERT_EQ("[['abc','aaa','','aaa','',NULL,NULL]]", result_column2->debug_string());
+}
+
+
 TEST_F(AggregateTest, test_group_concat) {
     const AggregateFunction* group_concat_function =
             get_aggregate_function("group_concat", TYPE_VARCHAR, TYPE_VARCHAR, false);

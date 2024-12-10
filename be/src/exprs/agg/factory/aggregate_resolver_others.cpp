@@ -17,6 +17,7 @@
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/factory/aggregate_resolver.hpp"
 #include "exprs/agg/group_concat.h"
+#include "exprs/agg/group_array.h"
 #include "exprs/agg/percentile_cont.h"
 #include "types/logical_type.h"
 #include "util/percentile_value.h"
@@ -57,6 +58,33 @@ void AggregateFuncResolver::register_others() {
             "group_concat", false, AggregateFactory::MakeGroupConcatAggregateFunction<TYPE_CHAR>());
     add_aggregate_mapping_variadic<TYPE_VARCHAR, TYPE_VARCHAR, GroupConcatAggregateState>(
             "group_concat", false, AggregateFactory::MakeGroupConcatAggregateFunction<TYPE_VARCHAR>());
+
+    add_aggregate_mapping<TYPE_BOOLEAN, TYPE_ARRAY, GroupArrayAggregateState<TYPE_BOOLEAN>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_BOOLEAN>());
+    add_aggregate_mapping<TYPE_TINYINT, TYPE_ARRAY, GroupArrayAggregateState<TYPE_TINYINT>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_TINYINT>());
+    add_aggregate_mapping<TYPE_SMALLINT, TYPE_ARRAY, GroupArrayAggregateState<TYPE_SMALLINT>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_SMALLINT>());
+    add_aggregate_mapping<TYPE_INT, TYPE_ARRAY, GroupArrayAggregateState<TYPE_INT>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_INT>());
+    add_aggregate_mapping<TYPE_BIGINT, TYPE_ARRAY, GroupArrayAggregateState<TYPE_BIGINT>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_BIGINT>());
+    add_aggregate_mapping<TYPE_LARGEINT, TYPE_ARRAY, GroupArrayAggregateState<TYPE_LARGEINT>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_LARGEINT>());
+    add_aggregate_mapping<TYPE_FLOAT, TYPE_ARRAY, GroupArrayAggregateState<TYPE_FLOAT>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_FLOAT>());
+    add_aggregate_mapping<TYPE_DOUBLE, TYPE_ARRAY, GroupArrayAggregateState<TYPE_DOUBLE>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_DOUBLE>());
+    add_aggregate_mapping<TYPE_VARCHAR, TYPE_ARRAY, GroupArrayAggregateState<TYPE_VARCHAR>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_VARCHAR>());
+    add_aggregate_mapping<TYPE_CHAR, TYPE_ARRAY, GroupArrayAggregateState<TYPE_CHAR>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_CHAR>());
+    add_aggregate_mapping<TYPE_DECIMAL32, TYPE_ARRAY, GroupArrayAggregateState<TYPE_DECIMAL32>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_DECIMAL32>());
+    add_aggregate_mapping<TYPE_DATETIME, TYPE_ARRAY, GroupArrayAggregateState<TYPE_DATETIME>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_DATETIME>());
+    add_aggregate_mapping<TYPE_DATE, TYPE_ARRAY, GroupArrayAggregateState<TYPE_DATE>, AggregateFunctionPtr, false>(
+        "group_array", false, AggregateFactory::MakeGroupArrayAggregateFunction<TYPE_DATE>());
 
     add_array_mapping<TYPE_ARRAY, TYPE_VARCHAR>("dict_merge");
     add_array_mapping<TYPE_ARRAY, TYPE_ARRAY>("retention");

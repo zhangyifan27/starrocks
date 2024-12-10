@@ -36,6 +36,7 @@
 #include "exprs/agg/distinct.h"
 #include "exprs/agg/exchange_perf.h"
 #include "exprs/agg/group_concat.h"
+#include "exprs/agg/group_array.h"
 #include "exprs/agg/histogram.h"
 #include "exprs/agg/hll_ndv.h"
 #include "exprs/agg/hll_union.h"
@@ -87,6 +88,9 @@ public:
     static AggregateFunctionPtr MakeBitmapIntersectAggregateFunction();
 
     static AggregateFunctionPtr MakeBitmapUnionCountAggregateFunction();
+
+    template <LogicalType PT>
+    static AggregateFunctionPtr MakeGroupArrayAggregateFunction();
 
     template <LogicalType LT>
     static AggregateFunctionPtr MakeWindowfunnelAggregateFunction();
@@ -291,6 +295,11 @@ AggregateFunctionPtr AggregateFactory::MakeCountDistinctAggregateFunctionV2() {
 template <LogicalType LT>
 AggregateFunctionPtr AggregateFactory::MakeGroupConcatAggregateFunction() {
     return std::make_shared<GroupConcatAggregateFunction<LT>>();
+}
+
+template <LogicalType LT>
+AggregateFunctionPtr AggregateFactory::MakeGroupArrayAggregateFunction() {
+    return std::make_shared<GroupArrayAggregateFunction<LT>>();
 }
 
 template <bool IsWindowFunc>

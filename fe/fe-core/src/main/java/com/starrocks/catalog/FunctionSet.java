@@ -290,6 +290,7 @@ public class FunctionSet {
     public static final String DISTINCT_PCSA = "distinct_pcsa";
     public static final String HISTOGRAM = "histogram";
     public static final String FLAT_JSON_META = "flat_json_meta";
+    public static final String GROUP_ARRAY = "group_array";
 
     // Bitmap functions:
     public static final String BITMAP_AND = "bitmap_and";
@@ -1005,6 +1006,49 @@ public class FunctionSet {
 
         addBuiltin(AggregateFunction.createBuiltin(GROUP_CONCAT,
                 Lists.newArrayList(Type.ANY_ELEMENT), Type.VARCHAR, Type.ANY_STRUCT, true,
+                false, false, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.DATE, Type.INT), Type.ARRAY_DATE, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.DATETIME, Type.INT), Type.ARRAY_DATETIME, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.BOOLEAN, Type.INT), Type.ARRAY_BOOLEAN, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.TINYINT, Type.INT), Type.ARRAY_TINYINT, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.SMALLINT, Type.INT), Type.ARRAY_SMALLINT, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.INT, Type.INT), Type.ARRAY_INT, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.BIGINT, Type.INT), Type.ARRAY_BIGINT, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.LARGEINT, Type.INT), Type.ARRAY_LARGEINT, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.FLOAT, Type.INT), Type.ARRAY_FLOAT, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.DOUBLE, Type.INT), Type.ARRAY_DOUBLE, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.VARCHAR, Type.INT), Type.ARRAY_VARCHAR, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.CHAR, Type.INT), Type.ARRAY_VARCHAR, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.DECIMAL32, Type.INT), Type.ARRAY_DECIMALV2, Type.VARCHAR,
+                false, false, false));
+        addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
+                Lists.newArrayList(Type.TIME, Type.INT), Type.ARRAY_DATETIME, Type.VARCHAR,
                 false, false, false));
 
         for (Type t : Type.getSupportedTypes()) {
