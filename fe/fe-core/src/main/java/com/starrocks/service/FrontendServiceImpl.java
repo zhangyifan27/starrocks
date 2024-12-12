@@ -122,6 +122,8 @@ import com.starrocks.load.streamload.StreamLoadTask;
 import com.starrocks.metric.MetricRepo;
 import com.starrocks.metric.TableMetricsEntity;
 import com.starrocks.metric.TableMetricsRegistry;
+import com.starrocks.mysql.MysqlPassword;
+import com.starrocks.mysql.security.TdwAuthenticate;
 import com.starrocks.persist.AutoIncrementInfo;
 import com.starrocks.planner.OlapTableSink;
 import com.starrocks.planner.StreamLoadPlanner;
@@ -154,6 +156,7 @@ import com.starrocks.sql.ast.PartitionDesc;
 import com.starrocks.sql.ast.RangePartitionDesc;
 import com.starrocks.sql.ast.SetType;
 import com.starrocks.sql.ast.ShowAlterStmt;
+import com.starrocks.sql.ast.TDWUserIdentity;
 import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.sql.common.StarRocksPlannerException;
 import com.starrocks.system.ComputeNode;
@@ -321,6 +324,7 @@ import com.starrocks.transaction.TabletFailInfo;
 import com.starrocks.transaction.TransactionNotFoundException;
 import com.starrocks.transaction.TransactionState;
 import com.starrocks.transaction.TxnCommitAttachment;
+import com.starrocks.utils.TdwUtil;
 import com.starrocks.warehouse.Warehouse;
 import com.starrocks.warehouse.WarehouseInfo;
 import org.apache.commons.lang3.StringUtils;
@@ -1147,11 +1151,26 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     private void checkPasswordAndLoadPriv(String user, String passwd, String db, String tbl,
                                           String clientIp) throws AuthenticationException {
         GlobalStateMgr globalStateMgr = GlobalStateMgr.getCurrentState();
-        UserIdentity currentUser =
-                globalStateMgr.getAuthenticationMgr().checkPlainPassword(user, clientIp, passwd);
-        if (currentUser == null) {
-            throw new AuthenticationException("Access denied for " + user + "@" + clientIp);
+        UserIdentity currentUser = null;
+        try {
+            if (TdwAuthenticate.useTdwAuthenticate(user)) {
+                String tdwUser = TdwUtil.getUserName(user);
+                UserIdentity authUser = TdwAuthenticate.authenticate(globalStateMgr.getAuthenticationMgr(),
+                        tdwUser, MysqlPassword.makeScrambledPassword(passwd), null);
+                if (authUser != null) {
+                    currentUser = new TDWUserIdentity(authUser);
+                }
+            } else {
+                currentUser =
+                        globalStateMgr.getAuthenticationMgr().checkPlainPassword(user, clientIp, passwd);
+            }
+            if (currentUser == null) {
+                throw new AuthenticationException("Access denied for " + user + "@" + clientIp);
+            }
+        } catch (AccessDeniedException e) {
+            throw new AuthenticationException("Access denied for " + user + "@" + clientIp + " with ", e);
         }
+
         // check INSERT action on table
         try {
             Authorizer.checkTableAction(currentUser, null, db, tbl, PrivilegeType.INSERT);
