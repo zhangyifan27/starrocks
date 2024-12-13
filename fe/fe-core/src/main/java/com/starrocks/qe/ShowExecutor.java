@@ -162,6 +162,7 @@ import com.starrocks.sql.ast.DescStorageVolumeStmt;
 import com.starrocks.sql.ast.DescribeStmt;
 import com.starrocks.sql.ast.GrantPrivilegeStmt;
 import com.starrocks.sql.ast.GrantRevokeClause;
+import com.starrocks.sql.ast.GrantRoleStmt;
 import com.starrocks.sql.ast.HelpStmt;
 import com.starrocks.sql.ast.ImportColumnDesc;
 import com.starrocks.sql.ast.PartitionNames;
@@ -1952,6 +1953,14 @@ public class ShowExecutor {
                             authorizationManager.getTypeToPrivilegeEntryListByRole(statement.getRole());
                     infos.addAll(privilegeToRowString(authorizationManager,
                             new GrantRevokeClause(null, statement.getRole()), typeToPrivilegeEntryList));
+
+                    List<String> roleNameList = new ArrayList<>();
+                    roleNameList.add(statement.getRole());
+                    List<UserIdentity> userList = authorizationManager.getUserByRole(statement.getRole());
+                    for (UserIdentity userIdentity : userList) {
+                        infos.add(Lists.newArrayList(statement.getRole(), null,
+                                AstToSQLBuilder.toSQL(new GrantRoleStmt(roleNameList, userIdentity))));
+                    }
                 } else {
                     List<String> granteeRole = authorizationManager.getGranteeRoleDetailsForUser(statement.getUserIdent());
                     if (granteeRole != null) {

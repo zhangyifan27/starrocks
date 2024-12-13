@@ -1470,6 +1470,25 @@ public class AuthorizationMgr {
         return inactivatedRoleNames;
     }
 
+    public List<UserIdentity> getUserByRole(String roleName) throws PrivilegeException {
+        try {
+            userReadLock();
+            List<UserIdentity> userList = Lists.newArrayList();
+            Long roleId = getRoleIdByNameAllowNull(roleName);
+            if (roleId == null) {
+                throw new SemanticException("cannot find role " + roleName);
+            }
+            for (Map.Entry<UserIdentity, UserPrivilegeCollectionV2> userPrivEntry : userToPrivilegeCollection.entrySet()) {
+                if (userPrivEntry.getValue().getAllRoles().contains(roleId)) {
+                    userList.add(userPrivEntry.getKey());
+                }
+            }
+            return userList;
+        } finally {
+            userReadUnlock();
+        }
+    }
+
     // used in executing `set role` statement
     public Long getRoleIdByNameAllowNull(String name) {
         roleReadLock();
