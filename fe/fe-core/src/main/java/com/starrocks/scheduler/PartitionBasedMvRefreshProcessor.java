@@ -72,6 +72,8 @@ import com.starrocks.sql.analyzer.PlannerMetaLocker;
 import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.sql.ast.PartitionNames;
 import com.starrocks.sql.ast.StatementBase;
+import com.starrocks.sql.ast.TDWUserIdentity;
+import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.sql.common.DmlException;
 import com.starrocks.sql.common.ListPartitionDiffer;
 import com.starrocks.sql.common.PListCell;
@@ -608,6 +610,13 @@ public class PartitionBasedMvRefreshProcessor extends BaseTaskRunProcessor {
         }
         // always exclude the current mv name from rewrite
         mvSessionVariable.setQueryExcludingMVNames(materializedView.getName());
+
+        if (!Strings.isNullOrEmpty(Config.tdw_supersql_platform_name)) {
+            UserIdentity currentUserIdentity = mvConnectCtx.getCurrentUserIdentity();
+            String[] tdwTauthPlatformWhiteList = Config.tdw_supersql_platform_name.split(",");
+            TDWUserIdentity tdwUserIdentity = new TDWUserIdentity(currentUserIdentity, tdwTauthPlatformWhiteList[0]);
+            mvConnectCtx.setCurrentUserIdentity(tdwUserIdentity);
+        }
     }
 
     private boolean isMVPropertyContains(String key) {
