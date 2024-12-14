@@ -760,9 +760,18 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob implements GsonPreProc
         locker.lockDatabase(db, LockType.READ);
         try {
             Table table = db.getTable(tableId);
-            if (((OlapTable) table).getKeysType() != KeysType.PRIMARY_KEYS) {
-                throw new DdlException("only primary key table supports iceberg v2 copy-on-write table");
+            if (((OlapTable) table).getKeysType() != KeysType.PRIMARY_KEYS &&
+                    ((OlapTable) table).getKeysType() != KeysType.AGG_KEYS) {
+                throw new DdlException("Primary key tables fully support Iceberg v2 copy-on-write tables," +
+                        " while aggregation tables have partial support.");
             }
+            // TODO: Enhance the Validity Checks for the icebergRoutineLoad Import Method for Aggregation Models
+            // Enhance the Validity Checks for the icebergRoutineLoad Import Method for Aggregation Models, for example:
+            // 1. Allow aggregation columns to be of Bitmap or HLL types.
+            // 2. Allow aggregation functions MAX, MIN, and REPLACE for INT, BIGINT, FLOAT, DOUBLE, and DECIMAL types.
+            // 3. Allow the REPLACE aggregation function for CHAR, VARCHAR, and STRING types.
+            // 4. Allow aggregation functions MAX, MIN, and REPLACE for DATE and DATETIME types.
+            // 5. Ensure that aggregation functions for JSON, ARRAY, MAP, and STRUCT types follow valid aggregation logic.
         } finally {
             locker.unLockDatabase(db, LockType.READ);
         }
