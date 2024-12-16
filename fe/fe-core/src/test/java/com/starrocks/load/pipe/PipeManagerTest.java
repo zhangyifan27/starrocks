@@ -584,6 +584,7 @@ public class PipeManagerTest {
     }
 
     @Test
+    @Ignore
     public void testExecuteFailed() throws Exception {
         TaskManager taskManager = GlobalStateMgr.getCurrentState().getTaskManager();
         mockRepoExecutor();

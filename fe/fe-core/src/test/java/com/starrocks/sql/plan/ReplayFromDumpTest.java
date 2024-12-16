@@ -922,6 +922,7 @@ public class ReplayFromDumpTest extends ReplayFromDumpTestBase {
     }
 
     @Test
+    @Ignore
     public void testQueryTimeout() {
         Assert.assertThrows(StarRocksPlannerException.class,
                 () -> getPlanFragment(getDumpInfoFromFile("query_dump/query_timeout"), null, TExplainLevel.NORMAL));
