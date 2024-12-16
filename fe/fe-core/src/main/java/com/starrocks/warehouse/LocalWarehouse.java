@@ -154,6 +154,58 @@ public class LocalWarehouse extends DefaultWarehouse {
         starOSAgent.deleteWorkerGroup(workerGroupId);
     }
 
+    @Override
+    public List<List<String>> getWarehouseNodesInfo() {
+        List<List<String>> rows = Lists.newArrayList();
+        for (Cluster cluster : getClusters().values()) {
+            List<Long> computeNodes = cluster.getComputeNodeIds();
+            for (Long computeNodeId : computeNodes) {
+                ComputeNode node = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo()
+                        .getComputeNode(computeNodeId);
+
+                List<String> computeNodeInfo = Lists.newArrayList();
+                long warehouseId = node.getWarehouseId();
+                Warehouse warehouse = GlobalStateMgr.getCurrentState().getWarehouseMgr().getWarehouse(warehouseId);
+                computeNodeInfo.add(warehouse.getName());
+
+                computeNodeInfo.add(String.valueOf(cluster.getId()));
+                computeNodeInfo.add(String.valueOf(cluster.getWorkerGroupId()));
+                long nodeId = node.getId();
+                computeNodeInfo.add(String.valueOf(nodeId));
+                if (RunMode.isSharedDataMode()) {
+                    long workerId = GlobalStateMgr.getCurrentState().getStarOSAgent().getWorkerIdByNodeId(nodeId);
+                    computeNodeInfo.add(String.valueOf(workerId));
+                } else {
+                    computeNodeInfo.add("0");
+                }
+
+                computeNodeInfo.add(node.getHost());
+
+                computeNodeInfo.add(String.valueOf(node.getHeartbeatPort()));
+                computeNodeInfo.add(String.valueOf(node.getBePort()));
+                computeNodeInfo.add(String.valueOf(node.getHttpPort()));
+                computeNodeInfo.add(String.valueOf(node.getBrpcPort()));
+                computeNodeInfo.add(String.valueOf(node.getStarletPort()));
+
+                computeNodeInfo.add(TimeUtils.longToTimeString(node.getLastStartTime()));
+                computeNodeInfo.add(TimeUtils.longToTimeString(node.getLastUpdateMs()));
+                computeNodeInfo.add(String.valueOf(node.isAlive()));
+
+                computeNodeInfo.add(node.getHeartbeatErrMsg());
+                computeNodeInfo.add(String.valueOf(node.getVersion()));
+
+                computeNodeInfo.add(String.valueOf(node.getNumRunningQueries()));
+                computeNodeInfo.add(String.valueOf(node.getCpuCores()));
+                double memUsedPct = node.getMemUsedPct();
+                computeNodeInfo.add(String.format("%.2f", memUsedPct * 100) + " %");
+                computeNodeInfo.add(String.format("%.1f", node.getCpuUsedPermille() / 10.0) + " %");
+
+                rows.add(computeNodeInfo);
+            }
+        }
+        return rows;
+    }
+
     private void dropNodeFromSystem() throws DdlException {
         SystemInfoService systemInfoService = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo();
         List<ComputeNode> nodes = systemInfoService.backendAndComputeNodeStream().
