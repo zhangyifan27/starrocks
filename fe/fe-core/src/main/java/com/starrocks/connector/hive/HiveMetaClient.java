@@ -380,6 +380,8 @@ public class HiveMetaClient {
             if (subListNum > 1) {
                 return getPartitionsWithRetry(dbName, tableName, partNames, retryNum + 1);
             } else {
+                LOG.error("Failed to getPartitionsByNames on " + dbName + "." + tableName + " with " +
+                        partNames.size() + " partNames, retryNum = " + retryNum, te);
                 throw new StarRocksConnectorException("Failed to getPartitionsByNames on [%s.%s] with slice size is %d",
                         dbName, tableName, subListNum);
             }
