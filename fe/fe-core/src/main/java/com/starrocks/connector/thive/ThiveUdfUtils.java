@@ -90,7 +90,7 @@ public class ThiveUdfUtils {
         }
         Function fn = ScalarFunction.createUdf(fnName, argTypes,
                 returnType, false, TFunctionBinaryType.SRJAR,
-                Config.thive_udf_wrapper_url, THIVE_UDF_WRAPPER_CLASS, "", "");
+                Config.thive_udf_wrapper_url, THIVE_UDF_WRAPPER_CLASS, "", "", true, true);
         fn.setChecksum(checksum);
         // set thive udf function id is negative to avoid conflicts with the builtin function
         fn.setFunctionId(-functionId);

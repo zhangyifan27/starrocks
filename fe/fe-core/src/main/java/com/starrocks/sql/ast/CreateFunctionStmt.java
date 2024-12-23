@@ -40,6 +40,7 @@ import java.io.IOException;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.lang.reflect.Parameter;
+import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.security.NoSuchAlgorithmException;
@@ -48,6 +49,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static com.starrocks.utils.MD5Utils.computeChecksum;
@@ -74,6 +76,7 @@ public class CreateFunctionStmt extends DdlStmt {
     public static final String IS_ANALYTIC_NAME = "analytic";
     public static final String PROCESS_METHOD_NAME = "process";
     public static final String JAVA_OBJECT_ARRAY_TYPE = "[Ljava.lang.Object;";
+    public static final String ALL_CLASS_LOAD = "allClassLoad";
 
     private final FunctionName functionName;
     private final boolean isAggregate;
@@ -84,6 +87,7 @@ public class CreateFunctionStmt extends DdlStmt {
     private final Map<String, String> properties;
     private boolean isStarrocksJar = false;
     private boolean isAnalyticFn = false;
+    private boolean isAllClassLoad = false;
 
     // needed item set after analyzed
     private String objectFile;
@@ -353,13 +357,19 @@ public class CreateFunctionStmt extends DdlStmt {
 
     private void analyzeUdfClassInStarrocksJar() throws AnalysisException {
         String className = properties.get(SYMBOL_KEY);
+        isAllClassLoad = Boolean.parseBoolean(Optional.of(properties.getOrDefault(ALL_CLASS_LOAD, "false"))
+                .map(String::toLowerCase).get());
         if (Strings.isNullOrEmpty(className)) {
             throw new AnalysisException("No '" + SYMBOL_KEY + "' in properties");
         }
 
         try {
             System.setSecurityManager(new UDFSecurityManager(UDFInternalClass.class));
-            try (URLClassLoader classLoader = new UDFInternalClassLoader(objectFile)) {
+            //try (URLClassLoader classLoader = new UDFInternalClassLoader(objectFile)) {
+            URL[] urls = {new URL("jar:" + objectFile + "!/")};
+            try (URLClassLoader classLoader = isAllClassLoad
+                    ? URLClassLoader.newInstance(urls, this.getClass().getClassLoader().getParent())
+                    : URLClassLoader.newInstance(urls)) {
                 mainClass.setClazz(classLoader.loadClass(className));
 
                 if (isAggregate) {
@@ -379,6 +389,8 @@ public class CreateFunctionStmt extends DdlStmt {
             } catch (Exception e) {
                 throw new AnalysisException("other exception when load class. exception:", e);
             }
+        } catch (MalformedURLException e) {
+            throw new AnalysisException("Object file is invalid: " + objectFile);
         } finally {
             System.setSecurityManager(null);
         }
@@ -414,7 +426,8 @@ public class CreateFunctionStmt extends DdlStmt {
         function = ScalarFunction.createUdf(
                 functionName, argsDef.getArgTypes(),
                 returnType.getType(), argsDef.isVariadic(), TFunctionBinaryType.SRJAR,
-                objectFile, mainClass.getCanonicalName(), "", "", !"shared".equalsIgnoreCase(isolation));
+                objectFile, mainClass.getCanonicalName(), "", "", !"shared".equalsIgnoreCase(isolation),
+                isAllClassLoad);
         function.setChecksum(checksum);
     }
 

@@ -505,7 +505,8 @@ public class ExpressionTest extends PlanTestBase {
     public void testFunctionNullable() throws Exception {
         String sql = "select UNIX_TIMESTAMP(\"2015-07-28 19:41:12\", \"22\");";
         String plan = getThriftPlan(sql);
-        Assert.assertTrue(plan, plan.contains("could_apply_dict_optimize:false, ignore_nulls:false"));
+        Assert.assertTrue(plan, plan.contains(
+                "could_apply_dict_optimize:false, ignore_nulls:false, isolated:true, load_all_class:false"));
     }
 
     @Test

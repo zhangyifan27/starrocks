@@ -140,6 +140,10 @@ public class Function implements Writable {
     @SerializedName(value = "checksum")
     protected String checksum = "";
 
+    // load all class
+    @SerializedName(value = "isLoadAllClass")
+    private boolean isLoadAllClass = false;
+
     // Function id, every function has a unique id. Now all built-in functions' id is 0
     private long id = 0;
     // User specified function name e.g. "Add"
@@ -232,6 +236,7 @@ public class Function implements Writable {
         couldApplyDictOptimize = other.couldApplyDictOptimize;
         isNullable = other.isNullable;
         isMetaFunction = other.isMetaFunction;
+        isLoadAllClass = other.isLoadAllClass;
     }
 
     public FunctionName getFunctionName() {
@@ -388,6 +393,14 @@ public class Function implements Writable {
     // Make sure you use a copy of the global function.
     public void setRetType(Type retType) {
         this.retType = retType;
+    }
+
+    public boolean isLoadAllClass() {
+        return isLoadAllClass;
+    }
+
+    public void setLoadAllClass(boolean loadAllClass) {
+        isLoadAllClass = loadAllClass;
     }
 
     // TODO(cmy): Currently we judge whether it is UDF by wheter the 'location' is set.
@@ -711,6 +724,7 @@ public class Function implements Writable {
             fn.setChecksum(checksum);
         }
         fn.setCould_apply_dict_optimize(couldApplyDictOptimize);
+        fn.setLoad_all_class(isLoadAllClass);
         return fn;
     }
 
