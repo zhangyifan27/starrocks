@@ -104,8 +104,10 @@ public class LockManager {
                 try {
                     locker.wait(Math.max(1, deadLockDetectionDelayTimeMs));
                 } catch (InterruptedException ie) {
-                    removeFromWaiterList(rid, locker, lockType);
-                    throw new LockInterruptException(ie);
+                    if (removeFromWaiterList(rid, locker, lockType)) {
+                        // Fail to acquire lock
+                        throw new LockInterruptException(ie);
+                    }
                 }
 
                 if (isOwner(rid, locker, lockType)) {
@@ -120,10 +122,13 @@ public class LockManager {
              * and it will be processed directly according to the lock timeout.*/
             boolean lockTimeOut = (timeout != 0) && timeRemain(timeout, startTime) <= 0;
             if (lockTimeOut) {
-                removeFromWaiterList(rid, locker, lockType);
-
-                /* Failure to acquire lock within the timeout ms*/
-                throw new LockTimeoutException("");
+                if (removeFromWaiterList(rid, locker, lockType)) {
+                    /* Failure to acquire lock within the timeout ms*/
+                    throw new LockTimeoutException("");
+                } else {
+                    /* Locker has become the owner */
+                    return;
+                }
             }
 
             /*
@@ -154,8 +159,10 @@ public class LockManager {
                             locker.wait(Math.max(1, timeRemain(timeout, startTime)));
                         }
                     } catch (InterruptedException ie) {
-                        removeFromWaiterList(rid, locker, lockType);
-                        throw new LockInterruptException(ie);
+                        if (removeFromWaiterList(rid, locker, lockType)) {
+                            // Fail to acquire lock
+                            throw new LockInterruptException(ie);
+                        }
                     }
 
                     //locker is wakeup normally and becomes the owner
@@ -165,10 +172,13 @@ public class LockManager {
 
                     boolean lockTimeOut = (timeout != 0) && timeRemain(timeout, startTime) <= 0;
                     if (lockTimeOut) {
-                        removeFromWaiterList(rid, locker, lockType);
-
-                        /* Failure to acquire lock within the timeout ms*/
-                        throw new LockTimeoutException("");
+                        if (removeFromWaiterList(rid, locker, lockType)) {
+                            /* Failure to acquire lock within the timeout ms*/
+                            throw new LockTimeoutException("");
+                        } else {
+                            /* Locker has become the owner */
+                            break;
+                        }
                     }
 
                     /*
@@ -220,11 +230,15 @@ public class LockManager {
         while (true) {
             boolean lockTimeOut = (timeout != 0) && timeRemain(timeout, startTime) < 0;
             if (lockTimeOut && dc != null) {
-                removeFromWaiterList(rid, currentLocker, lockType);
-                /* Failure to acquire lock within the timeout ms */
-                DeadlockException exception = DeadlockException.makeDeadlockException(dc, currentLocker, false);
-                LOG.warn(exception.getMessage(), exception);
-                throw exception;
+                if (removeFromWaiterList(rid, currentLocker, lockType)) {
+                    /* Failure to acquire lock within the timeout ms */
+                    DeadlockException exception = DeadlockException.makeDeadlockException(dc, currentLocker, false);
+                    LOG.warn(exception.getMessage(), exception);
+                    throw exception;
+                } else {
+                    /* Locker has become the owner */
+                    return true;
+                }
             }
 
             /*
@@ -301,7 +315,7 @@ public class LockManager {
         return lock != null && lock.isOwner(locker, lockType);
     }
 
-    private int getLockTableIndex(long rid) {
+    public int getLockTableIndex(long rid) {
         return (((int) rid) & 0x7fffffff) % lockTablesSize;
     }
 
@@ -318,12 +332,22 @@ public class LockManager {
         return useLock.cloneOwners();
     }
 
-    private void removeFromWaiterList(long rid, Locker locker, LockType lockType) {
+    /**
+     * removeFromWaiterList will determine whether the locker has become the owner.
+     * Because there may be a lock-free window period between judging
+     * isOwner and removeFromWaiterList separately, so second judgment is required here.
+     */
+    public boolean removeFromWaiterList(long rid, Locker locker, LockType lockType) {
         int lockTableIndex = getLockTableIndex(rid);
         synchronized (lockTableMutexes[lockTableIndex]) {
+            if (isOwnerInternal(rid, locker, lockType, lockTableIndex)) {
+                return false;
+            }
+
             Map<Long, Lock> lockTable = lockTables[lockTableIndex];
             Lock lock = lockTable.get(rid);
             lock.removeWaiter(locker, lockType);
+            return true;
         }
     }
 
@@ -398,19 +422,48 @@ public class LockManager {
         LOG.warn("LockManager detects slow lock : {}", ownerInfo.toString());
     }
 
+    // Test Only
+    public LockGrantType lockForTest(long rid, Locker locker, LockType lockType) throws LockException {
+        int lockTableIdx = getLockTableIndex(rid);
+        synchronized (lockTableMutexes[lockTableIdx]) {
+            Map<Long, Lock> lockTable = lockTables[lockTableIdx];
+            Lock lock = lockTable.get(rid);
+
+            if (lock == null) {
+                lock = new LightWeightLock();
+                lockTable.put(rid, lock);
+            } else if (lock instanceof LightWeightLock) {
+                List<LockHolder> owners = new ArrayList<>(lock.getOwners());
+                assert !owners.isEmpty();
+                /* Lock is already held by someone else so mutate. */
+                lock = new MultiUserLock(owners.get(0));
+                lockTable.put(rid, lock);
+            }
+
+            return lock.lock(locker, lockType);
+        }
+    }
+
     private Locker checkAndHandleDeadLock(Long rid, Locker locker, LockType lockType) throws DeadlockException {
         DeadLockChecker deadLockChecker = new DeadLockChecker(locker, rid, lockType);
         if (deadLockChecker.hasCycle()) {
             if (Config.lock_manager_enable_resolve_deadlock) {
                 Locker victim = deadLockChecker.chooseTargetedLocker();
                 if (victim != locker) {
+                    if (isOwner(rid, locker, lockType)) {
+                        return null;
+                    }
                     return victim;
                 } else {
-                    removeFromWaiterList(rid, locker, lockType);
-                    DeadlockException exception =
-                            DeadlockException.makeDeadlockException(deadLockChecker, victim, true);
-                    LOG.warn(exception.getMessage(), exception);
-                    throw exception;
+                    if (removeFromWaiterList(rid, locker, lockType)) {
+                        DeadlockException exception =
+                                DeadlockException.makeDeadlockException(deadLockChecker, victim, true);
+                        LOG.warn(exception.getMessage(), exception);
+                        throw exception;
+                    } else {
+                        /* Locker has become the owner */
+                        return null;
+                    }
                 }
             } else {
                 String msg = "LockManager detects dead lock.\n" + deadLockChecker;

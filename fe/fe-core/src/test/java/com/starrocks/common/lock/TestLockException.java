@@ -17,6 +17,9 @@ import com.google.common.collect.Lists;
 import com.starrocks.catalog.Database;
 import com.starrocks.common.ErrorReportException;
 import com.starrocks.common.util.concurrent.lock.LockException;
+import com.starrocks.common.util.concurrent.lock.LockGrantType;
+import com.starrocks.common.util.concurrent.lock.LockHolder;
+import com.starrocks.common.util.concurrent.lock.LockInfo;
 import com.starrocks.common.util.concurrent.lock.LockManager;
 import com.starrocks.common.util.concurrent.lock.LockTimeoutException;
 import com.starrocks.common.util.concurrent.lock.LockType;
@@ -59,6 +62,40 @@ public class TestLockException {
         Assert.assertFalse(lockManager.isOwner(rid, locker1.getLocker(), LockType.WRITE));
         Assert.assertFalse(lockManager.isOwner(rid, locker2.getLocker(), LockType.READ));
         Assert.assertFalse(lockManager.isOwner(rid, locker2.getLocker(), LockType.WRITE));
+    }
+
+    @Test
+    public void testTimeoutAfterLocked() throws LockException, InterruptedException {
+        long rid = 1L;
+        LockManager lockManager = GlobalStateMgr.getCurrentState().getLockManager();
+
+        Locker locker1 = new Locker();
+        locker1.setThreadId(0);
+        locker1.lock(rid, LockType.WRITE, 1);
+        Assert.assertTrue(lockManager.isOwner(rid, locker1, LockType.WRITE));
+
+        Locker locker2 = new Locker();
+        locker2.setThreadId(1);
+        Assert.assertEquals(LockGrantType.WAIT, lockManager.lockForTest(rid, locker2, LockType.INTENTION_EXCLUSIVE));
+        Assert.assertFalse(lockManager.isOwner(rid, locker2, LockType.INTENTION_EXCLUSIVE));
+        LockHolder lockHolder2 = new LockHolder(locker2, LockType.INTENTION_EXCLUSIVE);
+        boolean isLocker2Waiting = false;
+        for (LockInfo lockInfo : lockManager.dumpLockManager()) {
+            if (lockInfo.getWaiters().contains(lockHolder2)) {
+                isLocker2Waiting = true;
+                break;
+            }
+        }
+        Assert.assertTrue(isLocker2Waiting);
+
+        synchronized (locker2) {
+            locker2.wait(1);
+        }
+        Assert.assertFalse(lockManager.isOwner(rid, locker2, LockType.INTENTION_EXCLUSIVE));
+
+        // after locker2 timeout, and before removing it from waiters list, the thread of locker1 release lock and add locker2
+        lockManager.release(rid, locker1, LockType.WRITE);
+        Assert.assertFalse(lockManager.removeFromWaiterList(rid, locker2, LockType.INTENTION_EXCLUSIVE));
     }
 
     @Test

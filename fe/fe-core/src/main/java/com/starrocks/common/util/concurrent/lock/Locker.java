@@ -53,7 +53,7 @@ public class Locker {
     private long lockRequestTimeMs;
 
     //private final String lockerStackTrace;
-    private final long threadId;
+    private long threadId;
     private final String threadName;
 
     /* The thread that request lock. */
@@ -600,6 +600,11 @@ public class Locker {
 
     public void setLockRequestTimeMs(long lockRequestTimeMs) {
         this.lockRequestTimeMs = lockRequestTimeMs;
+    }
+
+    // Test Only
+    public void setThreadId(long threadId) {
+        this.threadId = threadId;
     }
 
     @Override
