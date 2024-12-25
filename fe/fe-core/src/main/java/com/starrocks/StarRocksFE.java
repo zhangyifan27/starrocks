@@ -168,8 +168,7 @@ public class StarRocksFE {
                     ExecuteEnv.getInstance().getScheduler());
             FrontendThriftServer frontendThriftServer = new FrontendThriftServer(Config.rpc_port);
             HttpServer httpServer = new HttpServer(Config.http_port);
-            ArrowFlightSqlService arrowFlightSqlService =
-                    new ArrowFlightSqlService(Config.arrow_flight_port);
+            ArrowFlightSqlService arrowFlightSqlService = new ArrowFlightSqlService(Config.arrow_flight_port);
 
             httpServer.setup();
 

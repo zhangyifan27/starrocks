@@ -714,11 +714,8 @@ public class StmtExecutor {
                                     context.getQueryId().toString(), plannerProfile);
                         }
                         if (isAsync) {
-                            int timeout = context.getSessionVariable().getQueryTimeoutS();
-                            QeProcessorImpl.INSTANCE
-                                    .monitorQuery(context.getExecutionId(),
-                                            System.currentTimeMillis() + timeout * 1000L +
-                                                    context.getSessionVariable().getProfileTimeout() * 1000L);
+                            QeProcessorImpl.INSTANCE.monitorQuery(context.getExecutionId(),
+                                    System.currentTimeMillis() + context.getSessionVariable().getProfileTimeout() * 1000L);
                         } else {
                             QeProcessorImpl.INSTANCE.unregisterQuery(context.getExecutionId());
                         }
