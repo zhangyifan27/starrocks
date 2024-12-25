@@ -184,6 +184,7 @@ statement
     | showEnginesStatement
     | showFrontendsStatement
     | showPluginsStatement
+    | showQueryProgressStatement
     | showRepositoriesStatement
     | showOpenTableStatement
     | showPrivilegesStatement
@@ -1422,6 +1423,10 @@ showFrontendsStatement
 
 showPluginsStatement
     : SHOW PLUGINS
+    ;
+
+showQueryProgressStatement
+    : SHOW QUERY PROGRESS string
     ;
 
 showRepositoriesStatement

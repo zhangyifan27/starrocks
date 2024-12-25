@@ -104,6 +104,7 @@ import com.starrocks.common.util.OrderByPair;
 import com.starrocks.common.util.PrintableMap;
 import com.starrocks.common.util.ProfileManager;
 import com.starrocks.common.util.TimeUtils;
+import com.starrocks.common.util.UUIDUtil;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
 import com.starrocks.credential.CredentialUtil;
@@ -134,6 +135,7 @@ import com.starrocks.proto.FailPointTriggerModeType;
 import com.starrocks.proto.PFailPointInfo;
 import com.starrocks.proto.PFailPointTriggerMode;
 import com.starrocks.proto.PListFailPointResponse;
+import com.starrocks.qe.scheduler.Coordinator;
 import com.starrocks.qe.scheduler.slot.LogicalSlot;
 import com.starrocks.rpc.BackendServiceClient;
 import com.starrocks.rpc.PListFailPointRequest;
@@ -206,6 +208,7 @@ import com.starrocks.sql.ast.ShowPluginsStmt;
 import com.starrocks.sql.ast.ShowProcStmt;
 import com.starrocks.sql.ast.ShowProcesslistStmt;
 import com.starrocks.sql.ast.ShowProfilelistStmt;
+import com.starrocks.sql.ast.ShowQueryProgressStmt;
 import com.starrocks.sql.ast.ShowRepositoriesStmt;
 import com.starrocks.sql.ast.ShowResourceGroupStmt;
 import com.starrocks.sql.ast.ShowResourceGroupUsageStmt;
@@ -718,6 +721,27 @@ public class ShowExecutor {
             } else {
                 return showCreateExternalCatalogTable(statement, tbl, catalogName);
             }
+        }
+
+        @Override
+        public ShowResultSet visitShowQueryProgressStmt(ShowQueryProgressStmt statement, ConnectContext context) {
+            List<List<String>> rows = Lists.newArrayList();
+            Coordinator coordinator = QeProcessorImpl.INSTANCE.getCoordinator(
+                    UUIDUtil.toTUniqueId(UUID.fromString(statement.getQueryId())));
+            String progressInfo = QeProcessorImpl.INSTANCE.getFinishedQueryProgress(
+                    UUIDUtil.toTUniqueId(UUID.fromString(statement.getQueryId())));
+            if (coordinator != null) {
+                progressInfo = coordinator.getQueryProgressInfo();
+            }
+            if (progressInfo != null && !progressInfo.isEmpty() && !progressInfo.isBlank()) {
+                String[] lines = progressInfo.split("\n");
+                for (String line : lines) {
+                    rows.add(Lists.newArrayList(line));
+                }
+            } else {
+                rows.add(Lists.newArrayList("the queryId is incorrect or the query info has been cleared"));
+            }
+            return new ShowResultSet(statement.getMetaData(), rows);
         }
 
         private ShowResultSet showCreateInternalCatalogTable(ShowCreateTableStmt showStmt, ConnectContext connectContext) {

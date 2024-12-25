@@ -59,4 +59,7 @@ public interface QeProcessor {
     List<Coordinator> getCoordinators();
 
     long getCoordinatorCount();
+
+    void addQueryProgress(TUniqueId queryId, String progressInfo);
+    String getFinishedQueryProgress(TUniqueId queryId);
 }

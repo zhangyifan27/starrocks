@@ -48,6 +48,9 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public abstract class Coordinator {
+
+    public void setProgressMaxTotalTime(long totalTimeMs) {}
+    public void resetProgressMaxTotalTime() {}
     public interface Factory {
         Coordinator createQueryScheduler(ConnectContext context,
                                          List<PlanFragment> fragments,
@@ -117,6 +120,7 @@ public abstract class Coordinator {
         startScheduling(false);
     }
 
+    public abstract String getQueryProgressInfo();
     public abstract String getSchedulerExplain();
 
     public abstract void updateFragmentExecStatus(TReportExecStatusParams params);

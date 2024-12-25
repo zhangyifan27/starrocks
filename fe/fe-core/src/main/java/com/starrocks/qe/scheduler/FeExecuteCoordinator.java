@@ -74,6 +74,11 @@ public class FeExecuteCoordinator extends Coordinator {
     }
 
     @Override
+    public String getQueryProgressInfo() {
+        return "";
+    }
+
+    @Override
     public String getSchedulerExplain() {
         return "FE EXECUTION";
     }

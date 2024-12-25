@@ -384,8 +384,24 @@ public class FragmentInstanceExecState {
         return state.hasBeenDeployed();
     }
 
+    public boolean isPending() {
+        return state.isPending();
+    }
+
     public boolean isFinished() {
         return state.isTerminal();
+    }
+
+    public boolean isExecuting() {
+        return state.isExecuting();
+    }
+
+    public boolean isFailed() {
+        return state.isFailed();
+    }
+
+    public boolean isCompleted() {
+        return state.isFinished();
     }
 
     public PlanFragmentId getFragmentId() {
@@ -485,6 +501,22 @@ public class FragmentInstanceExecState {
 
         public boolean hasBeenDeployed() {
             return this != CREATED;
+        }
+
+        public boolean isPending() {
+            return this == CREATED;
+        }
+
+        public boolean isExecuting() {
+            return this == EXECUTING;
+        }
+
+        public boolean isFinished() {
+            return this == FINISHED;
+        }
+
+        public boolean isFailed() {
+            return this == FAILED;
         }
 
         public boolean isTerminal() {

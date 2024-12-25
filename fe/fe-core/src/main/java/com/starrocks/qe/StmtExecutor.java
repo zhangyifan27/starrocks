@@ -694,12 +694,16 @@ public class StmtExecutor {
                             LOG.warn("Query {} failed. Planner profile : {}",
                                     context.getQueryId().toString(), plannerProfile);
                         }
-
                         if (isAsync) {
                             QeProcessorImpl.INSTANCE.monitorQuery(context.getExecutionId(), System.currentTimeMillis() +
                                     context.getSessionVariable().getProfileTimeout() * 1000L);
                         } else {
                             QeProcessorImpl.INSTANCE.unregisterQuery(context.getExecutionId());
+                        }
+                        if (coord != null) {
+                            coord.resetProgressMaxTotalTime();
+                            QeProcessorImpl.INSTANCE.addQueryProgress(context.getExecutionId(),
+                                    coord.getQueryProgressInfo());
                         }
                     }
                 }
@@ -1024,6 +1028,9 @@ public class StmtExecutor {
             if (queryDetail != null) {
                 queryDetail.setProfile(profileContent);
             }
+            coord.setProgressMaxTotalTime(totalTimeMs);
+            QeProcessorImpl.INSTANCE.addQueryProgress(executionId,
+                    coord.getQueryProgressInfo());
             QeProcessorImpl.INSTANCE.unMonitorQuery(executionId);
             QeProcessorImpl.INSTANCE.unregisterQuery(executionId);
             if (Config.enable_collect_query_detail_info && Config.enable_profile_log) {
@@ -2110,6 +2117,10 @@ public class StmtExecutor {
             } else {
                 QeProcessorImpl.INSTANCE.unregisterQuery(context.getExecutionId());
             }
+            if (coord != null) {
+                QeProcessorImpl.INSTANCE.addQueryProgress(context.getExecutionId(),
+                        coord.getQueryProgressInfo());
+            }
         }
     }
 
@@ -2565,6 +2576,8 @@ public class StmtExecutor {
             throw new UserException(t.getMessage(), t);
         } finally {
             QeProcessorImpl.INSTANCE.unregisterQuery(context.getExecutionId());
+            QeProcessorImpl.INSTANCE.addQueryProgress(context.getExecutionId(),
+                    coord.getQueryProgressInfo());
             if (insertError) {
                 try {
                     if (jobId != -1) {
@@ -2716,6 +2729,8 @@ public class StmtExecutor {
             } else {
                 QeProcessorImpl.INSTANCE.unregisterQuery(context.getExecutionId());
             }
+            QeProcessorImpl.INSTANCE.addQueryProgress(context.getExecutionId(),
+                    coord.getQueryProgressInfo());
         }
     }
 

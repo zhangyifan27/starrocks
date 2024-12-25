@@ -387,6 +387,7 @@ import com.starrocks.sql.ast.ShowProcStmt;
 import com.starrocks.sql.ast.ShowProcedureStmt;
 import com.starrocks.sql.ast.ShowProcesslistStmt;
 import com.starrocks.sql.ast.ShowProfilelistStmt;
+import com.starrocks.sql.ast.ShowQueryProgressStmt;
 import com.starrocks.sql.ast.ShowRepositoriesStmt;
 import com.starrocks.sql.ast.ShowResourceGroupStmt;
 import com.starrocks.sql.ast.ShowResourceGroupUsageStmt;
@@ -2991,6 +2992,16 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
     @Override
     public ParseNode visitShowPluginsStatement(StarRocksParser.ShowPluginsStatementContext context) {
         return new ShowPluginsStmt(createPos(context));
+    }
+
+    @Override
+    public ParseNode visitShowQueryProgressStatement(StarRocksParser.ShowQueryProgressStatementContext context) {
+        String queryId = null;
+        if (context.string() != null) {
+            StringLiteral stringLiteral = (StringLiteral) visit(context.string());
+            queryId = stringLiteral.getValue();
+        }
+        return new ShowQueryProgressStmt(queryId, createPos(context));
     }
 
     @Override

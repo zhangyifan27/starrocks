@@ -74,6 +74,7 @@ public final class QeProcessorImpl implements QeProcessor, MemoryTrackable {
     private static final Logger LOG = LogManager.getLogger(QeProcessorImpl.class);
     private static final int MEMORY_QUERY_SAMPLES = 10;
     private final Map<TUniqueId, QueryInfo> coordinatorMap = Maps.newConcurrentMap();
+    private final Map<TUniqueId, String> progresssMap = Maps.newConcurrentMap();
     private final Map<TUniqueId, Long> monitorQueryMap = Maps.newConcurrentMap();
 
     public static final QeProcessorImpl INSTANCE;
@@ -155,6 +156,16 @@ public final class QeProcessorImpl implements QeProcessor, MemoryTrackable {
                 LOG.info("deregister query id = {}", DebugUtil.printId(queryId));
             }
         }
+    }
+
+    @Override
+    public void addQueryProgress(TUniqueId queryId, String progressInfo) {
+        progresssMap.put(queryId, progressInfo);
+        LOG.info("add or update progress query id = {}", DebugUtil.printId(queryId));
+    }
+
+    public String getFinishedQueryProgress(TUniqueId queryId) {
+        return progresssMap.get(queryId);
     }
 
     @Override

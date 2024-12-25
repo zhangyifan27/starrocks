@@ -593,6 +593,10 @@ public interface AstVisitor<R, C> {
         return visitShowStatement(statement, context);
     }
 
+    default R visitShowQueryProgressStmt(ShowQueryProgressStmt statement, C context) {
+        return visitShowStatement(statement, context);
+    }
+
     default R visitShowWarningStatement(ShowWarningStmt statement, C context) {
         return visitShowStatement(statement, context);
     }

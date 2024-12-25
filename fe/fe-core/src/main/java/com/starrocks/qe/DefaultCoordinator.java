@@ -48,18 +48,22 @@ import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
 import com.starrocks.common.FeConstants;
 import com.starrocks.common.InternalErrorCode;
+import com.starrocks.common.Pair;
 import com.starrocks.common.Status;
 import com.starrocks.common.ThriftServer;
 import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.common.util.AuditStatisticsUtil;
+import com.starrocks.common.util.Counter;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.common.util.RuntimeProfile;
 import com.starrocks.connector.exception.RemoteFileNotFoundException;
 import com.starrocks.datacache.DataCacheSelectMetrics;
 import com.starrocks.mysql.MysqlCommand;
+import com.starrocks.planner.OlapScanNode;
 import com.starrocks.planner.PlanFragment;
+import com.starrocks.planner.PlanFragmentId;
 import com.starrocks.planner.ResultSink;
 import com.starrocks.planner.RuntimeFilterDescription;
 import com.starrocks.planner.ScanNode;
@@ -98,17 +102,21 @@ import com.starrocks.thrift.TStatusCode;
 import com.starrocks.thrift.TTabletCommitInfo;
 import com.starrocks.thrift.TTabletFailInfo;
 import com.starrocks.thrift.TUniqueId;
+import com.starrocks.thrift.TUnit;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
@@ -121,6 +129,10 @@ public class DefaultCoordinator extends Coordinator {
     private static final Logger LOG = LogManager.getLogger(DefaultCoordinator.class);
 
     private static final int DEFAULT_PROFILE_TIMEOUT_SECOND = 2;
+    private static final long BYTES_TO_MB = 1024 * 1024;
+    private static final double PICOSECONDS_TO_MILLISECONDS = 1_000_000_000.0;
+    private static final double NANOSECONDS_TO_MILLISECONDS = 1_000_000.0;
+
 
     private final JobSpec jobSpec;
     private final ExecutionDAG executionDAG;
@@ -128,6 +140,15 @@ public class DefaultCoordinator extends Coordinator {
     private final ConnectContext connectContext;
 
     private final CoordinatorPreprocessor coordinatorPreprocessor;
+
+    private static double progressMaxTotalTime = 0;
+
+    public void setProgressMaxTotalTime(long progressMaxTotalTime) {
+        DefaultCoordinator.progressMaxTotalTime = progressMaxTotalTime;
+    }
+    public void resetProgressMaxTotalTime() {
+        DefaultCoordinator.progressMaxTotalTime = 0;
+    }
 
     /**
      * Protects all the fields below.
@@ -689,6 +710,264 @@ public class DefaultCoordinator extends Coordinator {
         return host2probers.entrySet().stream().map(
                 e -> new TRuntimeFilterDestination().setAddress(e.getKey()).setFinstance_ids(e.getValue())
         ).collect(Collectors.toList());
+    }
+
+    public String getQueryProgressInfo() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("Query ID: %s\n", DebugUtil.printId(jobSpec.getQueryId())));
+        sb.append(String.format("State: %s\n", queryStatus.getErrorCodeString()));
+        int totalTablet = 0;
+        Map<Integer, Long> fragmentToScanRows = new TreeMap<>();
+        Set<PlanFragmentId> scanFragmentIds = new HashSet<>();
+        Map<PlanFragmentId, Integer> fragmentToInstances = new HashMap<>();
+        // calculate scan progress
+        for (ScanNode scanNode : jobSpec.getScanNodes()) {
+            PlanFragmentId fragmentId = scanNode.getFragmentId();
+            scanFragmentIds.add(fragmentId);
+            int instanceCount = 0;
+            for (FragmentInstanceExecState state : executionDAG.getExecutions()) {
+                if (state.getFragmentId().equals(fragmentId)) {
+                    instanceCount++;
+                }
+            }
+            fragmentToInstances.put(fragmentId, instanceCount);
+            fragmentToScanRows.put(fragmentId.asInt(), scanNode.getCardinality());
+            if (scanNode instanceof OlapScanNode) {
+                totalTablet += ((OlapScanNode) scanNode).getScanTabletIds().size();
+            }
+        }
+
+        for (Map.Entry<Integer, Long> entry : fragmentToScanRows.entrySet()) {
+            sb.append(String.format("Fragment F%02d Scan Rows: %,d\n",
+                    entry.getKey(), entry.getValue()));
+        }
+        // scan total tablet
+        sb.append(String.format("Scan Total Tablets: %,d\n",
+                totalTablet));
+
+        long startTime = connectContext.getStartTime();
+        double totalTimeMs = System.currentTimeMillis() - startTime;
+        if (totalTimeMs > progressMaxTotalTime) {
+            progressMaxTotalTime = totalTimeMs;
+        }
+        sb.append("Total Time: ")
+                .append(String.format("%.2fms", progressMaxTotalTime))
+                .append("\n");
+
+        // enable profile info
+        if (connectContext.getSessionVariable().isEnableProfile() && getQueryProfile() != null) {
+            RuntimeProfile newQueryProfile = buildQueryProfile(connectContext.needMergeProfile());
+            Counter peakMemoryCounter = newQueryProfile.getCounter("QueryPeakMemoryUsagePerNode");
+            String peakMemory = peakMemoryCounter != null ? String.valueOf(
+                    peakMemoryCounter.getValue() / BYTES_TO_MB) : "?";
+
+            Counter spillBytesCounter = newQueryProfile.getCounter("QuerySpillBytes");
+
+            String spillBytes = spillBytesCounter != null ? String.valueOf(
+                    spillBytesCounter.getValue() / BYTES_TO_MB) : "?";
+
+            Counter cpuTimeCounter = newQueryProfile.getCounter("QueryCumulativeCpuTime");
+            String cpuTime = cpuTimeCounter != null ?
+                    String.format("%.2fms", cpuTimeCounter.getValue() / PICOSECONDS_TO_MILLISECONDS) : "?";
+
+            sb.append(String.format(
+                    "Current Resource Usage:\n" +
+                            "  - PeekMemory: %sMB\n" +
+                            "  - SpillBytes: %sMB\n" +
+                            "  - CPUTime: %s\n",
+                    peakMemory,
+                    spillBytes,
+                    cpuTime
+            ));
+            addResourceUsedInfo(newQueryProfile, sb);
+        }
+
+        Map<PlanFragmentId, Integer> completedInstances = new HashMap<>();
+        List<FragmentInstanceExecState> executions = new ArrayList<>(executionDAG.getExecutions());
+        for (FragmentInstanceExecState state : executions) {
+            if (scanFragmentIds.contains(state.getFragmentId()) &&
+                    (state.isFinished() || state.isFailed())) {
+                completedInstances.merge(state.getFragmentId(), 1, Integer::sum);
+            }
+        }
+
+        // calculate scan progress and progressBar generate
+        calculateProgress(fragmentToInstances, completedInstances, sb);
+
+        // show all fragments progress
+        for (PlanFragmentId fragmentId : scanFragmentIds) {
+            int completed = completedInstances.getOrDefault(fragmentId, 0);
+            int total = fragmentToInstances.get(fragmentId);
+            double fragmentProgress = total > 0 ? (completed * 100.0 / total) : 0.0;
+            sb.append(String.format("  - Fragment %s: %d/%d instances (%.1f%%)\n",
+                    fragmentId, completed, total, fragmentProgress));
+        }
+
+        sb.append(String.format("\n%-40s %-10s %-10s %-10s %-10s %-10s %-10s\n",
+                "FRAGMENT TREE",
+                "TOTAL",
+                "PENDING",
+                "RUNNING",
+                "FINISHED",
+                "FAILED",
+                "PROGRESS"
+        ));
+        buildProgressTable(executionDAG.getRootFragment(), executions, sb, "", true);
+        return sb.toString();
+    }
+
+    private static Counter getMaximumPipelineDriverTime(RuntimeProfile executionProfile) {
+        Counter maxDriverTotalTime = null;
+        for (Pair<RuntimeProfile, Boolean> fragmentProfileKv : executionProfile.getChildList()) {
+            RuntimeProfile fragmentProfile = fragmentProfileKv.first;
+            for (Pair<RuntimeProfile, Boolean> pipelineProfileKv : fragmentProfile.getChildList()) {
+                RuntimeProfile pipelineProfile = pipelineProfileKv.first;
+                Counter driverTotalTime = pipelineProfile.getMaxCounter("DriverTotalTime");
+                if (maxDriverTotalTime == null ||
+                        (driverTotalTime != null && driverTotalTime.getValue() > maxDriverTotalTime.getValue())) {
+                    maxDriverTotalTime = driverTotalTime;
+                }
+            }
+        }
+        return maxDriverTotalTime;
+    }
+
+    private static void addResourceUsedInfo(RuntimeProfile executionProfile, StringBuilder sb) {
+        Map<String, Counter> counters = new HashMap<>();
+        counters.put("QueryExecutionWallTime", executionProfile.getCounter("QueryExecutionWallTime"));
+        counters.put("QueryCumulativeScanTime", executionProfile.getCounter("QueryCumulativeScanTime"));
+        counters.put("QueryCumulativeNetworkTime", executionProfile.getCounter("QueryCumulativeNetworkTime"));
+        counters.put("ResultDeliverTime", executionProfile.getCounter("ResultDeliverTime"));
+        counters.put("QueryPeakScheduleTime", executionProfile.getCounter("QueryPeakScheduleTime"));
+        double executionTime = 0;
+        if (counters.get("QueryExecutionWallTime") != null) {
+            executionTime = counters.get("QueryExecutionWallTime").getValue();
+        }
+        if (executionTime == 0 && getMaximumPipelineDriverTime(executionProfile) != null) {
+            counters.put("QueryExecutionWallTime", getMaximumPipelineDriverTime(executionProfile));
+            executionTime = getMaximumPipelineDriverTime(executionProfile).getValue();
+        }
+        Counter resultDeliverTime = executionProfile.getCounter("ResultDeliverTime");
+        if (resultDeliverTime == null) {
+            resultDeliverTime = new Counter(TUnit.TIME_NS, null, 0);
+            counters.put("QueryCumulativeNetworkTime", resultDeliverTime);
+        }
+
+        sb.append("Execution Time: ")
+                .append(String.format("%.2fms", executionTime / NANOSECONDS_TO_MILLISECONDS))
+                .append("\n");
+
+        sb.append("  - Scan:      ")
+                .append(formatCounter("QueryCumulativeScanTime", executionTime, counters))
+                .append("\n");
+
+        sb.append("  - Network:   ")
+                .append(formatCounter("QueryCumulativeNetworkTime", executionTime, counters))
+                .append("\n");
+
+        sb.append("  - Deliver:   ")
+                .append(formatCounter("ResultDeliverTime", executionTime, counters))
+                .append("\n");
+
+        sb.append("  - Schedule:  ")
+                .append(formatCounter("QueryPeakScheduleTime", executionTime, counters))
+                .append("\n");
+    }
+
+    private static String formatCounter(String counterName, double totalTimeSeconds, Map<String, Counter> counters) {
+        Counter counter = counters.get(counterName);
+        if (counter != null) {
+            double value = counter.getValue();
+            String result = String.format("%.2fms (%.2f%%)", value / NANOSECONDS_TO_MILLISECONDS,
+                    totalTimeSeconds > 0 ? (value * 100.0 / totalTimeSeconds) : 0);
+            LOG.info(result);
+            return result;
+        }
+        return "? (?%)";
+    }
+
+    private static @NotNull StringBuilder getProgressBar(double progress) {
+        int progressBarWidth = 30;
+        int completedWidth = (int) (progress * progressBarWidth / 100);
+        StringBuilder progressBar = new StringBuilder("[");
+        for (int i = 0; i < progressBarWidth; i++) {
+            if (i < completedWidth) {
+                progressBar.append("=");
+            } else if (i == completedWidth) {
+                progressBar.append(">>");
+            } else {
+                progressBar.append(" ");
+            }
+        }
+        progressBar.append("]");
+        return progressBar;
+    }
+
+    private void calculateProgress(Map<PlanFragmentId, Integer> fragmentToInstances,
+                                   Map<PlanFragmentId, Integer> completedInstances,
+                                   StringBuilder sb) {
+        int totalInstances = fragmentToInstances.values().stream().mapToInt(Integer::intValue).sum();
+        int completedTotal = completedInstances.values().stream().mapToInt(Integer::intValue).sum();
+        double progress = totalInstances > 0 ? (completedTotal * 100.0 / totalInstances) : 0.0;
+        // progressBar generate
+        StringBuilder progressBar = getProgressBar(progress);
+        sb.append(String.format("Scan Progress: %d/%d instances %s %.1f%%\n",
+                completedTotal, totalInstances, progressBar, progress));
+    }
+
+    private void buildProgressTable(ExecutionFragment fragment,
+                                    List<FragmentInstanceExecState> executions,
+                                    StringBuilder sb,
+                                    String prefix,
+                                    boolean isLast) {
+
+        List<FragmentInstance> instances = fragment.getInstances();
+        int total = instances.size();
+        int pending = 0;
+        int running = 0;
+        int finished = 0;
+        int failed = 0;
+
+        for (FragmentInstanceExecState execState : executions) {
+            if (execState.getFragmentId() != fragment.getFragmentId()) {
+                continue;
+            }
+            if (execState.isPending()) {
+                pending++;
+            } else if (execState.isExecuting()) {
+                running++;
+            } else if (execState.isCompleted()) {
+                finished++;
+            } else if (execState.isFailed()) {
+                failed++;
+            }
+        }
+
+        // calculate progress
+        double progress = total > 0 ? (double) (finished + failed) / total * 100 : 0.0;
+
+        String treeSymbol = isLast ? "└─ " : "├─ ";
+
+        int fragmentId = fragment.getPlanFragment().getFragmentId().asInt();
+        String fragmentInfo = String.format("%sFragment F%02d",
+                prefix + treeSymbol,
+                fragmentId);
+
+        sb.append(String.format("%-40s %-10d %-10d %-10d %-10d %-10d %6.1f%%\n",
+                fragmentInfo,
+                total,
+                pending,
+                running,
+                finished,
+                failed,
+                progress
+        ));
+
+        int size = fragment.childrenSize();
+        String childPrefix = prefix + (isLast ? "   " : "│  ");
+        for (int i = 0; i < size; i++) {
+            buildProgressTable(fragment.getChild(i), executions, sb, childPrefix, i == size - 1);
+        }
     }
 
     private void setGlobalRuntimeFilterParams(ExecutionFragment topParams,
