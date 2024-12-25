@@ -114,11 +114,12 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
     // estimate of the output cardinality of this node; set in computeStats();
     // invalid: -1
     protected long cardinality;
+    protected double cost;
 
     // sum of tupleIds' avgSerializedSizes; set in computeStats()
     protected float avgRowSize;
 
-    protected int numInstances;
+    public int numInstances;
 
     protected Map<ColumnRefOperator, ColumnStatistic> columnStatistics;
 
@@ -148,6 +149,7 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
         this.cardinality = -1;
         this.planNodeName = planNodeName;
         this.numInstances = 1;
+        this.cost = 0;
     }
 
     protected PlanNode(PlanNodeId id, String planNodeName) {
@@ -157,6 +159,7 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
         this.cardinality = -1;
         this.planNodeName = planNodeName;
         this.numInstances = 1;
+        this.cost = 0;
     }
 
     /**
@@ -171,6 +174,7 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
         this.cardinality = -1;
         this.planNodeName = planNodeName;
         this.numInstances = 1;
+        this.cost = 0;
     }
 
     public List<RuntimeFilterDescription> getProbeRuntimeFilters() {
@@ -263,6 +267,14 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
 
     public long getCardinality() {
         return cardinality;
+    }
+
+    public void setCost(double cost) {
+        this.cost = cost;
+    }
+
+    public double getCost() {
+        return cost;
     }
 
     public float getAvgRowSize() {
@@ -449,6 +461,7 @@ abstract public class PlanNode extends TreeNode<PlanNode> {
             expBuilder.append(detailPrefix).append("limit: ").append(limit).append("\n");
         }
         expBuilder.append(detailPrefix).append("cardinality: ").append(cardinality).append("\n");
+        expBuilder.append(detailPrefix).append("cost: ").append(cost).append("\n");
         if (!probeRuntimeFilters.isEmpty()) {
             expBuilder.append(detailPrefix + "probe runtime filters:\n");
             for (RuntimeFilterDescription rf : probeRuntimeFilters) {

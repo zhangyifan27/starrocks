@@ -183,6 +183,7 @@ public class PlanFragment extends TreeNode<PlanFragment> {
     // Controls whether group execution is used for plan fragment execution.
     private List<ExecGroup> colocateExecGroups = Lists.newArrayList();
 
+    private double cost = 0;
     /**
      * C'tor for fragment with specific partition; the output is by default broadcast.
      */
@@ -196,6 +197,7 @@ public class PlanFragment extends TreeNode<PlanFragment> {
         setPlanRoot(root);
         setParallelExecNumIfExists();
         setFragmentInPlanTree(planRoot);
+        setCost(root.getCost());
     }
 
     /**
@@ -626,8 +628,9 @@ public class PlanFragment extends TreeNode<PlanFragment> {
         str.append("\n");
         str.append("  Input Partition: ").append(dataPartition.getExplainString(TExplainLevel.NORMAL));
         if (sink != null) {
-            str.append(sink.getVerboseExplain("  ")).append("\n");
+            str.append(sink.getVerboseExplain("  "));
         }
+        str.append("  Cost: ").append(getCost()).append(", Instances: ").append(planRoot.numInstances).append("\n\n");
         if (planRoot != null) {
             str.append(planRoot.getCostExplain("  ", "  "));
         }
@@ -991,4 +994,11 @@ public class PlanFragment extends TreeNode<PlanFragment> {
         }
     }
 
+    public double getCost() {
+        return cost;
+    }
+
+    public void setCost(double cost) {
+        this.cost = cost;
+    }
 }

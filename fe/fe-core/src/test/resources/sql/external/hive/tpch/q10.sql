@@ -6,6 +6,7 @@ RESULT SINK
 
 20:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 limit: 20
 cardinality: 20
 column statistics:
@@ -55,6 +56,7 @@ OutPut Exchange Id: 20
 |
 17:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [1: c_custkey, INT, true], [2: c_name, VARCHAR, true], [6: c_acctbal, DECIMAL64(15,2), true], [5: c_phone, VARCHAR, true], [35: n_name, VARCHAR, true], [3: c_address, VARCHAR, true], [8: c_comment, VARCHAR, true]
 cardinality: 7651211
 
@@ -123,6 +125,7 @@ OutPut Exchange Id: 17
 |
 |----13:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 25
 |
 11:Project
@@ -169,11 +172,13 @@ OutPut Exchange Id: 17
 |
 |----9:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [10: o_custkey, INT, true]
 |       cardinality: 7651211
 |
 1:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [1: c_custkey, INT, true]
 cardinality: 15000000
 probe runtime filters:
@@ -230,6 +235,7 @@ OutPut Exchange Id: 09
 |
 |----6:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 5738046
 |
 3:Project

@@ -376,6 +376,7 @@ public class LowCardinalityTest2 extends PlanTestBase {
         Assert.assertTrue(plan, plan.contains("  2:Decode\n" +
                 "  |  <dict id 10> : <string id 3>\n" +
                 "  |  cardinality: 1\n" +
+                "  |  cost: 0.0\n" +
                 "  |  column statistics: \n" +
                 "  |  * S_ADDRESS-->[-Infinity, Infinity, 0.0, 40.0, 10000.0] ESTIMATE\n" +
                 "  |  * count-->[0.0, 1.0, 0.0, 8.0, 1.0] ESTIMATE"));

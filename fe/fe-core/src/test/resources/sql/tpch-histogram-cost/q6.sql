@@ -12,6 +12,7 @@ RESULT SINK
 |
 3:EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 1
 
 PLAN FRAGMENT 1(F00)

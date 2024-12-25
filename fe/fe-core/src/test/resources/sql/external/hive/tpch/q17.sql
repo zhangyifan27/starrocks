@@ -20,6 +20,7 @@ RESULT SINK
 |
 12:EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 1
 
 PLAN FRAGMENT 1(F03)
@@ -75,6 +76,7 @@ OutPut Exchange Id: 12
 |
 6:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [17: p_partkey, INT, true]
 cardinality: 600038
 
@@ -110,6 +112,7 @@ OutPut Exchange Id: 06
 |
 |----3:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 20000
 |
 0:HdfsScanNode

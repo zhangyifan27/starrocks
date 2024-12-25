@@ -909,12 +909,14 @@ public class ExpressionTest extends PlanTestBase {
                 "  |  output columns:\n" +
                 "  |  25 <-> 1\n" +
                 "  |  cardinality: 1\n" +
+                "  |  cost: 0.0\n" +
                 "  |  column statistics: \n" +
                 "  |  * auto_fill_col-->[1.0, 1.0, 0.0, 1.0, 1.0] ESTIMATE\n" +
                 "  |  \n" +
                 "  5:NESTLOOP JOIN\n" +
                 "  |  join op: CROSS JOIN\n" +
                 "  |  cardinality: 1\n" +
+                "  |  cost: 1000400.0\n" +
                 "  |  column statistics: \n" +
                 "  |  * auto_fill_col-->[1.0, 1.0, 0.0, 1.0, 1.0] ESTIMATE\n" +
                 "  |  * auto_fill_col-->[1.0, 1.0, 0.0, 1.0, 1.0] ESTIMATE"));

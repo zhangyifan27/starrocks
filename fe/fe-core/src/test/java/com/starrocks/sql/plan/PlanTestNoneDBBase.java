@@ -764,7 +764,8 @@ public class PlanTestNoneDBBase {
             expect = Stream.of(expect.split("\n")).filter(s -> !s.contains("tabletList"))
                     .collect(Collectors.joining("\n"));
             actual = Stream.of(actual.split("\n"))
-                    .filter(s -> !(s.contains("tabletList") || s.contains("numFiles") || s.contains("fileSize")))
+                    .filter(s -> !(s.contains("tabletList") || s.contains("numFiles") || s.contains("fileSize")
+                            || s.startsWith("Cost: ") || s.contains("cost: ")))
                     .collect(Collectors.joining("\n"));
             Assert.assertEquals(expect, actual);
         }

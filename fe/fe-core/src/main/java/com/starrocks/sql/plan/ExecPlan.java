@@ -28,6 +28,7 @@ import com.starrocks.planner.PlanNodeId;
 import com.starrocks.planner.ScanNode;
 import com.starrocks.plugin.AuditEvent;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.DefaultCoordinator;
 import com.starrocks.sql.Explain;
 import com.starrocks.sql.ast.StatementBase;
 import com.starrocks.sql.optimizer.OptExpression;
@@ -206,6 +207,26 @@ public class ExecPlan {
         } else {
             if (planCount != 0) {
                 str.append("There are ").append(planCount).append(" plans in optimizer search space\n");
+            }
+            if (level == TExplainLevel.COSTS) {
+                double est = 0;
+
+                DefaultCoordinator coord = new DefaultCoordinator.Factory().createQueryScheduler(
+                        connectContext, fragments, scanNodes, null);
+                try {
+                    coord.prepareExec();
+
+                } catch (Exception e) {
+                    //ignore error, then use 1 as instanceNum
+                }
+                for (PlanFragment fragment : fragments) {
+                    int instanceNum = coord.getFragmentInstaceNum(fragment.getFragmentId());
+                    if (instanceNum == 0) {
+                        instanceNum = 1;
+                    }
+                    est += fragment.getCost() / instanceNum;
+                }
+                str.append("Cost: ").append(physicalPlan.getCost()).append(", Est: ").append(est).append("\n");
             }
 
             for (int i = 0; i < fragments.size(); ++i) {

@@ -21,6 +21,7 @@ RESULT SINK
 |
 8:EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 1
 
 PLAN FRAGMENT 1(F04)
@@ -70,11 +71,13 @@ OutPut Exchange Id: 08
 |
 |----4:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [2: l_partkey, INT, true]
 |       cardinality: 6653886
 |
 1:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [17: p_partkey, INT, true]
 cardinality: 20000000
 

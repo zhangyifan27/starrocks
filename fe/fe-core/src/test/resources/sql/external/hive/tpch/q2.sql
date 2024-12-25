@@ -6,6 +6,7 @@ RESULT SINK
 
 26:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 limit: 100
 cardinality: 1
 column statistics:
@@ -123,6 +124,7 @@ OutPut Exchange Id: 26
 |
 20:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [1: p_partkey, INT, true]
 cardinality: 80000
 
@@ -177,11 +179,13 @@ OutPut Exchange Id: 20
 |
 |----17:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [18: ps_suppkey, INT, true]
 |       cardinality: 400000
 |
 10:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [10: s_suppkey, INT, true]
 cardinality: 200000
 
@@ -220,6 +224,7 @@ OutPut Exchange Id: 17
 |
 |----14:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 100000
 |
 11:HdfsScanNode
@@ -310,6 +315,7 @@ OutPut Exchange Id: 10
 |
 |----7:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 5
 |
 0:HdfsScanNode
@@ -360,6 +366,7 @@ OutPut Exchange Id: 07
 |
 |----4:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 1:HdfsScanNode

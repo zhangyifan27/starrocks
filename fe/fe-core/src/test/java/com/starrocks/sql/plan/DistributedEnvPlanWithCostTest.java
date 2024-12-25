@@ -557,16 +557,21 @@ public class DistributedEnvPlanWithCostTest extends DistributedEnvPlanTestBase {
                 "  |  join op: INNER JOIN (PARTITIONED)\n" +
                 "  |  equal join conjunct: [29: cast, BIGINT, false] = [30: add, BIGINT, false]\n" +
                 "  |  output columns: 14, 15, 20, 22\n" +
-                "  |  cardinality: 600000000");
+                "  |  cardinality: 600000000\n" +
+                "  |  cost: 5.964375E10");
         assertContains(plan, "  |----5:EXCHANGE\n" +
                 "  |       distribution type: SHUFFLE\n" +
+                "  |       partition type: HASH_PARTITIONED\n" +
                 "  |       partition exprs: [30: add, BIGINT, false]\n" +
                 "  |       cardinality: 150000000\n" +
+                "  |       cost: 3.9E9\n" +
                 "  |    \n" +
                 "  2:EXCHANGE\n" +
                 "     distribution type: SHUFFLE\n" +
+                "     partition type: HASH_PARTITIONED\n" +
                 "     partition exprs: [29: cast, BIGINT, false]\n" +
-                "     cardinality: 600000000");
+                "     cardinality: 600000000\n" +
+                "     cost: 5.16E10\n");
         sql =
                 "SELECT COUNT(*)  FROM lineitem JOIN orders ON l_orderkey * 2 = o_orderkey + 1 " +
                         "GROUP BY l_shipmode, l_shipinstruct, o_orderdate, o_orderstatus;";
@@ -617,6 +622,7 @@ public class DistributedEnvPlanWithCostTest extends DistributedEnvPlanTestBase {
                 "  |  25 <-> [25: L_EXTENDEDPRICE, DOUBLE, false]\n" +
                 "  |  26 <-> [26: L_DISCOUNT, DOUBLE, false]\n" +
                 "  |  cardinality: 7650728\n" +
+                "  |  cost: 0.0\n" +
                 "  |  column statistics: \n" +
                 "  |  * O_CUSTKEY-->[1.0, 1.49999E7, 0.0, 8.0, 5738045.738045738] ESTIMATE\n" +
                 "  |  * L_EXTENDEDPRICE-->[901.0, 104949.5, 0.0, 8.0, 932377.0] ESTIMATE\n" +
@@ -629,6 +635,7 @@ public class DistributedEnvPlanWithCostTest extends DistributedEnvPlanTestBase {
                 "  |  - filter_id = 0, build_expr = (10: O_ORDERKEY), remote = false\n" +
                 "  |  output columns: 11, 25, 26\n" +
                 "  |  cardinality: 7650728\n" +
+                "  |  cost: 2.8673971839468613E9\n" +
                 "  |  column statistics: \n" +
                 "  |  * O_ORDERKEY-->[1.0, 6.0E8, 0.0, 8.0, 5738045.738045738] ESTIMATE\n" +
                 "  |  * O_CUSTKEY-->[1.0, 1.49999E7, 0.0, 8.0, 5738045.738045738] ESTIMATE\n" +

@@ -135,8 +135,6 @@ public class CoordinatorPreprocessor {
 
     public static TQueryGlobals genQueryGlobals(Instant startTime, String timezone) {
         TQueryGlobals queryGlobals = new TQueryGlobals();
-        String nowString = DATE_FORMAT.format(startTime.atZone(ZoneId.of(timezone)));
-        queryGlobals.setNow_string(nowString);
         queryGlobals.setTimestamp_ms(startTime.toEpochMilli());
         queryGlobals.setTimestamp_us(startTime.getEpochSecond() * 1000000 + startTime.getNano() / 1000);
         if (timezone.equals("CST")) {
@@ -144,6 +142,8 @@ public class CoordinatorPreprocessor {
         } else {
             queryGlobals.setTime_zone(timezone);
         }
+        String nowString = DATE_FORMAT.format(startTime.atZone(ZoneId.of(queryGlobals.getTime_zone())));
+        queryGlobals.setNow_string(nowString);
         return queryGlobals;
     }
 

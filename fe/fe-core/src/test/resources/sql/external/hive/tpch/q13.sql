@@ -6,6 +6,7 @@ RESULT SINK
 
 13:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 10031873
 column statistics:
 * count-->[0.0, 1.125E8, 0.0, 8.0, 1.0031873E7] ESTIMATE
@@ -37,6 +38,7 @@ OutPut Exchange Id: 13
 |
 10:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [18: count, BIGINT, true]
 cardinality: 10031873
 
@@ -97,11 +99,13 @@ OutPut Exchange Id: 10
 |
 |----4:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [1: c_custkey, INT, true]
 |       cardinality: 15000000
 |
 2:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [10: o_custkey, INT, true]
 cardinality: 112500000
 

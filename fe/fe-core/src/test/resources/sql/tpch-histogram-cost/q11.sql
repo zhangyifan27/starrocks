@@ -5,6 +5,7 @@ RESULT SINK
 
 30:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 1600000
 column statistics:
 * PS_PARTKEY-->[1.0, 2.0E7, 0.0, 8.0, 1600000.0] ESTIMATE
@@ -48,6 +49,7 @@ OutPut Exchange Id: 30
 |
 |----26:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 10:AGGREGATE (update finalize)
@@ -86,6 +88,7 @@ OutPut Exchange Id: 30
 |
 |----7:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 40000
 |
 0:OlapScanNode
@@ -131,6 +134,7 @@ OutPut Exchange Id: 26
 |
 22:EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 1
 
 PLAN FRAGMENT 3(F05)
@@ -170,6 +174,7 @@ OutPut Exchange Id: 22
 |
 |----18:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 40000
 |
 11:OlapScanNode
@@ -212,6 +217,7 @@ OutPut Exchange Id: 18
 |
 |----15:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 12:OlapScanNode
@@ -277,6 +283,7 @@ OutPut Exchange Id: 07
 |
 |----4:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 1:OlapScanNode

@@ -6,6 +6,7 @@ RESULT SINK
 
 14:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 limit: 10
 cardinality: 10
 column statistics:
@@ -72,11 +73,13 @@ OutPut Exchange Id: 14
 |
 |----9:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [9: o_orderkey, INT, true]
 |       cardinality: 21729080
 |
 2:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [18: l_orderkey, INT, true]
 cardinality: 323426370
 
@@ -113,6 +116,7 @@ OutPut Exchange Id: 09
 |
 |----6:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 3000000
 |
 3:HdfsScanNode

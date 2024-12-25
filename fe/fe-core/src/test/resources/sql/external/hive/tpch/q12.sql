@@ -6,6 +6,7 @@ RESULT SINK
 
 10:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 2
 column statistics:
 * l_shipmode-->[-Infinity, Infinity, 0.0, 10.0, 2.0] ESTIMATE
@@ -38,6 +39,7 @@ OutPut Exchange Id: 10
 |
 7:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [24: l_shipmode, VARCHAR, true]
 cardinality: 2
 
@@ -85,6 +87,7 @@ OutPut Exchange Id: 07
 |
 |----3:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 6125233
 |
 0:HdfsScanNode

@@ -216,6 +216,14 @@ public class OptExpression {
         return cost;
     }
 
+    public double getOwnCost() {
+        double ownCost = cost;
+        for (OptExpression child : inputs) {
+            ownCost -= child.getCost();
+        }
+        return ownCost;
+    }
+
     public void setCost(double cost) {
         this.cost = cost;
     }

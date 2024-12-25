@@ -20,6 +20,7 @@ RESULT SINK
 |
 12:EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 1
 
 PLAN FRAGMENT 1(F03)
@@ -75,6 +76,7 @@ OutPut Exchange Id: 12
 |
 6:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [18: P_PARTKEY, INT, false]
 cardinality: 614017
 
@@ -110,6 +112,7 @@ OutPut Exchange Id: 06
 |
 |----3:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 20467
 |
 0:OlapScanNode

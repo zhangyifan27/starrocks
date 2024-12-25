@@ -950,6 +950,7 @@ public class TrinoQueryTest extends TrinoTestBase {
                         "  |  1 <-> [1: v1, BIGINT, true]\n" +
                         "  |  2 <-> [2: v2, BIGINT, true]\n" +
                         "  |  cardinality: 1\n" +
+                        "  |  cost: 0.0\n" +
                         "  |  column statistics: \n" +
                         "  |  * v1-->[-Infinity, Infinity, 0.0, 1.0, 1.0] UNKNOWN\n" +
                         "  |  * v2-->[-Infinity, Infinity, 0.0, 1.0, 1.0] UNKNOWN"));

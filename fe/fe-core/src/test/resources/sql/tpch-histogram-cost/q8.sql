@@ -6,6 +6,7 @@ RESULT SINK
 
 36:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 2
 column statistics:
 * year-->[1995.0, 1996.0, 0.0, 2.0, 2.0] ESTIMATE
@@ -50,6 +51,7 @@ OutPut Exchange Id: 36
 |
 32:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [69: year, SMALLINT, false]
 cardinality: 2
 
@@ -103,6 +105,7 @@ OutPut Exchange Id: 32
 |
 |----28:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 25
 |
 26:Project
@@ -135,6 +138,7 @@ OutPut Exchange Id: 32
 |
 |----24:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: BUCKET_SHUFFLE_HASH_PARTITIONED
 |       partition exprs: [21: L_SUPPKEY, INT, false]
 |       cardinality: 264791
 |
@@ -203,6 +207,7 @@ OutPut Exchange Id: 24
 |
 |----21:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: BUCKET_SHUFFLE_HASH_PARTITIONED
 |       partition exprs: [37: O_CUSTKEY, INT, false]
 |       cardinality: 1323957
 |
@@ -227,6 +232,7 @@ OutPut Exchange Id: 24
 |
 |----8:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 5
 |
 1:OlapScanNode
@@ -281,6 +287,7 @@ OutPut Exchange Id: 21
 |
 |----18:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: BUCKET_SHUFFLE_HASH_PARTITIONED
 |       partition exprs: [19: L_ORDERKEY, INT, false]
 |       cardinality: 4353000
 |
@@ -334,6 +341,7 @@ OutPut Exchange Id: 18
 |
 |----15:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 145100
 |
 12:OlapScanNode
@@ -402,6 +410,7 @@ OutPut Exchange Id: 08
 |
 |----5:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 2:OlapScanNode

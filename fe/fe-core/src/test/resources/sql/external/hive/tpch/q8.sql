@@ -6,6 +6,7 @@ RESULT SINK
 
 38:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 2
 column statistics:
 * year-->[1995.0, 1996.0, 0.0, 2.0, 2.0] ESTIMATE
@@ -50,6 +51,7 @@ OutPut Exchange Id: 38
 |
 34:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [61: year, SMALLINT, true]
 cardinality: 2
 
@@ -106,6 +108,7 @@ OutPut Exchange Id: 34
 |
 |----30:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 25
 |
 28:Project
@@ -138,11 +141,13 @@ OutPut Exchange Id: 34
 |
 |----26:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [19: l_suppkey, INT, true]
 |       cardinality: 242843
 |
 1:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [10: s_suppkey, INT, true]
 cardinality: 1000000
 probe runtime filters:
@@ -201,11 +206,13 @@ OutPut Exchange Id: 26
 |
 |----23:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [17: l_orderkey, INT, true]
 |       cardinality: 4000253
 |
 16:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [33: o_orderkey, INT, true]
 cardinality: 9106029
 
@@ -245,6 +252,7 @@ OutPut Exchange Id: 23
 |
 |----20:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 133333
 |
 17:HdfsScanNode
@@ -318,6 +326,7 @@ OutPut Exchange Id: 16
 |
 |----13:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 3000000
 |
 2:HdfsScanNode
@@ -363,6 +372,7 @@ OutPut Exchange Id: 13
 |
 |----10:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 5
 |
 3:HdfsScanNode
@@ -405,6 +415,7 @@ OutPut Exchange Id: 10
 |
 |----7:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 4:HdfsScanNode

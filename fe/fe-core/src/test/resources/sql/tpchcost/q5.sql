@@ -6,6 +6,7 @@ RESULT SINK
 
 27:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 5
 column statistics:
 * N_NAME-->[-Infinity, Infinity, 0.0, 25.0, 5.0] ESTIMATE
@@ -35,6 +36,7 @@ OutPut Exchange Id: 27
 |
 24:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [46: N_NAME, VARCHAR, false]
 cardinality: 5
 
@@ -81,6 +83,7 @@ OutPut Exchange Id: 24
 |
 |----20:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: BUCKET_SHUFFLE_HASH_PARTITIONED
 |       partition exprs: [10: O_ORDERKEY, INT, false]
 |       cardinality: 22765073
 |
@@ -116,6 +119,7 @@ OutPut Exchange Id: 24
 |
 |----11:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 200000
 |       probe runtime filters:
 |       - filter_id = 4, probe_expr = (40: S_NATIONKEY)
@@ -165,6 +169,7 @@ OutPut Exchange Id: 20
 |
 |----17:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: BUCKET_SHUFFLE_HASH_PARTITIONED
 |       partition exprs: [11: O_CUSTKEY, INT, false]
 |       cardinality: 22765073
 |
@@ -239,6 +244,7 @@ OutPut Exchange Id: 11
 |
 |----8:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 5
 |
 1:OlapScanNode
@@ -283,6 +289,7 @@ OutPut Exchange Id: 08
 |
 |----5:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 2:OlapScanNode

@@ -6,6 +6,7 @@ RESULT SINK
 
 25:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 limit: 100
 cardinality: 1
 column statistics:
@@ -123,6 +124,7 @@ OutPut Exchange Id: 25
 |
 19:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [1: P_PARTKEY, INT, false]
 cardinality: 80000
 
@@ -177,6 +179,7 @@ OutPut Exchange Id: 19
 |
 |----16:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: BUCKET_SHUFFLE_HASH_PARTITIONED
 |       partition exprs: [20: PS_SUPPKEY, INT, false]
 |       cardinality: 400000
 |
@@ -219,6 +222,7 @@ OutPut Exchange Id: 19
 |
 |----7:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 5
 |
 0:OlapScanNode
@@ -274,6 +278,7 @@ OutPut Exchange Id: 16
 |
 |----13:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: BUCKET_SHUFFLE_HASH_PARTITIONED
 |       partition exprs: [1: P_PARTKEY, INT, false]
 |       cardinality: 100000
 |
@@ -348,6 +353,7 @@ OutPut Exchange Id: 07
 |
 |----4:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 1:OlapScanNode

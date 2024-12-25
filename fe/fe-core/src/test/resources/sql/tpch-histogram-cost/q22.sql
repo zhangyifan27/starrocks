@@ -6,6 +6,7 @@ RESULT SINK
 
 19:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 150000
 column statistics:
 * substring-->[-Infinity, Infinity, 0.0, 15.0, 150000.0] ESTIMATE
@@ -38,6 +39,7 @@ OutPut Exchange Id: 19
 |
 16:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [32: substring, VARCHAR, true]
 cardinality: 150000
 
@@ -82,11 +84,13 @@ OutPut Exchange Id: 16
 |
 |----12:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [1: C_CUSTKEY, INT, false]
 |       cardinality: 3750000
 |
 1:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [22: O_CUSTKEY, INT, false]
 cardinality: 150000000
 
@@ -121,6 +125,7 @@ OutPut Exchange Id: 12
 |
 |----9:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 2:OlapScanNode
@@ -157,6 +162,7 @@ OutPut Exchange Id: 09
 |
 6:EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 1
 
 PLAN FRAGMENT 5(F03)

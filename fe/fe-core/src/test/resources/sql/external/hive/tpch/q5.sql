@@ -6,6 +6,7 @@ RESULT SINK
 
 29:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 25
 column statistics:
 * n_name-->[-Infinity, Infinity, 0.0, 25.0, 25.0] ESTIMATE
@@ -35,6 +36,7 @@ OutPut Exchange Id: 29
 |
 26:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [42: n_name, VARCHAR, true]
 cardinality: 25
 
@@ -81,11 +83,13 @@ OutPut Exchange Id: 26
 |
 |----22:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [9: o_orderkey, INT, true]
 |       cardinality: 22765073
 |
 14:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [18: l_orderkey, INT, true]
 cardinality: 120007580
 probe runtime filters:
@@ -121,11 +125,13 @@ OutPut Exchange Id: 22
 |
 |----19:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [1: c_custkey, INT, true]
 |       cardinality: 15000000
 |
 17:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [10: o_custkey, INT, true]
 cardinality: 22765073
 probe runtime filters:
@@ -214,6 +220,7 @@ OutPut Exchange Id: 14
 |
 |----11:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 200000
 |
 0:HdfsScanNode
@@ -264,6 +271,7 @@ OutPut Exchange Id: 11
 |
 |----8:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 5
 |
 1:HdfsScanNode
@@ -309,6 +317,7 @@ OutPut Exchange Id: 08
 |
 |----5:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 2:HdfsScanNode

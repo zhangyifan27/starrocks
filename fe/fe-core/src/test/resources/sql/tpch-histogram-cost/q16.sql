@@ -6,6 +6,7 @@ RESULT SINK
 
 15:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 7119
 column statistics:
 * P_BRAND-->[-Infinity, Infinity, 0.0, 10.0, 25.0] ESTIMATE
@@ -50,6 +51,7 @@ OutPut Exchange Id: 15
 |
 11:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [10: P_BRAND, VARCHAR, false], [11: P_TYPE, VARCHAR, false], [12: P_SIZE, INT, false]
 cardinality: 6914952
 
@@ -96,6 +98,7 @@ OutPut Exchange Id: 11
 |
 |----7:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 250000
 |
 4:Project
@@ -128,6 +131,7 @@ OutPut Exchange Id: 11
 |
 |----2:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: BUCKET_SHUFFLE_HASH_PARTITIONED
 |       partition exprs: [7: P_PARTKEY, INT, false]
 |       cardinality: 2304984
 |

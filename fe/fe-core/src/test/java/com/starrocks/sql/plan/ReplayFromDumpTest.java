@@ -111,6 +111,7 @@ public class ReplayFromDumpTest extends ReplayFromDumpTestBase {
         Assert.assertTrue(replayPair.second, replayPair.second.contains("  |----24:EXCHANGE\n" +
                 "  |       distribution type: BROADCAST\n" +
                 "  |       cardinality: 65744\n" +
+                "  |       cost: 1.89343008E7\n" +
                 "  |    \n" +
                 "  18:UNION\n" +
                 "  |  output exprs:\n" +
@@ -120,6 +121,7 @@ public class ReplayFromDumpTest extends ReplayFromDumpTestBase {
                 "  |      [289: cs_sold_date_sk, INT, true] | [310: cs_ext_sales_price, DECIMAL64(7,2), true]\n" +
                 "  |  pass-through-operands: all\n" +
                 "  |  cardinality: 194398472\n" +
+                "  |  cost: 0.0\n" +
                 "  |  column statistics: \n" +
                 "  |  * ws_sold_date_sk-->[-Infinity, Infinity, 0.0, 1.0, 1.0] UNKNOWN\n" +
                 "  |  * ws_ext_sales_price-->[-Infinity, Infinity, 0.0, 1.0, 1.0] UNKNOWN"));
@@ -149,6 +151,7 @@ public class ReplayFromDumpTest extends ReplayFromDumpTestBase {
                 "  |  other join predicates: cast([208: d_month_seq, INT, true] as BIGINT) <= [291: expr, BIGINT, " +
                 "true]\n" +
                 "  |  cardinality: 18262\n" +
+                "  |  cost: 2340767.9999999995\n" +
                 "  |  column statistics: \n" +
                 "  |  * d_date_sk-->[2415022.0, 2488070.0, 0.0, 4.0, 18262.25] ESTIMATE\n" +
                 "  |  * d_month_seq-->[0.0, 2400.0, 0.0, 4.0, 2398.0] ESTIMATE\n" +
@@ -157,6 +160,7 @@ public class ReplayFromDumpTest extends ReplayFromDumpTestBase {
                 "  |       distribution type: SHUFFLE\n" +
                 "  |       partition exprs: [70: cs_bill_customer_sk, INT, true]\n" +
                 "  |       cardinality: 6304\n" +
+                "  |       cost: 50433.44912004471\n" +
                 "  |    \n" +
                 "  2:OlapScanNode"));
     }
@@ -245,6 +249,7 @@ public class ReplayFromDumpTest extends ReplayFromDumpTestBase {
                 "  |  - filter_id = 0, build_expr = (5: d_date_sk), remote = false\n" +
                 "  |  output columns: 2, 4\n" +
                 "  |  cardinality: 399330000\n" +
+                "  |  cost: 5.590628705005834E9\n" +
                 "  |  column statistics: \n" +
                 "  |  * inv_date_sk-->[2450815.0, 2452635.0, 0.0, 4.0, 260.0] ESTIMATE\n" +
                 "  |  * inv_item_sk-->[1.0, 204000.0, 0.0, 4.0, 200414.0] ESTIMATE\n" +
@@ -494,6 +499,7 @@ public class ReplayFromDumpTest extends ReplayFromDumpTestBase {
                 "  |  aggregate: count[(*); args: ; result: BIGINT; args nullable: false; result nullable: false]\n" +
                 "  |  hasNullableGenerateChild: true\n" +
                 "  |  cardinality: 1\n" +
+                "  |  cost: 2.4857232570648193\n" +
                 "  |  column statistics: \n" +
                 "  |  * count-->[0.0, 1.0420273298435367, 0.0, 8.0, 1.0] ESTIMATE\n" +
                 "  |  \n" +
@@ -502,6 +508,7 @@ public class ReplayFromDumpTest extends ReplayFromDumpTestBase {
                 "  |  549 <-> 1\n" +
                 "  |  hasNullableGenerateChild: true\n" +
                 "  |  cardinality: 1\n" +
+                "  |  cost: 0.0\n" +
                 "  |  column statistics: \n" +
                 "  |  * auto_fill_col-->[1.0, 1.0, 0.0, 1.0, 1.0] ESTIMATE"));
     }

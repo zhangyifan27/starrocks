@@ -338,6 +338,7 @@ public class PlanFragmentBuilder {
         ExchangeNode exchangeNode =
                 new ExchangeNode(execPlan.getNextNodeId(), inputFragment.getPlanRoot(), DataPartition.UNPARTITIONED);
         exchangeNode.setNumInstances(1);
+        exchangeNode.setCost(exchangeNode.getCardinality() * exchangeNode.getAvgRowSize() / 2);
         PlanFragment exchangeFragment =
                 new PlanFragment(execPlan.getNextFragmentId(), exchangeNode, DataPartition.UNPARTITIONED);
         inputFragment.setDestination(exchangeNode);
@@ -345,6 +346,7 @@ public class PlanFragmentBuilder {
 
         exchangeFragment.setOutputExprs(outputExprs);
         execPlan.getFragments().add(exchangeFragment);
+        execPlan.getPhysicalPlan().setCost(execPlan.getPhysicalPlan().getCost() + exchangeFragment.getCost());
     }
 
     private static boolean enableComputeNode(ExecPlan execPlan) {
@@ -602,8 +604,10 @@ public class PlanFragmentBuilder {
             tupleDescriptor.computeMemLayout();
 
             projectNode.setLimit(inputFragment.getPlanRoot().getLimit());
+            projectNode.setCost(optExpr.getOwnCost());
             inputFragment.setPlanRoot(projectNode);
             inputFragment.setShortCircuit(optExpr.getShortCircuit());
+            inputFragment.setCost(projectNode.getCost() + inputFragment.getCost());
             return inputFragment;
         }
 
@@ -735,9 +739,11 @@ public class PlanFragmentBuilder {
                     node.getDictIdToStringsId(), projectMap, slotRefMap);
             decodeNode.computeStatistics(optExpression.getStatistics());
             decodeNode.setLimit(node.getLimit());
+            decodeNode.setCost(optExpression.getOwnCost());
             currentExecGroup.add(decodeNode);
 
             inputFragment.setPlanRoot(decodeNode);
+            inputFragment.setCost(decodeNode.getCost() + inputFragment.getCost());
             return inputFragment;
         }
 
@@ -898,6 +904,7 @@ public class PlanFragmentBuilder {
                     map(entry -> entry.first).collect(Collectors.toSet()));
 
             scanNode.setUsePkIndex(node.isUsePkIndex());
+            scanNode.setCost(optExpr.getOwnCost());
             context.getScanNodes().add(scanNode);
             PlanFragment fragment =
                     new PlanFragment(context.getNextFragmentId(), scanNode, DataPartition.RANDOM);
@@ -954,6 +961,7 @@ public class PlanFragmentBuilder {
             scanNode.computeRangeLocations();
             scanNode.computeStatistics(optExpression.getStatistics());
             currentExecGroup.add(scanNode, true);
+            scanNode.setCost(optExpression.getOwnCost());
 
             for (Map.Entry<ColumnRefOperator, Column> entry : scan.getColRefToColumnMetaMap().entrySet()) {
                 SlotDescriptor slotDescriptor =
@@ -1078,6 +1086,7 @@ public class PlanFragmentBuilder {
 
             hudiScanNode.setLimit(node.getLimit());
             hudiScanNode.setDataCacheOptions(node.getDataCacheOptions());
+            hudiScanNode.setCost(optExpression.getOwnCost());
 
             tupleDescriptor.computeMemLayout();
             context.getScanNodes().add(hudiScanNode);
@@ -1120,6 +1129,7 @@ public class PlanFragmentBuilder {
             }
 
             hdfsScanNode.setLimit(node.getLimit());
+            hdfsScanNode.setCost(optExpression.getOwnCost());
             hdfsScanNode.setDataCacheOptions(node.getDataCacheOptions());
 
             tupleDescriptor.computeMemLayout();
@@ -1162,6 +1172,7 @@ public class PlanFragmentBuilder {
 
             fileTableScanNode.setLimit(node.getLimit());
             fileTableScanNode.setDataCacheOptions(node.getDataCacheOptions());
+            fileTableScanNode.setCost(optExpression.getOwnCost());
 
             tupleDescriptor.computeMemLayout();
             context.getScanNodes().add(fileTableScanNode);
@@ -1217,6 +1228,7 @@ public class PlanFragmentBuilder {
 
             deltaLakeScanNode.setLimit(node.getLimit());
             deltaLakeScanNode.setDataCacheOptions(node.getDataCacheOptions());
+            deltaLakeScanNode.setCost(optExpression.getOwnCost());
 
             tupleDescriptor.computeMemLayout();
             context.getScanNodes().add(deltaLakeScanNode);
@@ -1410,6 +1422,7 @@ public class PlanFragmentBuilder {
 
             icebergScanNode.setLimit(node.getLimit());
             icebergScanNode.setDataCacheOptions(node.getDataCacheOptions());
+            icebergScanNode.setCost(optExpression.getOwnCost());
 
             tupleDescriptor.computeMemLayout();
             context.getScanNodes().add(icebergScanNode);
@@ -1676,6 +1689,7 @@ public class PlanFragmentBuilder {
             } else {
                 scanNode.setLogLimit(Config.max_per_node_grep_log_limit);
             }
+            scanNode.setCost(optExpression.getOwnCost());
 
             context.getScanNodes().add(scanNode);
             PlanFragment fragment = new PlanFragment(context.getNextFragmentId(), scanNode,
@@ -1722,6 +1736,7 @@ public class PlanFragmentBuilder {
             scanNode.computeColumnsAndFilters();
             scanNode.computeStatistics(optExpression.getStatistics());
             scanNode.setScanOptimzeOption(node.getScanOptimzeOption());
+            scanNode.setCost(optExpression.getOwnCost());
 
             context.getScanNodes().add(scanNode);
             PlanFragment fragment =
@@ -1767,6 +1782,7 @@ public class PlanFragmentBuilder {
                 throw new StarRocksPlannerException(e.getMessage(), INTERNAL_ERROR);
             }
             scanNode.setShardScanRanges(scanNode.computeShardLocations(node.getSelectedIndex()));
+            scanNode.setCost(optExpression.getOwnCost());
 
             context.getScanNodes().add(scanNode);
             PlanFragment fragment =
@@ -1809,6 +1825,8 @@ public class PlanFragmentBuilder {
             scanNode.computeColumnsAndFilters();
             scanNode.computeStatistics(optExpression.getStatistics());
             scanNode.setScanOptimzeOption(node.getScanOptimzeOption());
+            scanNode.setCost(optExpression.getOwnCost());
+
             context.getScanNodes().add(scanNode);
             PlanFragment fragment =
                     new PlanFragment(context.getNextFragmentId(), scanNode, DataPartition.UNPARTITIONED);
@@ -1836,6 +1854,7 @@ public class PlanFragmentBuilder {
                 EmptySetNode emptyNode = new EmptySetNode(context.getNextNodeId(),
                         Lists.newArrayList(tupleDescriptor.getId()));
                 emptyNode.computeStatistics(optExpr.getStatistics());
+                emptyNode.setCost(optExpr.getOwnCost());
                 currentExecGroup.add(emptyNode, true);
                 PlanFragment fragment = new PlanFragment(context.getNextFragmentId(), emptyNode,
                         DataPartition.UNPARTITIONED);
@@ -1858,6 +1877,7 @@ public class PlanFragmentBuilder {
 
                 unionNode.setMaterializedConstExprLists_(consts);
                 unionNode.computeStatistics(optExpr.getStatistics());
+                unionNode.setCost(optExpr.getOwnCost());
                 /*
                  * TODO(lhy):
                  * It doesn't make sense for vectorized execution engines, but it will appear in explain.
@@ -2225,6 +2245,7 @@ public class PlanFragmentBuilder {
             }
 
             aggregationNode.getAggInfo().setIntermediateAggrExprs(intermediateAggrExprs);
+            aggregationNode.setCost(optExpr.getOwnCost());
             // enable group execution for:
             // any aggregate stage
             // disable group execution for local shuffle Agg
@@ -2238,6 +2259,7 @@ public class PlanFragmentBuilder {
             inputFragment.setPlanRoot(aggregationNode);
             inputFragment.mergeQueryDictExprs(originalInputFragment.getQueryGlobalDictExprs());
             inputFragment.mergeQueryGlobalDicts(originalInputFragment.getQueryGlobalDicts());
+            inputFragment.setCost(aggregationNode.getCost() + inputFragment.getCost());
             return inputFragment;
         }
 
@@ -2350,11 +2372,13 @@ public class PlanFragmentBuilder {
                         + distribution.getDistributionSpec().getType(), INTERNAL_ERROR);
             }
             exchangeNode.setDataPartition(dataPartition);
+            exchangeNode.setCost(optExpr.getOwnCost());
 
             PlanFragment fragment =
                     new PlanFragment(context.getNextFragmentId(), exchangeNode, dataPartition);
             fragment.setQueryGlobalDicts(distribution.getGlobalDicts());
             fragment.setQueryGlobalDictExprs(getGlobalDictsExprs(distribution.getGlobalDictsExpr(), context));
+
             inputFragment.setDestination(exchangeNode);
             inputFragment.setOutputPartition(dataPartition);
 
@@ -2406,6 +2430,7 @@ public class PlanFragmentBuilder {
                 // So we cannot set limit at exchange
                 exchangeNode.unsetLimit();
             }
+            exchangeNode.setCost(optExpr.getOwnCost());
 
             PlanFragment fragment =
                     new PlanFragment(context.getNextFragmentId(), exchangeNode, dataPartition);
@@ -2498,8 +2523,10 @@ public class PlanFragmentBuilder {
             if (shouldBuildGlobalRuntimeFilter()) {
                 sortNode.buildRuntimeFilters(runtimeFilterIdIdGenerator, context.getDescTbl(), execGroups);
             }
+            sortNode.setCost(optExpr.getOwnCost());
 
             inputFragment.setPlanRoot(sortNode);
+            inputFragment.setCost(sortNode.getCost() + inputFragment.getCost());
             return inputFragment;
         }
 
@@ -2611,9 +2638,11 @@ public class PlanFragmentBuilder {
             if (shouldBuildGlobalRuntimeFilter()) {
                 joinNode.buildRuntimeFilters(runtimeFilterIdIdGenerator, context.getDescTbl(), execGroups);
             }
+            joinNode.setCost(optExpr.getOwnCost());
 
             leftFragment.mergeQueryGlobalDicts(rightFragment.getQueryGlobalDicts());
             leftFragment.mergeQueryDictExprs(rightFragment.getQueryGlobalDictExprs());
+            leftFragment.setCost(joinNode.getCost() + leftFragment.getCost() + rightFragment.getCost());
             return leftFragment;
         }
 
@@ -2777,6 +2806,7 @@ public class PlanFragmentBuilder {
             if (shouldBuildGlobalRuntimeFilter()) {
                 joinNode.buildRuntimeFilters(runtimeFilterIdIdGenerator, context.getDescTbl(), execGroups);
             }
+            joinNode.setCost(optExpr.getOwnCost());
 
             return buildJoinFragment(context, leftFragment, rightFragment, distributionMode, joinNode);
         }
@@ -2819,8 +2849,7 @@ public class PlanFragmentBuilder {
                     });
         }
 
-        public PlanFragment computeBucketShufflePlanFragment(ExecPlan context,
-                                                             PlanFragment stayFragment,
+        public PlanFragment computeBucketShufflePlanFragment(ExecPlan context, PlanFragment stayFragment,
                                                              PlanFragment removeFragment, JoinNode hashJoinNode) {
             hashJoinNode.setLocalHashBucket(true);
             hashJoinNode.setPartitionExprs(removeFragment.getDataPartition().getPartitionExprs());
@@ -2839,6 +2868,7 @@ public class PlanFragmentBuilder {
             stayFragment.addChildren(removeFragment.getChildren());
             stayFragment.mergeQueryGlobalDicts(removeFragment.getQueryGlobalDicts());
             stayFragment.mergeQueryDictExprs(removeFragment.getQueryGlobalDictExprs());
+            stayFragment.setCost(hashJoinNode.getCost() + stayFragment.getCost() + removeFragment.getCost());
             return stayFragment;
         }
 
@@ -2862,6 +2892,7 @@ public class PlanFragmentBuilder {
             stayFragment.addChildren(removeFragment.getChildren());
             stayFragment.mergeQueryGlobalDicts(removeFragment.getQueryGlobalDicts());
             stayFragment.mergeQueryDictExprs(removeFragment.getQueryGlobalDictExprs());
+            stayFragment.setCost(hashJoinNode.getCost() + stayFragment.getCost() + removeFragment.getCost());
             return stayFragment;
         }
 
@@ -2880,8 +2911,10 @@ public class PlanFragmentBuilder {
                             new AssertNumRowsElement(assertOneRow.getCheckRows(), assertOneRow.getTips(),
                                     assertOneRow.getAssertion()));
             node.computeStatistics(optExpression.getStatistics());
+            node.setCost(optExpression.getOwnCost());
             currentExecGroup.add(node);
             inputFragment.setPlanRoot(node);
+            inputFragment.setCost(node.getCost() + inputFragment.getCost());
             return inputFragment;
         }
 
@@ -2947,8 +2980,9 @@ public class PlanFragmentBuilder {
             }
             passPartitionByToSortNode(context, inputFragment.getPlanRoot(), analyticEvalNode.getPartitionExprs(),
                     node.isSkewed());
-
+            analyticEvalNode.setCost(optExpr.getOwnCost());
             inputFragment.setPlanRoot(analyticEvalNode);
+            inputFragment.setCost(analyticEvalNode.getCost() + inputFragment.getCost());
             return inputFragment;
         }
 
@@ -3036,6 +3070,7 @@ public class PlanFragmentBuilder {
                 Preconditions.checkState(slotIdMap.size() == setOperation.getOutputColumnRefOp().size());
             }
             setOperationNode.setOutputSlotIdToChildSlotIdMaps(outputSlotIdToChildSlotIdMaps);
+            setOperationNode.setCost(optExpr.getOwnCost());
 
             Preconditions.checkState(optExpr.getInputs().size() == setOperation.getChildOutputColumns().size());
 
@@ -3165,8 +3200,10 @@ public class PlanFragmentBuilder {
                 repeatNode.getConjuncts().add(ScalarOperatorToExpr.buildExecExpression(predicate, formatterContext));
             }
             repeatNode.computeStatistics(optExpr.getStatistics());
+            repeatNode.setCost(optExpr.getOwnCost());
 
             inputFragment.setPlanRoot(repeatNode);
+            inputFragment.setCost(repeatNode.getCost() + inputFragment.getCost());
             return inputFragment;
         }
 
@@ -3206,7 +3243,9 @@ public class PlanFragmentBuilder {
             selectNode.computeStatistics(optExpr.getStatistics());
             selectNode.setCommonSlotMap(commonSubOperatorMap);
             currentExecGroup.add(selectNode);
+            selectNode.setCost(optExpr.getOwnCost());
             inputFragment.setPlanRoot(selectNode);
+            inputFragment.setCost(selectNode.getCost() + inputFragment.getCost());
             return inputFragment;
         }
 
@@ -3241,7 +3280,9 @@ public class PlanFragmentBuilder {
             tableFunctionNode.computeStatistics(optExpression.getStatistics());
             tableFunctionNode.setLimit(physicalTableFunction.getLimit());
             currentExecGroup.add(tableFunctionNode);
+            tableFunctionNode.setCost(optExpression.getOwnCost());
             inputFragment.setPlanRoot(tableFunctionNode);
+            inputFragment.setCost(tableFunctionNode.getCost() + inputFragment.getCost());
             return inputFragment;
         }
 
@@ -3306,6 +3347,7 @@ public class PlanFragmentBuilder {
             exchangeNode.setDataPartition(cteFragment.getDataPartition());
 
             exchangeNode.setNumInstances(cteFragment.getPlanRoot().getNumInstances());
+            exchangeNode.setCost(cteFragment.getCost());
 
             PlanFragment consumeFragment = new PlanFragment(context.getNextFragmentId(), exchangeNode,
                     cteFragment.getDataPartition());
@@ -3327,6 +3369,7 @@ public class PlanFragmentBuilder {
                         new SelectNode(context.getNextNodeId(), consumeFragment.getPlanRoot(), predicates);
                 this.currentExecGroup.add(selectNode, true);
                 selectNode.computeStatistics(optExpression.getStatistics());
+                selectNode.setCost(optExpression.getOwnCost());
                 consumeFragment.setPlanRoot(selectNode);
             }
 
@@ -3337,6 +3380,7 @@ public class PlanFragmentBuilder {
 
             cteFragment.getDestNodeList().add(exchangeNode);
             consumeFragment.addChild(cteFragment);
+            consumeFragment.setCost(optExpression.getOwnCost());
             context.getFragments().add(consumeFragment);
             return consumeFragment;
         }
@@ -3353,6 +3397,7 @@ public class PlanFragmentBuilder {
                     .forEach(i -> outputs.add(context.getColRefToExpr().get(columnRefFactory.getColumnRef(i))));
 
             cteProduce.setOutputExprs(outputs);
+            cteProduce.setCost(optExpression.getOwnCost() + child.getCost());
             context.getCteProduceFragments().put(cteId, cteProduce);
             context.getFragments().add(cteProduce);
             return child;

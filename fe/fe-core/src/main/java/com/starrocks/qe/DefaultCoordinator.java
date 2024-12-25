@@ -524,6 +524,14 @@ public class DefaultCoordinator extends Coordinator {
         return coordinatorPreprocessor;
     }
 
+    public int getFragmentInstaceNum(PlanFragmentId id) {
+        ExecutionFragment fragment = executionDAG.getFragment(id);
+        if (fragment != null) {
+            return fragment.getInstances().size();
+        }
+        return 0;
+    }
+
     public List<PlanFragment> getFragments() {
         return jobSpec.getFragments();
     }

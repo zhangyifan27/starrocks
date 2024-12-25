@@ -212,6 +212,7 @@ public class UtFrameUtils {
         ctx.setThreadLocalInfo();
         ctx.setDumpInfo(new MockDumpInfo());
         ctx.setSessionId(UUIDUtil.genUUID());
+        ctx.setExecutionId(UUIDUtil.toTUniqueId(UUIDUtil.genUUID()));
         return ctx;
     }
 

@@ -6,6 +6,7 @@ RESULT SINK
 
 32:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 1600000
 column statistics:
 * ps_partkey-->[1.0, 2.0E7, 0.0, 8.0, 1600000.0] ESTIMATE
@@ -47,6 +48,7 @@ OutPut Exchange Id: 32
 |
 |----28:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 12:AGGREGATE (merge finalize)
@@ -59,6 +61,7 @@ OutPut Exchange Id: 32
 |
 11:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [1: ps_partkey, INT, true]
 cardinality: 3200000
 
@@ -91,6 +94,7 @@ OutPut Exchange Id: 28
 |
 24:EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 1
 
 PLAN FRAGMENT 3(F06)
@@ -130,6 +134,7 @@ OutPut Exchange Id: 24
 |
 |----20:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 40000
 |
 13:HdfsScanNode
@@ -173,6 +178,7 @@ OutPut Exchange Id: 20
 |
 |----17:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 14:HdfsScanNode
@@ -254,6 +260,7 @@ OutPut Exchange Id: 11
 |
 |----7:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 40000
 |
 0:HdfsScanNode
@@ -298,6 +305,7 @@ OutPut Exchange Id: 07
 |
 |----4:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 1
 |
 1:HdfsScanNode

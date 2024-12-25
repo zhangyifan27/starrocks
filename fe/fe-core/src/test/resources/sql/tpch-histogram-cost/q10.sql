@@ -7,6 +7,7 @@ RESULT SINK
 
 17:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 limit: 20
 cardinality: 20
 column statistics:
@@ -98,6 +99,7 @@ OutPut Exchange Id: 17
 |
 |----12:EXCHANGE
 |       distribution type: BROADCAST
+|       partition type: UNPARTITIONED
 |       cardinality: 25
 |
 10:Project
@@ -144,6 +146,7 @@ OutPut Exchange Id: 17
 |
 |----8:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: BUCKET_SHUFFLE_HASH_PARTITIONED
 |       partition exprs: [11: O_CUSTKEY, INT, false]
 |       cardinality: 5644405
 |
@@ -214,6 +217,7 @@ OutPut Exchange Id: 08
 |
 |----5:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: BUCKET_SHUFFLE_HASH_PARTITIONED
 |       partition exprs: [10: O_ORDERKEY, INT, false]
 |       cardinality: 5644405
 |

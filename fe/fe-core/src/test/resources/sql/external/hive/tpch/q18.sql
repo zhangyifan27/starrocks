@@ -6,6 +6,7 @@ RESULT SINK
 
 20:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 limit: 100
 cardinality: 100
 column statistics:
@@ -124,16 +125,19 @@ OutPut Exchange Id: 20
 |    |    |
 |    |    11:EXCHANGE
 |    |       distribution type: SHUFFLE
+|    |       partition type: HASH_PARTITIONED
 |    |       partition exprs: [34: l_orderkey, INT, true]
 |    |       cardinality: 150000000
 |    |
 |    8:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [9: o_orderkey, INT, true]
 |       cardinality: 150000000
 |
 1:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [18: l_orderkey, INT, true]
 cardinality: 600037902
 
@@ -201,11 +205,13 @@ OutPut Exchange Id: 08
 |
 |----5:EXCHANGE
 |       distribution type: SHUFFLE
+|       partition type: HASH_PARTITIONED
 |       partition exprs: [1: c_custkey, INT, true]
 |       cardinality: 15000000
 |
 3:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [10: o_custkey, INT, true]
 cardinality: 150000000
 

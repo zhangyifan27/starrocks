@@ -6,6 +6,7 @@ RESULT SINK
 
 6:MERGING-EXCHANGE
 distribution type: GATHER
+partition type: UNPARTITIONED
 cardinality: 3
 column statistics:
 * L_RETURNFLAG-->[-Infinity, Infinity, 0.0, 1.0, 3.0] MCV: [[N:304385200][R:147887000][A:147849300]] ESTIMATE
@@ -59,6 +60,7 @@ OutPut Exchange Id: 06
 |
 3:EXCHANGE
 distribution type: SHUFFLE
+partition type: HASH_PARTITIONED
 partition exprs: [9: L_RETURNFLAG, VARCHAR, false], [10: L_LINESTATUS, VARCHAR, false]
 cardinality: 3
 

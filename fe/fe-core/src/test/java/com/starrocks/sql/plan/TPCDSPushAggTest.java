@@ -75,7 +75,9 @@ public class TPCDSPushAggTest extends TPCDS1TTestBase {
         String plan = getCostExplain(sql);
         assertContains(plan, "|----5:EXCHANGE\n" +
                 "  |       distribution type: BROADCAST\n" +
+                "  |       partition type: UNPARTITIONED\n" +
                 "  |       cardinality: 73049\n" +
+                "  |       cost: 2337568.0\n" +
                 "  |       probe runtime filters:\n" +
                 "  |       - filter_id = 3, probe_expr = (48: d_date)");
     }

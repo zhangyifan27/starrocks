@@ -338,9 +338,11 @@ public class LowCardinalityTest extends PlanTestBase {
     public void testDecodeNodeRewrite8() throws Exception {
         String sql = "select S_ADDRESS, count(S_ADDRESS) from supplier group by S_ADDRESS";
         String plan = getCostExplain(sql);
+        System.out.println(plan);
         Assert.assertTrue(plan.contains("  2:Decode\n" +
                 "  |  <dict id 10> : <string id 3>\n" +
                 "  |  cardinality: 1\n" +
+                "  |  cost: 0.0\n" +
                 "  |  column statistics: \n" +
                 "  |  * S_ADDRESS-->[-Infinity, Infinity, 0.0, 40.0, 10000.0] ESTIMATE\n" +
                 "  |  * count-->[0.0, 1.0, 0.0, 8.0, 1.0] ESTIMATE"));
@@ -1920,6 +1922,7 @@ public class LowCardinalityTest extends PlanTestBase {
                 "result: VARCHAR; args nullable: true; result nullable: true]\n" +
                 "  |  group by: [2: S_NAME, CHAR, false]\n" +
                 "  |  cardinality: 1\n" +
+                "  |  cost: 80.0\n" +
                 "  |  column statistics: \n" +
                 "  |  * S_NAME-->[-Infinity, Infinity, 0.0, 1.0, 1.0] UNKNOWN\n" +
                 "  |  * max-->[-Infinity, Infinity, 0.0, 1.0, 1.0] UNKNOWN\n" +
@@ -1969,6 +1972,7 @@ public class LowCardinalityTest extends PlanTestBase {
         assertContains(plan, "  3:Decode\n" +
                 "  |  <dict id 38> : <string id 2>\n" +
                 "  |  cardinality: 1\n" +
+                "  |  cost: 0.0\n" +
                 "  |  probe runtime filters:\n" +
                 "  |  - filter_id = 1, probe_expr = (2: P_NAME)\n" +
                 "  |  column statistics: \n" +
@@ -1982,6 +1986,7 @@ public class LowCardinalityTest extends PlanTestBase {
                 "WHEN DictDecode(39: P_BRAND, [<place-holder> = 'b']) THEN 'b1' ELSE 'c1' END\n" +
                 "  |  38 <-> [38: P_NAME, INT, false]\n" +
                 "  |  cardinality: 1\n" +
+                "  |  cost: 0.0\n" +
                 "  |  probe runtime filters:\n" +
                 "  |  - filter_id = 0, probe_expr = (<slot 12>)\n" +
                 "  |  column statistics: \n" +
