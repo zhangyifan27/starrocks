@@ -45,6 +45,7 @@ import com.starrocks.sql.optimizer.operator.physical.PhysicalDistributionOperato
 import com.starrocks.sql.optimizer.operator.physical.PhysicalHashAggregateOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalHashJoinOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalHiveScanOperator;
+import com.starrocks.sql.optimizer.operator.physical.PhysicalIcebergScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalMergeJoinOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalNestLoopJoinOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalNoCTEOperator;
@@ -516,6 +517,13 @@ public class CostModel {
                 }
             }
             return Optional.empty();
+        }
+
+        @Override
+        public CostEstimate visitPhysicalIcebergScan(PhysicalIcebergScanOperator node, ExpressionContext context) {
+            Statistics statistics = context.getStatistics();
+            Preconditions.checkNotNull(statistics);
+            return CostEstimate.of(statistics.getComputeSize(), 0, 0);
         }
     }
 }
