@@ -751,6 +751,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     // negative value means force interleaving under the group size of abs(interleaving_group_size)
     public static final String INTERLEAVING_GROUP_SIZE = "interleaving_group_size";
 
+    public static final String ENABLE_ICEBERG_ROUTINE_LOAD_V2_CHECK = "enable_iceberg_routine_load_v2_check";
+
     public static final String CBO_PUSHDOWN_TOPN_LIMIT = "cbo_push_down_topn_limit";
 
     public static final String ENABLE_AGGREGATION_PIPELINE_SHARE_LIMIT = "enable_aggregation_pipeline_share_limit";
@@ -1777,6 +1779,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_DATACACHE_IO_ADAPTOR)
     private boolean enableDataCacheIOAdaptor = true;
+
+    @VarAttr(name = ENABLE_ICEBERG_ROUTINE_LOAD_V2_CHECK)
+    private boolean enableIcebergRoutineLoadV2Check = true;
+
+    public boolean enableIcebergRoutineLoadV2Check() {
+        return enableIcebergRoutineLoadV2Check;
+    }
+
+    public void setenableIcebergRoutineLoadV2Check(boolean enableIcebergRoutineLoadV2Check) {
+        this.enableIcebergRoutineLoadV2Check = enableIcebergRoutineLoadV2Check;
+    }
 
     @VariableMgr.VarAttr(name = DATACACHE_EVICT_PROBABILITY, flag = VariableMgr.INVISIBLE)
     private int datacacheEvictProbability = 100;

@@ -48,6 +48,7 @@ import com.starrocks.planner.IcebergStreamLoadPlanner;
 import com.starrocks.planner.PlanNodeId;
 import com.starrocks.planner.StreamLoadPlanner;
 import com.starrocks.planner.StreamLoadScanNode;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.qe.QeProcessorImpl;
 import com.starrocks.qe.scheduler.Coordinator;
@@ -745,6 +746,10 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob implements GsonPreProc
     }
 
     private void checkIcebergV2() throws DdlException {
+        if (!ConnectContext.get().getSessionVariable().enableIcebergRoutineLoadV2Check()) {
+            LOG.info("enableIcebergRoutineLoadV2Check is set false, skip the iceberg v2 check.");
+            return;
+        }
         boolean isMorTable;
         try {
             org.apache.iceberg.Table iceTbl = getIceTbl();
@@ -763,7 +768,11 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob implements GsonPreProc
             if (((OlapTable) table).getKeysType() != KeysType.PRIMARY_KEYS &&
                     ((OlapTable) table).getKeysType() != KeysType.AGG_KEYS) {
                 throw new DdlException("Primary key tables fully support Iceberg v2 copy-on-write tables," +
-                        " while aggregation tables have partial support.");
+                        " while aggregation tables have partial support. " +
+                        "Besides the primary key model, consumption with overwrite mode may cause data duplication issues. " +
+                        "If you are certain that the upstream COW (Copy-on-Write) table will only import data " +
+                        "in append mode and are aware of the potential data duplication risks, " +
+                        "you can skip this check by `set enable_iceberg_routine_load_v2_check = false`");
             }
             // TODO: Enhance the Validity Checks for the icebergRoutineLoad Import Method for Aggregation Models
             // Enhance the Validity Checks for the icebergRoutineLoad Import Method for Aggregation Models, for example:
