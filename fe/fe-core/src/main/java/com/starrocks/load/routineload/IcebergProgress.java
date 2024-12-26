@@ -178,12 +178,11 @@ public class IcebergProgress extends RoutineLoadProgress {
         }
         // `last` is either last done meta or last running meta
         IcebergSplitMeta last = null;
+        long fullConsumeCompleteCheckPoint = 0;
         for (IcebergSplitMeta splitMeta : splitMetas) {
             last = splitMeta;
             if (splitMeta.isAllDone()) {
-                if (iceTbl != null) {
-                    maxTimeLag = iceTbl.currentSnapshot().timestampMillis() - splitMeta.getEndSnapshotTimestamp();
-                }
+                fullConsumeCompleteCheckPoint = splitMeta.getEndSnapshotTimestamp();
                 continue;
             }
             // this is the first running splitMeta
@@ -208,6 +207,12 @@ public class IcebergProgress extends RoutineLoadProgress {
             }
         }
         lastCheckpointSplitMeta = last;
+        if (lastCheckpointSplitMeta == null) {
+            maxTimeLag = 0L;
+        } else {
+            maxTimeLag = (lastCheckpointSplitMeta.getEndSnapshotTimestamp() - fullConsumeCompleteCheckPoint) / 1000;
+        }
+        LOG.debug("update maxTimeLag: " + maxTimeLag);
     }
 
     // For IcebergRoutineLoad tasks, the max time lag is calculated as the difference between the snapshot time of
@@ -249,9 +254,11 @@ public class IcebergProgress extends RoutineLoadProgress {
 
     @Override
     public String toString() {
-        return "IcebergProgress [current planned size=" + (lastSplitMeta == null ? 0 : lastSplitMeta.getTotalSplits()) +
-                ", splitDoneRecords size=" + splitDoneRecords.size() + ", running size=" +
-                splitDoneRecords.values().stream().filter((Predicate<Boolean>) done -> !done).count() + "]";
+        return "IcebergProgress [current planned size=" + (lastSplitMeta == null ? 0 : lastSplitMeta.getTotalSplits())
+                + ", splitDoneRecords size=" + splitDoneRecords.size()
+                + ", running size=" + splitDoneRecords.values().stream().filter((Predicate<Boolean>) done -> !done).count()
+                + ", lastCheckpointSplitMeta: " + (lastCheckpointSplitMeta == null ? "null" : lastCheckpointSplitMeta.toString())
+                + "]";
     }
 
     @Override
