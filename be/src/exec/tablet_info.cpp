@@ -695,6 +695,10 @@ Status OlapTablePartitionParam::find_tablets(Chunk* chunk, std::vector<OlapTable
         } else {
             for (size_t i = 0; i < partition_columns.size(); ++i) {
                 partition_columns[i] = chunk->get_column_by_slot_id(_partition_slot_descs[i]->id());
+                if (partition_columns[i]->is_nullable()) {
+                    auto* nullable_column = down_cast<const NullableColumn*>(partition_columns[i].get());
+                    partition_columns[i] = nullable_column->data_column();
+                }
                 DCHECK(partition_columns[i] != nullptr);
             }
         }

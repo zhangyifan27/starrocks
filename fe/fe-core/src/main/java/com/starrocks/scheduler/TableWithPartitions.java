@@ -20,6 +20,7 @@ import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.sql.common.PRangeCell;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -50,10 +51,26 @@ public class TableWithPartitions {
         if (partitionNames == null || partitionNames.isEmpty()) {
             return Lists.newArrayList();
         }
-        return partitionNames.stream()
-                .filter(partitinRangeMap::containsKey)
-                .map(p -> new PRangeCell(partitinRangeMap.get(p)))
-                .sorted(PRangeCell::compareTo)
-                .collect(Collectors.toList());
+        try {
+            return partitionNames.stream()
+                    .filter(partitinRangeMap::containsKey)
+                    .map(p -> new PRangeCell(partitinRangeMap.get(p)))
+                    .sorted(PRangeCell::compareTo)
+                    .collect(Collectors.toList());
+        } catch (IllegalArgumentException e) {
+            return partitionNames.stream()
+                    .filter(partitinRangeMap::containsKey)
+                    .map(p -> new PRangeCell(partitinRangeMap.get(p)))
+                    .sorted(new PRangeCellComparator())
+                    .collect(Collectors.toList());
+        }
+    }
+
+    private static class PRangeCellComparator implements Comparator<PRangeCell> {
+
+        @Override
+        public int compare(PRangeCell p1, PRangeCell p2) {
+            return p1.getRange().lowerEndpoint().compareTo(p2.getRange().lowerEndpoint());
+        }
     }
 }

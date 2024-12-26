@@ -180,7 +180,12 @@ public class SyncPartitionUtils {
             return range;
         }
         LocalDateTime lowerDate = DateUtils.parseStrictDateTime(lower.getStringValue());
-        LocalDateTime upperDate = DateUtils.parseStrictDateTime(upper.getStringValue());
+        LocalDateTime upperDate = null;
+        if (upper == MaxLiteral.MAX_VALUE) {
+            upperDate = DateLiteral.MAX_DATE.toLocalDateTime();
+        } else {
+            upperDate = DateUtils.parseStrictDateTime(upper.getStringValue());
+        }
         try {
             PartitionKey lowerPartitionKey = new PartitionKey();
             PartitionKey upperPartitionKey = new PartitionKey();

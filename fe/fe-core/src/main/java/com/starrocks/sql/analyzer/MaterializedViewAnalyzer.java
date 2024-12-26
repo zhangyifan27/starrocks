@@ -60,6 +60,7 @@ import com.starrocks.common.FeConstants;
 import com.starrocks.common.Pair;
 import com.starrocks.common.util.DateUtils;
 import com.starrocks.common.util.PropertyAnalyzer;
+import com.starrocks.connector.hive.THiveUtils;
 import com.starrocks.mv.analyzer.MVPartitionSlotRefResolver;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
@@ -838,7 +839,7 @@ public class MaterializedViewAnalyzer {
                     statement.setPartitionType(PartitionType.LIST);
                 }
             } else {
-                List<Column> refPartitionCols = refBaseTable.getPartitionColumns();
+                List<Column> refPartitionCols = getPartitionColumns(refBaseTable);
                 Optional<Column> refPartitionColOpt = refPartitionCols.stream()
                         .filter(col -> col.getName().equals(slotRef.getColumnName()))
                         .findFirst();
@@ -860,7 +861,27 @@ public class MaterializedViewAnalyzer {
                 } else {
                     statement.setPartitionType(PartitionType.RANGE);
                 }
+                if (refBaseTable.isHiveTable()) {
+                    HiveTable hiveTable = (HiveTable) refBaseTable;
+                    if (hiveTable.isThiveTable()) {
+                        if (THiveUtils.isListPartitionType(hiveTable, slotRef.getColumnName())) {
+                            statement.setPartitionType(PartitionType.LIST);
+                        } else {
+                            statement.setPartitionType(PartitionType.RANGE);
+                        }
+                    }
+                }
             }
+        }
+
+        public List<Column> getPartitionColumns(Table table) {
+            if (table.isHiveTable()) {
+                HiveTable hiveTable = (HiveTable) table;
+                if (hiveTable.isThiveTable()) {
+                    return hiveTable.getThivePartitionColumns();
+                }
+            }
+            return table.getPartitionColumns();
         }
 
         private void checkPartitionColumnWithBaseOlapTable(SlotRef slotRef, OlapTable table) {

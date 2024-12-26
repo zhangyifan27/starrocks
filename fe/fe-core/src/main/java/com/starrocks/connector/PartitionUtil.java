@@ -856,10 +856,8 @@ public class PartitionUtil {
                     //List<String> partitionNameValues = toPartitionValues(partitionName);
                     List<String> values = toPartitionValues(partitionName);
                     String thivePartition = values.get(partitionColumnIndex);
-                    if (thivePartition.equalsIgnoreCase(THiveConstants.DEFAULT)) {
-                        String mvPartitionName = "thivemvp_DEFAULT";
-                        partitionListMap.put(mvPartitionName, new PListCell(Lists.newArrayList()));
-                    } else {
+                    // ignore DEFAULT partition
+                    if (!thivePartition.equalsIgnoreCase(THiveConstants.DEFAULT)) {
                         List<String> partitionNameValues = partitionNameToPartitionValues.get(thivePartition);
                         String mvPartitionName = "thivemvp_" + thivePartition;
                         List<List<String>> partitionKeyList = generateMVPartitionList(partitionNameValues);

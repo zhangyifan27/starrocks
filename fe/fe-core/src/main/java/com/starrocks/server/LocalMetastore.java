@@ -3195,6 +3195,16 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
 
         // create partition info
         PartitionInfo partitionInfo = buildPartitionInfo(stmt);
+        if (partitionInfo instanceof ListPartitionInfo) {
+            // list partition does not support partition column is null
+            // List partition columns must not be nullable in Materialized view for now.
+            stmt.getPartitionColumn().setIsAllowNull(false);
+            for (Column column : baseSchema) {
+                if (column.getName().equalsIgnoreCase(stmt.getPartitionColumn().getName())) {
+                    column.setIsAllowNull(false);
+                }
+            }
+        }
         // create distribution info
         DistributionDesc distributionDesc = stmt.getDistributionDesc();
         Preconditions.checkNotNull(distributionDesc);

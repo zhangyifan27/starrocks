@@ -41,6 +41,7 @@ import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Pair;
+import com.starrocks.common.util.DateUtils;
 import com.starrocks.connector.PartitionUtil;
 import com.starrocks.connector.statistics.ConnectorTableColumnStats;
 import com.starrocks.qe.ConnectContext;
@@ -153,6 +154,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -844,8 +846,27 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
                 min = Utils.getLongFromDateTime(minDateLiteral.toLocalDateTime());
                 max = Utils.getLongFromDateTime(maxDateLiteral.toLocalDateTime());
             } else {
-                min = firstKey.getValue().lowerEndpoint().getKeys().get(0).getDoubleValue();
-                max = lastKey.getValue().upperEndpoint().getKeys().get(0).getDoubleValue();
+                if (olapTable.isMaterializedView()) {
+                    try {
+                        min = firstKey.getValue().lowerEndpoint().getKeys().get(0).getDoubleValue();
+                        max = lastKey.getValue().upperEndpoint().getKeys().get(0).getDoubleValue();
+                    } catch (NumberFormatException e) {
+                        LocalDateTime lowerDate = DateUtils.parseStrictDateTime(
+                                firstKey.getValue().lowerEndpoint().getKeys().get(0).getStringValue());
+                        LocalDateTime upperDate = null;
+                        if (maxLiteral instanceof MaxLiteral) {
+                            upperDate = new DateLiteral(Type.DATE, true).toLocalDateTime();
+                        } else {
+                            upperDate = DateUtils.parseStrictDateTime(
+                                    lastKey.getValue().lowerEndpoint().getKeys().get(0).getStringValue());
+                        }
+                        min = Utils.getLongFromDateTime(lowerDate);
+                        max = Utils.getLongFromDateTime(upperDate);
+                    }
+                } else {
+                    min = firstKey.getValue().lowerEndpoint().getKeys().get(0).getDoubleValue();
+                    max = lastKey.getValue().upperEndpoint().getKeys().get(0).getDoubleValue();
+                }
             }
 
             int selectedPartitionsSize = selectedPartitionId.size();
