@@ -108,12 +108,6 @@ public class HivePartitionEvaluatorVisitor extends ScalarOperatorVisitor<Pair<Se
         ConcurrentNavigableMap<LiteralExpr, Set<Long>> partitionValueMap = columnToPartitionValuesMap.get(leftChild);
         Set<Long> nullPartitions = columnToNullPartitions.get(leftChild);
 
-        if (binaryPredicate.getChild(0) instanceof CastOperator && partitionValueMap != null) {
-            // partitionValueMap need cast to target type
-            partitionValueMap = getCastPartitionValueMap((CastOperator) binaryPredicate.getChild(0),
-                    partitionValueMap);
-        }
-
         if (binaryPredicate.getChild(0) instanceof CallOperator && partitionValueMap != null) {
             partitionValueMap = getCallPartitionValueMap((CallOperator) binaryPredicate.getChild(0),
                     partitionValueMap);
