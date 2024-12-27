@@ -381,6 +381,7 @@ public class OptThivePartitionPruner {
 
         Map<Long, Range<PartitionKey>> keyRangeById = Maps.newHashMap();
         long partitionId = 0;
+        Set<Long> defaultPartitionIds = new HashSet<>();
         for (Map.Entry<String, List<String>> entry : partitionNameToPartitionValues.entrySet()) {
             PartitionKey partitionKey = new HivePartitionKey();
             partitionKey.pushColumn(LiteralExpr.create(entry.getKey(), Type.STRING), PrimitiveType.VARCHAR);
@@ -402,14 +403,7 @@ public class OptThivePartitionPruner {
                     keyRangeById.put(partitionId, Range.closedOpen(lowerBound, upperBound));
                 }
             } else {
-                if (values.size() > 0) {
-                    PartitionKey lowerBound = new PartitionKey();
-                    lowerBound.pushColumn(values.get(values.size() - 1), partitionColumn.getType().getPrimitiveType());
-                    keyRangeById.put(partitionId, Range.atLeast(lowerBound));
-                } else {
-                    // only one partition and it is default.
-                    keyRangeById.put(partitionId, Range.all());
-                }
+                defaultPartitionIds.add(partitionId);
             }
             operator.getScanOperatorPredicates().getIdToPartitionKey().put(partitionId, partitionKey);
 
@@ -426,10 +420,9 @@ public class OptThivePartitionPruner {
 
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
         Collection<Long> selectedPartitionIds = partitionPruner.prune();
-        if (selectedPartitionIds == null) {
-            selectedPartitionIds = scanOperatorPredicates.getIdToPartitionKey().keySet();
-        }
-        scanOperatorPredicates.setSelectedPartitionIds(selectedPartitionIds);
+        Collection<Long> finalPartitions = processThiveDefaultParititions(selectedPartitionIds, defaultPartitionIds,
+                new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
+        scanOperatorPredicates.setSelectedPartitionIds(finalPartitions);
 
         // partition prune use id_hive_part = 'xxx'
         thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
