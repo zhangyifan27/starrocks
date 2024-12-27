@@ -1677,7 +1677,8 @@ public class GlobalStateMgr {
             starrocksMetaVersion = flag;
         }
 
-        if (!MetaVersion.isCompatible(starrocksMetaVersion, FeConstants.STARROCKS_META_VERSION)) {
+        // For compatibility with version 3.1.11-tq
+        if ((starrocksMetaVersion != FeConstants.STARROCKS_META_VERSION) && (starrocksMetaVersion != 5)) {
             LOG.error("Not compatible with meta version {}, current version is {}",
                         starrocksMetaVersion, FeConstants.STARROCKS_META_VERSION);
             System.exit(-1);
@@ -1686,7 +1687,7 @@ public class GlobalStateMgr {
         MetaContext.get().setStarRocksMetaVersion(starrocksMetaVersion);
         ImageHeader header = GsonUtils.GSON.fromJson(Text.readString(dis), ImageHeader.class);
         idGenerator.setId(header.getBatchEndId());
-        LOG.info("finished to replay header from image");
+        LOG.info("finished to replay header from image, starrocksMetaVersion = {} ", starrocksMetaVersion);
     }
 
     // Only called by checkpoint thread

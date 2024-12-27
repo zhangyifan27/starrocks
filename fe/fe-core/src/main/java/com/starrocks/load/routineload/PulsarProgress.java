@@ -20,12 +20,10 @@ import com.google.common.collect.Maps;
 import com.google.gson.Gson;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.common.Pair;
-import com.starrocks.common.StarRocksFEMetaVersion;
 import com.starrocks.common.UserException;
 import com.starrocks.common.io.Text;
 import com.starrocks.persist.gson.GsonPostProcessable;
 import com.starrocks.persist.gson.GsonPreProcessable;
-import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.thrift.TPulsarRLTaskProgress;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -154,26 +152,17 @@ public class PulsarProgress extends RoutineLoadProgress implements GsonPreProces
         }
     }
 
+    @Override
     public void readFields(DataInput in) throws IOException {
         super.readFields(in);
-        if (GlobalStateMgr.getCurrentStateStarRocksMetaVersion() < StarRocksFEMetaVersion.VERSION_5) {
-            int backlogSize = in.readInt();
-            Map<String, Long> tmpPartitionToBacklogNum = new HashMap<>();
-            for (int i = 0; i < backlogSize; i++) {
-                tmpPartitionToBacklogNum.put(Text.readString(in), in.readLong());
-            }
-        }
-
-        if (GlobalStateMgr.getCurrentStateStarRocksMetaVersion() >= StarRocksFEMetaVersion.VERSION_5) {
-            int positionSize = in.readInt();
-            partitionToInitialPosition = new HashMap<>();
-            for (int i = 0; i < positionSize; i++) {
-                String partition = Text.readString(in);
-                int length = in.readInt();
-                byte[] messageId = new byte[length];
-                in.readFully(messageId, 0, length);
-                partitionToInitialPosition.put(partition, MessageId.fromByteArray(messageId));
-            }
+        int positionSize = in.readInt();
+        partitionToInitialPosition = new HashMap<>();
+        for (int i = 0; i < positionSize; i++) {
+            String partition = Text.readString(in);
+            int length = in.readInt();
+            byte[] messageId = new byte[length];
+            in.readFully(messageId, 0, length);
+            partitionToInitialPosition.put(partition, MessageId.fromByteArray(messageId));
         }
     }
 

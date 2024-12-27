@@ -28,9 +28,6 @@ public class StarRocksFEMetaVersion {
     //change all serialize format to json
     public static final int VERSION_4 = 4;
 
-    //pulsar exactly once
-    public static final int VERSION_5 = 5;
-
     // note: when increment meta version, should assign the latest version to VERSION_CURRENT
-    public static final int VERSION_CURRENT = VERSION_5;
+    public static final int VERSION_CURRENT = VERSION_4;
 }
