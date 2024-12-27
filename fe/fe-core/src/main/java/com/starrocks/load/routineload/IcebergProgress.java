@@ -74,6 +74,7 @@ public class IcebergProgress extends RoutineLoadProgress {
     private IcebergSplitMeta lastCheckpointSplitMeta;
     private String lastWatermark = "-1";
     private Long maxTimeLag = null;
+    private long fullConsumeCompleteCheckPoint = 0;
 
     @SerializedName("r")
     private ConcurrentHashMap<IcebergSplit, Boolean> splitDoneRecords = new ConcurrentHashMap<>();
@@ -178,11 +179,10 @@ public class IcebergProgress extends RoutineLoadProgress {
         }
         // `last` is either last done meta or last running meta
         IcebergSplitMeta last = null;
-        long fullConsumeCompleteCheckPoint = 0;
         for (IcebergSplitMeta splitMeta : splitMetas) {
             last = splitMeta;
             if (splitMeta.isAllDone()) {
-                fullConsumeCompleteCheckPoint = splitMeta.getEndSnapshotTimestamp();
+                fullConsumeCompleteCheckPoint =  Math.max(fullConsumeCompleteCheckPoint, splitMeta.getEndSnapshotTimestamp());
                 continue;
             }
             // this is the first running splitMeta
@@ -210,7 +210,7 @@ public class IcebergProgress extends RoutineLoadProgress {
         if (lastCheckpointSplitMeta == null) {
             maxTimeLag = 0L;
         } else {
-            maxTimeLag = (lastCheckpointSplitMeta.getEndSnapshotTimestamp() - fullConsumeCompleteCheckPoint) / 1000;
+            maxTimeLag = lastCheckpointSplitMeta.getEndSnapshotTimestamp() - fullConsumeCompleteCheckPoint;
         }
         LOG.debug("update maxTimeLag: " + maxTimeLag);
     }
