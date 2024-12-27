@@ -19,7 +19,8 @@ public enum ErrorType {
     INTERNAL_ERROR(1),
     UNSUPPORTED(2),
     META_NOT_FOUND(3),
-    RULE_EXHAUSTED(4);
+    RULE_EXHAUSTED(4),
+    FULL_TABLE_SCAN_ERROR(5);
 
     private final int code;
 

@@ -528,7 +528,7 @@ public class OptExternalPartitionPruner {
                 partitionPruner = new RangePartitionPruner(
                         keyRangeById,
                         rangePartitionInfo.getPartitionColumns(table.getIdToColumn()),
-                        columnFilters);
+                        columnFilters, false, table.getName());
                 return partitionPruner.prune();
             }
             default: {

@@ -40,6 +40,7 @@ import com.starrocks.common.Pair;
 import com.starrocks.planner.PartitionColumnFilter;
 import com.starrocks.planner.PartitionPruner;
 import com.starrocks.planner.RangePartitionPruner;
+import com.starrocks.sql.common.StarRocksPlannerException;
 import com.starrocks.sql.optimizer.Utils;
 import com.starrocks.sql.optimizer.operator.ColumnFilterConverter;
 import com.starrocks.sql.optimizer.operator.logical.LogicalOlapScanOperator;
@@ -368,6 +369,7 @@ public class OptOlapPartitionPruner {
     public static List<Long> rangePartitionPrune(OlapTable olapTable, RangePartitionInfo partitionInfo,
                                                   LogicalOlapScanOperator operator) {
         Map<Long, Range<PartitionKey>> keyRangeById;
+        boolean filterPartition;
         if (operator.getPartitionNames() != null && operator.getPartitionNames().getPartitionNames() != null) {
             keyRangeById = Maps.newHashMap();
             for (String partName : operator.getPartitionNames().getPartitionNames()) {
@@ -377,14 +379,19 @@ public class OptOlapPartitionPruner {
                 }
                 keyRangeById.put(part.getId(), partitionInfo.getRange(part.getId()));
             }
+            filterPartition = true;
         } else {
             keyRangeById = partitionInfo.getIdToRange(false);
+            filterPartition = false;
         }
         PartitionPruner partitionPruner = new RangePartitionPruner(keyRangeById,
                 partitionInfo.getPartitionColumns(olapTable.getIdToColumn()),
-                operator.getColumnFilters());
+                operator.getColumnFilters(), filterPartition, olapTable.getName());
         try {
             return partitionPruner.prune();
+        } catch (StarRocksPlannerException e) {
+            LOG.warn("PartitionPrune Failed. ", e);
+            throw e;
         } catch (Exception e) {
             LOG.warn("PartitionPrune Failed. ", e);
         }

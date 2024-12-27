@@ -357,10 +357,17 @@ public enum ErrorCode {
     ERR_INVALID_WAREHOUSE_NAME(10006, new byte[] {'4', '2', '0', '0', '0'}, "Warehouse name can not be null or empty"),
 
     ERR_NOT_SUPPORTED_STATEMENT_IN_SHARED_NOTHING_MODE(10007, new byte[] {'4', '2', '0', '0', '0'},
-            "unsupported statement in shared_nothing mode");
+            "unsupported statement in shared_nothing mode"),
+
+    ERR_FULL_TABLE_SCAN_ERROR(10031, new byte[] {'H', 'Y', '0', '0', '0'}, "Full table scan sql"),
+    ERR_FRAGMENT_INSTANCES_SKEW_ERROR(10032, new byte[] {'H', 'Y', '0', '0', '0'},
+            "This query is skewed, the skewness is %s"),
+    ERR_INSTANCES_SKEW_NOT_PIPELINE_ENGINE_ERROR(10033, new byte[] {'H', 'Y', '0', '0', '0'},
+            "Sql skewness check only support pipeline engine. You can set enable_pipeline_engine = true");
 
     public static final String ERR_ACCESS_DENIED_HINT_MSG_FORMAT = "Please ask the admin to grant permission(s) or" +
             " try activating existing roles using <set [default] role>. Current role(s): %s. Inactivated role(s): %s.";
+
 
     ErrorCode(int code, byte[] sqlState, String errorMsg) {
         this.code = code;

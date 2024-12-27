@@ -205,6 +205,8 @@ public enum RuleType {
 
     TF_CTE_ADD_PROJECTION,
 
+    TF_GROUP_KEY_NUMBER_CHECK_RULE,
+
     // The following are implementation rules:
     IMP_OLAP_LSCAN_TO_PSCAN,
     IMP_HIVE_LSCAN_TO_PSCAN,

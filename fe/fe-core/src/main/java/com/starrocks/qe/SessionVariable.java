@@ -107,6 +107,11 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String COMPUTATION_FRAGMENT_SCHEDULING_POLICY = "computation_fragment_scheduling_policy";
     public static final String EXEC_MEM_LIMIT = "exec_mem_limit";
 
+    public static final String ENABLE_SQL_DIALOG = "enable_sql_dialog";
+    public static final String SQL_SWKENESS_WEIGHT = "sql_swkeness_weight";
+
+    public static final String GROUP_KEY_LIMIT = "group_key_limit";
+
     /**
      * configure the mem limit of load process on BE.
      * Previously users used exec_mem_limit to set memory limits.
@@ -839,6 +844,15 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String REMOTE_FILE_PULL_TIMEOUT = "remote_file_pull_timeout";
 
     // --------  tq session variables end --------
+
+    @VariableMgr.VarAttr(name = ENABLE_SQL_DIALOG)
+    private boolean enableSqlDialog = false;
+
+    @VariableMgr.VarAttr(name = GROUP_KEY_LIMIT)
+    private int groupKeyLimit = 5;
+
+    @VariableMgr.VarAttr(name = SQL_SWKENESS_WEIGHT)
+    private int sqlSwkenessWeight = 15;
 
     @VariableMgr.VarAttr(name = ENABLE_PIPELINE, alias = ENABLE_PIPELINE_ENGINE, show = ENABLE_PIPELINE_ENGINE)
     private boolean enablePipelineEngine = true;
@@ -2327,6 +2341,30 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setExprChildrenLimit(int exprChildrenLimit) {
         this.exprChildrenLimit = exprChildrenLimit;
+    }
+
+    public boolean isEnableSqlDialog() {
+        return enableSqlDialog;
+    }
+
+    public void setEnableSqlDialog(boolean enableSqlDialog) {
+        this.enableSqlDialog = enableSqlDialog;
+    }
+
+    public int getGroupKeyLimit() {
+        return groupKeyLimit;
+    }
+
+    public void setGroupKeyLimit(int groupKeyLimit) {
+        this.groupKeyLimit = groupKeyLimit;
+    }
+
+    public int getSqlSwkenessWeight() {
+        return sqlSwkenessWeight;
+    }
+
+    public void setSqlSwkenessWeight(int sqlSwkenessWeight) {
+        this.sqlSwkenessWeight = sqlSwkenessWeight;
     }
 
     public void setFullSortMaxBufferedRows(long v) {

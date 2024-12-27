@@ -248,7 +248,7 @@ public class DeleteMgr implements Writable, MemoryTrackable {
         if (noPartitionSpecified) {
             PartitionInfo partitionInfo = olapTable.getPartitionInfo();
             if (partitionInfo.isRangePartition()) {
-                partitionNames = extractPartitionNamesByCondition(olapTable, conditions);
+                partitionNames = extractPartitionNamesByCondition(olapTable, conditions, stmt);
                 if (partitionNames.isEmpty()) {
                     LOG.info("The delete statement [{}] prunes all partitions",
                             stmt.getOrigStmt().originStmt);
@@ -331,10 +331,10 @@ public class DeleteMgr implements Writable, MemoryTrackable {
     @VisibleForTesting
     public List<String> extractPartitionNamesByCondition(DeleteStmt stmt, OlapTable olapTable)
             throws DdlException, AnalysisException {
-        return extractPartitionNamesByCondition(olapTable, stmt.getDeleteConditions());
+        return extractPartitionNamesByCondition(olapTable, stmt.getDeleteConditions(), stmt);
     }
 
-    public List<String> extractPartitionNamesByCondition(OlapTable olapTable, List<Predicate> conditions)
+    public List<String> extractPartitionNamesByCondition(OlapTable olapTable, List<Predicate> conditions, DeleteStmt stmt)
             throws DdlException, AnalysisException {
         List<String> partitionNames = Lists.newArrayList();
         PartitionInfo partitionInfo = olapTable.getPartitionInfo();
@@ -346,7 +346,8 @@ public class DeleteMgr implements Writable, MemoryTrackable {
             partitionNames.addAll(olapTable.getPartitionNames());
         } else {
             RangePartitionPruner pruner = new RangePartitionPruner(keyRangeById,
-                    rangePartitionInfo.getPartitionColumns(olapTable.getIdToColumn()), columnFilters);
+                    rangePartitionInfo.getPartitionColumns(olapTable.getIdToColumn()), columnFilters,
+                            stmt.getPartitionNames() != null, olapTable.getName());
             Collection<Long> selectedPartitionIds = pruner.prune();
 
             if (selectedPartitionIds == null) {

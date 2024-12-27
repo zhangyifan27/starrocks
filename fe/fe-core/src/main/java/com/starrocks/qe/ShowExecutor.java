@@ -231,6 +231,7 @@ import com.starrocks.sql.ast.ShowTransactionStmt;
 import com.starrocks.sql.ast.ShowUserPropertyStmt;
 import com.starrocks.sql.ast.ShowUserStmt;
 import com.starrocks.sql.ast.ShowVariablesStmt;
+import com.starrocks.sql.ast.ShowWarningStmt;
 import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.sql.ast.pipe.DescPipeStmt;
 import com.starrocks.sql.ast.pipe.PipeName;
@@ -306,6 +307,19 @@ public class ShowExecutor {
         @Override
         public ShowResultSet visitShowStatement(ShowStmt statement, ConnectContext context) {
             return new ShowResultSet(statement.getMetaData(), EMPTY_SET);
+        }
+
+        @Override
+        public ShowResultSet visitShowWarningStatement(ShowWarningStmt statement, ConnectContext context) {
+            List<List<String>> rows = new ArrayList<>();
+            if (context.getLastQueryWarnings() != null) {
+                rows = context.getLastQueryWarnings();
+            }
+            long limit = statement.getLimitNum();
+            if (limit >= 0) {
+                rows = rows.subList(0, (int) limit);
+            }
+            return new ShowResultSet(statement.getMetaData(), rows);
         }
 
         @Override

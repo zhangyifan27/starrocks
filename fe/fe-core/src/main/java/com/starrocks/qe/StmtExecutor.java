@@ -69,6 +69,7 @@ import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
 import com.starrocks.common.FeConstants;
+import com.starrocks.common.InternalErrorCode;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.NoAliveBackendException;
 import com.starrocks.common.Pair;
@@ -586,6 +587,9 @@ public class StmtExecutor {
                 dumpException(e);
                 if (e.getType().equals(ErrorType.USER_ERROR)) {
                     throw e;
+                } else if (e.getType().equals(ErrorType.FULL_TABLE_SCAN_ERROR)) {
+                    context.getState().setErrorCode(ErrorCode.ERR_FULL_TABLE_SCAN_ERROR);
+                    throw e;
                 } else {
                     LOG.warn("New planner error: " + originStmt.originStmt, e);
                     throw e;
@@ -792,6 +796,11 @@ public class StmtExecutor {
                 // TODO: some UserException doesn't belong to analysis error
                 // we should set such error type to internal error
                 context.getState().setErrType(QueryState.ErrType.ANALYSIS_ERR);
+                if (e.getErrorCode().equals(InternalErrorCode.FRAGMENT_INSTANCES_SKEW_ERROR)) {
+                    context.getState().setErrorCode(ErrorCode.ERR_FRAGMENT_INSTANCES_SKEW_ERROR);
+                } else if (e.getErrorCode().equals(InternalErrorCode.INSTANCES_SKEW_NOT_PIPELINE_ENGINE_ERROR)) {
+                    context.getState().setErrorCode(ErrorCode.ERR_INSTANCES_SKEW_NOT_PIPELINE_ENGINE_ERROR);
+                }
             }
         } catch (Throwable e) {
             String sql = originStmt != null ? originStmt.originStmt : "";
@@ -1323,6 +1332,9 @@ public class StmtExecutor {
                     context.updateReturnRows(batch.getBatch().getRows().size());
                 }
             } while (!batch.isEos());
+            if (context.getSessionVariable().isEnableSqlDialog()) {
+                coord.checkInstancesSkew();
+            }
             if (!isSendFields && !isOutfileQuery && !isExplainAnalyze) {
                 sendFields(colNames, outputExprs);
             }

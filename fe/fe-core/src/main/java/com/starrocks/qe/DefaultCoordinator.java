@@ -104,6 +104,7 @@ import com.starrocks.thrift.TTabletFailInfo;
 import com.starrocks.thrift.TUniqueId;
 import com.starrocks.thrift.TUnit;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.commons.math3.stat.descriptive.moment.Skewness;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -464,6 +465,33 @@ public class DefaultCoordinator extends Coordinator {
     @Override
     public boolean isShortCircuit() {
         return isShortCircuit;
+    }
+
+    @Override
+    public void checkInstancesSkew() throws UserException {
+        if (!connectContext.getSessionVariable().isEnablePipelineEngine()) {
+            throw new UserException(InternalErrorCode.INSTANCES_SKEW_NOT_PIPELINE_ENGINE_ERROR,
+                    ErrorCode.ERR_INSTANCES_SKEW_NOT_PIPELINE_ENGINE_ERROR.formatErrorMsg());
+        }
+        Map<PlanFragmentId, List<Long>> fragmentInstanceCounter = new HashMap<>();
+        for (FragmentInstanceExecState execution : executionDAG.getExecutions()) {
+            List<Long> instancesTime = fragmentInstanceCounter
+                    .getOrDefault(execution.getFragmentId(), new ArrayList<>());
+            instancesTime.add(execution.getRunningTime());
+            fragmentInstanceCounter.put(execution.getFragmentId(), instancesTime);
+        }
+        for (List<Long> instancesTime : fragmentInstanceCounter.values()) {
+            if (instancesTime.size() <= 1) {
+                continue;
+            }
+            // Skewness = (3 * (Mean - Median)) / Standard Deviation
+            double skewness = new Skewness().evaluate(instancesTime.stream().mapToDouble(Long::doubleValue).toArray());
+
+            if (skewness >= connectContext.getSessionVariable().getSqlSwkenessWeight()) {
+                throw new UserException(InternalErrorCode.FRAGMENT_INSTANCES_SKEW_ERROR,
+                        ErrorCode.ERR_FRAGMENT_INSTANCES_SKEW_ERROR.formatErrorMsg(skewness));
+            }
+        }
     }
 
     private void lock() {

@@ -207,6 +207,10 @@ public class QueryState {
         return warningRows;
     }
 
+    public void setWarningRows(int warningRows) {
+        this.warningRows = warningRows;
+    }
+
     public MysqlPacket toResponsePacket() {
         MysqlPacket packet = null;
         switch (stateType) {

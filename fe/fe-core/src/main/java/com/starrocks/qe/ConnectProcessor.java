@@ -713,6 +713,9 @@ public class ConnectProcessor {
             ctx.setLastQueryId(ctx.queryId);
             ctx.setQueryId(null);
         }
+
+        ctx.setLastQueryWarnings(ctx.queryWarnings);
+        ctx.setQueryWarnings(null);
     }
 
     public TMasterOpResult proxyExecute(TMasterOpRequest request) {

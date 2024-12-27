@@ -127,6 +127,11 @@ public class ConnectContext {
     // the same queryId
     protected UUID queryId;
 
+    // the warning contains Level、Code、Message
+    protected List<List<String>> lastQueryWarnings;
+
+    protected List<List<String>> queryWarnings;
+
     // A request will be executed multiple times because of retry or redirect.
     // This id is used to distinguish between different execution instances
     protected TUniqueId executionId;
@@ -160,7 +165,7 @@ public class ConnectContext {
     // `qualifiedUser` should not be changed during the entire session.
     protected String qualifiedUser;
     // `currentUserIdentity` is the user used for authorization. Under normal circumstances,
-    // `currentUserIdentity` and `qualifiedUser` are the same user,
+    // `currentUserIdentity` and `qualifiedUser` are the same user,lastQueryWarnings
     // but currentUserIdentity may be modified by execute as statement.
     protected UserIdentity currentUserIdentity;
     // currentRoleIds is the role that has taken effect in the current session.
@@ -762,6 +767,22 @@ public class ConnectContext {
                 sessionVariable.getPipelineProfileLevel() < TPipelineProfileLevel.DETAIL.getValue();
     }
 
+    public List<List<String>> getLastQueryWarnings() {
+        return lastQueryWarnings;
+    }
+
+    public void setLastQueryWarnings(List<List<String>> lastQueryWarnings) {
+        this.lastQueryWarnings = lastQueryWarnings;
+    }
+
+    public List<List<String>> getQueryWarnings() {
+        return queryWarnings;
+    }
+
+    public void setQueryWarnings(List<List<String>> queryWarnings) {
+        this.queryWarnings = queryWarnings;
+    }
+
     public byte[] getAuthDataSalt() {
         return authDataSalt;
     }
@@ -902,6 +923,12 @@ public class ConnectContext {
 
     public void setRelationAliasCaseInSensitive(boolean relationAliasCaseInsensitive) {
         this.relationAliasCaseInsensitive = relationAliasCaseInsensitive;
+    }
+
+    public boolean enableSqlDialog() {
+        return sessionVariable != null && sessionVariable.isEnableSqlDialog()
+                && executor != null && executor.getParsedStmt() != null
+                && !executor.getParsedStmt().isExplain();
     }
 
     public boolean isRelationAliasCaseInsensitive() {

@@ -317,6 +317,11 @@ public class FeExecuteCoordinator extends Coordinator {
         return false;
     }
 
+    @Override
+    public void checkInstancesSkew() {
+
+    }
+
     private List<ByteBuffer> covertToMySQLRowBuffer() {
         MysqlSerializer serializer = MysqlSerializer.newInstance();
         PhysicalValuesOperator valuesOperator = (PhysicalValuesOperator) execPlan.getPhysicalPlan().getOp();

@@ -371,6 +371,7 @@ public class OlapScanNode extends ScanNode {
     private List<Long> partitionPrune(RangePartitionInfo partitionInfo, PartitionNames partitionNames)
             throws AnalysisException {
         Map<Long, Range<PartitionKey>> keyRangeById = null;
+        boolean filterPartition;
         if (partitionNames != null) {
             keyRangeById = Maps.newHashMap();
             for (String partName : partitionNames.getPartitionNames()) {
@@ -380,13 +381,15 @@ public class OlapScanNode extends ScanNode {
                 }
                 keyRangeById.put(part.getId(), partitionInfo.getRange(part.getId()));
             }
+            filterPartition = true;
         } else {
             keyRangeById = partitionInfo.getIdToRange(false);
+            filterPartition = false;
         }
         PartitionPruner partitionPruner = new RangePartitionPruner(
                 keyRangeById,
                 partitionInfo.getPartitionColumns(olapTable.getIdToColumn()),
-                columnFilters);
+                columnFilters, filterPartition, olapTable.getName());
         return partitionPruner.prune();
     }
 

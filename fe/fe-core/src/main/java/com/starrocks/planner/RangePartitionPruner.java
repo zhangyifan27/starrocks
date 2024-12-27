@@ -49,6 +49,8 @@ import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.connector.PartitionUtil;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.sql.common.ErrorType;
+import com.starrocks.sql.common.StarRocksPlannerException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -64,13 +66,18 @@ public class RangePartitionPruner implements PartitionPruner {
     private Map<Long, Range<PartitionKey>> partitionRangeMap;
     private List<Column> partitionColumns;
     private Map<String, PartitionColumnFilter> partitionColumnFilters;
+    private boolean hasPartitionFilter;
+    private String tableName;
 
     public RangePartitionPruner(Map<Long, Range<PartitionKey>> rangeMap,
                                 List<Column> columns,
-                                Map<String, PartitionColumnFilter> filters) {
+                                Map<String, PartitionColumnFilter> filters,
+                                boolean filterPartition, String tableName) {
         partitionRangeMap = rangeMap;
         partitionColumns = columns;
         partitionColumnFilters = filters;
+        hasPartitionFilter = filterPartition;
+        this.tableName = tableName;
     }
 
     private List<Long> prune(RangeMap<PartitionKey, Long> rangeMap,
@@ -92,6 +99,10 @@ public class RangePartitionPruner implements PartitionPruner {
         Column keyColumn = partitionColumns.get(columnIdx);
         PartitionColumnFilter filter = partitionColumnFilters.get(keyColumn.getName());
         if (null == filter) {
+            if (ConnectContext.get() != null && ConnectContext.get().enableSqlDialog() && !hasPartitionFilter) {
+                throw new StarRocksPlannerException("Full table scan sql; table : " + tableName
+                        , ErrorType.FULL_TABLE_SCAN_ERROR);
+            }
             minKey.pushColumn(LiteralExpr.createInfinity(Type.fromPrimitiveType(keyColumn.getPrimitiveType()), false),
                     keyColumn.getPrimitiveType());
             maxKey.pushColumn(LiteralExpr.createInfinity(Type.fromPrimitiveType(keyColumn.getPrimitiveType()), true),
@@ -107,6 +118,11 @@ public class RangePartitionPruner implements PartitionPruner {
             maxKey.popColumn();
             return result;
         }
+
+        if (ConnectContext.get() != null && ConnectContext.get().enableSqlDialog() && !hasPartitionFilter) {
+            checkPartitionColumnFilter(filter, rangeMap);
+        }
+        
         List<LiteralExpr> inPredicateLiterals = filter.getInPredicateLiterals();
         int inPredicateMaxLen = 100;
         if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable() != null) {
@@ -214,6 +230,47 @@ public class RangePartitionPruner implements PartitionPruner {
         }
 
         return new ArrayList<>(resultSet);
+    }
+
+    private void checkPartitionColumnFilter(PartitionColumnFilter filter, RangeMap<PartitionKey, Long> rangeMap) {
+        LiteralExpr lowerBound = new NullLiteral();
+        LiteralExpr upperBound = new NullLiteral();
+        boolean first = true;
+        for (Range<PartitionKey> keyRange : rangeMap.asMapOfRanges().keySet()) {
+            if (first) {
+                lowerBound = keyRange.lowerEndpoint().getKeys().get(0);
+                int sizeOfUpperBound = keyRange.upperEndpoint().getKeys().size();
+                upperBound = keyRange.upperEndpoint().getKeys().get(sizeOfUpperBound - 1);
+                first = false;
+            } else {
+                if (keyRange.lowerEndpoint().getKeys().get(0).compareLiteral(lowerBound) < 0) {
+                    lowerBound = keyRange.lowerEndpoint().getKeys().get(0);
+                }
+                int sizeOfUpperBound = keyRange.upperEndpoint().getKeys().size();
+                if (keyRange.upperEndpoint().getKeys().get(sizeOfUpperBound - 1).compareLiteral(upperBound) > 0) {
+                    upperBound = keyRange.upperEndpoint().getKeys().get(sizeOfUpperBound - 1);
+                }
+            }
+        }
+        if (filter.lowerBound == null && filter.upperBound == null) {
+            throw new StarRocksPlannerException("Full table scan sql; table : " + tableName
+                    , ErrorType.FULL_TABLE_SCAN_ERROR);
+        } else if (filter.lowerBound == null) {
+            if (upperBound.compareLiteral(filter.upperBound) <= 0) {
+                throw new StarRocksPlannerException("Full table scan sql; table : " + tableName
+                        , ErrorType.FULL_TABLE_SCAN_ERROR);
+            }
+        } else if (filter.upperBound == null) {
+            if (lowerBound.compareLiteral(filter.lowerBound) >= 0) {
+                throw new StarRocksPlannerException("Full table scan sql; table : " + tableName
+                        , ErrorType.FULL_TABLE_SCAN_ERROR);
+            }
+        } else {
+            if (lowerBound.compareLiteral(filter.lowerBound) >= 0 && upperBound.compareLiteral(filter.upperBound) <= 0) {
+                throw new StarRocksPlannerException("Full table scan sql; table : " + tableName
+                        , ErrorType.FULL_TABLE_SCAN_ERROR);
+            }
+        }
     }
 
     public List<Long> prune() throws AnalysisException {

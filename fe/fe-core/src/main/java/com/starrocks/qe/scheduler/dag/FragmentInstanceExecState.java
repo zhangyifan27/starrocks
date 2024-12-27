@@ -94,6 +94,8 @@ public class FragmentInstanceExecState {
     private final ComputeNode worker;
     private final TNetworkAddress address;
     private final long lastMissingHeartbeatTime;
+    private volatile long beginTime;
+    private volatile long runningTime;
 
     /**
      * Create a fake backendExecState, only user for stream load profile.
@@ -143,6 +145,7 @@ public class FragmentInstanceExecState {
         this.jobSpec = jobSpec;
         // fake fragment instance exec state
         if (jobSpec == null) {
+            beginTime = System.currentTimeMillis();
             state = State.EXECUTING;
         }
         this.fragmentId = fragmentId;
@@ -290,6 +293,7 @@ public class FragmentInstanceExecState {
         }
 
         if (code == TStatusCode.OK) {
+            beginTime = System.currentTimeMillis();
             transitionState(State.DEPLOYING, State.EXECUTING);
         } else {
             transitionState(State.DEPLOYING, State.FAILED);
@@ -326,6 +330,7 @@ public class FragmentInstanceExecState {
             default:
                 if (params.isDone()) {
                     if (params.getStatus() == null || params.getStatus().getStatus_code() == TStatusCode.OK) {
+                        runningTime = System.currentTimeMillis();
                         transitionState(State.FINISHED);
                     } else {
                         transitionState(State.FAILED);
@@ -339,6 +344,14 @@ public class FragmentInstanceExecState {
         if (execStatusParams.isSetProfile()) {
             profile.update(execStatusParams.profile);
         }
+    }
+
+    public long getBeginTime() {
+        return beginTime;
+    }
+
+    public long getRunningTime() {
+        return runningTime;
     }
 
     /**
