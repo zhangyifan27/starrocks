@@ -24,10 +24,12 @@ import org.apache.iceberg.HasTableOperations;
 import org.apache.iceberg.HistoryEntry;
 import org.apache.iceberg.IncrementalAppendScan;
 import org.apache.iceberg.IncrementalChangelogScan;
+import org.apache.iceberg.IndexSpec;
 import org.apache.iceberg.ManageSnapshots;
 import org.apache.iceberg.OverwriteFiles;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.PartitionSpecParser;
+import org.apache.iceberg.ReplaceIndexSpec;
 import org.apache.iceberg.ReplacePartitions;
 import org.apache.iceberg.ReplaceSortOrder;
 import org.apache.iceberg.RewriteFiles;
@@ -58,6 +60,7 @@ import org.apache.iceberg.util.SerializableMap;
 import org.apache.iceberg.util.SerializableSupplier;
 
 import java.io.Serializable;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -220,6 +223,16 @@ public class SerializableTable implements Table, Serializable {
     }
 
     @Override
+    public IndexSpec indexSpec() {
+        return null;
+    }
+
+    @Override
+    public Map<Integer, IndexSpec> indexesById() {
+        return Collections.emptyMap();
+    }
+
+    @Override
     public FileIO io() {
         return io;
     }
@@ -307,6 +320,11 @@ public class SerializableTable implements Table, Serializable {
     @Override
     public ReplaceSortOrder replaceSortOrder() {
         throw new UnsupportedOperationException(errorMsg("replaceSortOrder"));
+    }
+
+    @Override
+    public ReplaceIndexSpec replaceIndexSpec() {
+        return null;
     }
 
     @Override

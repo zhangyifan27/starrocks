@@ -218,7 +218,7 @@ public class IcebergProgress extends RoutineLoadProgress {
         }
         Map<String, Long> consumeLags = new HashMap<>();
         consumeLags.put(routineLoadJob.getName(), maxTimeLag / 1000);
-        //routineLoadJob.updateTimeConsumeLags(consumeLags);
+        routineLoadJob.updateTimeConsumeLags(consumeLags);
     }
 
     /**

@@ -17,6 +17,7 @@ import org.apache.iceberg.Table;
 import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.TableScan;
 //import org.apache.iceberg.TableScanOptions;
+import org.apache.iceberg.TableScanOptions;
 import org.apache.iceberg.expressions.Expression;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.util.SnapshotUtil;
@@ -362,11 +363,11 @@ public class IcebergSplitDiscover {
     private TableScan newTableScan() {
         TableScan scan = iceTbl.newScan()
                 .includeColumnStats()
-                .option(TableProperties.SPLIT_SIZE, "" + splitSize);
-        //.option(TableScanOptions.SKIP_OVERWRITE, Boolean.toString(skipOverwrite))
-        //.option(TableProperties.INCLUDE_SNAPSHOT_MERGE_ON_READ_OVERWRITE,
-        //        Boolean.toString(mergeOnReadOverwrite))
-        //.option(TableProperties.INCLUDE_SNAPSHOT_REPLACE_PARTITIONS, Boolean.toString(replacePartitions));
+                .option(TableProperties.SPLIT_SIZE, "" + splitSize)
+                .option(TableScanOptions.SKIP_OVERWRITE, Boolean.toString(skipOverwrite))
+                .option(TableProperties.INCLUDE_SNAPSHOT_MERGE_ON_READ_OVERWRITE,
+                        Boolean.toString(mergeOnReadOverwrite))
+                .option(TableProperties.INCLUDE_SNAPSHOT_REPLACE_PARTITIONS, Boolean.toString(replacePartitions));
         if (whereExpr != null) {
             scan = scan.filter(whereExpr);
         }

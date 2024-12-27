@@ -40,6 +40,7 @@ import org.apache.iceberg.expressions.Projections;
 import org.apache.iceberg.io.CloseableGroup;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.CloseableIterator;
+import org.apache.iceberg.io.FileIO;
 import org.apache.iceberg.io.InputFile;
 import org.apache.iceberg.metrics.ScanMetrics;
 import org.apache.iceberg.relocated.com.google.common.base.Preconditions;
@@ -101,6 +102,18 @@ public class ManifestReader<F extends ContentFile<F>> extends CloseableGroup
     private Cache<String, Set<DataFile>> dataFileCache;
     private Cache<String, Set<DeleteFile>> deleteFileCache;
     private Set<Integer> identifierFieldIds = null;
+    private FileIO fileIO = null;
+
+    protected ManifestReader(
+            InputFile file,
+            int specId,
+            Map<Integer, PartitionSpec> specsById,
+            InheritableMetadata inheritableMetadata,
+            FileType content,
+            FileIO fileIO) {
+        this(file, specId, specsById, inheritableMetadata, content);
+        this.fileIO = fileIO;
+    }
 
     protected ManifestReader(
             InputFile file,

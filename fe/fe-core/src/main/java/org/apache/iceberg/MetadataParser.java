@@ -16,6 +16,7 @@ package org.apache.iceberg;
 
 import com.esotericsoftware.kryo.Kryo;
 import com.esotericsoftware.kryo.io.Input;
+import com.google.common.collect.ImmutableMap;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.metadata.MetadataCollectJob;
 import com.starrocks.connector.share.iceberg.CommonMetadataBean;
@@ -245,6 +246,7 @@ public class MetadataParser {
         // TODO(stephen): add keyMetadata field
         if (content == FileContent.DATA) {
             baseFile = new GenericDataFile(
+                    -1,
                     specId,
                     filePath,
                     fileFormat,
@@ -253,9 +255,11 @@ public class MetadataParser {
                     metrics,
                     keyMetadata,
                     splitOffsets,
-                    null);
+                    null,
+                    ImmutableMap.of());
         } else {
             baseFile = new GenericDeleteFile(
+                    -1,
                     specId,
                     content,
                     filePath,
@@ -266,7 +270,8 @@ public class MetadataParser {
                     equalityFieldIds,
                     sortId,
                     splitOffsets,
-                    keyMetadata
+                    keyMetadata,
+                    ImmutableMap.of()
             );
         }
 

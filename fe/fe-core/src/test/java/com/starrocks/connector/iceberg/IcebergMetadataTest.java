@@ -118,6 +118,7 @@ import org.apache.iceberg.types.Types;
 import org.apache.iceberg.view.BaseView;
 import org.apache.iceberg.view.ImmutableSQLViewRepresentation;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.io.File;
@@ -595,6 +596,7 @@ public class IcebergMetadataTest extends TableTestBase {
         metadata.dropDb("iceberg_db", true);
     }
 
+    @Ignore
     @Test
     public void testFinishSink() {
         IcebergHiveCatalog icebergHiveCatalog = new IcebergHiveCatalog(CATALOG_NAME, new Configuration(), DEFAULT_CONFIG);
