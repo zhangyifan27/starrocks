@@ -329,8 +329,16 @@ void JVMFunctionHelper::batch_update_if_not_null(FunctionContext* ctx, jobject u
     CHECK_UDF_CALL_EXCEPTION(_env, ctx);
 }
 
-jobject JVMFunctionHelper::batch_call(BatchEvaluateStub* stub, jobject* input, int cols, int rows) {
+StatusOr<jobject> JVMFunctionHelper::batch_call(BatchEvaluateStub* stub, jobject* input, int cols, int rows) {
     return stub->batch_evaluate(rows, input, cols);
+}
+
+StatusOr<jobject> JVMFunctionHelper::batch_call(jobject caller, jobject method, jobject* input, int cols, int rows) {
+    jobjectArray input_arr = _build_object_array(_object_array_class, input, cols);
+    LOCAL_REF_GUARD(input_arr);
+    auto res = _env->CallStaticObjectMethod(_udf_helper_class, _batch_call, caller, method, rows, input_arr);
+    RETURN_ERROR_IF_JNI_EXCEPTION(_env);
+    return res;
 }
 
 jobject JVMFunctionHelper::batch_call(FunctionContext* ctx, jobject caller, jobject method, jobject* input, int cols,
@@ -935,7 +943,7 @@ void AggBatchCallStub::batch_update_single(int num_rows, jobject state, jobject*
     CHECK_UDF_CALL_EXCEPTION(env, this->_ctx);
 }
 
-jobject BatchEvaluateStub::batch_evaluate(int num_rows, jobject* input, int cols) {
+StatusOr<jobject> BatchEvaluateStub::batch_evaluate(int num_rows, jobject* input, int cols) {
     jvalue jni_inputs[2 + cols];
     jni_inputs[0].i = num_rows;
     jni_inputs[1].l = _caller;
@@ -945,7 +953,7 @@ jobject BatchEvaluateStub::batch_evaluate(int num_rows, jobject* input, int cols
     auto* env = JVMFunctionHelper::getInstance().getEnv();
     auto res = env->CallStaticObjectMethodA(_stub_clazz.clazz(), env->FromReflectedMethod(_stub_method.handle()),
                                             jni_inputs);
-    CHECK_UDF_CALL_EXCEPTION(env, this->_ctx);
+    RETURN_ERROR_IF_JNI_EXCEPTION(env);
     return res;
 }
 
