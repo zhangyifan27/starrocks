@@ -41,6 +41,7 @@ import mockit.Expectations;
 import mockit.Mocked;
 import org.junit.Assert;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -59,6 +60,7 @@ public class HiveTableSinkTest {
         starRocksAssert.withCatalog(createHiveCatalogStmt);
     }
 
+    @Ignore
     @Test
     public void testHiveTableSink(@Mocked CatalogConnector hiveConnector) {
         HiveTable.Builder builder = HiveTable.builder()

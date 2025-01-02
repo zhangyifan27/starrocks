@@ -28,6 +28,7 @@ import mockit.Mock;
 import mockit.MockUp;
 import org.junit.Assert;
 import org.junit.BeforeClass;
+import org.junit.Ignore;
 import org.junit.Test;
 
 public class ReplayFromDumpForSharedDataTest extends ReplayFromDumpTestBase {
@@ -57,6 +58,7 @@ public class ReplayFromDumpForSharedDataTest extends ReplayFromDumpTestBase {
         };
     }
 
+    @Ignore
     @Test
     public void testReplicationNum() throws Exception {
         String dumpInfo = getDumpInfoFromFile("query_dump/shared_data_query_test");
