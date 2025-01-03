@@ -453,6 +453,7 @@ import com.starrocks.sql.ast.pipe.DescPipeStmt;
 import com.starrocks.sql.ast.pipe.DropPipeStmt;
 import com.starrocks.sql.ast.pipe.PipeName;
 import com.starrocks.sql.ast.pipe.ShowPipeStmt;
+import com.starrocks.sql.ast.translate.TranslateStmt;
 import com.starrocks.sql.ast.warehouse.CreateWarehouseStmt;
 import com.starrocks.sql.ast.warehouse.DropWarehouseStmt;
 import com.starrocks.sql.ast.warehouse.ResumeWarehouseStmt;
@@ -3149,7 +3150,6 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
     }
 
     // ------------------------------------------- Backup Store Statement ----------------------------------------------
-
     @Override
     public ParseNode visitBackupStatement(StarRocksParser.BackupStatementContext context) {
         QualifiedName qualifiedName = getQualifiedName(context.qualifiedName());
@@ -4602,6 +4602,25 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             }
         }
         return new ShowNodesStmt(warehouseName, pattern, createPos(context));
+    }
+
+    // ------------------------------------------- Translate Statement -------------------------------------------------
+    @Override
+    public ParseNode visitTranslateStatement(StarRocksParser.TranslateStatementContext context) {
+        String dialect = ((Identifier) visit(context.dialect().identifier())).getValue();
+        return new TranslateStmt(createPos(context), dialect, ((StringLiteral) visit(context.translateSQL())).getValue());
+    }
+
+    @Override
+    public ParseNode visitTranslateSQL(StarRocksParser.TranslateSQLContext context) {
+        StringBuilder buf = new StringBuilder();
+        for (int i = 0; i < context.getChildCount(); ++i) {
+            if (i > 0) {
+                buf.append(' ');
+            }
+            buf.append(context.getChild(i).getText());
+        }
+        return new StringLiteral(buf.toString(), createPos(context));
     }
 
     // ------------------------------------------- Query Statement -----------------------------------------------------
