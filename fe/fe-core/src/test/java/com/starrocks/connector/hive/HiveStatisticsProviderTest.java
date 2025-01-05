@@ -108,6 +108,7 @@ public class HiveStatisticsProviderTest {
 
     @Test
     public void testGetTableStatistics() throws AnalysisException {
+        FeConstants.runningUnitTest = true;
         HiveTable hiveTable = (HiveTable) hmsOps.getTable("db1", "table1");
         ColumnRefOperator partColumnRefOperator = new ColumnRefOperator(0, Type.INT, "col1", true);
         ColumnRefOperator dataColumnRefOperator = new ColumnRefOperator(1, Type.INT, "col2", true);
@@ -118,7 +119,7 @@ public class HiveStatisticsProviderTest {
         Statistics statistics = statisticsProvider.getTableStatistics(
                 optimizerContext, hiveTable, Lists.newArrayList(partColumnRefOperator, dataColumnRefOperator),
                 Lists.newArrayList(hivePartitionKey1, hivePartitionKey2));
-        Assert.assertEquals(1,  statistics.getOutputRowCount(), 0.001);
+        Assert.assertEquals(10.0,  statistics.getOutputRowCount(), 0.001);
         Assert.assertEquals(0, statistics.getColumnStatistics().size());
 
         cachingHiveMetastore.getPartitionStatistics(hiveTable, Lists.newArrayList("col1=1", "col1=2"));

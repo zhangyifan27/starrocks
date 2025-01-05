@@ -266,7 +266,7 @@ public class HiveMetadataTest {
         columns.put(dataColumnRefOperator, null);
         Statistics statistics = hiveMetadata.getTableStatistics(optimizerContext, hiveTable, columns,
                 Lists.newArrayList(hivePartitionKey1, hivePartitionKey2), null, -1, TableVersionRange.empty());
-        Assert.assertEquals(1, statistics.getOutputRowCount(), 0.001);
+        Assert.assertEquals(10.0, statistics.getOutputRowCount(), 0.001);
         Assert.assertEquals(2, statistics.getColumnStatistics().size());
         Assert.assertTrue(statistics.getColumnStatistics().get(partColumnRefOperator).isUnknown());
         Assert.assertTrue(statistics.getColumnStatistics().get(dataColumnRefOperator).isUnknown());
@@ -300,7 +300,7 @@ public class HiveMetadataTest {
         Statistics statistics = hiveMetadata.getTableStatistics(
                 optimizerContext, hiveTable, columns, Lists.newArrayList(hivePartitionKey1, hivePartitionKey2),
                 null, -1, TableVersionRange.empty());
-        Assert.assertEquals(1, statistics.getOutputRowCount(), 0.001);
+        Assert.assertEquals(10.0, statistics.getOutputRowCount(), 0.001);
         Assert.assertEquals(2, statistics.getColumnStatistics().size());
 
         cachingHiveMetastore.getPartitionStatistics(hiveTable, Lists.newArrayList("col1=1", "col1=2"));

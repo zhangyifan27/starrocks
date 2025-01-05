@@ -149,7 +149,7 @@ public class HiveStatisticsProvider {
                 Lists.newArrayList(hmsOps.getPartitionByPartitionKeys(table, partitionKeys).values());
 
         Optional<String> hudiBasePath = table.isHiveTable() ? Optional.empty() : Optional.of(hmsTbl.getTableLocation());
-        List<RemoteFileInfo> remoteFileInfos = fileOps.getRemoteFileInfoForStats(partitions, hudiBasePath);
+        List<RemoteFileInfo> remoteFileInfos = fileOps.getRemoteFiles(partitions, hudiBasePath);
 
         long totalBytes = 0;
         for (RemoteFileInfo remoteFileInfo : remoteFileInfos) {
