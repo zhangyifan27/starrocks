@@ -27,8 +27,8 @@
 #include "common/process_exit.h"
 #include "common/status.h"
 #include "exec/pipeline/query_context.h"
-#include "gutil/strings/join.h"
 #include "fs/hdfs/tauth_env.h"
+#include "gutil/strings/join.h"
 #include "runtime/exec_env.h"
 #include "runtime/fragment_mgr.h"
 #include "runtime/jdbc_driver_manager.h"
@@ -283,7 +283,7 @@ void start_be(const std::vector<StorePath>& paths, bool as_cn) {
     // Start heartbeat server
     std::unique_ptr<ThriftServer> heartbeat_server;
     if (auto ret = create_heartbeat_server(exec_env, config::heartbeat_service_port,
-                                           config::heartbeat_service_thread_count);
+                                           config::heartbeat_service_thread_count, as_cn);
         !ret.ok()) {
         LOG(ERROR) << process_name << " heartbeat server did not start correctly, exiting: " << ret.status().message();
         shutdown_logging();

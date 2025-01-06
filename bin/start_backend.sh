@@ -80,14 +80,22 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-# JEMALLOC enable DEBUG 
+# JEMALLOC enable DEBUG
 # export JEMALLOC_CONF="junk:true,tcache:false,prof:true"
 # Set JEMALLOC_CONF environment variable if not already set
 if [[ -z "$JEMALLOC_CONF" ]]; then
-    if [ ${RUN_CHECK_MEM_LEAK} -eq 1 ] ; then
-      export JEMALLOC_CONF="percpu_arena:percpu,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000,metadata_thp:auto,background_thread:true,prof:true,prof_active:true,prof_leak:true,lg_prof_sample:0,prof_final:true"
+    if [ ${RUN_CN} -eq 1 ]; then
+      let narenas=`get_cpu_num` * 4
+      echo "running on cn, use fixed arena size ${narenas}"
+      JEMALLOC_OPTIONS="narenas:${narenas}"
     else
-      export JEMALLOC_CONF="percpu_arena:percpu,oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000,metadata_thp:auto,background_thread:true,prof:true,prof_active:false"
+      JEMALLOC_OPTIONS="percpu_arena:percpu"
+    fi
+
+    if [ ${RUN_CHECK_MEM_LEAK} -eq 1 ] ; then
+      export JEMALLOC_CONF="${JEMALLOC_OPTIONS},oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000,metadata_thp:auto,background_thread:true,prof:true,prof_active:true,prof_leak:true,lg_prof_sample:0,prof_final:true"
+    else
+      export JEMALLOC_CONF="${JEMALLOC_OPTIONS},oversize_threshold:0,muzzy_decay_ms:5000,dirty_decay_ms:5000,metadata_thp:auto,background_thread:true,prof:true,prof_active:false"
     fi
 else
     echo "JEMALLOC_CONF from conf is '$JEMALLOC_CONF'"

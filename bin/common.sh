@@ -172,3 +172,21 @@ check_and_update_max_processes() {
     fi
 }
 
+get_cpu_num() {
+    cgroup_version=$(stat -fc %T /sys/fs/cgroup)
+    if [ -f /.dockerenv ] && [ "$cgroup_version" == "tmpfs" ]; then
+        quota=`cat /sys/fs/cgroup/cpu/cpu.cfs_quota_us | awk '{print $1}'`
+        period=`cat /sys/fs/cgroup/cpu/cpu.cfs_period_us | awk '{print $1}'`
+    fi
+
+    if [ -f /.dockerenv ] && [ "$cgroup_version" == "cgroup2fs" ]; then
+        IFS=' ' read -r quota period <<< `cat /sys/fs/cgroup/cpu.max`
+    fi
+
+    # use host's cpu num if quota is unlimited
+    if [[ ! -v quota || "$quota" == "max" || "$quota" == "-1" ]]; then
+        getconf _NPROCESSORS_CONF
+    else
+        echo "$quota,$period" | awk 'BEGIN{FS=","} {res=$1/$2; print int(res)+(res!=int(res)&&res>=0)}'
+    fi
+}

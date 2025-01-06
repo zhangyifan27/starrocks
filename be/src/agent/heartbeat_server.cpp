@@ -204,54 +204,59 @@ StatusOr<HeartbeatServer::CmpResult> HeartbeatServer::compare_master_info(const 
         if (master_info.backend_ip != BackendOptions::get_localhost()) {
             LOG(WARNING) << master_info.backend_ip << " not equal to to backend localhost "
                          << BackendOptions::get_localhost();
-            // step1: check master_info.backend_ip is IP or FQDN
             bool fe_saved_is_valid_ip = is_valid_ip(master_info.backend_ip);
-            if (fe_saved_is_valid_ip && is_valid_ip(BackendOptions::get_localhost())) {
-                // if master_info.backend_ip is IP,and not equal with BackendOptions::get_localhost(),return error
-                return Status::InternalError("FE saved address not match backend address");
-            }
-
-            //step2: resolve FQDN to IP
-            std::string ip;
-            if (fe_saved_is_valid_ip) {
-                ip = master_info.backend_ip;
+            if (fe_saved_is_valid_ip && !_check_address) {
+                BackendOptions::set_localhost(master_info.backend_ip);
+                LOG(INFO) << "use registered backend_ip " << BackendOptions::get_localhost();
             } else {
-                Status status = hostname_to_ip(master_info.backend_ip, ip, BackendOptions::is_bind_ipv6());
-                if (!status.ok()) {
-                    LOG(WARNING) << "Can not get ip from fqdn, fqdn is: " << master_info.backend_ip
-                                 << ", binding ipv6: " << BackendOptions::is_bind_ipv6()
-                                 << ", status: " << status.to_string();
-                    return status;
+                // step1: check master_info.backend_ip is IP or FQDN
+                if (fe_saved_is_valid_ip && is_valid_ip(BackendOptions::get_localhost())) {
+                    // if master_info.backend_ip is IP,and not equal with BackendOptions::get_localhost(),return error
+                    return Status::InternalError("FE saved address not match backend address");
                 }
-                LOG(INFO) << "resolved from fqdn: " << master_info.backend_ip << " to ip: " << ip;
-            }
 
-            //step3: get all ips of the interfaces on this machine
-            std::vector<InetAddress> hosts;
-            RETURN_IF_ERROR(get_hosts(&hosts));
-            if (hosts.empty()) {
-                std::stringstream err_msg;
-                err_msg << "the status was not ok when get_hosts.";
-                LOG(WARNING) << err_msg.str();
-                return Status::InternalError(err_msg.str());
-            }
-
-            //step4: check if the IP of FQDN belongs to the current machine and update BackendOptions._s_localhost
-            bool set_new_localhost = false;
-
-            for (auto& host : hosts) {
-                if (host.get_host_address() == ip) {
-                    BackendOptions::set_localhost(master_info.backend_ip);
-                    set_new_localhost = true;
-                    break;
+                //step2: resolve FQDN to IP
+                std::string ip;
+                if (fe_saved_is_valid_ip) {
+                    ip = master_info.backend_ip;
+                } else {
+                    Status status = hostname_to_ip(master_info.backend_ip, ip, BackendOptions::is_bind_ipv6());
+                    if (!status.ok()) {
+                        LOG(WARNING) << "Can not get ip from fqdn, fqdn is: " << master_info.backend_ip
+                                     << ", binding ipv6: " << BackendOptions::is_bind_ipv6()
+                                     << ", status: " << status.to_string();
+                        return status;
+                    }
+                    LOG(INFO) << "resolved from fqdn: " << master_info.backend_ip << " to ip: " << ip;
                 }
-            }
 
-            if (!set_new_localhost) {
-                return Status::InternalError("Unmatched backend ip");
-            }
+                //step3: get all ips of the interfaces on this machine
+                std::vector<InetAddress> hosts;
+                RETURN_IF_ERROR(get_hosts(&hosts));
+                if (hosts.empty()) {
+                    std::stringstream err_msg;
+                    err_msg << "the status was not ok when get_hosts.";
+                    LOG(WARNING) << err_msg.str();
+                    return Status::InternalError(err_msg.str());
+                }
 
-            LOG(INFO) << "update localhost done, the new localhost is " << BackendOptions::get_localhost();
+                //step4: check if the IP of FQDN belongs to the current machine and update BackendOptions._s_localhost
+                bool set_new_localhost = false;
+
+                for (auto& host : hosts) {
+                    if (host.get_host_address() == ip) {
+                        BackendOptions::set_localhost(master_info.backend_ip);
+                        set_new_localhost = true;
+                        break;
+                    }
+                }
+
+                if (!set_new_localhost) {
+                    return Status::InternalError("Unmatched backend ip");
+                }
+
+                LOG(INFO) << "update localhost done, the new localhost is " << BackendOptions::get_localhost();
+            }
         }
     }
 
@@ -279,11 +284,14 @@ StatusOr<HeartbeatServer::CmpResult> HeartbeatServer::compare_master_info(const 
 }
 
 StatusOr<std::unique_ptr<ThriftServer>> create_heartbeat_server(ExecEnv* exec_env, uint32_t server_port,
-                                                                uint32_t worker_thread_num) {
+                                                                uint32_t worker_thread_num, bool is_cn) {
     auto* heartbeat_server = new HeartbeatServer();
     heartbeat_server->init_cluster_id_or_die();
 
     std::shared_ptr<HeartbeatServer> handler(heartbeat_server);
+    if (is_cn) {
+        handler->disable_check_address();
+    }
     std::shared_ptr<TProcessor> server_processor(new HeartbeatServiceProcessor(handler));
     return std::make_unique<ThriftServer>("heartbeat", server_processor, server_port, exec_env->metrics(),
                                           worker_thread_num);

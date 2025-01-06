@@ -68,6 +68,7 @@ public:
     // * heartbeat_result: The result of heartbeat set
     void heartbeat(THeartbeatResult& heartbeat_result, const TMasterInfo& master_info) override;
 
+    void disable_check_address() { _check_address = false; }
     DISALLOW_COPY_AND_MOVE(HeartbeatServer);
 
 private:
@@ -83,8 +84,10 @@ private:
     std::string print_master_info(const TMasterInfo& master_info) const;
 
     StorageEngine* _olap_engine;
+
+    bool _check_address = true;
 }; // class HeartBeatServer
 
 StatusOr<std::unique_ptr<ThriftServer>> create_heartbeat_server(ExecEnv* exec_env, uint32_t heartbeat_server_port,
-                                                                uint32_t worker_thread_num);
+                                                                uint32_t worker_thread_num, bool is_cn);
 } // namespace starrocks
