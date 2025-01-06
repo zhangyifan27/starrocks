@@ -270,7 +270,7 @@ public enum PrimitiveType {
             case PERCENTILE:
                 return PERCENTILE;
             case DECIMAL32:
-                return DECIMALV2;
+                return DECIMAL32;
             case DECIMAL64:
                 return DECIMAL64;
             case DECIMAL128:
