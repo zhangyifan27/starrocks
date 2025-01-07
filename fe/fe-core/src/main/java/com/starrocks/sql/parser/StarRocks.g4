@@ -872,6 +872,7 @@ alterClause
     | optimizeClause
     | addFieldClause
     | dropFieldClause
+    | dropPersistentIndexClause
 
     //Alter partition clause
     | addPartitionClause
@@ -1036,6 +1037,14 @@ addFieldClause
 
 dropFieldClause
     : MODIFY COLUMN identifier DROP FIELD nestedFieldName properties?
+    ;
+
+integer_list
+    : '(' INTEGER_VALUE (',' INTEGER_VALUE)* ')'
+    ;
+
+dropPersistentIndexClause
+    : DROP PERSISTENT INDEX ON TABLETS integer_list
     ;
 
 // ---------Alter partition clause---------
@@ -2787,4 +2796,5 @@ nonReserved
     | DOTDOTDOT | NGRAMBF
     | FIELD
     | ARRAY_ELEMENT
+    | PERSISTENT
     ;
