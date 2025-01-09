@@ -194,7 +194,7 @@ StatusOr<std::shared_ptr<JavaUDFContext>> JavaFunctionCallExpr::_build_udf_func_
         ExprContext* context, FunctionContext::FunctionStateScope scope, const std::string& libpath) {
     auto desc = std::make_shared<JavaUDFContext>();
     // init class loader and analyzer
-    desc->udf_classloader = std::make_unique<ClassLoader>(std::move(libpath), _fn.load_all_class);
+    desc->udf_classloader = std::make_unique<ClassLoader>(std::move(libpath));
     RETURN_IF_ERROR(desc->udf_classloader->init());
     desc->analyzer = std::make_unique<ClassAnalyzer>();
 

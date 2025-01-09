@@ -300,7 +300,7 @@ public class InfoSchemaDbTest {
         arg[0] = Type.INT;
         Function function = ScalarFunction.createUdf(new FunctionName("db", "MY_UDF_JSON_GET"), arg, Type.INT,
                 false, TFunctionBinaryType.SRJAR,
-                "objectFile", "mainClass.getCanonicalName()", "", "", true, false);
+                "objectFile", "mainClass.getCanonicalName()", "", "");
         function.setChecksum("checksum");
 
         statement.setFunction(function);

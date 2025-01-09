@@ -534,15 +534,6 @@ ClassLoader::~ClassLoader() {
 constexpr const char* CLASS_LOADER_NAME = "com.starrocks.udf.UDFClassLoader";
 constexpr const char* CLASS_ANALYZER_NAME = "com.starrocks.udf.UDFClassAnalyzer";
 
-static inline jobject get_system_class_loader_parent(JNIEnv* env) {
-    jclass clazz = env->FindClass(JVMFunctionHelper::to_jni_class_name("java.lang.ClassLoader").c_str());
-    jmethodID get_system_class_loader_method = env->GetStaticMethodID(clazz, "getSystemClassLoader",
-                                                                      "()Ljava/lang/ClassLoader;");
-    jobject system_class_loader = env->CallStaticObjectMethod(clazz, get_system_class_loader_method);
-    jmethodID get_parent_method = env->GetMethodID(clazz, "getParent", "()Ljava/lang/ClassLoader;");
-    return env->CallObjectMethod(system_class_loader, get_parent_method);
-}
-
 Status ClassLoader::init() {
     JNIEnv* env = JVMFunctionHelper::getInstance().getEnv();
     if (env == nullptr) {
@@ -556,9 +547,8 @@ Status ClassLoader::init() {
     if (clazz == nullptr) {
         return Status::InternalError(fmt::format("ClassLoader Not Found: {}", CLASS_LOADER_NAME));
     }
-    const char* signature =
-            _is_load_all_class ? "(Ljava/lang/String;Ljava/lang/ClassLoader;)V" : "(Ljava/lang/String;)V";
-    jmethodID udf_loader_contructor = env->GetMethodID(clazz, "<init>", signature);
+
+    jmethodID udf_loader_contructor = env->GetMethodID(clazz, "<init>", "(Ljava/lang/String;)V");
     if (udf_loader_contructor == nullptr) {
         return Status::InternalError("ClassLoader constructor Not Found");
     }
@@ -567,9 +557,7 @@ Status ClassLoader::init() {
     jstring jstr = env->NewStringUTF(_path.c_str());
     LOCAL_REF_GUARD(jstr);
 
-    auto handle = _is_load_all_class ? env->NewObject(clazz, udf_loader_contructor, jstr,
-                                                      get_system_class_loader_parent(env))
-                                     : env->NewObject(clazz, udf_loader_contructor, jstr);
+    auto handle = env->NewObject(clazz, udf_loader_contructor, jstr);
     LOCAL_REF_GUARD(handle);
     _handle = env->NewGlobalRef(handle);
 

@@ -372,7 +372,6 @@ struct TFunction {
   // Ignore nulls
   33: optional bool ignore_nulls
   34: optional bool isolated
-  35: optional bool load_all_class;
 }
 
 enum TLoadJobState {
