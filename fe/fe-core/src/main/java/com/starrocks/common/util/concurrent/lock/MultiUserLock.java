@@ -48,7 +48,9 @@ public class MultiUserLock extends Lock {
     @Override
     public LockGrantType lock(Locker locker, LockType lockType) throws LockException {
         LockHolder lockHolderRequest = new LockHolder(locker, lockType);
-        LockGrantType lockGrantType = tryLock(lockHolderRequest);
+        // in order to ensure fair locking, a lock can only be acquired when the lock types do not conflict
+        // and either the wait list is empty or the holder is the same thread
+        LockGrantType lockGrantType = tryLock(lockHolderRequest, true);
         if (lockGrantType == LockGrantType.NEW) {
             addOwner(lockHolderRequest);
         } else if (lockGrantType == LockGrantType.WAIT) {
@@ -58,7 +60,13 @@ public class MultiUserLock extends Lock {
         return lockGrantType;
     }
 
-    private LockGrantType tryLock(LockHolder lockHolderRequest) throws LockException {
+    /**
+     * For actively acquiring locks, in order to ensure fair locking, a lock can only be acquired when
+     * the lock types do not conflict and either the wait list is empty or the holder is the same thread.
+     * For passively acquiring locks, as long as the lock types do not conflict, locks can be acquired
+     * @param active active or not
+     */
+    private LockGrantType tryLock(LockHolder lockHolderRequest, boolean active) throws LockException {
         if (ownerNum() == 0) {
             return LockGrantType.NEW;
         }
@@ -131,7 +139,11 @@ public class MultiUserLock extends Lock {
             }
         }
 
-        if (!hasConflicts && (hasSameLockerWithDifferentLockType || waiterNum() == 0)) {
+        // For actively acquiring locks, in order to ensure fair locking, a lock can only be acquired
+        // when the lock types do not conflict and either the wait list is empty or the holder is the same thread.
+        boolean canLock = active ? (hasSameLockerWithDifferentLockType || waiterNum() == 0) : true;
+
+        if (!hasConflicts && canLock) {
             return LockGrantType.NEW;
         } else {
             return LockGrantType.WAIT;
@@ -205,12 +217,14 @@ public class MultiUserLock extends Lock {
         }
 
         while (lockWaiter != null) {
-            LockGrantType lockGrantType = tryLock(lockWaiter);
+            // locks in the waiter list can be acquired continuously until a conflict lock occurs
+            LockGrantType lockGrantType = tryLock(lockWaiter, false);
 
             if (lockGrantType == LockGrantType.NEW
                     || lockGrantType == LockGrantType.EXISTING) {
                 if (isFirstWaiter) {
                     firstWaiter = null;
+                    isFirstWaiter = false;
                 } else {
                     lockWaiterIterator.remove();
                 }
