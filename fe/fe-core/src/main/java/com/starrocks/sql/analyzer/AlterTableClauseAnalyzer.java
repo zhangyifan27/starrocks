@@ -497,11 +497,11 @@ public class AlterTableClauseAnalyzer implements AstVisitor<Void, ConnectContext
 
         if (columnDef.isGeneratedColumn()) {
             if (!table.isOlapTable()) {
-                throw new SemanticException("Generated Column only support olap table");
+                throw new SemanticException("Generated Column only support table in share nothing mode");
             }
 
             if (table.isCloudNativeTable()) {
-                throw new SemanticException("Lake table does not support generated column");
+                throw new SemanticException("Cloud native table does not support generated column");
             }
 
             if (((OlapTable) table).getKeysType() == KeysType.AGG_KEYS) {
@@ -615,11 +615,11 @@ public class AlterTableClauseAnalyzer implements AstVisitor<Void, ConnectContext
                 hasGeneratedColumn = true;
 
                 if (!table.isOlapTable()) {
-                    throw new SemanticException("Generated Column only support olap table");
+                    throw new SemanticException("Generated Column only support table in share nothing mode");
                 }
 
                 if (table.isCloudNativeTable()) {
-                    throw new SemanticException("Lake table does not support generated column");
+                    throw new SemanticException("Cloud native table does not support generated column");
                 }
 
                 if (((OlapTable) table).getKeysType() == KeysType.AGG_KEYS) {
@@ -778,11 +778,11 @@ public class AlterTableClauseAnalyzer implements AstVisitor<Void, ConnectContext
 
         if (columnDef.isGeneratedColumn()) {
             if (!(table instanceof OlapTable)) {
-                throw new SemanticException("Generated Column only support olap table");
+                throw new SemanticException("Generated Column only support table in share nothing mode");
             }
 
             if (table.isCloudNativeTable()) {
-                throw new SemanticException("Lake table does not support generated column");
+                throw new SemanticException("Cloud native table does not support generated column");
             }
 
             if (((OlapTable) table).getKeysType() == KeysType.AGG_KEYS) {
