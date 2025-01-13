@@ -48,7 +48,8 @@ public class LogicalIcebergScanOperator extends LogicalScanOperator {
 
         Preconditions.checkState(table instanceof IcebergTable);
         IcebergTable icebergTable = (IcebergTable) table;
-        partitionColumns.addAll(icebergTable.getPartitionColumns().stream().map(x -> x.getName()).collect(Collectors.toList()));
+        partitionColumns.addAll(icebergTable.getPartitionColumnsIncludeTransformed().stream().map(x -> x.getName())
+                .collect(Collectors.toList()));
     }
 
     private LogicalIcebergScanOperator() {
