@@ -132,6 +132,13 @@ public class DescriptorTable {
         partitions.add(info);
     }
 
+    public void cleanReferencedPartitions(Table table) {
+        List<ReferencedPartitionInfo> partitions = referencedPartitionsPerTable.get(table);
+        if (partitions != null) {
+            partitions.clear();
+        }
+    }
+
     /**
      * Marks all slots in list as materialized.
      */

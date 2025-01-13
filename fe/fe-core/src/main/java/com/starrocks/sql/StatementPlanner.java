@@ -310,6 +310,7 @@ public class StatementPlanner {
                 TransformerContext transformerContext = new TransformerContext(columnRefFactory, session, mvTransformerContext);
                 logicalPlan = new RelationTransformer(transformerContext).transformWithSelectLimit(query);
             }
+            SimpleLimitPlanner.checkSimpleLimit(logicalPlan.getRoot(), session);
 
             OptExpression root = ShortCircuitPlanner.checkSupportShortCircuitRead(logicalPlan.getRoot(), session);
 

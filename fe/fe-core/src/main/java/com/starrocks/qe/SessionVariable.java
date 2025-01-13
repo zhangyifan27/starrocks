@@ -818,6 +818,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_SCAN_PREDICATE_EXPR_REUSE = "enable_scan_predicate_expr_reuse";
 
+    public static final String ENABLE_PRUNE_PARTITION_SIMPLE_QUERY = "enable_prune_partition_simple_query";
+    public static final String PRUNE_PARTITION_SIMPLE_QUERY_MAX_LIMIT = "prune_partition_simple_query_max_limit";
+    public static final String PRUNE_PARTITION_SIMPLE_QUERY_AVG_ROW_SIZE = "prune_partition_simple_query_avg_row_size";
+
     public static final List<String> DEPRECATED_VARIABLES = ImmutableList.<String>builder()
             .add(CODEGEN_LEVEL)
             .add(MAX_EXECUTION_TIME)
@@ -4404,6 +4408,39 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setEnableDistinctWithGroupby(boolean enableDistinctWithGroupby) {
         this.enableDistinctWithGroupby = enableDistinctWithGroupby;
+    }
+
+    @VariableMgr.VarAttr(name = ENABLE_PRUNE_PARTITION_SIMPLE_QUERY)
+    private boolean enablePrunePartitionSimpleQuery = true;
+
+    public boolean isEnablePrunePartitionSimpleQuery() {
+        return enablePrunePartitionSimpleQuery;
+    }
+
+    public void setEnablePrunePartitionSimpleQuery(boolean enablePrunePartitionSimpleQuery) {
+        this.enablePrunePartitionSimpleQuery = enablePrunePartitionSimpleQuery;
+    }
+
+    @VariableMgr.VarAttr(name = PRUNE_PARTITION_SIMPLE_QUERY_MAX_LIMIT)
+    private long prunePartitionSimpleQueryMaxLimit = 1000;
+
+    public long getPrunePartitionSimpleQueryMaxLimit() {
+        return prunePartitionSimpleQueryMaxLimit;
+    }
+
+    public void setPrunePartitionSimpleQueryMaxLimit(long prunePartitionSimpleQueryMaxLimit) {
+        this.prunePartitionSimpleQueryMaxLimit = prunePartitionSimpleQueryMaxLimit;
+    }
+
+    @VariableMgr.VarAttr(name = PRUNE_PARTITION_SIMPLE_QUERY_AVG_ROW_SIZE)
+    private long prunePartitionSimpleQueryAvgRowSize = 4096;
+
+    public long getPrunePartitionSimpleQueryAvgRowSize() {
+        return prunePartitionSimpleQueryAvgRowSize;
+    }
+
+    public void setPrunePartitionSimpleQueryAvgRowSize(long prunePartitionSimpleQueryAvgRowSize) {
+        this.prunePartitionSimpleQueryAvgRowSize = prunePartitionSimpleQueryAvgRowSize;
     }
 
     // Serialize to thrift object

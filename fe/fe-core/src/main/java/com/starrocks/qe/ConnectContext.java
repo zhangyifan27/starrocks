@@ -260,6 +260,8 @@ public class ConnectContext {
     // then use platformUser to check privileges.
     protected String platformUser;
 
+    private long simpleLimit = -1;
+
     public StmtExecutor getExecutor() {
         return executor;
     }
@@ -1113,6 +1115,14 @@ public class ConnectContext {
 
     public boolean isHiveView() {
         return isHiveView;
+    }
+
+    public void setSimpleLimit(long simpleLimit) {
+        this.simpleLimit = simpleLimit;
+    }
+
+    public long getSimpleLimit() {
+        return simpleLimit;
     }
 
     public boolean enableSSL() throws IOException {

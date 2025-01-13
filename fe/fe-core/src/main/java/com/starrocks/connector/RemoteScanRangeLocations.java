@@ -65,13 +65,14 @@ public class RemoteScanRangeLocations {
     private static final Logger LOG = LogManager.getLogger(RemoteScanRangeLocations.class);
 
     private final List<TScanRangeLocations> result = new ArrayList<>();
-    private final List<DescriptorTable.ReferencedPartitionInfo> partitionInfos = new ArrayList<>();
+    private List<DescriptorTable.ReferencedPartitionInfo> partitionInfos = new ArrayList<>();
     private boolean forceScheduleLocal = false;
     private boolean canBackendSplitFile = false;
 
     private List<RemoteFileInfo> partitions = new ArrayList<>();
     private long fileNum = 0;
     private long fileSizeBytes = 0;
+    private long simpleLimitSizeBytes = Long.MAX_VALUE;
 
     public void setup(DescriptorTable descTbl, Table table, HDFSScanNodePredicates scanNodePredicates) {
         Collection<Long> selectedPartitionIds = scanNodePredicates.getSelectedPartitionIds();
@@ -97,12 +98,17 @@ public class RemoteScanRangeLocations {
 
         HiveMetaStoreTable hiveMetaStoreTable = (HiveMetaStoreTable) table;
         String catalogName = hiveMetaStoreTable.getCatalogName();
-        try {
-            partitions = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(
-                    catalogName, table, partitionKeys);
-        } catch (Exception e) {
-            LOG.error("Failed to get remote files", e);
-            throw e;
+        if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable() != null &&
+                ConnectContext.get().getSimpleLimit() > 0) {
+            tryPrunePartitionForSimpleQuery(descTbl, catalogName, table, partitionKeys);
+        } else {
+            try {
+                partitions = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(
+                        catalogName, table, partitionKeys);
+            } catch (Exception e) {
+                LOG.error("Failed to get remote files", e);
+                throw e;
+            }
         }
 
         for (int i = 0; i < partitions.size(); i++) {
@@ -111,6 +117,60 @@ public class RemoteScanRangeLocations {
                     fileNum++;
                     fileSizeBytes += fileDesc.getLength();
                 }
+            }
+        }
+    }
+
+    private void tryPrunePartitionForSimpleQuery(DescriptorTable descTbl, String catalogName, Table table,
+                                                 List<PartitionKey> partitionKeys) {
+        ConnectContext context = ConnectContext.get();
+        long simpleLimit = context.getSimpleLimit();
+        if (simpleLimit < context.getSessionVariable().getPrunePartitionSimpleQueryMaxLimit()) {
+            long totalSize = 0;
+            long count = 0;
+            List<DescriptorTable.ReferencedPartitionInfo> tmpPartitionInfos = new ArrayList<>();
+            descTbl.cleanReferencedPartitions(table);
+            for (int i = partitionKeys.size() - 1; i >= 0; i--) {
+                try {
+                    List<RemoteFileInfo> remoteFileInfos = GlobalStateMgr.getCurrentState().getMetadataMgr()
+                            .getRemoteFileInfos(catalogName, table, Lists.newArrayList(partitionKeys.get(i)));
+                    long partitionBytes = 0;
+                    for (int j = 0; j < remoteFileInfos.size(); j++) {
+                        for (RemoteFileDesc fileDesc : remoteFileInfos.get(j).getFiles()) {
+                            if (fileDesc.getLength() > 0) {
+                                partitionBytes += fileDesc.getLength();
+                            }
+                        }
+                    }
+                    if (partitionBytes > 0) {
+                        partitions.addAll(remoteFileInfos);
+                        tmpPartitionInfos.add(partitionInfos.get(i));
+                        descTbl.addReferencedPartitions(table, partitionInfos.get(i));
+                        totalSize += partitionBytes;
+                        count++;
+                        // Assuming avg row 4KB in size, if total file size > 4KB * limit found enough files.
+                        if (totalSize >
+                                context.getSessionVariable().getPrunePartitionSimpleQueryAvgRowSize() * simpleLimit) {
+                            LOG.info("prune partition for simple query {}, limit {}, partitions {}, file sizes {}",
+                                    context.getQueryId(), simpleLimit, count, totalSize);
+                            partitionInfos = tmpPartitionInfos;
+                            simpleLimitSizeBytes =
+                                    context.getSessionVariable().getPrunePartitionSimpleQueryAvgRowSize() * simpleLimit;
+                            break;
+                        }
+                    }
+                } catch (Exception e) {
+                    LOG.error("Failed to get remote files", e);
+                    throw e;
+                }
+            }
+        } else {
+            try {
+                partitions = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(
+                        catalogName, table, partitionKeys);
+            } catch (Exception e) {
+                LOG.error("Failed to get remote files", e);
+                throw e;
             }
         }
     }
@@ -396,6 +456,7 @@ public class RemoteScanRangeLocations {
         updateCanBackendSplitFile(partitions);
 
         if (table instanceof HiveTable) {
+            long sum = 0;
             for (int i = 0; i < partitions.size(); i++) {
                 DataCacheOptions dataCacheOptions = null;
                 if (dataCacheOptionsList.isPresent()) {
@@ -406,6 +467,10 @@ public class RemoteScanRangeLocations {
                     if (fileDesc.getLength() == 0) {
                         continue;
                     }
+                    if (sum > simpleLimitSizeBytes) {
+                        continue;
+                    }
+                    sum += fileDesc.getLength();
                     if (remoteFileInfo.getFormat().equals(RemoteFileInputFormat.FORMATFILE)) {
                         if (Config.enable_split_storage_format) {
                             StorageFormatRemoteFileDesc storageFormatFileDesc = (StorageFormatRemoteFileDesc) fileDesc;

@@ -27,6 +27,7 @@ import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.RemoteScanRangeLocations;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.datacache.DataCacheOptions;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.optimizer.ScanOptimzeOption;
 import com.starrocks.sql.plan.HDFSScanNodePredicates;
@@ -169,6 +170,10 @@ public class HdfsScanNode extends ScanNode {
                             .append(String.format("Pruned type: %d [%s] <-> [%s]\n", slotDescriptor.getId().asInt(), slotDescriptor.getColumn().getName(), type));
                 }
             }
+        }
+
+        if (ConnectContext.get() != null && ConnectContext.get().getSimpleLimit() > 0) {
+            output.append(prefix).append("PruneSimpleQueryPartition: true\n");
         }
 
         return output.toString();
