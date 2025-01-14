@@ -75,7 +75,7 @@ public class SelectAnalyzer {
         analyzeWhere(whereClause, analyzeState, sourceScope);
 
         List<Expr> outputExpressions =
-                analyzeSelect(selectList, fromRelation, groupByClause != null, analyzeState, sourceScope);
+                analyzeSelect(selectList, fromRelation, groupByClause, analyzeState, sourceScope);
         Scope outputScope = analyzeState.getOutputScope();
 
         List<Expr> groupByExpressions = new ArrayList<>(
@@ -200,13 +200,34 @@ public class SelectAnalyzer {
         }
     }
 
-    private List<Expr> analyzeSelect(SelectList selectList, Relation fromRelation, boolean hasGroupByClause,
+    private List<Expr> analyzeSelect(SelectList selectList, Relation fromRelation, GroupByClause groupByClause,
                                      AnalyzeState analyzeState, Scope scope) {
+        boolean hasGroupByClause = (groupByClause != null);
         ImmutableList.Builder<Expr> outputExpressionBuilder = ImmutableList.builder();
         ImmutableList.Builder<Field> outputFields = ImmutableList.builder();
         List<Integer> outputExprInOrderByScope = new ArrayList<>();
 
         int columnNumber = 0;
+
+        if (session.getSessionVariable().isEnableDistinctWithGroupby()) {
+            if (selectList.isDistinct() && hasGroupByClause && (groupByClause.getOriGroupingExprs() != null) &&
+                    (selectList.getItems().size() == groupByClause.getOriGroupingExprs().size())) {
+                // select distinct k1 from mytable group by k1 =
+                // select k1 from mytable group by k1 =
+                // select distinct k1 from mytable
+                boolean supportDistinctWithAggregate = true;
+                for (int i = 0; i < selectList.getItems().size(); i++) {
+                    SelectListItem item = selectList.getItems().get(i);
+                    Expr oriGroupingExpr = groupByClause.getOriGroupingExprs().get(i);
+                    if (!oriGroupingExpr.equals(item.getExpr())) {
+                        supportDistinctWithAggregate = false;
+                    }
+                }
+                if (supportDistinctWithAggregate) {
+                    selectList.setIsDistinct(false);
+                }
+            }
+        }
 
         for (SelectListItem item : selectList.getItems()) {
             if (item.isStar()) {

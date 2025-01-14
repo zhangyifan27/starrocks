@@ -841,6 +841,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     // query timeout cannot greater than one month
     public static final int MAX_QUERY_TIMEOUT = 259200;
 
+    public static final String ENABLE_DISTINCT_WITH_GROUPBY = "enable_distinct_with_groupby";
+
     // --------  tq session variables start --------
 
     public static final String TQ_TAUTH_PLATFORM_TOKEN = "tq_tauth_platform_token";
@@ -4391,6 +4393,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setRemoteFilePullTimeout(long remoteFilePullTimeout) {
         this.remoteFilePullTimeout = remoteFilePullTimeout;
+    }
+
+    @VarAttr(name = ENABLE_DISTINCT_WITH_GROUPBY)
+    private boolean enableDistinctWithGroupby = true;
+
+    public boolean isEnableDistinctWithGroupby() {
+        return enableDistinctWithGroupby;
+    }
+
+    public void setEnableDistinctWithGroupby(boolean enableDistinctWithGroupby) {
+        this.enableDistinctWithGroupby = enableDistinctWithGroupby;
     }
 
     // Serialize to thrift object
