@@ -142,7 +142,6 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -291,6 +290,8 @@ public class OlapTable extends Table {
 
     // Both the following two flags are used by StarMgrMetaSyncer
     private long lastCollectProfileTime = 0;
+
+    public static final int RECENT_PARTITION_BY_WEEK = 7;
 
     // The flag is used to indicate whether the table shard group has changed.
     public AtomicBoolean isShardGroupChanged = new AtomicBoolean(false);
@@ -1297,12 +1298,12 @@ public class OlapTable extends Table {
     /*
      * Infer the distribution info based on partitions and cluster status
      */
-    public void inferDistribution(DistributionInfo info) throws DdlException {
+    public void inferDistribution(DistributionInfo info, String partitionName) throws DdlException {
         if (info.getBucketNum() == 0) {
             if (info.getType() == DistributionInfo.DistributionInfoType.HASH) {
                 // infer bucket num
                 int numBucket = CatalogUtils.calAvgBucketNumOfRecentPartitions(this,
-                        5, Config.enable_auto_tablet_distribution);
+                        RECENT_PARTITION_BY_WEEK, Config.enable_auto_tablet_distribution, partitionName);
                 info.setBucketNum(numBucket);
             } else if (info.getType() == DistributionInfo.DistributionInfoType.RANDOM) {
                 // prior to use user set mutable bucket num
@@ -1650,15 +1651,12 @@ public class OlapTable extends Table {
         return new ArrayList<>(idToPartition.keySet());
     }
 
-    public Collection<Partition> getRecentPartitions(int recentPartitionNum) {
+    public Collection<Partition> getRecentPartitions(int recentPartitionNum, String partitionName) {
         List<Partition> partitions = Lists.newArrayList(idToPartition.values());
-        Collections.sort(partitions, new Comparator<Partition>() {
-            @Override
-            public int compare(Partition h1, Partition h2) {
-                return (int) (h2.getVisibleVersion() - h1.getVisibleVersion());
-            }
-        });
-        return partitions.subList(0, recentPartitionNum);
+        return partitions.stream().filter(p -> p.getVisibleVersion()
+                        != Partition.PARTITION_INIT_VERSION
+                        && p.getName().compareTo(partitionName) < 0)
+                .sorted((o1, o2) -> o2.getName().compareTo(o1.getName())).limit(recentPartitionNum).collect(Collectors.toList());
     }
 
     // get all partitions' name except the temp partitions

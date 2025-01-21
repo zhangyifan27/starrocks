@@ -17,6 +17,7 @@ package com.starrocks.catalog;
 import com.google.common.collect.Sets;
 import com.starrocks.analysis.LiteralExpr;
 import com.starrocks.common.AnalysisException;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
@@ -401,17 +402,17 @@ public class CatalogUtils {
         } else if (backendNum <= 36) {
             bucketNum = 36;
         } else {
-            bucketNum = Math.min(backendNum, 48);
+            bucketNum = backendNum;
         }
         return bucketNum;
     }
 
     public static int calAvgBucketNumOfRecentPartitions(OlapTable olapTable, int recentPartitionNum,
-                                                        boolean enableAutoTabletDistribution) {
+                                                        boolean enableAutoTabletDistribution, String partitionName) {
         // 1. If the partition is less than recentPartitionNum, use backendNum to speculate the bucketNum
         //    Or the Config.enable_auto_tablet_distribution is disabled
         int bucketNum = 0;
-        if (olapTable.getPartitions().size() < recentPartitionNum || !enableAutoTabletDistribution) {
+        if (olapTable.getPartitions().size() <= 0 || !enableAutoTabletDistribution) {
             bucketNum = CatalogUtils.calBucketNumAccordingToBackends();
             // If table is not partitioned, the bucketNum should be at least DEFAULT_UNPARTITIONED_TABLE_BUCKET_NUM
             if (!olapTable.getPartitionInfo().isPartitioned()) {
@@ -420,15 +421,15 @@ public class CatalogUtils {
             }
             return bucketNum;
         }
+        if (olapTable.getPartitions().size() < recentPartitionNum) {
+            recentPartitionNum = olapTable.getPartitions().size();
+        }
 
         // 2. If the partition is not imported anydata, use backendNum to speculate the bucketNum
-        List<Partition> partitions = (List<Partition>) olapTable.getRecentPartitions(recentPartitionNum);
+        List<Partition> partitions = (List<Partition>) olapTable.getRecentPartitions(recentPartitionNum, partitionName);
         boolean dataImported = true;
-        for (Partition partition : partitions) {
-            if (partition.getVisibleVersion() == 1) {
-                dataImported = false;
-                break;
-            }
+        if (partitions.isEmpty()) {
+            dataImported = false;
         }
 
         bucketNum = CatalogUtils.calBucketNumAccordingToBackends();
@@ -446,10 +447,10 @@ public class CatalogUtils {
         long speculateTabletNum = (maxDataSize + FeConstants.AUTO_DISTRIBUTION_UNIT - 1) / FeConstants.AUTO_DISTRIBUTION_UNIT;
         // speculateTabletNum may be not accurate, so we need to take the max value of bucketNum and speculateTabletNum
         bucketNum = (int) Math.max(bucketNum, speculateTabletNum);
-        if (bucketNum == 0) {
-            bucketNum = 1;
+        if (speculateTabletNum == 0) {
+            return 1;
         }
-        return bucketNum;
+        return (int) Math.min(Config.max_bucket_num_per_partition, speculateTabletNum);
     }
 
     public static String addEscapeCharacter(String comment) {
