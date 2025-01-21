@@ -2270,7 +2270,7 @@ public class StmtExecutor {
         String trackingSql = "";
         try {
             coord = getCoordinatorFactory().createInsertScheduler(
-                    context, execPlan.getFragments(), execPlan.getScanNodes(), execPlan.getDescTbl().toThrift());
+                    context, execPlan.getFragments(), execPlan.getScanNodes(), execPlan.getDescTbl().toThrift(true));
 
             List<ScanNode> scanNodes = execPlan.getScanNodes();
 

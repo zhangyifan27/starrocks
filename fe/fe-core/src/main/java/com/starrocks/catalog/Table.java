@@ -474,6 +474,10 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
         return null;
     }
 
+    public TTableDescriptor toThrift(List<ReferencedPartitionInfo> partitions, boolean write) {
+        return toThrift(partitions);
+    }
+
     @Override
     public void write(DataOutput out) throws IOException {
         Text.writeString(out, GsonUtils.GSON.toJson(this));

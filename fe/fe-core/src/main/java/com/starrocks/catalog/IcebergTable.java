@@ -332,6 +332,11 @@ public class IcebergTable extends Table {
 
     @Override
     public TTableDescriptor toThrift(List<DescriptorTable.ReferencedPartitionInfo> partitions) {
+        return toThrift(partitions, false);
+    }
+
+    @Override
+    public TTableDescriptor toThrift(List<DescriptorTable.ReferencedPartitionInfo> partitions, boolean write) {
         Preconditions.checkNotNull(partitions);
 
         TIcebergTable tIcebergTable = new TIcebergTable();
@@ -344,7 +349,11 @@ public class IcebergTable extends Table {
         tIcebergTable.setColumns(tColumns);
 
         tIcebergTable.setIceberg_schema(IcebergApiConverter.getTIcebergSchema(nativeTable.schema()));
-        tIcebergTable.setPartition_column_names(getIcebergPartitionColumnNames());
+        if (write) {
+            tIcebergTable.setPartition_column_names(getIcebergPartitionColumnNames());
+        } else {
+            tIcebergTable.setPartition_column_names(getPartitionColumnNames());
+        }
 
         Set<Integer> identifierIds = nativeTable.schema().identifierFieldIds();
         if (identifierIds.isEmpty()) {

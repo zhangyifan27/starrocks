@@ -180,6 +180,37 @@ public class DescriptorTable {
         return result;
     }
 
+    public TDescriptorTable toThrift(boolean write) {
+        TDescriptorTable result = new TDescriptorTable();
+        Map<Long, Table> referencedTbls = Maps.newHashMap();
+        for (TupleDescriptor tupleD : tupleDescs.values()) {
+            // inline view of a non-constant select has a non-materialized tuple descriptor
+            // in the descriptor table just for type checking, which we need to skip
+            if (tupleD.getIsMaterialized()) {
+                result.addToTupleDescriptors(tupleD.toThrift());
+                // an inline view of a constant select has a materialized tuple
+                // but its table has no id
+                if (tupleD.getTable() != null
+                        && tupleD.getTable().getId() >= 0) {
+                    referencedTbls.putIfAbsent(tupleD.getTable().getId(), tupleD.getTable());
+                }
+                for (SlotDescriptor slotD : tupleD.getMaterializedSlots()) {
+                    result.addToSlotDescriptors(slotD.toThrift());
+                }
+            }
+        }
+
+        for (Table tbl : referencedTables) {
+            referencedTbls.putIfAbsent(tbl.getId(), tbl);
+        }
+
+        for (Table tbl : referencedTbls.values()) {
+            result.addToTableDescriptors(
+                    tbl.toThrift(referencedPartitionsPerTable.getOrDefault(tbl, Lists.newArrayList()), write));
+        }
+        return result;
+    }
+
     public static class ReferencedPartitionInfo {
         private long id;
         private PartitionKey key;
