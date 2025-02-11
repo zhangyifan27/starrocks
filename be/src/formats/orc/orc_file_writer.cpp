@@ -125,7 +125,7 @@ ORCFileWriter::ORCFileWriter(std::string location, std::shared_ptr<orc::OutputSt
 
 Status ORCFileWriter::init() {
     RETURN_IF_ERROR(ColumnEvaluator::init(_column_evaluators));
-    ASSIGN_OR_RETURN(_schema, _make_schema(_column_names, _type_descs, _writer_options->column_ids.value()));
+    ASSIGN_OR_RETURN(_schema, _make_schema(_column_names, _type_descs, _writer_options->column_ids.value_or(std::vector<FileColumnId>())));
     auto options = orc::WriterOptions();
     ASSIGN_OR_RETURN(auto compression, _convert_compression_type(_compression_type));
     options.setCompression(compression);
