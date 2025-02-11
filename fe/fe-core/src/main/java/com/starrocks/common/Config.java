@@ -2493,6 +2493,12 @@ public class Config extends ConfigBase {
     public static int iceberg_table_refresh_expire_sec = 86400;
 
     /**
+     * query progress sql result cache max size
+     */
+    @ConfField(mutable = true)
+    public static int query_progress_cache_max_size = 1000;
+
+    /**
      * iceberg metadata cache dir
      */
     @ConfField(mutable = true)

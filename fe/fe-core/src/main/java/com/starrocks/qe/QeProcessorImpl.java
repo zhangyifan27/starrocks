@@ -34,6 +34,7 @@
 
 package com.starrocks.qe;
 
+import com.google.common.cache.CacheBuilder;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
@@ -74,7 +75,10 @@ public final class QeProcessorImpl implements QeProcessor, MemoryTrackable {
     private static final Logger LOG = LogManager.getLogger(QeProcessorImpl.class);
     private static final int MEMORY_QUERY_SAMPLES = 10;
     private final Map<TUniqueId, QueryInfo> coordinatorMap = Maps.newConcurrentMap();
-    private final Map<TUniqueId, String> progresssMap = Maps.newConcurrentMap();
+    private final Map<TUniqueId, String> progressMap = CacheBuilder.newBuilder()
+            .maximumSize(Config.query_progress_cache_max_size)
+            .<TUniqueId, String>build()
+            .asMap();
     private final Map<TUniqueId, Long> monitorQueryMap = Maps.newConcurrentMap();
 
     public static final QeProcessorImpl INSTANCE;
@@ -160,12 +164,12 @@ public final class QeProcessorImpl implements QeProcessor, MemoryTrackable {
 
     @Override
     public void addQueryProgress(TUniqueId queryId, String progressInfo) {
-        progresssMap.put(queryId, progressInfo);
+        progressMap.put(queryId, progressInfo);
         LOG.info("add or update progress query id = {}", DebugUtil.printId(queryId));
     }
 
     public String getFinishedQueryProgress(TUniqueId queryId) {
-        return progresssMap.get(queryId);
+        return progressMap.get(queryId);
     }
 
     @Override

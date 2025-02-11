@@ -780,9 +780,17 @@ public class DefaultCoordinator extends Coordinator {
             }
         }
 
+
+        Map<Integer, Integer>  fragmentsIndexMap = new HashMap<>();
+        for (int i = 0; i < getFragments().size(); ++i) {
+            PlanFragment fragment = getFragments().get(i);
+            fragmentsIndexMap.put(fragment.getFragmentId().asInt(), i);
+        }
+
         for (Map.Entry<Integer, Long> entry : fragmentToScanRows.entrySet()) {
-            sb.append(String.format("Fragment F%02d Scan Rows: %,d\n",
-                    entry.getKey(), entry.getValue()));
+            String index = getFragmentIndex(fragmentsIndexMap, entry.getKey());
+            sb.append(String.format("Fragment F%s Scan Rows: %,d\n",
+                    index, entry.getValue()));
         }
         // scan total tablet
         sb.append(String.format("Scan Total Tablets: %,d\n",
@@ -842,8 +850,9 @@ public class DefaultCoordinator extends Coordinator {
             int completed = completedInstances.getOrDefault(fragmentId, 0);
             int total = fragmentToInstances.get(fragmentId);
             double fragmentProgress = total > 0 ? (completed * 100.0 / total) : 0.0;
-            sb.append(String.format("  - Fragment %s: %d/%d instances (%.1f%%)\n",
-                    fragmentId, completed, total, fragmentProgress));
+            String index = getFragmentIndex(fragmentsIndexMap, fragmentId.asInt());
+            sb.append(String.format("  - Fragment F%s: %d/%d instances (%.1f%%)\n",
+                    index, completed, total, fragmentProgress));
         }
 
         sb.append(String.format("\n%-40s %-10s %-10s %-10s %-10s %-10s %-10s\n",
@@ -855,8 +864,17 @@ public class DefaultCoordinator extends Coordinator {
                 "FAILED",
                 "PROGRESS"
         ));
-        buildProgressTable(executionDAG.getRootFragment(), executions, sb, "", true);
+        buildProgressTable(executionDAG.getRootFragment(), executions, sb, "", fragmentsIndexMap, true);
         return sb.toString();
+    }
+
+
+    private String getFragmentIndex(Map<Integer, Integer>  fragmentsIndexMap, Integer fragmentId) {
+        String index = String.valueOf(fragmentsIndexMap.get(fragmentId));
+        if (fragmentsIndexMap.get(fragmentId) < 10) {
+            index = "0" + fragmentsIndexMap.get(fragmentId);
+        }
+        return index;
     }
 
     private static Counter getMaximumPipelineDriverTime(RuntimeProfile executionProfile) {
@@ -962,6 +980,7 @@ public class DefaultCoordinator extends Coordinator {
                                     List<FragmentInstanceExecState> executions,
                                     StringBuilder sb,
                                     String prefix,
+                                    Map<Integer, Integer> fragmentsIndexMap,
                                     boolean isLast) {
 
         List<FragmentInstance> instances = fragment.getInstances();
@@ -994,7 +1013,7 @@ public class DefaultCoordinator extends Coordinator {
         int fragmentId = fragment.getPlanFragment().getFragmentId().asInt();
         String fragmentInfo = String.format("%sFragment F%02d",
                 prefix + treeSymbol,
-                fragmentId);
+                fragmentsIndexMap.get(fragmentId));
 
         sb.append(String.format("%-40s %-10d %-10d %-10d %-10d %-10d %6.1f%%\n",
                 fragmentInfo,
@@ -1009,7 +1028,7 @@ public class DefaultCoordinator extends Coordinator {
         int size = fragment.childrenSize();
         String childPrefix = prefix + (isLast ? "   " : "│  ");
         for (int i = 0; i < size; i++) {
-            buildProgressTable(fragment.getChild(i), executions, sb, childPrefix, i == size - 1);
+            buildProgressTable(fragment.getChild(i), executions, sb, childPrefix, fragmentsIndexMap, i == size - 1);
         }
     }
 
