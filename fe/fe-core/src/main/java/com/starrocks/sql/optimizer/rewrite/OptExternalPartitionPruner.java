@@ -124,6 +124,16 @@ public class OptExternalPartitionPruner {
             if (table instanceof HiveMetaStoreTable && ((HiveMetaStoreTable) table).isThiveTable()) {
                 try {
                     OptThivePartitionPruner.thivePrunePartitions(logicalScanOperator, context);
+
+                    int scanHivePartitionNumLimit = context.getSessionVariable().getScanHivePartitionNumLimit();
+                    Collection<Long> selectedPartitionIds =
+                            logicalScanOperator.getScanOperatorPredicates().getSelectedPartitionIds();
+                    if (scanHivePartitionNumLimit > 0 && !table.isUnPartitioned()
+                            && selectedPartitionIds.size() > scanHivePartitionNumLimit) {
+                        String msg = "Exceeded the limit of " + scanHivePartitionNumLimit + " max scan hive external partitions";
+                        LOG.warn("{} queryId: {}", msg, DebugUtil.printId(context.getQueryId()));
+                        throw new AnalysisException(msg);
+                    }
                 } catch (Exception e) {
                     LOG.warn("HMS thive table partition prune failed : ", e);
                     throw new StarRocksPlannerException(e.getMessage(), ErrorType.INTERNAL_ERROR);
