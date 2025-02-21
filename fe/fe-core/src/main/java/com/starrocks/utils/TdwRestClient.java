@@ -61,7 +61,8 @@ public class TdwRestClient extends RestClient {
         init();
     }
     private void init() {
-        userCache  = newCacheBuilder(Config.tdw_user_cache_count, Config.tdw_user_cache_ttl_s)
+        userCache = newCacheBuilder(Config.tdw_user_cache_count, Config.tdw_user_cache_ttl_s,
+                Config.tdw_user_cache_refresh_interval_s)
                 .build(asyncReloading(new CacheLoader<String, String>() {
                     @Override
                     public String load(String key) throws Exception {
@@ -69,7 +70,8 @@ public class TdwRestClient extends RestClient {
                     }
                 }, executor));
 
-        userGroupCache  = newCacheBuilder(Config.tdw_user_cache_count, Config.tdw_user_cache_ttl_s)
+        userGroupCache = newCacheBuilder(Config.tdw_user_cache_count, Config.tdw_user_cache_ttl_s,
+                Config.tdw_user_cache_refresh_interval_s)
                 .build(asyncReloading(new CacheLoader<String, Set<String>>() {
                     @Override
                     public Set<String> load(String key) throws Exception {
@@ -78,9 +80,14 @@ public class TdwRestClient extends RestClient {
                 }, executor));
     }
 
-    private CacheBuilder<Object, Object> newCacheBuilder(long maximumSize, long expireTime) {
+    private CacheBuilder<Object, Object> newCacheBuilder(long maximumSize, long expiresAfterWriteSec, long refreshSec) {
         CacheBuilder<Object, Object> cacheBuilder = CacheBuilder.newBuilder();
-        cacheBuilder.expireAfterWrite(expireTime, SECONDS);
+        if (expiresAfterWriteSec >= 0) {
+            cacheBuilder.expireAfterWrite(expiresAfterWriteSec, SECONDS);
+        }
+        if (refreshSec > 0 && expiresAfterWriteSec > refreshSec) {
+            cacheBuilder.refreshAfterWrite(refreshSec, SECONDS);
+        }
         cacheBuilder.maximumSize(maximumSize);
         return cacheBuilder;
     }

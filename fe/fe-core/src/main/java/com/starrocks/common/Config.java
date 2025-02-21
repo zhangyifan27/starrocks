@@ -1978,7 +1978,9 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean tdw_authentication_skip_root = false;
     @ConfField
-    public static long tdw_user_cache_ttl_s = 60L * 5L;
+    public static long tdw_user_cache_ttl_s = 60L * 30L;
+    @ConfField
+    public static long tdw_user_cache_refresh_interval_s = 60L * 5L;
     @ConfField
     public static long tdw_user_cache_count = 100L;
     @ConfField
