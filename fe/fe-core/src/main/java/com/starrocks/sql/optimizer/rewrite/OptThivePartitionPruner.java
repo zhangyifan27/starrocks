@@ -277,7 +277,10 @@ public class OptThivePartitionPruner {
             Set<Long> selectedPartitionIds = new HashSet<>();
             for (String partName : operator.getPartitionNames().getPartitionNames()) {
                 LiteralExpr literal = LiteralExpr.create(partName, Type.STRING);
-                selectedPartitionIds.addAll(partitionValueMap.get(literal));
+                Set<Long> partitions = partitionValueMap.get(literal);
+                if (partitions != null) {
+                    selectedPartitionIds.addAll(partitions);
+                }
             }
             ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
             Collection<Long> oldSelectedPartitionIds = scanOperatorPredicates.getSelectedPartitionIds();
