@@ -262,7 +262,7 @@ public class RemoteScanRangeLocations {
 
         if (blockDesc.isPresent()) {
             if (blockDesc.get().getReplicaHostIds().length == 0) {
-                String message = String.format("hdfs file block has no host. file = %s/%s",
+                String message = String.format("hdfs file corrupt, file block has no host, block Missing. file = %s/%s",
                         partition.getFullPath(), fileDesc.getFileName());
                 throw new StarRocksPlannerException(message, ErrorType.INTERNAL_ERROR);
             }
