@@ -28,6 +28,8 @@ import com.starrocks.connector.iceberg.rest.IcebergRESTCatalog;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.credential.CloudConfigurationFactory;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.utils.TAuthUtils;
+import com.starrocks.utils.TdwUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.util.ThreadPools;
 import org.apache.logging.log4j.LogManager;
@@ -44,6 +46,9 @@ import static org.apache.iceberg.util.ThreadPools.newWorkerPool;
 
 public class IcebergConnector implements Connector {
     private static final Logger LOG = LogManager.getLogger(IcebergConnector.class);
+    public static final String HADOOP_TAUTH_USER = "hadoop.tauth.user";
+    public static final String HADOOP_TAUTH_KEY = "hadoop.tauth.key";
+    public static final String HADOOP_TAUTH_PROXY_USER = "hadoop.tauth.proxyuser";
     private final Map<String, String> properties;
     private final HdfsEnvironment hdfsEnvironment;
     private final String catalogName;
@@ -63,6 +68,9 @@ public class IcebergConnector implements Connector {
     private IcebergCatalog buildIcebergNativeCatalog() {
         IcebergCatalogType nativeCatalogType = icebergCatalogProperties.getCatalogType();
         Configuration conf = hdfsEnvironment.getConfiguration();
+        conf.set(HADOOP_TAUTH_USER, TAuthUtils.getTauthPlatformUser());
+        conf.set(HADOOP_TAUTH_KEY, TAuthUtils.getTauthPlatformCMK());
+        conf.set(HADOOP_TAUTH_PROXY_USER, TdwUtil.getTdwUserName());
 
         if (Config.enable_iceberg_custom_worker_thread) {
             LOG.info("Default iceberg worker thread number changed " + Config.iceberg_worker_num_threads);
