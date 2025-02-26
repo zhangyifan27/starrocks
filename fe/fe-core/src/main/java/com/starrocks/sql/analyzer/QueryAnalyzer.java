@@ -1410,7 +1410,10 @@ public class QueryAnalyzer {
 
             PartitionNames partitionNamesObject = tableRelation.getPartitionNames();
             if (table.isExternalTableWithFileSystem() && partitionNamesObject != null) {
-                throw unsupportedException("Unsupported table type for partition clause, type: " + table.getType());
+                // hive support
+                if (!table.isHiveTable()) {
+                    throw unsupportedException("Unsupported table type for partition clause, type: " + table.getType());
+                }
             }
 
             if (partitionNamesObject != null && table.isNativeTable()) {
