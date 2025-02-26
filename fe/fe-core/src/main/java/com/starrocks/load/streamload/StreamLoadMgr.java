@@ -30,8 +30,6 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.LogBuilder;
 import com.starrocks.common.util.LogKey;
-import com.starrocks.common.util.concurrent.lock.LockType;
-import com.starrocks.common.util.concurrent.lock.Locker;
 import com.starrocks.http.rest.TransactionResult;
 import com.starrocks.memory.MemoryTrackable;
 import com.starrocks.persist.ImageWriter;
@@ -184,15 +182,7 @@ public class StreamLoadMgr implements MemoryTrackable {
     public StreamLoadTask createLoadTask(Database db, String tableName, String label, String user, String clientIp,
                                          long timeoutMillis, boolean isRoutineLoad, long warehouseId)
             throws UserException {
-        Table table;
-        Locker locker = new Locker();
-        locker.lockDatabase(db, LockType.READ);
-        try {
-            unprotectedCheckMeta(db, tableName);
-            table = db.getTable(tableName);
-        } finally {
-            locker.unLockDatabase(db, LockType.READ);
-        }
+        Table table = unprotectedCheckMeta(db, tableName);
 
         // init stream load task
         long id = GlobalStateMgr.getCurrentState().getNextId();
@@ -215,15 +205,7 @@ public class StreamLoadMgr implements MemoryTrackable {
     public StreamLoadTask createLoadTask(Database db, String tableName, String label, String user, String clientIp,
                                          long timeoutMillis, int channelNum,
                                          int channelId, long warehouseId) throws UserException {
-        Table table;
-        Locker locker = new Locker();
-        locker.lockDatabase(db, LockType.READ);
-        try {
-            unprotectedCheckMeta(db, tableName);
-            table = db.getTable(tableName);
-        } finally {
-            locker.unLockDatabase(db, LockType.READ);
-        }
+        Table table = unprotectedCheckMeta(db, tableName);
 
         // init stream load task
         long id = GlobalStateMgr.getCurrentState().getNextId();
@@ -232,7 +214,7 @@ public class StreamLoadMgr implements MemoryTrackable {
         return streamLoadTask;
     }
 
-    public void unprotectedCheckMeta(Database db, String tblName)
+    public Table unprotectedCheckMeta(Database db, String tblName)
             throws UserException {
         if (tblName == null) {
             throw new AnalysisException("Table name must be specified when calling /begin/transaction/ first time");
@@ -253,6 +235,7 @@ public class StreamLoadMgr implements MemoryTrackable {
         if (!table.isOlapOrCloudNativeTable()) {
             throw new AnalysisException("Only olap/lake table support stream load");
         }
+        return table;
     }
 
     public void replayCreateLoadTask(StreamLoadTask loadJob) {

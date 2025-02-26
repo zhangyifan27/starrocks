@@ -1739,7 +1739,7 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
                                 }
 
                                 pStat.skew = maxNum - minNum;
-                                LOG.info("add partition stat: {} id: {}",
+                                LOG.debug("add partition stat: {} id: {}",
                                         pStat, new Pair<>(physicalPartition.getId(), idx.getId()));
                             }
                         }
