@@ -40,6 +40,7 @@ import org.apache.iceberg.hadoop.HadoopCatalog;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -209,5 +210,11 @@ public class IcebergHadoopCatalog implements IcebergCatalog {
 
     public String toString() {
         return delegate.toString();
+    }
+
+    @Override
+    public void close() throws IOException {
+        LOG.info("close IcebergHadoopCatalog " + this);
+        delegate.close();
     }
 }

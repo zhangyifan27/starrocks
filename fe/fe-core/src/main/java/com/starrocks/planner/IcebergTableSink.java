@@ -32,6 +32,7 @@ import com.starrocks.thrift.TDataSink;
 import com.starrocks.thrift.TDataSinkType;
 import com.starrocks.thrift.TExplainLevel;
 import com.starrocks.thrift.TIcebergTableSink;
+import com.starrocks.utils.TdwUtil;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.aws.AwsProperties;
 
@@ -55,7 +56,7 @@ public class IcebergTableSink extends DataSink {
     private final long targetMaxFileSize;
     private final boolean isStaticPartitionSink;
     private final String tableIdentifier;
-    private final CloudConfiguration cloudConfiguration;
+    private CloudConfiguration cloudConfiguration;
 
     public IcebergTableSink(IcebergTable icebergTable, TupleDescriptor desc, boolean isStaticPartitionSink, SessionVariable sessionVariable) {
         Table nativeTable = icebergTable.getNativeTable();
@@ -81,6 +82,8 @@ public class IcebergTableSink extends DataSink {
         } else {
             this.cloudConfiguration = connector.getMetadata().getCloudConfiguration();
         }
+        String username = TdwUtil.getTdwUserName();
+        this.cloudConfiguration = this.cloudConfiguration.cloneWithNewUsername(username);
 
         Preconditions.checkState(cloudConfiguration != null,
                 String.format("cloudConfiguration of catalog %s should not be null", catalogName));

@@ -34,6 +34,7 @@ import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.io.CloseableIterator;
 import org.apache.iceberg.view.View;
 
+import java.io.Closeable;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -45,7 +46,7 @@ import java.util.concurrent.ExecutorService;
 import static com.starrocks.connector.PartitionUtil.convertIcebergPartitionToPartitionName;
 import static org.apache.iceberg.StarRocksIcebergTableScan.newTableScanContext;
 
-public interface IcebergCatalog extends MemoryTrackable {
+public interface IcebergCatalog extends MemoryTrackable, Closeable {
 
     IcebergCatalogType getIcebergCatalogType();
 
@@ -159,5 +160,9 @@ public interface IcebergCatalog extends MemoryTrackable {
 
     default List<Pair<List<Object>, Long>> getSamples() {
         return new ArrayList<>();
+    }
+
+    @Override
+    default void close() throws IOException {
     }
 }
