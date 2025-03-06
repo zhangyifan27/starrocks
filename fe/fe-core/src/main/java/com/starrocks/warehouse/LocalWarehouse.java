@@ -15,7 +15,6 @@
 package com.starrocks.warehouse;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.gson.annotations.SerializedName;
 import com.staros.util.LockCloseable;
@@ -24,7 +23,6 @@ import com.starrocks.common.util.TimeUtils;
 import com.starrocks.lake.StarOSAgent;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.RunMode;
-import com.starrocks.server.WarehouseManager;
 import com.starrocks.system.Backend;
 import com.starrocks.system.ComputeNode;
 import com.starrocks.system.SystemInfoService;
@@ -32,7 +30,6 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
@@ -45,9 +42,6 @@ public class LocalWarehouse extends DefaultWarehouse {
         AVAILABLE,
         SUSPENDED,
     }
-
-    @SerializedName(value = "cluster")
-    protected final com.starrocks.warehouse.Cluster cluster;
 
     @SerializedName(value = "state")
     protected WarehouseState state = WarehouseState.AVAILABLE;
@@ -71,19 +65,9 @@ public class LocalWarehouse extends DefaultWarehouse {
             .add("Running")
             .build();
 
-    public LocalWarehouse() {
-        super(WarehouseManager.DEFAULT_WAREHOUSE_ID, WarehouseManager.DEFAULT_WAREHOUSE_NAME);
-        cluster = new Cluster(WarehouseManager.DEFAULT_WAREHOUSE_ID);
-    }
-
     public LocalWarehouse(long id, String name, long clusterId, String comment) {
-        super(id, name);
+        super(id, name, RunMode.isSharedNothingMode() ? new Cluster(id) : new Cluster(clusterId));
         this.comment = comment;
-        if (RunMode.isSharedNothingMode()) {
-            cluster = new Cluster(id);
-        } else {
-            cluster = new Cluster(clusterId);
-        }
     }
 
     public void init() throws DdlException {
@@ -99,14 +83,6 @@ public class LocalWarehouse extends DefaultWarehouse {
 
     public WarehouseState getState() {
         return state;
-    }
-
-    public Map<Long, Cluster> getClusters() {
-        return ImmutableMap.of(cluster.getId(), cluster);
-    }
-
-    public Cluster getAnyAvailableCluster() {
-        return cluster;
     }
 
     public List<String> getWarehouseInfo() {
@@ -152,58 +128,6 @@ public class LocalWarehouse extends DefaultWarehouse {
         long workerGroupId = cluster.getWorkerGroupId();
         StarOSAgent starOSAgent = GlobalStateMgr.getCurrentState().getStarOSAgent();
         starOSAgent.deleteWorkerGroup(workerGroupId);
-    }
-
-    @Override
-    public List<List<String>> getWarehouseNodesInfo() {
-        List<List<String>> rows = Lists.newArrayList();
-        for (Cluster cluster : getClusters().values()) {
-            List<Long> computeNodes = cluster.getComputeNodeIds();
-            for (Long computeNodeId : computeNodes) {
-                ComputeNode node = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo()
-                        .getComputeNode(computeNodeId);
-
-                List<String> computeNodeInfo = Lists.newArrayList();
-                long warehouseId = node.getWarehouseId();
-                Warehouse warehouse = GlobalStateMgr.getCurrentState().getWarehouseMgr().getWarehouse(warehouseId);
-                computeNodeInfo.add(warehouse.getName());
-
-                computeNodeInfo.add(String.valueOf(cluster.getId()));
-                computeNodeInfo.add(String.valueOf(cluster.getWorkerGroupId()));
-                long nodeId = node.getId();
-                computeNodeInfo.add(String.valueOf(nodeId));
-                if (RunMode.isSharedDataMode()) {
-                    long workerId = GlobalStateMgr.getCurrentState().getStarOSAgent().getWorkerIdByNodeId(nodeId);
-                    computeNodeInfo.add(String.valueOf(workerId));
-                } else {
-                    computeNodeInfo.add("0");
-                }
-
-                computeNodeInfo.add(node.getHost());
-
-                computeNodeInfo.add(String.valueOf(node.getHeartbeatPort()));
-                computeNodeInfo.add(String.valueOf(node.getBePort()));
-                computeNodeInfo.add(String.valueOf(node.getHttpPort()));
-                computeNodeInfo.add(String.valueOf(node.getBrpcPort()));
-                computeNodeInfo.add(String.valueOf(node.getStarletPort()));
-
-                computeNodeInfo.add(TimeUtils.longToTimeString(node.getLastStartTime()));
-                computeNodeInfo.add(TimeUtils.longToTimeString(node.getLastUpdateMs()));
-                computeNodeInfo.add(String.valueOf(node.isAlive()));
-
-                computeNodeInfo.add(node.getHeartbeatErrMsg());
-                computeNodeInfo.add(String.valueOf(node.getVersion()));
-
-                computeNodeInfo.add(String.valueOf(node.getNumRunningQueries()));
-                computeNodeInfo.add(String.valueOf(node.getCpuCores()));
-                double memUsedPct = node.getMemUsedPct();
-                computeNodeInfo.add(String.format("%.2f", memUsedPct * 100) + " %");
-                computeNodeInfo.add(String.format("%.1f", node.getCpuUsedPermille() / 10.0) + " %");
-
-                rows.add(computeNodeInfo);
-            }
-        }
-        return rows;
     }
 
     private void dropNodeFromSystem() throws DdlException {

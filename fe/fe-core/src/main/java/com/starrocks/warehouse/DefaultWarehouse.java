@@ -15,20 +15,36 @@
 package com.starrocks.warehouse;
 
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
+import com.google.gson.annotations.SerializedName;
 import com.starrocks.common.proc.BaseProcResult;
 import com.starrocks.common.proc.ProcResult;
+import com.starrocks.common.util.TimeUtils;
 import com.starrocks.lake.StarOSAgent;
+import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.server.RunMode;
+import com.starrocks.server.WarehouseManager;
+import com.starrocks.system.ComputeNode;
 
-import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 public class DefaultWarehouse extends Warehouse {
 
     private static final List<Long> WORKER_GROUP_ID_LIST;
 
+    @SerializedName(value = "cluster")
+    protected final com.starrocks.warehouse.Cluster cluster;
+
     public DefaultWarehouse(long id, String name) {
         super(id, name, "An internal warehouse init after FE is ready");
+        this.cluster = new Cluster(WarehouseManager.DEFAULT_WAREHOUSE_ID);
+    }
+
+    public DefaultWarehouse(long id, String name, Cluster cluster) {
+        super(id, name, "An internal warehouse init after FE is ready");
+        this.cluster = cluster;
     }
 
     static {
@@ -45,13 +61,21 @@ public class DefaultWarehouse extends Warehouse {
         return StarOSAgent.DEFAULT_WORKER_GROUP_ID;
     }
 
+    public Map<Long, Cluster> getClusters() {
+        return ImmutableMap.of(cluster.getId(), cluster);
+    }
+
+    public Cluster getAnyAvailableCluster() {
+        return cluster;
+    }
+
     @Override
     public List<String> getWarehouseInfo() {
         return Lists.newArrayList(
                 String.valueOf(getId()),
                 getName(),
                 "AVAILABLE",
-                String.valueOf(0L),
+                String.valueOf(cluster.getComputeNodeIds().size()),
                 String.valueOf(1L),
                 String.valueOf(1L),
                 String.valueOf(1L),
@@ -65,7 +89,54 @@ public class DefaultWarehouse extends Warehouse {
 
     @Override
     public List<List<String>> getWarehouseNodesInfo() {
-        return new ArrayList<>();
+        List<List<String>> rows = Lists.newArrayList();
+        for (Cluster cluster : getClusters().values()) {
+            List<Long> computeNodes = cluster.getComputeNodeIds();
+            for (Long computeNodeId : computeNodes) {
+                ComputeNode node = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo()
+                        .getComputeNode(computeNodeId);
+
+                List<String> computeNodeInfo = Lists.newArrayList();
+                long warehouseId = node.getWarehouseId();
+                Warehouse warehouse = GlobalStateMgr.getCurrentState().getWarehouseMgr().getWarehouse(warehouseId);
+                computeNodeInfo.add(warehouse.getName());
+
+                computeNodeInfo.add(String.valueOf(cluster.getId()));
+                computeNodeInfo.add(String.valueOf(cluster.getWorkerGroupId()));
+                long nodeId = node.getId();
+                computeNodeInfo.add(String.valueOf(nodeId));
+                if (RunMode.isSharedDataMode()) {
+                    long workerId = GlobalStateMgr.getCurrentState().getStarOSAgent().getWorkerIdByNodeId(nodeId);
+                    computeNodeInfo.add(String.valueOf(workerId));
+                } else {
+                    computeNodeInfo.add("0");
+                }
+
+                computeNodeInfo.add(node.getHost());
+
+                computeNodeInfo.add(String.valueOf(node.getHeartbeatPort()));
+                computeNodeInfo.add(String.valueOf(node.getBePort()));
+                computeNodeInfo.add(String.valueOf(node.getHttpPort()));
+                computeNodeInfo.add(String.valueOf(node.getBrpcPort()));
+                computeNodeInfo.add(String.valueOf(node.getStarletPort()));
+
+                computeNodeInfo.add(TimeUtils.longToTimeString(node.getLastStartTime()));
+                computeNodeInfo.add(TimeUtils.longToTimeString(node.getLastUpdateMs()));
+                computeNodeInfo.add(String.valueOf(node.isAlive()));
+
+                computeNodeInfo.add(node.getHeartbeatErrMsg());
+                computeNodeInfo.add(String.valueOf(node.getVersion()));
+
+                computeNodeInfo.add(String.valueOf(node.getNumRunningQueries()));
+                computeNodeInfo.add(String.valueOf(node.getCpuCores()));
+                double memUsedPct = node.getMemUsedPct();
+                computeNodeInfo.add(String.format("%.2f", memUsedPct * 100) + " %");
+                computeNodeInfo.add(String.format("%.1f", node.getCpuUsedPermille() / 10.0) + " %");
+
+                rows.add(computeNodeInfo);
+            }
+        }
+        return rows;
     }
 
     @Override
