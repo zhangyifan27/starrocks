@@ -1482,4 +1482,6 @@ CONF_mBool(enable_dynamic_batch_size_for_json_parse_many, "true");
 // The number of elements to preallocate for each row in an array column
 // before reading data from disk block or page cache.
 CONF_mInt32(preallocate_array_elements_per_row, "0");
+
+CONF_mBool(enable_frequency_base, "false");
 } // namespace starrocks::config

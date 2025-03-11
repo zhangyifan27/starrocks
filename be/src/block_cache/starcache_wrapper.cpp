@@ -39,6 +39,7 @@ Status StarCacheWrapper::init(const CacheOptions& options) {
     _cache_adaptor.reset(starcache::create_default_adaptor(options.skip_read_factor));
     opt.cache_adaptor = _cache_adaptor.get();
     opt.instance_name = "dla_cache";
+    opt.enable_frequency_base = config::enable_frequency_base;
     _enable_tiered_cache = options.enable_tiered_cache;
     _cache = std::make_unique<starcache::StarCache>();
     return to_status(_cache->init(opt));

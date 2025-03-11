@@ -18,7 +18,7 @@
 
 ##############################################################
 # This script is used to compile StarRocks
-# Usage: 
+# Usage:
 #    sh build.sh --help
 # Eg:
 #    sh build.sh                                      build all
@@ -73,7 +73,7 @@ else
     fi
     PARALLEL=$[$(nproc)/4+1]
 fi
-
+PARALLEL=16
 # Check args
 usage() {
   echo "
@@ -95,7 +95,7 @@ Usage: $0 <options>
      --without-starcache
                         build Backend without starcache library
      -j                 build Backend parallel
-     --output-compile-time 
+     --output-compile-time
                         save a list of the compile time for every C++ file in ${ROOT}/compile_times.txt.
                         Turning this option on automatically disables ccache.
      --with-compress-debug-symbol {ON|OFF}
@@ -276,6 +276,23 @@ if [[ ${HELP} -eq 1 ]]; then
     exit
 fi
 
+if [[ ${WITH_STARCACHE} = 'ON' ]]; then
+    starcache_dir=${STARROCKS_THIRDPARTY}/installed/starcache
+    if [ -d "${starcache_dir}" ] && [ $(cat "${starcache_dir}/version.txt") = "${STARCACHE_VERSION}" ]; then
+        echo "starcache version meets requirement. ${STARCACHE_VERSION}"
+    else
+        rm -rf ${THIRDPARTY_DIR}/starcache
+        starcache_tarball_name="starcache-${STARCACHE_VERSION}.tar.gz"
+        echo "download tarball from ${STARCACHE_REPOSITORY_URL}/${starcache_tarball_name} to ${STARROCKS_THIRDPARTY}/installed/${starcache_tarball_name}"
+        curl -s --request GET -L -o ${STARROCKS_THIRDPARTY}/installed/${starcache_tarball_name} --url "${STARCACHE_REPOSITORY_URL}/${starcache_tarball_name}"
+        echo "decompress starcache tarball ${starcache_tarball_name}"
+        pushd ${STARROCKS_THIRDPARTY}/installed > /dev/null
+        tar xvzf ${starcache_tarball_name}
+        rm ${starcache_tarball_name}
+        popd
+    fi
+fi
+
 if [ ${CLEAN} -eq 1 ] && [ ${BUILD_BE} -eq 0 ] && [ ${BUILD_FE} -eq 0 ] && [ ${BUILD_SPARK_DPP} -eq 0 ] && [ ${BUILD_HIVE_UDF} -eq 0 ]; then
     echo "--clean can not be specified without --fe or --be or --spark-dpp or --hive-udf"
     exit 1
@@ -383,7 +400,7 @@ if [ ${BUILD_BE} -eq 1 ] ; then
       fi
       export STARLET_INSTALL_DIR
     fi
-    
+
     if [ "${OUTPUT_COMPILE_TIME}" == "ON" ]; then
         rm -f ${ROOT}/compile_times.txt
         CXX_COMPILER_LAUNCHER=${ROOT}/build-support/compile_time.sh

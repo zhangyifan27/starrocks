@@ -31,6 +31,11 @@ if [[ -z ${STARROCKS_THIRDPARTY} ]]; then
     export STARROCKS_THIRDPARTY=${STARROCKS_HOME}/thirdparty
 fi
 
+if [[ -z ${STARCACHE_VERSION} ]]; then
+    export STARCACHE_VERSION="3.3-latest"
+fi
+export STARCACHE_REPOSITORY_URL="https://mirrors.tencent.com/repository/generic/starrocks/starcachelib"
+
 # set cachelib dir
 if [[ -z ${CACHELIB_DIR} ]]; then
     export CACHELIB_DIR=${STARROCKS_THIRDPARTY}/installed/cachelib
