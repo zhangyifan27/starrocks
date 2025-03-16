@@ -556,6 +556,16 @@ public class PropertyAnalyzer {
 
     public static Short analyzeReplicationNum(Map<String, String> properties, short oldReplicationNum)
             throws AnalysisException {
+        ConnectContext context = ConnectContext.get();
+        if (context != null && org.apache.commons.lang3.StringUtils.isNotEmpty(context.getDatabase())) {
+            Database db = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(context.getDatabase());
+            return analyzeReplicationNum(properties, oldReplicationNum, db);
+        }
+        return analyzeReplicationNum(properties, oldReplicationNum, null);
+    }
+
+    public static Short analyzeReplicationNum(Map<String, String> properties, short oldReplicationNum, Database db)
+            throws AnalysisException {
         short replicationNum = oldReplicationNum;
         if (properties != null && properties.containsKey(PROPERTIES_REPLICATION_NUM)) {
             try {
@@ -565,7 +575,9 @@ public class PropertyAnalyzer {
             }
             if (RunMode.getCurrentRunMode() == RunMode.SHARED_NOTHING
                     && Config.enable_replication_num_restriction && replicationNum < 3) {
-                throw new AnalysisException("Value of `replication_num` should not be less than 3!");
+                if (db == null || !db.isStatisticsDatabase()) {
+                    throw new AnalysisException("Value of `replication_num` should not be less than 3!");
+                }
             }
             checkReplicationNum(replicationNum);
             properties.remove(PROPERTIES_REPLICATION_NUM);
@@ -1469,7 +1481,7 @@ public class PropertyAnalyzer {
             // replication_num
             short replicationNum = RunMode.defaultReplicationNum();
             if (properties.containsKey(PropertyAnalyzer.PROPERTIES_REPLICATION_NUM)) {
-                replicationNum = PropertyAnalyzer.analyzeReplicationNum(properties, replicationNum);
+                replicationNum = PropertyAnalyzer.analyzeReplicationNum(properties, replicationNum, db);
                 materializedView.setReplicationNum(replicationNum);
             }
             // bloom_filter_columns

@@ -729,7 +729,7 @@ public class AlterJobExecutor implements AstVisitor<Void, ConnectContext> {
                 PropertyAnalyzer.analyzeDataProperty(properties, null, false);
         // 2. replication num
         short newReplicationNum =
-                PropertyAnalyzer.analyzeReplicationNum(properties, (short) -1);
+                PropertyAnalyzer.analyzeReplicationNum(properties, (short) -1, db);
         // 3. in memory
         boolean newInMemory = PropertyAnalyzer.analyzeBooleanProp(properties,
                 PropertyAnalyzer.PROPERTIES_INMEMORY, false);

@@ -44,7 +44,7 @@ public class LoadsHistorySyncer extends FrontendDaemon {
             "user varchar(2048), " +
             "warehouse varchar(2048), " +
             "state varchar(2048), " +
-            "progress varchar(2048), " +
+            "`progress` varchar(2048), " +
             "type varchar(2048), " +
             "priority varchar(2048), " +
             "scan_rows bigint, " +

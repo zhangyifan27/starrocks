@@ -2296,6 +2296,8 @@ public class FrontendServiceImpl implements FrontendService.Iface {
             if (txnState.getWarehouseId() != WarehouseManager.DEFAULT_WAREHOUSE_ID) {
                 ctx.setCurrentWarehouseId(txnState.getWarehouseId());
             }
+            ctx.setDatabase(db.getFullName());
+            ctx.setThreadLocalInfo();
             try (AutoCloseableLock ignore = new AutoCloseableLock(new Locker(), db, Lists.newArrayList(table.getId()),
                     LockType.READ)) {
                 AlterTableClauseAnalyzer analyzer = new AlterTableClauseAnalyzer(olapTable);
