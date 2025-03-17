@@ -55,6 +55,7 @@ import com.starrocks.analysis.SlotDescriptor;
 import com.starrocks.analysis.SlotId;
 import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.TableName;
+import com.starrocks.analysis.TimestampArithmeticExpr;
 import com.starrocks.backup.Status;
 import com.starrocks.backup.Status.ErrCode;
 import com.starrocks.backup.mv.MvBackupInfo;
@@ -1653,10 +1654,31 @@ public class OlapTable extends Table {
 
     public Collection<Partition> getRecentPartitions(int recentPartitionNum, String partitionName) {
         List<Partition> partitions = Lists.newArrayList(idToPartition.values());
-        return partitions.stream().filter(p -> p.getVisibleVersion()
+        partitions = partitions.stream().filter(p -> p.getVisibleVersion()
                         != Partition.PARTITION_INIT_VERSION
                         && p.getName().compareTo(partitionName) < 0)
-                .sorted((o1, o2) -> o2.getName().compareTo(o1.getName())).limit(recentPartitionNum).collect(Collectors.toList());
+                .sorted((o1, o2) -> o2.getName().compareTo(o1.getName())).collect(Collectors.toList());
+        if (tableProperty != null && tableProperty.getDynamicPartitionProperty() != null
+                && TimestampArithmeticExpr.TimeUnit.HOUR.toString()
+                .equalsIgnoreCase(tableProperty.getDynamicPartitionProperty().getTimeUnit())) {
+            // dynamic hour partition name = pre + yyyyMMddHH;
+            // get the corresponding hour partitions to calculate bucket number
+            if (partitionName.length() > 2) {
+                String currentHour = partitionName.substring(partitionName.length() - 2);
+                List<Partition> hourPartitions = new ArrayList<>();
+                for (Partition partition : partitions) {
+                    if (partition.getName().length() > 2
+                            && currentHour.equals(partition.getName().substring(partition.getName().length() - 2))) {
+                        hourPartitions.add(partition);
+                    }
+                }
+                // if there is no corresponding hours, use recent partitions
+                if (!hourPartitions.isEmpty()) {
+                    return hourPartitions.stream().limit(recentPartitionNum).collect(Collectors.toList());
+                }
+            }
+        }
+        return partitions.stream().limit(recentPartitionNum).collect(Collectors.toList());
     }
 
     // get all partitions' name except the temp partitions
