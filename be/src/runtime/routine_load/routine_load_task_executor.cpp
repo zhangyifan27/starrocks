@@ -60,6 +60,7 @@ Status RoutineLoadTaskExecutor::init() {
                       .set_max_queue_size(INT_MAX)
                       .build(&_thread_pool);
     RETURN_IF_ERROR(st);
+    REGISTER_THREAD_POOL_METRICS(routine_load, _thread_pool);
 
     _data_consumer_pool.start_bg_worker();
     return Status::OK();

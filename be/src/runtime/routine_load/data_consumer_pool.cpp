@@ -183,6 +183,7 @@ void DataConsumerPool::start_bg_worker() {
             if (*is_closed) {
                 return;
             }
+            _clean_idle_consumer_bg();
             nap_sleep(interval, [&is_closed] { return *is_closed; });
         }
     });
