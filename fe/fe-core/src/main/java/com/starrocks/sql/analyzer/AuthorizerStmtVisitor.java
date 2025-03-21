@@ -29,6 +29,7 @@ import com.starrocks.catalog.FunctionSearchDesc;
 import com.starrocks.catalog.InternalCatalog;
 import com.starrocks.catalog.Resource;
 import com.starrocks.catalog.Table;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
@@ -2724,6 +2725,9 @@ public class AuthorizerStmtVisitor implements AstVisitor<Void, ConnectContext> {
     }
 
     private void checkWarehouseUsagePrivilege(String warehouseName, ConnectContext context) {
+        if (!Config.check_warehouse_usage_privilege) {
+            return;
+        }
         try {
             Authorizer.checkWarehouseAction(context.getCurrentUserIdentity(),
                     context.getCurrentRoleIds(), warehouseName, PrivilegeType.USAGE);

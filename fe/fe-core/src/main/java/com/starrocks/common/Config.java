@@ -3511,4 +3511,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean use_lowercase_access_oms = false;
+
+    @ConfField(mutable = true)
+    public static boolean check_warehouse_usage_privilege = true;
 }
