@@ -1301,6 +1301,10 @@ public class ExpressionAnalyzer {
                 fn = ScalarOperatorEvaluator.INSTANCE.getMetaFunction(node.getFnName(), argumentTypes);
             }
 
+            if (fn == null && session.getSessionVariable().isEnableThiveFunction()) {
+                fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+            }
+
             if (fn == null) {
                 String msg = String.format("No matching function with signature: %s(%s)",
                         fnName,
