@@ -31,6 +31,7 @@ import com.starrocks.sql.optimizer.operator.scalar.CollectionElementOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.CompoundPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ConstantOperator;
+import com.starrocks.sql.optimizer.operator.scalar.DictQueryOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ExistsPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.InPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.IsNullPredicateOperator;
@@ -325,6 +326,21 @@ class BaseScalarOperatorShuttleTest {
         {
             ScalarOperator newOperator = shuttle2.visitCloneOperator(clone, null);
             assertEquals(clone, newOperator);
+        }
+    }
+
+    @Test
+    void testDictQueryOperator() {
+        BinaryPredicateOperator binary1 = new BinaryPredicateOperator(BinaryType.EQ,
+                new ColumnRefOperator(1, INT, "id", true), ConstantOperator.createInt(1));
+        DictQueryOperator dict = new DictQueryOperator(Lists.newArrayList(binary1), null, null, INT);
+        {
+            ScalarOperator newOperator = shuttle.visitDictQueryOperator(dict, null);
+            assertEquals(dict, newOperator);
+        }
+        {
+            ScalarOperator newOperator = shuttle2.visitDictQueryOperator(dict, null);
+            assertEquals(dict, newOperator);
         }
     }
 
