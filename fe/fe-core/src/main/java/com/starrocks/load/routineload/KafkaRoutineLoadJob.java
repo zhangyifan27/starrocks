@@ -71,7 +71,7 @@ import com.starrocks.load.Load;
 import com.starrocks.load.RoutineLoadDesc;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.server.RunMode;
+import com.starrocks.server.WarehouseManager;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
 import com.starrocks.system.ComputeNode;
 import com.starrocks.system.SystemInfoService;
@@ -286,7 +286,7 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
         SystemInfoService systemInfoService = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo();
         // TODO: need to refactor after be split into cn + dn
         int aliveNodeNum = systemInfoService.getAliveBackendNumber();
-        if (RunMode.isSharedDataMode()) {
+        if (warehouseId != WarehouseManager.DEFAULT_WAREHOUSE_ID) {
             aliveNodeNum = 0;
             List<Long> computeIds = GlobalStateMgr.getCurrentState().getWarehouseMgr().getAllComputeNodeIds(warehouseId);
             for (long nodeId : computeIds) {

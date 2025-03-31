@@ -63,6 +63,7 @@ import com.starrocks.sql.ast.PauseRoutineLoadStmt;
 import com.starrocks.sql.ast.ResumeRoutineLoadStmt;
 import com.starrocks.sql.ast.StopRoutineLoadStmt;
 import com.starrocks.sql.ast.UserIdentity;
+import com.starrocks.system.ComputeNode;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.thrift.TKafkaRLTaskProgress;
 import com.starrocks.thrift.TLoadSourceType;
@@ -72,6 +73,7 @@ import com.starrocks.thrift.TUniqueId;
 import com.starrocks.transaction.InsertTxnCommitAttachment;
 import com.starrocks.transaction.TxnCommitAttachment;
 import com.starrocks.utframe.UtFrameUtils;
+import com.starrocks.warehouse.DefaultWarehouse;
 import mockit.Expectations;
 import mockit.Injectable;
 import mockit.Mock;
@@ -296,7 +298,7 @@ public class RoutineLoadManagerTest {
     }
 
     @Test
-    public void testGetTotalIdleTaskNum() {
+    public void testGetTotalIdleTaskNum(@Mocked GlobalStateMgr globalStateMgr) {
         List<Long> beIds = Lists.newArrayList(1L, 2L);
 
         new Expectations() {
@@ -304,6 +306,30 @@ public class RoutineLoadManagerTest {
                 systemInfoService.getBackendIds(true);
                 minTimes = 0;
                 result = beIds;
+            }
+            {
+                systemInfoService.getBackendOrComputeNode(anyLong);
+                minTimes = 0;
+                ComputeNode compute1 = new ComputeNode();
+                compute1.setAlive(true);
+                result = compute1;
+            }
+        };
+
+        new Expectations() {
+            {
+                globalStateMgr.getWarehouseMgr().getAllWarehouses();
+                minTimes = 0;
+                result = Lists.newArrayList(new DefaultWarehouse(
+                        WarehouseManager.DEFAULT_WAREHOUSE_ID, WarehouseManager.DEFAULT_WAREHOUSE_NAME));
+            }
+        };
+
+        new Expectations() {
+            {
+                globalStateMgr.getWarehouseMgr().getAllComputeNodeIds(anyLong);
+                minTimes = 0;
+                result = new ArrayList<>();
             }
         };
 
@@ -316,7 +342,7 @@ public class RoutineLoadManagerTest {
     }
 
     @Test
-    public void testTakeBeTaskSlot() throws Exception {
+    public void testTakeBeTaskSlot(@Mocked GlobalStateMgr globalStateMgr) throws Exception {
         List<Long> beIds = Lists.newArrayList(1L, 2L);
 
         new Expectations() {
@@ -324,6 +350,33 @@ public class RoutineLoadManagerTest {
                 systemInfoService.getBackendIds(true);
                 minTimes = 0;
                 result = beIds;
+            }
+        };
+
+        new Expectations() {
+            {
+                globalStateMgr.getWarehouseMgr().getAllWarehouses();
+                minTimes = 0;
+                result = Lists.newArrayList(new DefaultWarehouse(
+                        WarehouseManager.DEFAULT_WAREHOUSE_ID, WarehouseManager.DEFAULT_WAREHOUSE_NAME));
+            }
+        };
+
+        new Expectations() {
+            {
+                globalStateMgr.getWarehouseMgr().getAllComputeNodeIds(anyLong);
+                minTimes = 0;
+                result = new ArrayList<>();
+            }
+        };
+
+        new Expectations() {
+            {
+                GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendOrComputeNode(anyLong);
+                minTimes = 0;
+                ComputeNode compute1 = new ComputeNode();
+                compute1.setAlive(true);
+                result = compute1;
             }
         };
 
@@ -363,7 +416,7 @@ public class RoutineLoadManagerTest {
     }
 
     @Test
-    public void testTakeBeTaskSlotWithJobs() throws Exception {
+    public void testTakeBeTaskSlotWithJobs(@Mocked GlobalStateMgr globalStateMgr) throws Exception {
         Config.max_routine_load_task_num_per_be = 1000;
         List<Long> beIds = Lists.newArrayList(1L, 2L, 3L, 4L, 5L);
 
@@ -372,6 +425,33 @@ public class RoutineLoadManagerTest {
                 systemInfoService.getBackendIds(true);
                 minTimes = 0;
                 result = beIds;
+            }
+        };
+
+        new Expectations() {
+            {
+                globalStateMgr.getWarehouseMgr().getAllWarehouses();
+                minTimes = 0;
+                result = Lists.newArrayList(new DefaultWarehouse(
+                        WarehouseManager.DEFAULT_WAREHOUSE_ID, WarehouseManager.DEFAULT_WAREHOUSE_NAME));
+            }
+        };
+
+        new Expectations() {
+            {
+                globalStateMgr.getWarehouseMgr().getAllComputeNodeIds(anyLong);
+                minTimes = 0;
+                result = new ArrayList<>();
+            }
+        };
+
+        new Expectations() {
+            {
+                GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendOrComputeNode(anyLong);
+                minTimes = 0;
+                ComputeNode compute1 = new ComputeNode();
+                compute1.setAlive(true);
+                result = compute1;
             }
         };
 

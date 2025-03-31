@@ -158,6 +158,10 @@ public class WarehouseManager implements Writable {
         Warehouse warehouse = getWarehouse(warehouseId);
 
         try {
+            if (RunMode.isSharedNothingMode()) {
+                return ((DefaultWarehouse) warehouse).getAnyAvailableCluster().getComputeNodeIds();
+            }
+
             return GlobalStateMgr.getCurrentState().getStarOSAgent().getWorkersByWorkerGroup(workerGroupId);
         } catch (UserException e) {
             LOG.warn("Fail to get compute node ids from starMgr : {}", e.getMessage());

@@ -22,6 +22,7 @@ import com.starrocks.analysis.ParseNode;
 import com.starrocks.analysis.RoutineLoadDataSourceProperties;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.UserException;
+import com.starrocks.common.util.PropertyAnalyzer;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.Util;
 import com.starrocks.load.RoutineLoadDesc;
@@ -60,6 +61,7 @@ public class AlterRoutineLoadStmt extends DdlStmt {
             .add(LoadStmt.STRICT_MODE)
             .add(LoadStmt.IGNORE_TAIL_COLUMNS)
             .add(LoadStmt.SKIP_UTF8_CHECK)
+            .add(PropertyAnalyzer.PROPERTIES_WAREHOUSE)
             .add(LoadStmt.TASK_NUM_EXCEED_BE_NUM)
             .add(LoadStmt.TIMEZONE)
             .add(SessionVariable.EXEC_MEM_LIMIT)
@@ -276,6 +278,11 @@ public class AlterRoutineLoadStmt extends DdlStmt {
         if (jobProperties.containsKey(LoadStmt.SKIP_UTF8_CHECK)) {
             boolean skipUtf8Check = Boolean.valueOf(jobProperties.get(LoadStmt.SKIP_UTF8_CHECK));
             analyzedJobProperties.put(LoadStmt.SKIP_UTF8_CHECK, String.valueOf(skipUtf8Check));
+        }
+
+        if (jobProperties.containsKey(PropertyAnalyzer.PROPERTIES_WAREHOUSE)) {
+            analyzedJobProperties
+                    .put(PropertyAnalyzer.PROPERTIES_WAREHOUSE, jobProperties.get(PropertyAnalyzer.PROPERTIES_WAREHOUSE));
         }
 
         if (jobProperties.containsKey(LoadStmt.TASK_NUM_EXCEED_BE_NUM)) {

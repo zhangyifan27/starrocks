@@ -114,6 +114,13 @@ public class WarehouseManagerTest {
             }
         };
 
+        new MockUp<RunMode>() {
+            @Mock
+            public RunMode getCurrentRunMode() {
+                return RunMode.SHARED_DATA;
+            }
+        };
+
         WarehouseManager mgr = new WarehouseManager();
         mgr.initDefaultWarehouse();
 
@@ -140,6 +147,13 @@ public class WarehouseManagerTest {
             @Mock
             public StarOSAgent getStarOSAgent() {
                 return starOSAgent;
+            }
+        };
+
+        new MockUp<RunMode>() {
+            @Mock
+            public RunMode getCurrentRunMode() {
+                return RunMode.SHARED_DATA;
             }
         };
 

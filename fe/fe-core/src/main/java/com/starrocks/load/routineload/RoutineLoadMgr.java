@@ -64,7 +64,6 @@ import com.starrocks.persist.metablock.SRMetaBlockReader;
 import com.starrocks.persist.metablock.SRMetaBlockWriter;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.server.RunMode;
 import com.starrocks.server.WarehouseManager;
 import com.starrocks.sql.ast.AlterRoutineLoadStmt;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
@@ -228,45 +227,35 @@ public class RoutineLoadMgr implements Writable, MemoryTrackable {
             // TODO: need to refactor after be split into cn + dn
             List<Long> finalAliveNodeIds = new ArrayList<>();
             // collect all nodes group by warehouse
-            if (RunMode.isSharedDataMode()) {
-                for (Warehouse warehouse : GlobalStateMgr.getCurrentState().getWarehouseMgr().getAllWarehouses()) {
-                    List<Long> allComputeNodeIds = GlobalStateMgr.getCurrentState().getWarehouseMgr()
-                            .getAllComputeNodeIds(warehouse.getId());
-                    List<Long> aliveNodeIds = new ArrayList<>();
-                    for (long nodeId : allComputeNodeIds) {
-                        ComputeNode node =
-                                GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendOrComputeNode(nodeId);
-                        if (node != null && node.isAlive()) {
-                            aliveNodeIds.add(nodeId);
-                        }
-                    }
-
-                    finalAliveNodeIds.addAll(aliveNodeIds);
-
-                    // add new nodes
-                    Map<Long, Integer> nodesInfo = warehouseNodeTasksNum.get(warehouse.getId());
-                    if (nodesInfo == null) {
-                        nodesInfo = new HashMap<>();
-                        warehouseNodeTasksNum.put(warehouse.getId(), nodesInfo);
-                    }
-                    Map<Long, Set<Long>> nodeToJobs = warehouseNodeToJobs.get(warehouse.getId());
-                    if (nodeToJobs == null) {
-                        nodeToJobs = new HashMap<>();
-                        warehouseNodeToJobs.put(warehouse.getId(), nodeToJobs);
-                    }
-                    for (Long nodeId : aliveNodeIds) {
-                        if (!nodesInfo.containsKey(nodeId)) {
-                            nodesInfo.put(nodeId, 0);
-                            nodeToJobs.put(nodeId, Sets.newHashSet());
-                        }
+            for (Warehouse warehouse : GlobalStateMgr.getCurrentState().getWarehouseMgr().getAllWarehouses()) {
+                List<Long> allComputeNodeIds = GlobalStateMgr.getCurrentState().getWarehouseMgr()
+                        .getAllComputeNodeIds(warehouse.getId());
+                if (WarehouseManager.DEFAULT_WAREHOUSE_ID == warehouse.getId()) {
+                    allComputeNodeIds.addAll(GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendIds(true));
+                }
+                List<Long> aliveNodeIds = new ArrayList<>();
+                for (long nodeId : allComputeNodeIds) {
+                    ComputeNode node =
+                            GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendOrComputeNode(nodeId);
+                    if (node != null && node.isAlive()) {
+                        aliveNodeIds.add(nodeId);
                     }
                 }
-            } else {
-                finalAliveNodeIds.addAll(GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendIds(true));
+
+                finalAliveNodeIds.addAll(aliveNodeIds);
+
                 // add new nodes
-                for (Long nodeId : finalAliveNodeIds) {
-                    Map<Long, Integer> nodesInfo = warehouseNodeTasksNum.get(WarehouseManager.DEFAULT_WAREHOUSE_ID);
-                    Map<Long, Set<Long>> nodeToJobs = warehouseNodeToJobs.get(WarehouseManager.DEFAULT_WAREHOUSE_ID);
+                Map<Long, Integer> nodesInfo = warehouseNodeTasksNum.get(warehouse.getId());
+                if (nodesInfo == null) {
+                    nodesInfo = new HashMap<>();
+                    warehouseNodeTasksNum.put(warehouse.getId(), nodesInfo);
+                }
+                Map<Long, Set<Long>> nodeToJobs = warehouseNodeToJobs.get(warehouse.getId());
+                if (nodeToJobs == null) {
+                    nodeToJobs = new HashMap<>();
+                    warehouseNodeToJobs.put(warehouse.getId(), nodeToJobs);
+                }
+                for (Long nodeId : aliveNodeIds) {
                     if (!nodesInfo.containsKey(nodeId)) {
                         nodesInfo.put(nodeId, 0);
                         nodeToJobs.put(nodeId, Sets.newHashSet());
