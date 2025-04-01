@@ -3510,6 +3510,11 @@ public class Config extends ConfigBase {
     public static long remote_file_warn_response_time = 60000;
 
     @ConfField(mutable = true)
+    public static boolean print_get_remote_file_info = false;
+    @ConfField(mutable = true)
+    public static int print_remote_file_names_max_length = 200;
+
+    @ConfField(mutable = true)
     public static boolean use_lowercase_access_oms = false;
 
     @ConfField(mutable = true)

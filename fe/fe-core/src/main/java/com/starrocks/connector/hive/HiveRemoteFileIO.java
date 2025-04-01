@@ -75,6 +75,8 @@ public class HiveRemoteFileIO implements RemoteFileIO {
         ImmutableMap.Builder<RemotePathKey, List<RemoteFileDesc>> resultPartitions = ImmutableMap.builder();
         String path = pathKey.getPath();
         List<RemoteFileDesc> fileDescs = Lists.newArrayList();
+        long totalSize = 0;
+        StringBuilder pathBuilder = new StringBuilder();
         try {
             URI uri = new Path(path).toUri();
             FileSystem fileSystem = getFileSystem(uri, path, pathKey.getProperties());
@@ -106,6 +108,8 @@ public class HiveRemoteFileIO implements RemoteFileIO {
                     List<RemoteFileBlockDesc> fileBlockDescs = getRemoteFileBlockDesc(blockLocations);
                     RemoteFileDesc fileDesc = new RemoteFileDesc(fileName, "", locatedFileStatus.getLen(),
                             locatedFileStatus.getModificationTime(), ImmutableList.copyOf(fileBlockDescs));
+                    totalSize += locatedFileStatus.getLen();
+                    pathBuilder.append(fileName).append(",");
                     if (expandWildCards) {
                         fileDesc.setFullPath(locatedFileStatus.getPath().toString());
                     }
@@ -122,6 +126,14 @@ public class HiveRemoteFileIO implements RemoteFileIO {
         long endTime = System.currentTimeMillis();
         if (endTime - startTime > Config.remote_file_warn_response_time) {
             LOG.warn("Get remote file for {} take too much time {} ms.", pathKey.toString(), endTime - startTime);
+        }
+        if (Config.print_get_remote_file_info) {
+            int traceLogMaxLength = Config.print_remote_file_names_max_length;
+            int truncatedLength = pathBuilder.length() < traceLogMaxLength ? pathBuilder.length() : traceLogMaxLength;
+            String truncatedFlag = truncatedLength == pathBuilder.length() ? "" : " <TRUNCATED>";
+            String fileNames = pathBuilder.subSequence(0, truncatedLength) + truncatedFlag;
+            LOG.info("Get remote file for {} take time {} ms, get {} num files, totalSize is {}, fileNames is {}",
+                    pathKey.toString(), endTime - startTime, fileDescs.size(), totalSize, fileNames);
         }
         return resultPartitions.put(pathKey, fileDescs).build();
     }

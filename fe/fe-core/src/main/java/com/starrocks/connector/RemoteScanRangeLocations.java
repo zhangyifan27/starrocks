@@ -113,8 +113,8 @@ public class RemoteScanRangeLocations {
 
         for (int i = 0; i < partitions.size(); i++) {
             for (RemoteFileDesc fileDesc : partitions.get(i).getFiles()) {
+                fileNum++;
                 if (fileDesc.getLength() > 0) {
-                    fileNum++;
                     fileSizeBytes += fileDesc.getLength();
                 }
             }
