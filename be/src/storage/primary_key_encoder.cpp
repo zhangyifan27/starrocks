@@ -422,6 +422,7 @@ static void prepare_ops_datas(const Schema& schema, const std::vector<ColumnId>&
                 encode_integral(((const int128_t*)data)[idx], buff);
             };
             break;
+        case TYPE_CHAR:
         case TYPE_VARCHAR:
             if (j + 1 == ncol) {
                 ops[j] = [](const void* data, int idx, std::string* buff) {
@@ -723,6 +724,7 @@ Status decode_internal(const Schema& schema, const T& bkeys, size_t offset, size
                 decode_integral(&s, &v);
                 tc.append(v);
             } break;
+            case TYPE_CHAR:
             case TYPE_VARCHAR: {
                 auto& tc = down_cast<BinaryColumn&>(column);
                 bool fast_decode = value_encode_flags != nullptr ? (bool)((*value_encode_flags)[i]) : false;
