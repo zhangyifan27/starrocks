@@ -112,6 +112,8 @@ import com.starrocks.connector.hive.events.MetastoreEventsProcessor;
 import com.starrocks.consistency.ConsistencyChecker;
 import com.starrocks.consistency.LockChecker;
 import com.starrocks.consistency.MetaRecoveryDaemon;
+import com.starrocks.datacache.DataCacheJobMgr;
+import com.starrocks.datacache.DataCacheSelectExecutor;
 import com.starrocks.encryption.KeyMgr;
 import com.starrocks.encryption.KeyRotationDaemon;
 import com.starrocks.ha.FrontendNodeType;
@@ -447,6 +449,8 @@ public class GlobalStateMgr {
     private final TaskManager taskManager;
     private final InsertOverwriteJobMgr insertOverwriteJobMgr;
 
+    private final DataCacheJobMgr dataCacheJobMgr;
+
     private final LocalMetastore localMetastore;
     private final GlobalFunctionMgr globalFunctionMgr;
 
@@ -513,6 +517,8 @@ public class GlobalStateMgr {
     private final DDLStmtExecutor ddlStmtExecutor;
     private final ShowExecutor showExecutor;
     private final WarehouseIdleChecker warehouseIdleChecker;
+
+    private final DataCacheSelectExecutor dataCacheSelectExecutor;
 
     public NodeMgr getNodeMgr() {
         return nodeMgr;
@@ -736,6 +742,7 @@ public class GlobalStateMgr {
 
         this.taskManager = new TaskManager();
         this.insertOverwriteJobMgr = new InsertOverwriteJobMgr();
+        this.dataCacheJobMgr = new DataCacheJobMgr();
         this.shardManager = new ShardManager();
         this.compactionMgr = new CompactionMgr();
         this.compactionControlScheduler = new CompactionControlScheduler();
@@ -817,6 +824,7 @@ public class GlobalStateMgr {
         this.showExecutor = new ShowExecutor(ShowExecutor.ShowExecutorVisitor.getInstance());
         this.temporaryTableCleaner = new TemporaryTableCleaner();
         this.warehouseIdleChecker = new WarehouseIdleChecker();
+        this.dataCacheSelectExecutor = new DataCacheSelectExecutor();
     }
 
     public static void destroyCheckpoint() {
@@ -985,6 +993,10 @@ public class GlobalStateMgr {
 
     public InsertOverwriteJobMgr getInsertOverwriteJobMgr() {
         return insertOverwriteJobMgr;
+    }
+
+    public DataCacheJobMgr getDataCacheJobMgr() {
+        return dataCacheJobMgr;
     }
 
     public WarehouseManager getWarehouseMgr() {
@@ -1554,6 +1566,7 @@ public class GlobalStateMgr {
                     .put(SRMetaBlockID.KEY_MGR, keyMgr::load)
                     .put(SRMetaBlockID.PIPE_MGR, pipeManager.getRepo()::load)
                     .put(SRMetaBlockID.WAREHOUSE_MGR, warehouseMgr::load)
+                    .put(SRMetaBlockID.DATA_CACHE_MGR, dataCacheSelectExecutor::load)
                     .build();
 
         Set<SRMetaBlockID> metaMgrMustExists = new HashSet<>(loadImages.keySet());
@@ -1755,6 +1768,7 @@ public class GlobalStateMgr {
                 keyMgr.save(imageWriter);
                 pipeManager.getRepo().save(imageWriter);
                 warehouseMgr.save(imageWriter);
+                dataCacheSelectExecutor.save(imageWriter);
             } catch (SRMetaBlockException e) {
                 LOG.error("Save meta block failed ", e);
                 throw new IOException("Save meta block failed ", e);
@@ -2680,5 +2694,9 @@ public class GlobalStateMgr {
 
     public WarehouseIdleChecker getWarehouseIdleChecker() {
         return warehouseIdleChecker;
+    }
+
+    public DataCacheSelectExecutor getDataCacheSelectExecutor() {
+        return dataCacheSelectExecutor;
     }
 }

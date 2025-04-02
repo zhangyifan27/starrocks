@@ -14,6 +14,7 @@
 
 package com.starrocks.analysis;
 
+import com.starrocks.common.Config;
 import com.starrocks.datacache.DataCacheMgr;
 import com.starrocks.datacache.DataCacheRule;
 import com.starrocks.qe.ConnectContext;
@@ -125,6 +126,7 @@ public class DataCacheStmtAnalyzerTest {
 
     @Test
     public void testCacheSelect() throws Exception {
+        Config.disable_datacache_without_partition = false;
         {
             DataCacheSelectStatement stmt = (DataCacheSelectStatement) analyzeSuccess(
                     "cache select * from hive0.datacache_db.multi_partition_table");
@@ -151,6 +153,7 @@ public class DataCacheStmtAnalyzerTest {
 
     @Test
     public void testCacheSelectProperties() {
+        Config.disable_datacache_without_partition = false;
         DataCacheSelectStatement stmt = (DataCacheSelectStatement) analyzeSuccess(
                 "cache select * from hive0.datacache_db.multi_partition_table properties(\"verBose\"=\"true\")");
         Assert.assertTrue(stmt.isVerbose());

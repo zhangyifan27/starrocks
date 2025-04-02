@@ -28,7 +28,6 @@ import com.starrocks.common.ErrorReport;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.UserException;
 import com.starrocks.datacache.DataCacheMgr;
-import com.starrocks.datacache.DataCacheSelectExecutor;
 import com.starrocks.datacache.DataCacheSelectMetrics;
 import com.starrocks.load.EtlJobType;
 import com.starrocks.plugin.PluginInfo;
@@ -74,6 +73,7 @@ import com.starrocks.sql.ast.CleanTemporaryTableStmt;
 import com.starrocks.sql.ast.ClearDataCacheRulesStmt;
 import com.starrocks.sql.ast.CreateAnalyzeJobStmt;
 import com.starrocks.sql.ast.CreateCatalogStmt;
+import com.starrocks.sql.ast.CreateDataCacheJobStmt;
 import com.starrocks.sql.ast.CreateDataCacheRuleStmt;
 import com.starrocks.sql.ast.CreateDbStmt;
 import com.starrocks.sql.ast.CreateDictionaryStmt;
@@ -1089,13 +1089,21 @@ public class DDLStmtExecutor {
         public ShowResultSet visitDataCacheSelectStatement(DataCacheSelectStatement statement, ConnectContext context) {
             DataCacheSelectMetrics metrics = null;
             try {
-                metrics = DataCacheSelectExecutor.cacheSelect(statement, context);
+                metrics = GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor().cacheSelect(statement, context);
             } catch (Exception e) {
                 LOG.warn("Failed to execute cacheSelect", e);
                 throw new RuntimeException(e.getMessage());
             }
 
             return metrics.getShowResultSet(statement.isVerbose());
+        }
+
+        @Override
+        public ShowResultSet visitCreateDataCacheJobStatement(CreateDataCacheJobStmt stmt, ConnectContext context) {
+            ErrorReport.wrapWithRuntimeException(() -> {
+                context.getGlobalStateMgr().getDataCacheJobMgr().createJob(stmt, context);
+            });
+            return null;
         }
 
         //=========================================== Dictionary Statement ==================================================

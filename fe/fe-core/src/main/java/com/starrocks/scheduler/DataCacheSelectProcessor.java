@@ -14,12 +14,13 @@
 
 package com.starrocks.scheduler;
 
+import com.starrocks.analysis.TableName;
 import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Tracers;
-import com.starrocks.datacache.DataCacheSelectExecutor;
 import com.starrocks.datacache.DataCacheSelectMetrics;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.StmtExecutor;
+import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.DataCacheSelectStatement;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -37,7 +38,8 @@ public class DataCacheSelectProcessor extends BaseTaskRunProcessor {
             ConnectContext ctx = context.getCtx();
 
             // We need to reset catalog name in ConnectContext, because ctx's session variable was reset in TaskRun::executeTaskRun()
-            String catalogName = context.taskRun.getTask().getCatalogName();
+            Task task = context.taskRun.getTask();
+            String catalogName = task.getCatalogName();
             ctx.setCurrentCatalog(catalogName);
 
             ctx.getAuditEventBuilder().reset();
@@ -60,7 +62,10 @@ public class DataCacheSelectProcessor extends BaseTaskRunProcessor {
             // Cache select's metrics is held by sub StmtExecutor
             DataCacheSelectMetrics metrics = getDataCacheSelectMetrics(executor);
             // update compute node or backend's metrics
-            DataCacheSelectExecutor.updateBackendDataCacheMetrics(metrics);
+            TableName tableName = task.getTableName();
+            long ttlSecond = task.getTtlSeconds();
+            GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor().updateDataCacheMetrics(metrics,
+                    tableName, context.taskRun.getPartition(), ttlSecond);
             DataCacheSelectStatement dataCacheSelectStatement = (DataCacheSelectStatement) executor.getParsedStmt();
             boolean isVerbose = dataCacheSelectStatement.isVerbose();
             context.getStatus().setExtraMessage(metrics.debugString(isVerbose));

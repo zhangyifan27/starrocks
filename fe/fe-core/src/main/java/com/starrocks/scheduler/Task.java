@@ -16,6 +16,7 @@
 package com.starrocks.scheduler;
 
 import com.google.gson.annotations.SerializedName;
+import com.starrocks.analysis.TableName;
 import com.starrocks.authentication.AuthenticationMgr;
 import com.starrocks.cluster.ClusterNamespace;
 import com.starrocks.common.io.Text;
@@ -58,6 +59,12 @@ public class Task implements Writable {
     @SerializedName("dbName")
     private String dbName;
 
+    @SerializedName("tableName")
+    private TableName tableName;
+
+    @SerializedName("partition")
+    private String partition;
+
     @SerializedName("definition")
     private String definition;
 
@@ -80,6 +87,9 @@ public class Task implements Writable {
 
     @SerializedName("createUserIdentity")
     private UserIdentity userIdentity;
+
+    @SerializedName("ttlSeconds")
+    private long ttlSeconds;
 
     public Task() {}
 
@@ -157,6 +167,22 @@ public class Task implements Writable {
         this.dbName = ClusterNamespace.getFullName(dbName);
     }
 
+    public TableName getTableName() {
+        return tableName;
+    }
+
+    public void setTableName(TableName tableName) {
+        this.tableName = tableName;
+    }
+
+    public String getPartition() {
+        return partition;
+    }
+
+    public void setPartition(String partition) {
+        this.partition = partition;
+    }
+
     public String getDefinition() {
         return definition;
     }
@@ -207,6 +233,14 @@ public class Task implements Writable {
 
     public void setUserIdentity(UserIdentity userIdentity) {
         this.userIdentity = userIdentity;
+    }
+
+    public long getTtlSeconds() {
+        return ttlSeconds;
+    }
+
+    public void setTtlSeconds(long ttlSeconds) {
+        this.ttlSeconds = ttlSeconds;
     }
 
     public String getPostRun() {

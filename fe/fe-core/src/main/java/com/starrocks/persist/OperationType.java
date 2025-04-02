@@ -938,6 +938,11 @@ public class OperationType {
     @IgnorableOnReplayFailed
     public static final short OP_ADD_KEY = 13512;
 
+
+    // datacache  14000 ~ 14020
+    public static final short OP_ADD_DATA_CACHE_RECORD = 14000;
+    public static final short OP_REMOVE_BE_DATA_CACHE_RECORD = 14001;
+
     /**
      * NOTICE: OperationType cannot use a value exceeding 20000, please follow the above sequence number
      */
@@ -947,6 +952,9 @@ public class OperationType {
     public static final short OP_CREATE_WAREHOUSE = 20101;
     public static final short OP_DROP_WAREHOUSE = 20102;
     public static final short OP_ALTER_WAREHOUSE = 20103;
+
+
+
 
     public static final ImmutableSet<Short> IGNORABLE_OPERATIONS = buildIgnorableOperations();
 

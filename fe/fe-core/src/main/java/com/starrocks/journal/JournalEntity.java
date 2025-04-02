@@ -63,6 +63,7 @@ import com.starrocks.load.loadv2.LoadJob.LoadJobStateUpdateInfo;
 import com.starrocks.load.loadv2.LoadJobFinalOperation;
 import com.starrocks.load.routineload.RoutineLoadJob;
 import com.starrocks.load.streamload.StreamLoadTask;
+import com.starrocks.persist.AddDataCacheInfo;
 import com.starrocks.persist.AddPartitionsInfoV2;
 import com.starrocks.persist.AddSubPartitionsInfoV2;
 import com.starrocks.persist.AlterCatalogLog;
@@ -213,7 +214,8 @@ public class JournalEntity implements Writable {
             case OperationType.OP_ERASE_PARTITION:
             case OperationType.OP_META_VERSION:
             case OperationType.OP_DROP_ALL_BROKER:
-            case OperationType.OP_DROP_REPOSITORY: {
+            case OperationType.OP_DROP_REPOSITORY:
+            case OperationType.OP_REMOVE_BE_DATA_CACHE_RECORD: {
                 data = new Text();
                 ((Text) data).readFields(in);
                 break;
@@ -965,6 +967,10 @@ public class JournalEntity implements Writable {
                 break;
             case OperationType.OP_DROP_WAREHOUSE: {
                 data = DropWarehouseLog.read(in);
+                break;
+            }
+            case OperationType.OP_ADD_DATA_CACHE_RECORD: {
+                data = GsonUtils.GSON.fromJson(Text.readString(in), AddDataCacheInfo.class);
                 break;
             }
             default: {

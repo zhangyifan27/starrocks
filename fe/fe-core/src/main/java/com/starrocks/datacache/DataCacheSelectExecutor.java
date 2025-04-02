@@ -15,7 +15,17 @@
 package com.starrocks.datacache;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.Lists;
+import com.starrocks.analysis.TableName;
 import com.starrocks.common.UserException;
+import com.starrocks.monitor.unit.ByteSizeValue;
+import com.starrocks.persist.AddDataCacheInfo;
+import com.starrocks.persist.ImageWriter;
+import com.starrocks.persist.metablock.SRMetaBlockEOFException;
+import com.starrocks.persist.metablock.SRMetaBlockException;
+import com.starrocks.persist.metablock.SRMetaBlockID;
+import com.starrocks.persist.metablock.SRMetaBlockReader;
+import com.starrocks.persist.metablock.SRMetaBlockWriter;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.qe.StmtExecutor;
@@ -28,12 +38,30 @@ import com.starrocks.system.SystemInfoService;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class DataCacheSelectExecutor {
     private static final Logger LOG = LogManager.getLogger(DataCacheSelectExecutor.class);
 
-    public static DataCacheSelectMetrics cacheSelect(DataCacheSelectStatement statement,
+    private final Map<Long, Map<TableName, List<DataCacheRecord>>> dataCacheRecords = new ConcurrentHashMap<>();
+
+    private final ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor();
+
+    public DataCacheSelectExecutor() {
+        cleaner.scheduleAtFixedRate(this::cleanExpiredRecords, 30, 30, TimeUnit.SECONDS);
+    }
+
+    public DataCacheSelectMetrics cacheSelect(DataCacheSelectStatement statement,
                                                              ConnectContext connectContext) throws Exception {
         // backup original session variable
         SessionVariable sessionVariableBackup = connectContext.getSessionVariable();
@@ -92,7 +120,7 @@ public class DataCacheSelectExecutor {
     }
 
     // update BE's datacache metrics after cache select
-    public static void updateBackendDataCacheMetrics(DataCacheSelectMetrics metrics) {
+    public void updateDataCacheMetrics(DataCacheSelectMetrics metrics, TableName tableName, String partition, long ttlSecond) {
         final SystemInfoService clusterInfoService = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo();
         for (Map.Entry<Long, LoadDataCacheMetrics> metric : metrics.getBeMetrics().entrySet()) {
             ComputeNode computeNode = clusterInfoService.getBackendOrComputeNode(metric.getKey());
@@ -100,6 +128,112 @@ public class DataCacheSelectExecutor {
                 continue;
             }
             computeNode.updateDataCacheMetrics(metric.getValue().getLastDataCacheMetrics());
+            DataCacheRecord dataCacheRecord = new DataCacheRecord(tableName, partition,
+                    metric.getValue().getWriteBytes().getBytes(), System.currentTimeMillis() + (ttlSecond * 1000));
+            addDataCacheRecord(metric.getKey(), tableName, dataCacheRecord);
+            GlobalStateMgr.getCurrentState().getEditLog().logDataCacheRecord(
+                    new AddDataCacheInfo(metric.getKey(), tableName, dataCacheRecord));
         }
+    }
+
+    public void addDataCacheRecord(Long beid, TableName tableName, DataCacheRecord record) {
+        dataCacheRecords.compute(beid, (k, v) -> {
+            // new be cache info
+            if (v == null) {
+                v = new ConcurrentHashMap<>();
+            }
+            v.compute(tableName, (tk, tv) -> {
+                        if (tv == null) {
+                            tv = new CopyOnWriteArrayList<>();
+                        }
+                        tv.add(record);
+                        return tv;
+                    }
+            );
+            return v;
+        });
+    }
+
+    public void removeRecord(TableName tableName, DataCacheRecord record) {
+        dataCacheRecords.forEach((beid, beidMap) ->
+                beidMap.computeIfPresent(tableName, (tk, records) -> {
+                    records.remove(record);
+                    return records.isEmpty() ? null : records;
+                })
+        );
+    }
+
+    public boolean removeBeRecord(Long beid) {
+        if (dataCacheRecords.containsKey(beid)) {
+            dataCacheRecords.remove(beid);
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    public List<List<String>> getPartitionsDataCacheSize(TableName tableName) {
+        List<List<String>> rows = new ArrayList<>();
+        Map<String, AtomicLong> partitionCounter = new HashMap<>();
+        dataCacheRecords.forEach((beId, map) -> {
+            List<DataCacheRecord> dataCacheRecords = map.get(tableName);
+            if (dataCacheRecords != null) {
+                for (DataCacheRecord dataCacheRecord : dataCacheRecords) {
+                    String partition = dataCacheRecord.getPartition();
+                    AtomicLong cacheSize = partitionCounter.getOrDefault(partition, new AtomicLong(0L));
+                    cacheSize.addAndGet(dataCacheRecord.getCacheDataSize());
+                    partitionCounter.put(partition, cacheSize);
+                }
+            }
+        });
+        for (Map.Entry<String, AtomicLong> entry : partitionCounter.entrySet()) {
+            ByteSizeValue value = new ByteSizeValue(entry.getValue().get());
+            rows.add(Lists.newArrayList(entry.getKey(), value.toString()));
+        }
+        return rows;
+    }
+
+    public List<List<String>> getTablesDataCacheSize(String catalogName, String db) {
+        List<List<String>> rows = new ArrayList<>();
+        Map<TableName, AtomicLong> tableCounter = new HashMap<>();
+        dataCacheRecords.forEach((beId, map) -> {
+            map.forEach((tableName, list) -> {
+                if (tableName.getCatalog().equals(catalogName)
+                        && tableName.getDb().equals(db)) {
+                    AtomicLong cacheSize = tableCounter.getOrDefault(tableName, new AtomicLong(0L));
+                    for (DataCacheRecord dataCacheRecord : list) {
+                        cacheSize.addAndGet(dataCacheRecord.getCacheDataSize());
+                    }
+                    tableCounter.put(tableName, cacheSize);
+                }
+            });
+        });
+        for (Map.Entry<TableName, AtomicLong> entry : tableCounter.entrySet()) {
+            ByteSizeValue value = new ByteSizeValue(entry.getValue().get());
+            rows.add(Lists.newArrayList(entry.getKey().getTbl(), value.toString()));
+        }
+        return rows;
+    }
+
+    private void cleanExpiredRecords() {
+        long now = System.currentTimeMillis();
+        dataCacheRecords.forEach((beId, map) -> {
+            map.forEach((tableName, list) -> {
+                list.removeIf(dataCacheRecord -> dataCacheRecord.getTtlTime() < now);
+            });
+        });
+    }
+
+    public void save(ImageWriter imageWriter) throws IOException, SRMetaBlockException {
+        SRMetaBlockWriter writer = imageWriter.getBlockWriter(SRMetaBlockID.DATA_CACHE_MGR, 33);
+        writer.writeJson(this);
+        writer.close();
+    }
+
+    public void load(SRMetaBlockReader reader)
+            throws SRMetaBlockEOFException, IOException, SRMetaBlockException {
+        DataCacheSelectExecutor newData = reader.readJson(DataCacheSelectExecutor.class);
+        dataCacheRecords.clear();
+        dataCacheRecords.putAll(newData.dataCacheRecords);
     }
 }

@@ -15,6 +15,7 @@
 package com.starrocks.sql.ast;
 
 import com.google.common.base.Preconditions;
+import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.InternalCatalog;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.sql.analyzer.AstToSQLBuilder;
@@ -33,8 +34,11 @@ public class DataCacheSelectStatement extends DdlStmt {
     private boolean isVerbose = false;
     // real catalog of cache select table
     private String catalog = InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME;
+    private TableName tableName;
+    private String partition;
     private long ttlSeconds = 0;
     private int priority = 0;
+    private boolean createByJob = false;
     // =================================================================================
 
     public DataCacheSelectStatement(InsertStmt insertStmt, Map<String, String> properties, NodePosition pos) {
@@ -69,6 +73,22 @@ public class DataCacheSelectStatement extends DdlStmt {
         return this.catalog;
     }
 
+    public TableName getTableName() {
+        return tableName;
+    }
+
+    public void setTableName(TableName tableName) {
+        this.tableName = tableName;
+    }
+
+    public String getPartition() {
+        return partition;
+    }
+
+    public void setPartition(String partition) {
+        this.partition = partition;
+    }
+
     public void setPriority(int priority) {
         this.priority = priority;
     }
@@ -83,6 +103,14 @@ public class DataCacheSelectStatement extends DdlStmt {
 
     public long getTTLSeconds() {
         return ttlSeconds;
+    }
+
+    public boolean isCreateByJob() {
+        return createByJob;
+    }
+
+    public void setCreateByJob(boolean createByJob) {
+        this.createByJob = createByJob;
     }
 
     @Override

@@ -3274,6 +3274,9 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean enable_datacache = true;
 
+    @ConfField(mutable = true)
+    public static boolean disable_datacache_without_partition = true;
+
     /**
      * To prevent the external catalog from displaying too many entries in the grantsTo system table,
      * you can use this variable to ignore the entries in the external catalog

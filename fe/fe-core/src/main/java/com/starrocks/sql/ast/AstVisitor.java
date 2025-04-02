@@ -850,6 +850,18 @@ public interface AstVisitor<R, C> {
         return visitStatement(statement, context);
     }
 
+    default R visitCreateDataCacheJobStatement(CreateDataCacheJobStmt statement, C context) {
+        return visitDDLStatement(statement, context);
+    }
+
+    default R visitShowDataCacheTableStmt(ShowDataCacheTableStmt statement, C context) {
+        return visitShowStatement(statement, context);
+    }
+
+    default R visitShowDataCacheStmt(ShowDataCacheStmt statement, C context) {
+        return visitShowStatement(statement, context);
+    }
+
     // --------------------------------------- Export Statement --------------------------------------------------------
 
     default R visitExportStatement(ExportStmt statement, C context) {
@@ -1483,4 +1495,5 @@ public interface AstVisitor<R, C> {
     default R visitUserVariableHint(UserVariableHint node, C context) {
         return visitNode(node, context);
     }
+
 }

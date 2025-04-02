@@ -188,6 +188,8 @@ import com.starrocks.sql.ast.ShowCreateExternalCatalogStmt;
 import com.starrocks.sql.ast.ShowCreateRoutineLoadStmt;
 import com.starrocks.sql.ast.ShowCreateTableStmt;
 import com.starrocks.sql.ast.ShowDataCacheRulesStmt;
+import com.starrocks.sql.ast.ShowDataCacheStmt;
+import com.starrocks.sql.ast.ShowDataCacheTableStmt;
 import com.starrocks.sql.ast.ShowDataStmt;
 import com.starrocks.sql.ast.ShowDbStmt;
 import com.starrocks.sql.ast.ShowDeleteStmt;
@@ -485,6 +487,49 @@ public class ShowExecutor {
             } finally {
                 GlobalStateMgr.getCurrentState().unlock();
             }
+        }
+
+        public ShowResultSet visitShowDataCacheTableStmt(ShowDataCacheTableStmt stmt, ConnectContext context) {
+            String catalogName = stmt.getCatalogName();
+            if (catalogName == null) {
+                catalogName = context.getCurrentCatalog();
+            }
+            if (Config.enable_supersql_proxy_authentication) {
+                try {
+                    Authorizer.checkAnyActionOnCatalog(context.getCurrentUserIdentity(),
+                            context.getCurrentRoleIds(), catalogName);
+                } catch (AccessDeniedException ignored) {
+                }
+            }
+
+            String dbName = stmt.getDb();
+            Database db = GlobalStateMgr.getCurrentState().getMetadataMgr().getDb(catalogName, dbName);
+
+            Locker locker = new Locker();
+            locker.lockDatabase(db, LockType.READ);
+            try {
+                List<List<String>> rows = GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor()
+                        .getTablesDataCacheSize(catalogName, dbName);
+                return new ShowResultSet(stmt.getMetaData(), rows);
+            } finally {
+                locker.unLockDatabase(db, LockType.READ);
+            }
+        }
+
+        public ShowResultSet visitShowDataCacheStmt(ShowDataCacheStmt stmt, ConnectContext context) {
+            TableName tableName = stmt.getTableName();
+
+            if (Config.enable_supersql_proxy_authentication) {
+                try {
+                    Authorizer.checkAnyActionOnCatalog(context.getCurrentUserIdentity(),
+                            context.getCurrentRoleIds(), tableName.getCatalog());
+                } catch (AccessDeniedException ignored) {
+                }
+            }
+
+            List<List<String>> rows = GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor()
+                    .getPartitionsDataCacheSize(tableName);
+            return new ShowResultSet(stmt.getMetaData(), rows);
         }
 
         public ShowResultSet visitShowTableStatement(ShowTableStmt statement, ConnectContext context) {

@@ -83,6 +83,16 @@ public class TaskBuilder {
         task.setCreateTime(System.currentTimeMillis());
         task.setCatalogName(submitTaskStmt.getCatalogName());
         task.setDbName(submitTaskStmt.getDbName());
+        if (submitTaskStmt.getDataCacheSelectStmt() != null) {
+            task.setTableName(submitTaskStmt.getDataCacheSelectStmt().getTableName());
+            task.setTtlSeconds(submitTaskStmt.getDataCacheSelectStmt().getTTLSeconds());
+            if (submitTaskStmt.getDataCacheSelectStmt().getPartition() != null) {
+                task.setPartition(submitTaskStmt.getDataCacheSelectStmt().getPartition());
+            } else {
+                task.setPartition(submitTaskStmt.getDataCacheSelectStmt().getTableName().getTbl());
+            }
+        }
+
         task.setDefinition(submitTaskStmt.getSqlText());
 
         Map<String, String> taskProperties = Maps.newHashMap();

@@ -15,8 +15,13 @@
 
 package com.starrocks.scheduler;
 
+import com.starrocks.analysis.TimestampArithmeticExpr;
+import com.starrocks.common.util.DateUtils;
+import com.starrocks.datacache.DataCacheJobMgr;
 import com.starrocks.qe.ConnectContext;
 
+import java.time.LocalDateTime;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -52,6 +57,27 @@ public class TaskRunBuilder {
             taskRun.setProcessor(new PartitionBasedMvRefreshProcessor());
         } else if (task.getSource().equals(Constants.TaskSource.DATACACHE_SELECT)) {
             taskRun.setProcessor(new DataCacheSelectProcessor());
+            if (Constants.TaskType.PERIODICAL.equals(task.getType())) {
+                if (task.getProperties() != null && task.getProperties().containsKey("partition_unit")) {
+                    String partitionUnit = task.getProperties().get("partition_unit");
+                    String partition;
+                    LocalDateTime now = LocalDateTime.now();
+                    if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
+                        partition = DateUtils.HOUR_FORMATTER_UNIX.format(now.minusHours(1).truncatedTo(ChronoUnit.HOURS));
+                    } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
+                        partition = DateUtils.DATEKEY_FORMATTER_UNIX.format(now.minusDays(1).truncatedTo(ChronoUnit.DAYS));
+                    } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
+                        partition = DateUtils.MONTH_FORMATTER_UNIX.format(now.minusMonths(1).truncatedTo(ChronoUnit.MONTHS));
+                    } else { // YEAR
+                        partition = DateUtils.YEAR_FORMATTER_UNIX.format(now.minusYears(1).truncatedTo(ChronoUnit.YEARS));
+                    }
+                    taskRun.setPartition(DataCacheJobMgr.PARTITION_PREFIX + partition);
+                } else {
+                    taskRun.setPartition(task.getTableName().getTbl());
+                }
+            } else {
+                taskRun.setPartition(task.getPartition());
+            }
         } else {
             taskRun.setProcessor(new SqlTaskRunProcessor());
         }

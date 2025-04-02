@@ -18,9 +18,14 @@ import com.google.common.collect.ImmutableList;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.TableName;
+import com.starrocks.analysis.TimestampArithmeticExpr;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.Table;
+import com.starrocks.catalog.Type;
+import com.starrocks.common.Config;
+import com.starrocks.common.util.DateUtils;
+import com.starrocks.datacache.DataCacheJobMgr;
 import com.starrocks.datacache.DataCacheMgr;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.CatalogMgr;
@@ -29,6 +34,7 @@ import com.starrocks.server.MetadataMgr;
 import com.starrocks.server.RunMode;
 import com.starrocks.sql.ast.AstVisitor;
 import com.starrocks.sql.ast.ClearDataCacheRulesStmt;
+import com.starrocks.sql.ast.CreateDataCacheJobStmt;
 import com.starrocks.sql.ast.CreateDataCacheRuleStmt;
 import com.starrocks.sql.ast.DataCacheSelectStatement;
 import com.starrocks.sql.ast.DropDataCacheRuleStmt;
@@ -37,9 +43,12 @@ import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.sql.ast.SelectRelation;
 import com.starrocks.sql.ast.StatementBase;
 import com.starrocks.sql.ast.TableRelation;
+import com.starrocks.sql.common.DmlException;
 
 import java.time.Duration;
+import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -141,9 +150,37 @@ public class DataCacheStmtAnalyzer {
                 throw new SemanticException("Currently cache select is not supported in local olap table");
             }
             statement.setCatalog(tableName.getCatalog());
+            statement.setTableName(tableName);
 
             Map<String, String> properties = statement.getProperties();
             statement.setVerbose(Boolean.parseBoolean(properties.getOrDefault("verbose", "false")));
+
+            String partition = properties.get("partition");
+
+            if (!statement.isCreateByJob()) {
+                if (partition == null) {
+                    if (Config.disable_datacache_without_partition && selectRelation.getPredicate() != null) {
+                        throw new SemanticException("cache select is not supported without partition, " +
+                                "please data cache by partition or change disable_datacache_without_partition to false.");
+                    }
+                    statement.setPartition(tableName.getTbl());
+                } else if (DataCacheJobMgr.PARTITION_SCHEDULE.equalsIgnoreCase(partition)) {
+                    String partitionUnit = properties.get("partition_unit");
+                    LocalDateTime now = LocalDateTime.now();
+                    if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
+                        partition = DateUtils.HOUR_FORMATTER_UNIX.format(now.minusHours(1).truncatedTo(ChronoUnit.HOURS));
+                    } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
+                        partition = DateUtils.DATEKEY_FORMATTER_UNIX.format(now.minusDays(1).truncatedTo(ChronoUnit.DAYS));
+                    } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
+                        partition = DateUtils.MONTH_FORMATTER_UNIX.format(now.minusMonths(1).truncatedTo(ChronoUnit.MONTHS));
+                    } else { // YEAR
+                        partition = DateUtils.YEAR_FORMATTER_UNIX.format(now.minusYears(1).truncatedTo(ChronoUnit.YEARS));
+                    }
+                    statement.setPartition(DataCacheJobMgr.PARTITION_PREFIX + partition);
+                } else {
+                    statement.setPartition(partition.toLowerCase());
+                }
+            }
 
             int priority = Integer.parseInt(properties.getOrDefault("priority", "0"));
             if (priority != 0 && priority != 1) {
@@ -166,6 +203,109 @@ public class DataCacheStmtAnalyzer {
                 throw new SemanticException("TTL must be specified when priority > 0");
             }
             statement.setTTLSeconds(ttlSeconds);
+
+            return null;
+        }
+
+        @Override
+        public Void visitCreateDataCacheJobStatement(CreateDataCacheJobStmt statement, ConnectContext context) {
+            DataCacheSelectStatement dataCacheSelectStatement = statement.getDataCacheSelectStatement();
+            dataCacheSelectStatement.setCreateByJob(true);
+            visit(dataCacheSelectStatement, context);
+            SelectRelation selectRelation =
+                    (SelectRelation) dataCacheSelectStatement.getInsertStmt().getQueryStatement().getQueryRelation();
+            if (selectRelation.getPredicate() != null) {
+                throw new SemanticException("current data cache job not supportes predicat");
+            }
+
+            // need collect all be data cache info
+            dataCacheSelectStatement.setVerbose(true);
+
+            Map<String, String> properties = statement.getProperties();
+
+            String partitionFiled = null;
+            Type partitionFiledType = null;
+
+            TableRelation relation = (TableRelation) selectRelation.getRelation();
+            List<Column> partitionColumns = relation.getTable().getPartitionColumns();
+            if (partitionColumns != null && !partitionColumns.isEmpty()) {
+                if (partitionColumns.size() > 1) {
+                    throw new SemanticException("Data cache job not supportes multi partition column table");
+                }
+                Column partitionColumn = partitionColumns.get(0);
+                if (!partitionColumn.getType().isDateType()
+                        && !partitionColumn.getType().isInt()
+                        && !partitionColumn.getType().isBigint()) {
+                    throw new DmlException("Data cache job only supportes partition column type : " +
+                            "date|datetime|int|bigint");
+                }
+                partitionFiled = partitionColumn.getName();
+                partitionFiledType = partitionColumn.getType();
+            }
+
+            if (partitionFiled == null && properties.containsKey("partition_filed")) {
+                statement.setPartitionFiled(properties.get("partition_filed"));
+            } else {
+                statement.setPartitionFiled(partitionFiled);
+            }
+
+            // statement partitionFiled == null => no partition table
+            if (statement.getPartitionFiled() != null) {
+                if (!properties.containsKey("partition_unit")) {
+                    throw new SemanticException("Data cache job partition_unit properties is necessary");
+                }
+                String partitionUnit = properties.get("partition_unit");
+                if (!partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())
+                        && !partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())
+                        && !partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())
+                        && !partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.YEAR.toString())) {
+                    throw new SemanticException("Data cache job only supportes partition unit : hour|day|month|year");
+                }
+                statement.setPartitionUnit(properties.get("partition_unit"));
+                dataCacheSelectStatement.getProperties().put("partition_unit", properties.get("partition_unit"));
+
+                // cache_partition_num <= ttl
+                if (properties.containsKey("cache_partition_num")) {
+                    long ttlSeconds = dataCacheSelectStatement.getTTLSeconds();
+                    int cachePartitionNum = Integer.parseInt(properties.get("cache_partition_num"));
+                    long cacheTime;
+                    if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
+                        cacheTime = cachePartitionNum * 60 * 60L;
+                    } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
+                        cacheTime = cachePartitionNum * 24 * 60 * 60L;
+                    } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
+                        cacheTime = cachePartitionNum * 31 * 24 * 60 * 60L;
+                    } else { // YEAR
+                        cacheTime = cachePartitionNum * 365 * 31 * 24 * 60 * 60L;
+                    }
+                    if (cacheTime > ttlSeconds) {
+                        throw new SemanticException("cache_partition_num * partition_unit need less than ttl");
+                    }
+                }
+                statement.setCachePartitionNum(Integer.parseInt(properties.getOrDefault("cache_partition_num", "0")));
+
+                if (partitionFiledType == null && properties.containsKey("partition_filed_type")) {
+                    String partitionFiledTypeFromProperties = properties.get("partition_filed_type");
+                    if ("int".equalsIgnoreCase(partitionFiledTypeFromProperties)
+                            || "bigint".equalsIgnoreCase(partitionFiledTypeFromProperties)) {
+                        statement.setPartitionFiledType(Type.INT);
+                    } else if ("date".equalsIgnoreCase(partitionFiledTypeFromProperties)) {
+                        if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
+                            throw new DmlException("date partition type not supports hour partition unit~");
+                        }
+                        statement.setPartitionFiledType(Type.DATE);
+                    } else if ("datetime".equalsIgnoreCase(partitionFiledTypeFromProperties)) {
+                        statement.setPartitionFiledType(Type.DATETIME);
+                    } else {
+                        throw new DmlException("Data cache job only supportes partition column type : " +
+                                "date|datetime|int|bigint");
+                    }
+                } else {
+                    statement.setPartitionFiledType(partitionFiledType);
+                }
+
+                statement.setPartitionFiledFormat(properties.get("partition_filed_format"));
+            }
 
             return null;
         }

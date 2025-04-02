@@ -55,6 +55,7 @@ import com.starrocks.sql.ast.CancelRefreshMaterializedViewStmt;
 import com.starrocks.sql.ast.ClearDataCacheRulesStmt;
 import com.starrocks.sql.ast.CreateAnalyzeJobStmt;
 import com.starrocks.sql.ast.CreateCatalogStmt;
+import com.starrocks.sql.ast.CreateDataCacheJobStmt;
 import com.starrocks.sql.ast.CreateDataCacheRuleStmt;
 import com.starrocks.sql.ast.CreateDbStmt;
 import com.starrocks.sql.ast.CreateDictionaryStmt;
@@ -814,6 +815,12 @@ public class Analyzer {
         @Override
         public Void visitDataCacheSelectStatement(DataCacheSelectStatement statement, ConnectContext context) {
             DataCacheStmtAnalyzer.analyze(statement, context);
+            return null;
+        }
+
+        @Override
+        public Void visitCreateDataCacheJobStatement(CreateDataCacheJobStmt stmt, ConnectContext context) {
+            DataCacheStmtAnalyzer.analyze(stmt, context);
             return null;
         }
 

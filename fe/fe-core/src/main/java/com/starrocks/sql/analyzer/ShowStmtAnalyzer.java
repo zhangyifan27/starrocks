@@ -60,6 +60,8 @@ import com.starrocks.sql.ast.ShowColumnStmt;
 import com.starrocks.sql.ast.ShowCreateDbStmt;
 import com.starrocks.sql.ast.ShowCreateExternalCatalogStmt;
 import com.starrocks.sql.ast.ShowCreateTableStmt;
+import com.starrocks.sql.ast.ShowDataCacheStmt;
+import com.starrocks.sql.ast.ShowDataCacheTableStmt;
 import com.starrocks.sql.ast.ShowDataStmt;
 import com.starrocks.sql.ast.ShowDbStmt;
 import com.starrocks.sql.ast.ShowDeleteStmt;
@@ -105,6 +107,40 @@ public class ShowStmtAnalyzer {
         public void analyze(ShowStmt statement, ConnectContext session) {
             analyzeShowPredicate(statement);
             visit(statement, session);
+        }
+
+        @Override
+        public Void visitShowDataCacheStmt(ShowDataCacheStmt node, ConnectContext context) {
+            TableName tableName = node.getTableName();
+            String catalogName = tableName.getCatalog();
+            if (catalogName == null) {
+                catalogName = context.getCurrentCatalog();
+            }
+            if (!GlobalStateMgr.getCurrentState().getCatalogMgr().catalogExists(catalogName)) {
+                ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_CATALOG_ERROR, catalogName);
+            }
+            tableName.setCatalog(catalogName);
+
+            String db = tableName.getDb();
+            if (db == null) {
+                db = getDatabaseName(null, context);
+            }
+            tableName.setDb(db);
+            return null;
+        }
+
+        @Override
+        public Void visitShowDataCacheTableStmt(ShowDataCacheTableStmt node, ConnectContext context) {
+            String catalogName = context.getCurrentCatalog();
+            if (!GlobalStateMgr.getCurrentState().getCatalogMgr().catalogExists(catalogName)) {
+                ErrorReport.reportSemanticException(ErrorCode.ERR_BAD_CATALOG_ERROR, catalogName);
+            }
+            node.setCatalogName(catalogName);
+
+            String db = node.getDb();
+            db = getDatabaseName(db, context);
+            node.setDb(db);
+            return null;
         }
 
         @Override

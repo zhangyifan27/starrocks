@@ -71,6 +71,8 @@ public class TaskRun implements Comparable<TaskRun> {
     @SerializedName("taskRunId")
     private final String taskRunId;
 
+    private String partition;
+
     private Map<String, String> properties;
 
     private final CompletableFuture<Constants.TaskRunState> future;
@@ -100,6 +102,14 @@ public class TaskRun implements Comparable<TaskRun> {
 
     public void setTaskId(long taskId) {
         this.taskId = taskId;
+    }
+
+    public String getPartition() {
+        return partition;
+    }
+
+    public void setPartition(String partition) {
+        this.partition = partition;
     }
 
     public Map<String, String> getProperties() {
@@ -331,7 +341,11 @@ public class TaskRun implements Comparable<TaskRun> {
         long created = createTime == null ? System.currentTimeMillis() : createTime;
         status.setQueryId(queryId);
         status.setTaskId(task.getId());
-        status.setTaskName(task.getName());
+        if (partition != null && Constants.TaskType.PERIODICAL.equals(task.getType())) {
+            status.setTaskName(task.getName() + "_" + partition);
+        } else {
+            status.setTaskName(task.getName());
+        }
         status.setSource(task.getSource());
         status.setCreateTime(created);
         status.setUser(task.getCreateUser());

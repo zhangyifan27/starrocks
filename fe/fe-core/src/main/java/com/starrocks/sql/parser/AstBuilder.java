@@ -182,6 +182,7 @@ import com.starrocks.sql.ast.ColumnSeparator;
 import com.starrocks.sql.ast.CompactionClause;
 import com.starrocks.sql.ast.CreateAnalyzeJobStmt;
 import com.starrocks.sql.ast.CreateCatalogStmt;
+import com.starrocks.sql.ast.CreateDataCacheJobStmt;
 import com.starrocks.sql.ast.CreateDataCacheRuleStmt;
 import com.starrocks.sql.ast.CreateDbStmt;
 import com.starrocks.sql.ast.CreateDictionaryStmt;
@@ -365,6 +366,8 @@ import com.starrocks.sql.ast.ShowCreateExternalCatalogStmt;
 import com.starrocks.sql.ast.ShowCreateRoutineLoadStmt;
 import com.starrocks.sql.ast.ShowCreateTableStmt;
 import com.starrocks.sql.ast.ShowDataCacheRulesStmt;
+import com.starrocks.sql.ast.ShowDataCacheStmt;
+import com.starrocks.sql.ast.ShowDataCacheTableStmt;
 import com.starrocks.sql.ast.ShowDataStmt;
 import com.starrocks.sql.ast.ShowDbStmt;
 import com.starrocks.sql.ast.ShowDeleteStmt;
@@ -3441,6 +3444,50 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         }
 
         return new DataCacheSelectStatement(insertStmt, properties, createPos(ctx));
+    }
+
+
+    @Override
+    public ParseNode visitCreateDataCacheJobStatement(StarRocksParser.CreateDataCacheJobStatementContext ctx) {
+        QualifiedName qualifiedName = null;
+        if (ctx.qualifiedName() != null) {
+            qualifiedName = getQualifiedName(ctx.qualifiedName());
+        }
+
+        DataCacheSelectStatement dataCacheSelectStmt = (DataCacheSelectStatement) visit(ctx.dataCacheSelectStatement());
+
+        NodePosition pos = createPos(ctx);
+        TaskName taskName;
+        if (qualifiedName == null) {
+            taskName = new TaskName(null, null, pos);
+        } else {
+            taskName = qualifiedNameToTaskName(qualifiedName);
+        }
+
+        int dataCacheSelectStart = ctx.dataCacheSelectStatement().start.getStartIndex();
+
+        int dataCacheSelectPropertiesStart = ctx.dataCacheSelectStatement().stop.getStopIndex() + 1;
+        if (ctx.dataCacheSelectStatement().properties() != null) {
+            dataCacheSelectPropertiesStart = ctx.dataCacheSelectStatement().properties().start.getStartIndex();
+        }
+
+        CreateDataCacheJobStmt res = new CreateDataCacheJobStmt(taskName, dataCacheSelectStmt,
+                dataCacheSelectStart, dataCacheSelectPropertiesStart, pos);
+        res.getProperties().putAll(extractVarHintValues(hintMap.get(ctx)));
+        parseTaskClause(ctx.taskClause(), res);
+        return res;
+    }
+
+    @Override
+    public ParseNode visitShowDataCacheTableStatement(StarRocksParser.ShowDataCacheTableStatementContext ctx) {
+        return new ShowDataCacheTableStmt(createPos(ctx));
+    }
+
+    @Override
+    public ParseNode visitShowDataCacheStatement(StarRocksParser.ShowDataCacheStatementContext ctx) {
+        QualifiedName qualifiedName = getQualifiedName(ctx.qualifiedName());
+        TableName tableName = qualifiedNameToTableName(qualifiedName);
+        return new ShowDataCacheStmt(tableName, createPos(ctx));
     }
 
     // ----------------------------------------------- Export Statement ------------------------------------------------

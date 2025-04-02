@@ -37,7 +37,7 @@ public class SubmitTaskStmt extends DdlStmt {
     private TaskSchedule schedule;
 
     private CreateTableAsSelectStmt createTableAsSelectStmt;
-    private DataCacheSelectStatement dataCacheSelectStmt;
+    protected DataCacheSelectStatement dataCacheSelectStmt;
     private InsertStmt insertStmt;
 
     public SubmitTaskStmt(TaskName taskName, int sqlBeginIndex, CreateTableAsSelectStmt createTableAsSelectStmt,

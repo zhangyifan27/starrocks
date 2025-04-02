@@ -80,6 +80,9 @@ statement
     | submitTaskStatement
     | dropTaskStatement
 
+    // DataCache JOB
+    | createDataCacheJobStatement
+
     // Materialized View Statement
     | createMaterializedViewStatement
     | showMaterializedViewsStatement
@@ -249,6 +252,8 @@ statement
     | dropDataCacheRuleStatement
     | clearDataCacheRulesStatement
     | dataCacheSelectStatement
+    | showDataCacheTableStatement
+    | showDataCacheStatement
 
     // Export Statement
     | exportStatement
@@ -1752,6 +1757,20 @@ clearDataCacheRulesStatement
 
 dataCacheSelectStatement
     : CACHE SELECT selectItem (',' selectItem)* FROM qualifiedName (WHERE where=expression)? properties?
+    ;
+
+createDataCacheJobStatement
+    : CREATE DATA CACHE JOB qualifiedName?
+      taskClause*
+      AS dataCacheSelectStatement
+    ;
+
+showDataCacheTableStatement
+    : SHOW DATA CACHE TABLES
+    ;
+
+showDataCacheStatement
+    : SHOW DATA CACHE FROM table=qualifiedName
     ;
 
 // ------------------------------------------- Export Statement --------------------------------------------------------

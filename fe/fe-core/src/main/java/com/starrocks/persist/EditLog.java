@@ -1223,6 +1223,17 @@ public class EditLog {
                     warehouseMgr.replayAlterWarehouse(wh);
                     break;
                 }
+                case OperationType.OP_ADD_DATA_CACHE_RECORD: {
+                    AddDataCacheInfo addDataCacheInfo = (AddDataCacheInfo) journal.getData();
+                    GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor().addDataCacheRecord(addDataCacheInfo.getBeid(),
+                            addDataCacheInfo.getTableName(), addDataCacheInfo.getDataCacheRecord());
+                    break;
+                }
+                case OperationType.OP_REMOVE_BE_DATA_CACHE_RECORD: {
+                    Text beId = (Text) journal.getData();
+                    GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor().removeBeRecord(Long.parseLong(beId.toString()));
+                    break;
+                }
                 default: {
                     if (Config.metadata_ignore_unknown_operation_type) {
                         LOG.warn("UNKNOWN Operation Type {}", opCode);
@@ -2093,5 +2104,13 @@ public class EditLog {
 
     public void logRecoverPartitionVersion(PartitionVersionRecoveryInfo info) {
         logEdit(OperationType.OP_RECOVER_PARTITION_VERSION, info);
+    }
+
+    public void logDataCacheRecord(AddDataCacheInfo info) {
+        logJsonObject(OperationType.OP_ADD_DATA_CACHE_RECORD, info);
+    }
+
+    public void logRemoveBeDataCacheRecord(long beId) {
+        logEdit(OperationType.OP_REMOVE_BE_DATA_CACHE_RECORD, new Text(Long.toString(beId)));
     }
 }
