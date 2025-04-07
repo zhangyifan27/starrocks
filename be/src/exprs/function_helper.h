@@ -97,11 +97,11 @@ public:
     }
 
     static std::optional<DatumArray> get_data_of_array(const Column* col, size_t row_num) {
-        const auto* data_column = FunctionHelper::unwrap_if_nullable<const ArrayColumn*>(col, row_num);
-        if (data_column == nullptr) {
-            return {};
+        auto item = col->get(row_num);
+        if (item.is_null()) {
+            return std::nullopt;
         }
-        return data_column->get(row_num).get_array();
+        return item.get_array();
     }
 
     /**

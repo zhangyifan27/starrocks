@@ -38,3 +38,15 @@ select 'delta_method',
   round(delta_method('x1/x2 + x3/x4', false, [numerator, denominator, X1, X2]), 5), 
   round(delta_method('x1/x2/x3+x4', false, [numerator, denominator, X1, X2]), 5) 
 from delta_method_test_tbl;
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ 'delta_method',  
+  round(delta_method('x1/x2', true, [numerator, denominator]), 5), 
+  round(delta_method('x1/x2', false, [numerator, denominator]), 5), 
+  round(delta_method('x1/x2 + x3/x4', false, [numerator, denominator, X1, X2]), 5), 
+  round(delta_method('x1/x2/x3+x4', false, [numerator, denominator, X1, X2]), 5) 
+from delta_method_test_tbl;
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ 'delta_method',  
+  round(delta_method('x1/x2', true, [numerator, denominator]), 5), 
+  round(delta_method('x1/x2', false, [numerator, denominator]), 5), 
+  round(delta_method('x1/x2 + x3/x4', false, [numerator, denominator, X1, X2]), 5), 
+  round(delta_method('x1/x2/x3+x4', false, [numerator, denominator, X1, X2]), 5) 
+from delta_method_test_tbl;

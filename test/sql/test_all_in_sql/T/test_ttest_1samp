@@ -43,3 +43,7 @@ select ttest_1samp('x1/x2', 'greater', 1.111, [numerator, denominator]) from tte
 select ttest_1samp('x1/x2', 'less', 1.111, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5') from ttest_1samp_test_tbl;
 
 select ttest_1samp('x1/x2', 'less', 1.111, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95) from ttest_1samp_test_tbl;
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ ttest_1samp('x1/x2', 'less', 1.111, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95) from ttest_1samp_test_tbl;
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ ttest_1samp('x1/x2', 'less', 1.111, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95) from ttest_1samp_test_tbl;

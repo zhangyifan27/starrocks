@@ -43,6 +43,7 @@
 #include "exprs/agg/hll_union_count.h"
 #include "exprs/agg/hll_uniq_combined.h"
 #include "exprs/agg/intersect_count.h"
+#include "exprs/agg/kurtosis.h"
 #include "exprs/agg/maxmin.h"
 #include "exprs/agg/maxmin_by.h"
 #include "exprs/agg/nullable_aggregate.h"
@@ -50,6 +51,7 @@
 #include "exprs/agg/percentile_cont.h"
 #include "exprs/agg/percentile_union.h"
 #include "exprs/agg/retention.h"
+#include "exprs/agg/skewness.h"
 #include "exprs/agg/stream/retract_maxmin.h"
 #include "exprs/agg/sum.h"
 #include "exprs/agg/variance.h"
@@ -172,13 +174,12 @@ public:
     template <LogicalType LT>
     static auto MakeCorelationAggregateFunction();
 
-    template <LogicalType L, LogicalType R>
-    static AggregateFunctionPtr MakeTtest1SampAggregateFunction();
 
-    template <LogicalType X1_LT, LogicalType X2_LT, LogicalType INDEX_LT, LogicalType X1_PRE_LT = TYPE_MAX_VALUE,
-              LogicalType X2_PRE_LT = TYPE_MAX_VALUE, LogicalType DIM_LT = TYPE_MAX_VALUE, bool use_cuped = false,
-              bool use_dim = false>
-    static AggregateFunctionPtr MakeTtest2SampAggregateFunction();
+    template <LogicalType LT, bool is_sample>
+    static AggregateFunctionPtr MakeSkewnessAggregateFunction();
+
+    template <LogicalType LT, bool is_sample>
+    static AggregateFunctionPtr MakeKurtosisAggregateFunction();
 
     template <LogicalType LT>
     static auto MakeSumDistinctAggregateFunction();
@@ -381,6 +382,16 @@ auto AggregateFactory::MakeCovarianceAggregateFunction() {
 template <LogicalType LT>
 auto AggregateFactory::MakeCorelationAggregateFunction() {
     return std::make_shared<CorelationAggregateFunction<LT>>();
+}
+
+template <LogicalType LT, bool is_sample>
+AggregateFunctionPtr AggregateFactory::MakeSkewnessAggregateFunction() {
+    return std::make_shared<SkewnessAggregateFunction<LT, is_sample>>();
+}
+
+template <LogicalType LT, bool is_sample>
+AggregateFunctionPtr AggregateFactory::MakeKurtosisAggregateFunction() {
+    return std::make_shared<KurtosisAggregateFunction<LT, is_sample>>();
 }
 
 template <LogicalType LT>

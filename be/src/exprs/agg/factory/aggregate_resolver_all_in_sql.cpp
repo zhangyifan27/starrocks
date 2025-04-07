@@ -85,6 +85,20 @@ void AggregateFuncResolver::register_all_in_sql() {
             std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_ARRAY},
             false, std::make_shared<Ttest2SampAggregateFunction>());
 
+    // register for ttest 2 samp
+    add_aggregate_mapping<TYPE_JSON, Ttest2SampAggregateState>(
+            std::string(AllInSqlFunctions::ttest_2samp),
+            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_ARRAY,
+                        TYPE_DOUBLE, TYPE_DOUBLE},
+            false, std::make_shared<Ttest2SampAggregateFunction>());
+
+    // register for ttest 2 samp
+    add_aggregate_mapping<TYPE_JSON, Ttest2SampAggregateState>(
+            std::string(AllInSqlFunctions::ttest_2samp),
+            std::vector{TYPE_VARCHAR, TYPE_VARCHAR, TYPE_BOOLEAN, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_ARRAY,
+                        TYPE_DOUBLE, TYPE_DOUBLE, TYPE_BIGINT},
+            false, std::make_shared<Ttest2SampAggregateFunction>());
+
     // expression, alternative, treatment, data[, cuped[, alpha[, pse_index, pse_data]]]
     // register for ttest 2 samp
     add_aggregate_mapping<TYPE_JSON, Ttests2SampAggregateState>(
@@ -125,6 +139,12 @@ void AggregateFuncResolver::register_all_in_sql() {
             std::string(AllInSqlFunctions::xexpt_ttest_2samp),
             std::vector{TYPE_BIGINT, TYPE_VARCHAR, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE,
                         TYPE_VARCHAR, TYPE_ARRAY},
+            false, std::make_shared<XexptTtest2SampAggregateFunction<std::string>>());
+
+    add_aggregate_mapping<TYPE_JSON, XexptTtest2SampAggregateState<std::string>>(
+            std::string(AllInSqlFunctions::xexpt_ttest_2samp),
+            std::vector{TYPE_BIGINT, TYPE_VARCHAR, TYPE_ARRAY, TYPE_VARCHAR, TYPE_DOUBLE, TYPE_DOUBLE, TYPE_DOUBLE,
+                        TYPE_VARCHAR, TYPE_ARRAY, TYPE_INT},
             false, std::make_shared<XexptTtest2SampAggregateFunction<std::string>>());
 
     // register for ols
@@ -209,7 +229,13 @@ void AggregateFuncResolver::register_all_in_sql() {
             std::make_shared<AggregateFunctionCausalForest>());
 
     // register for quantile test
-    // Y, treatment, percentiles, uin[, num_bootstrap=500[, alpha=0.05[, power=0.8[, mde=0.01]]]]]
+    // Y, treatment, percentiles, uin[, num_bootstrap=500[, alpha=0.05[, power=0.8[, mde=0.01[, uin_hash_type]]]]]]
+    add_aggregate_mapping<TYPE_JSON, QuantileTestAggregateState>(
+            std::string(AllInSqlFunctions::quantile_test),
+            std::vector{TYPE_DOUBLE, TYPE_VARCHAR, TYPE_ARRAY, TYPE_BIGINT, TYPE_BIGINT, TYPE_DOUBLE, TYPE_DOUBLE,
+                        TYPE_DOUBLE, TYPE_INT},
+            false, std::make_shared<QuantileTestAggregateFunction>());
+
     add_aggregate_mapping<TYPE_JSON, QuantileTestAggregateState>(
             std::string(AllInSqlFunctions::quantile_test),
             std::vector{TYPE_DOUBLE, TYPE_VARCHAR, TYPE_ARRAY, TYPE_BIGINT, TYPE_BIGINT, TYPE_DOUBLE, TYPE_DOUBLE,

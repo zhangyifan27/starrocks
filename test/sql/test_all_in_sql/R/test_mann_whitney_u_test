@@ -70,3 +70,55 @@ from mann_whitney_test_tbl;
 {"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."}      
 {"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."}
 -- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ 'mann_whitney',  
+  mann_whitney_u_test(numerator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(numerator, treatment, 'two-sided', 1),
+  mann_whitney_u_test(numerator, treatment, 'less', 0),
+  mann_whitney_u_test(numerator, treatment, 'less', 1),
+  mann_whitney_u_test(numerator, treatment, 'greater', 0),
+  mann_whitney_u_test(numerator, treatment, 'greater', 1),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 1),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 1)
+from mann_whitney_test_tbl;
+-- result:
+[LOOSE]mann_whitney   
+{"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}       
+{"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}       
+{"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}      
+{"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}        
+{"causal-function": "mann_whitney_u_test", "p-value": 1, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}       
+{"causal-function": "mann_whitney_u_test", "p-value": 1, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}       
+{"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."}       
+{"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."}       
+{"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."}      
+{"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."}
+-- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ 'mann_whitney',  
+  mann_whitney_u_test(numerator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(numerator, treatment, 'two-sided', 1),
+  mann_whitney_u_test(numerator, treatment, 'less', 0),
+  mann_whitney_u_test(numerator, treatment, 'less', 1),
+  mann_whitney_u_test(numerator, treatment, 'greater', 0),
+  mann_whitney_u_test(numerator, treatment, 'greater', 1),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 1),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 1)
+from mann_whitney_test_tbl;
+-- result:
+[LOOSE]mann_whitney   
+{"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}       
+{"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}       
+{"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}      
+{"causal-function": "mann_whitney_u_test", "p-value": 0, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}        
+{"causal-function": "mann_whitney_u_test", "p-value": 1, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}       
+{"causal-function": "mann_whitney_u_test", "p-value": 1, "schema": "{\n    causal-function(string),\n    statistic(double),\n    p-value(double)\n  }", "statistic": 88264759845}       
+{"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."}       
+{"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."}       
+{"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."}      
+{"causal-function": "mann_whitney_u_test", "error": "All numbers in both samples are identical."}
+-- !result

@@ -39,3 +39,5 @@ select count(*), floor(sum(`numerator`)), floor(sum(`y`)) from group_set_test_tb
 
 select group_set(numerator, treatment, [X3_string], ['X3_string']) from group_set_test_tbl;
 
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ group_set(numerator, treatment, [X3_string], ['X3_string']) from group_set_test_tbl;
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ group_set(numerator, treatment, [X3_string], ['X3_string']) from group_set_test_tbl;

@@ -32,8 +32,6 @@ public:
 
     class CaliperMatchingFunctionState {
     public:
-        using TupleHash = MathHelpers::TupleHash;
-
         CaliperMatchingFunctionState() = default;
 
         Status init_once(JsonValue const& stats_json);
@@ -43,7 +41,7 @@ public:
     private:
         bool _is_init{false};
         std::mutex _mtx;
-        std::unordered_map<std::tuple<int64_t, size_t>, std::array<size_t, 4>, TupleHash> _info;
+        std::map<std::tuple<int64_t, size_t>, std::array<size_t, 4>> _info;
     };
 
     /**

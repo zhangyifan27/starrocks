@@ -51,3 +51,6 @@ with model as (
     from ols_test_tbl
 )
 select eval_ml_method(model.params, [X1, X2, X3, weight]) as Y_prime from ols_test_tbl, model order by Y_prime limit 10 offset 1000;
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ ols_train(Y, [X1, X2, X3, weight], true) as params from ols_test_tbl;
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ ols_train(Y, [X1, X2, X3, weight], true) as params from ols_test_tbl;

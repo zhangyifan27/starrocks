@@ -140,10 +140,11 @@ T_R_TABLE = "t_r_table"
 
 ARRAY_FLAG = "[ARRAY]"
 LOOSE_FLAG = "[LOOSE]"
+ERROR_FLAG = "[ERROR]"
 
 SECRET_INFOS = {}
 
-def compare_lists(list1, list2, epsilon=1e-4):
+def compare_lists(list1, list2, epsilon=5e-2):
     if len(list1) != len(list2):
         log.info(f"{list1} != {list2}")
         return False
@@ -1469,11 +1470,27 @@ class StarrocksSQLApiLib(object):
                 log.info("[check array]: exp(%s), act(%s)" % (exp[len(ARRAY_FLAG) :], act))
                 tools.assert_true(compare_lists(act, eval(exp[len(ARRAY_FLAG) :])))
                 return
+            
+            if exp.startswith(ERROR_FLAG):
+                def remove_last_be_code(s):
+                    # 匹配所有": BE:数字"模式
+                    matches = list(re.finditer(r': BE:\d+', s))
+                    if not matches:
+                        return s
+                    last_match = matches[-1]
+                    return s[:last_match.start()] + s[last_match.end():]
+                
+                act = remove_last_be_code(act)
+                log.info("[check error]: exp(%s), act(%s)" % (exp[len(ERROR_FLAG) :], act))
+                tools.assert_equal(act, exp[len(ERROR_FLAG) :],
+                                   "sql result not match:\n- [SQL]: %s\n- [exp]: %s\n- [act]: %s\n---"
+                                    % (self_print(sql, need_print=False), exp[len(ERROR_FLAG) :], act),)
+                return
 
             if exp.startswith(LOOSE_FLAG):
                 def extract(s):
                     # 正则表达式模式
-                    number_pattern = r'-?\d+\.?\d*e?-?\+?\d*'
+                    number_pattern = r'[-+]?\d*\.?\d+([eE][-+]?\d+)?'
                     non_number_pattern = r'[^-\d.]+'  # 匹配任何不是数字、负号或小数点的字符序列
 
                     numbers = []

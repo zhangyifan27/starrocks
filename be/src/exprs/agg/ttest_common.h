@@ -32,6 +32,8 @@ enum class TtestAlternative : uint8_t { Unknown = 0, TwoSided, Less, Greater };
 
 namespace ublas = boost::numeric::ublas;
 
+enum class UinHashType : uint32_t { x32 = 0, x64 };
+
 class TtestCommon {
 public:
     constexpr static double kDefaultAlphaValue = 0.05;
@@ -39,6 +41,7 @@ public:
     constexpr static double kDefaultPowerValue = 0.8;
     const static std::unordered_map<std::string, TtestAlternative> str2alternative;
 
+    template <bool is_skew = false>
     static bool calc_means_and_vars(std::string const& Y_expression, std::string const& cuped_expression,
                                     int num_variables, size_t count0, size_t count1,
                                     ublas::vector<double> const& means0, ublas::vector<double> const& means1,
@@ -49,8 +52,8 @@ public:
             ExprTree<double> Y_expr_tree(Y_expression, num_variables);
             mean0 = Y_expr_tree.value(means0);
             mean1 = Y_expr_tree.value(means1);
-            var0 = DeltaMethodStats::calc_delta_method(Y_expr_tree, count0, means0, cov_matrix0, false);
-            var1 = DeltaMethodStats::calc_delta_method(Y_expr_tree, count1, means1, cov_matrix1, false);
+            var0 = DeltaMethodStats<is_skew>::calc_delta_method(Y_expr_tree, count0, means0, cov_matrix0, false);
+            var1 = DeltaMethodStats<is_skew>::calc_delta_method(Y_expr_tree, count1, means1, cov_matrix1, false);
         } else {
             ublas::matrix<double> cuped_means = calc_cuped_means(cuped_expression, num_variables, means);
             double var_y_tmp;
@@ -71,10 +74,11 @@ public:
         return true;
     }
 
+    template <bool is_skew = false>
     static bool calc_means_and_vars(std::string const& Y_expression, std::string const& cuped_expression,
-                                    int num_variables, DeltaMethodStats const& stats0, DeltaMethodStats const& stats1,
-                                    DeltaMethodStats const& stats, double& mean0, double& mean1, double& var0,
-                                    double& var1) {
+                                    int num_variables, DeltaMethodStats<is_skew> const& stats0,
+                                    DeltaMethodStats<is_skew> const& stats1, DeltaMethodStats<is_skew> const& stats,
+                                    double& mean0, double& mean1, double& var0, double& var1) {
         size_t count0 = stats0.count();
         size_t count1 = stats1.count();
         ublas::vector<double> const means0 = stats0.means();
@@ -130,6 +134,7 @@ public:
         return true;
     }
 
+    template <bool is_skew = false>
     static bool calc_cuped_covs(std::string const& Y_expression, std::string const& cuped_expression, int num_variables,
                                 size_t count, ublas::vector<double> const& means,
                                 ublas::matrix<double> const& cov_matrix, double& var_y, ublas::matrix<double>& cov_XY,
@@ -150,13 +155,14 @@ public:
         cov_XY.resize(1, num_parts);
         for (uint32_t part_i = 0; part_i < num_parts; ++part_i) {
             const auto& [_, Xi_expr_tree] = expressions[part_i];
-            cov_XX(part_i, part_i) = DeltaMethodStats::calc_delta_method(Xi_expr_tree, count, means, cov_matrix, false);
-            cov_XY(0, part_i) =
-                    DeltaMethodStats::calc_delta_method_cov(Y_expr_tree, Xi_expr_tree, count, means, cov_matrix);
+            cov_XX(part_i, part_i) =
+                    DeltaMethodStats<is_skew>::calc_delta_method(Xi_expr_tree, count, means, cov_matrix, false);
+            cov_XY(0, part_i) = DeltaMethodStats<is_skew>::calc_delta_method_cov(Y_expr_tree, Xi_expr_tree, count,
+                                                                                 means, cov_matrix);
             for (uint32_t part_j = part_i + 1; part_j < num_parts; ++part_j) {
                 const auto& [_, Xj_expr_tree] = expressions[part_j];
-                cov_XX(part_j, part_i) = cov_XX(part_i, part_j) =
-                        DeltaMethodStats::calc_delta_method_cov(Xi_expr_tree, Xj_expr_tree, count, means, cov_matrix);
+                cov_XX(part_j, part_i) = cov_XX(part_i, part_j) = DeltaMethodStats<is_skew>::calc_delta_method_cov(
+                        Xi_expr_tree, Xj_expr_tree, count, means, cov_matrix);
             }
         }
 
@@ -170,16 +176,17 @@ public:
             }
         }
         theta = ublas::prod(cov_XY, cov_XX_inv);
-        var_y = DeltaMethodStats::calc_delta_method(Y_expr_tree, count, means, cov_matrix, false);
+        var_y = DeltaMethodStats<is_skew>::calc_delta_method(Y_expr_tree, count, means, cov_matrix, false);
         return true;
     }
 
+    template <bool is_skew = false>
     static bool calc_cuped_var(std::string const& Y_expression, std::string const& cuped_expression, int num_variables,
                                size_t count, ublas::vector<double> const& means,
                                ublas::matrix<double> const& cov_matrix, double& var) {
         if (cuped_expression.empty()) {
-            var = DeltaMethodStats::calc_delta_method(ExprTree<double>(Y_expression, num_variables), count, means,
-                                                      cov_matrix, false);
+            var = DeltaMethodStats<is_skew>::calc_delta_method(ExprTree<double>(Y_expression, num_variables), count,
+                                                               means, cov_matrix, false);
             return true;
         }
 
@@ -215,6 +222,29 @@ public:
         return p_value;
     }
 
+    static double calc_pvalue_edge_worth(double t_stat, TtestAlternative alternative, double skewness,
+                                         double total_num) {
+        boost::math::normal normal_dist(0, 1);
+        auto pdf_correction = [&](double x) {
+            return skewness * (2 * x * x + 1) * pdf(normal_dist, x) / 6 / sqrt(total_num);
+        };
+        double p_value = 0;
+        if (alternative == TtestAlternative::TwoSided) {
+            p_value = 2 * std::min(cdf(normal_dist, t_stat) + pdf_correction(t_stat),
+                                   1 - cdf(normal_dist, t_stat) - pdf_correction(t_stat));
+        } else if (alternative == TtestAlternative::Less) {
+            p_value = cdf(normal_dist, t_stat) + pdf_correction(t_stat);
+        } else if (alternative == TtestAlternative::Greater) {
+            p_value = 1 - cdf(normal_dist, t_stat) - pdf_correction(t_stat);
+        }
+        if (p_value > 1) {
+            p_value = 1;
+        } else if (p_value < 0) {
+            p_value = 0;
+        }
+        return p_value;
+    }
+
     static std::pair<double, double> calc_confidence_interval(double estimate, double stderr_var, size_t count,
                                                               double alpha, TtestAlternative alternative) {
         double lower = 0, upper = 0;
@@ -237,6 +267,23 @@ public:
                 lower = upper = std::numeric_limits<double>::quiet_NaN();
             }
         }
+        return {lower, upper};
+    }
+    static std::pair<double, double> calc_confidence_interval_edge_worth(double estimate, double stderr_var,
+                                                                         size_t count, double alpha,
+                                                                         TtestAlternative alternative, double skewness,
+                                                                         double total_num) {
+        boost::math::normal normal_dist(0, 1);
+        auto quantile_correction = [&](double quantile) {
+            return skewness * (2 * quantile * quantile + 1) / 6 / sqrt(total_num);
+        };
+        double ci_width_lower =
+                (quantile(normal_dist, alpha / 2) - quantile_correction(quantile(normal_dist, alpha / 2))) * stderr_var;
+        double ci_width_upper =
+                (quantile(normal_dist, 1 - alpha / 2) - quantile_correction(quantile(normal_dist, 1 - alpha / 2))) *
+                stderr_var;
+        double lower = estimate - ci_width_lower;
+        double upper = estimate + ci_width_upper;
         return {lower, upper};
     }
 };

@@ -100,6 +100,7 @@ private:
     uint8_t _is_std{true};
 };
 
+template <bool is_skew = false>
 class DeltaMethodStats {
 public:
     DeltaMethodStats() = default;
@@ -108,12 +109,18 @@ public:
         _count = other._count;
         _sum_x = other._sum_x;
         _sum_xy = other._sum_xy;
+        if constexpr (is_skew) {
+            _sum_x3 = other._sum_x3;
+        }
     }
     DeltaMethodStats(DeltaMethodStats&& other) noexcept {
         _num_variables = other._num_variables;
         _count = other._count;
         _sum_x = std::move(other._sum_x);
         _sum_xy = std::move(other._sum_xy);
+        if constexpr (is_skew) {
+            _sum_x3 = std::move(other._sum_x3);
+        }
         other.reset();
     }
 
@@ -126,6 +133,9 @@ public:
         _sum_x = ublas::vector<double>(length, 0);
         _sum_xy = ublas::triangular_matrix<double, ublas::upper>(length, length);
         std::fill(_sum_xy.data().begin(), _sum_xy.data().end(), 0);
+        if constexpr (is_skew) {
+            _sum_x3 = ublas::vector<double>(length, 0);
+        }
     }
 
     void reset() {
@@ -133,6 +143,9 @@ public:
         _count = 0;
         ublas::vector<double>().swap(_sum_x);
         ublas::triangular_matrix<double, ublas::upper>().swap(_sum_xy);
+        if constexpr (is_skew) {
+            ublas::vector<double>().swap(_sum_x3);
+        }
     }
 
     void update(const double* input, int length) {
@@ -145,6 +158,11 @@ public:
                 _sum_xy(i, j) += input[i] * input[j];
             }
         }
+        if constexpr (is_skew) {
+            for (uint32_t i = 0; i < _num_variables; ++i) {
+                _sum_x3(i) += input[i] * input[i] * input[i];
+            }
+        }
         _count += 1;
     }
 
@@ -153,6 +171,9 @@ public:
         _sum_x += other._sum_x;
         _sum_xy += other._sum_xy;
         _count += other._count;
+        if constexpr (is_skew) {
+            _sum_x3 += other._sum_x3;
+        }
     }
 
     int num_variables() const { return _num_variables; }
@@ -182,6 +203,9 @@ public:
         SerializeHelpers::serialize(&_count, data);
         SerializeHelpers::serialize(_sum_x.data().begin(), data, _num_variables);
         SerializeHelpers::serialize(_sum_xy.data().begin(), data, _num_variables * (_num_variables + 1) / 2);
+        if constexpr (is_skew) {
+            SerializeHelpers::serialize(_sum_x3.data().begin(), data, _num_variables);
+        }
     }
 
     void deserialize(const uint8_t*& data) {
@@ -189,10 +213,17 @@ public:
         SerializeHelpers::deserialize(data, &_count);
         SerializeHelpers::deserialize(data, _sum_x.data().begin(), _num_variables);
         SerializeHelpers::deserialize(data, _sum_xy.data().begin(), _num_variables * (_num_variables + 1) / 2);
+        if constexpr (is_skew) {
+            SerializeHelpers::deserialize(data, _sum_x3.data().begin(), _num_variables);
+        }
     }
 
     size_t serialized_size() const {
         DCHECK(!is_uninitialized());
+        if constexpr (is_skew) {
+            return sizeof(_count) + sizeof(double) * _num_variables +
+                   sizeof(double) * _num_variables * (_num_variables + 1) / 2 + sizeof(double) * _num_variables;
+        }
         return sizeof(_count) + sizeof(double) * _num_variables +
                sizeof(double) * _num_variables * (_num_variables + 1) / 2;
     }
@@ -258,11 +289,25 @@ public:
         return ret;
     }
 
+    double calc_moment3() const {
+        DCHECK(_count > 0);
+        DCHECK(_num_variables >= 2);
+        double bucket_mean = (_sum_x[0] - _sum_x[1]) / _count;
+        double m3 = 0;
+        m3 += _sum_x3[0] - 3 * bucket_mean * _sum_xy(0, 0) + 3 * _sum_x[0] * std::pow(bucket_mean, 2) -
+              _count * std::pow(bucket_mean, 3);
+        m3 /= _sum_x[1];
+        return m3;
+    }
+
+    double calc_sum(size_t i) const { return _sum_x[i]; }
+
 private:
     int _num_variables{-1};
     size_t _count{0};
     ublas::vector<double> _sum_x;
     ublas::triangular_matrix<double, ublas::upper> _sum_xy;
+    ublas::vector<double> _sum_x3;
 };
 
 class DeltaMethodAggregateState {
@@ -289,9 +334,9 @@ public:
         if (_stats.count() == 0 || _stats.count() == 1) {
             return std::numeric_limits<double>::quiet_NaN();
         }
-        return DeltaMethodStats::calc_delta_method(ExprTree<double>(_params.expression(), _params.num_variables()),
-                                                   _stats.count(), _stats.means(), _stats.cov_matrix(),
-                                                   _params.is_stderr());
+        return DeltaMethodStats<false>::calc_delta_method(
+                ExprTree<double>(_params.expression(), _params.num_variables()), _stats.count(), _stats.means(),
+                _stats.cov_matrix(), _params.is_stderr());
     }
 
     void update(const double* input, int num_variables) {
@@ -342,7 +387,7 @@ public:
 
 private:
     DeltaMethodParams _params;
-    DeltaMethodStats _stats;
+    DeltaMethodStats<false> _stats;
 };
 
 class DeltaMethodAggregateFunction
@@ -438,7 +483,28 @@ public:
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
-                                     ColumnPtr* dst) const override {}
+                                     ColumnPtr* dst) const override {
+        DCHECK((*dst)->is_binary());
+        auto* dst_column = down_cast<BinaryColumn*>((*dst).get());
+
+        std::vector<const Column*> cols;
+        std::for_each(src.begin(), src.end(), [&cols](const ColumnPtr& col) { cols.emplace_back(col.get()); });
+        for (size_t i = 0; i < chunk_size; ++i) {
+            DeltaMethodAggregateState state;
+            update(ctx, cols.data(), reinterpret_cast<AggDataPtr>(&state), i);
+            if (ctx->has_error()) {
+                return;
+            }
+            Bytes& bytes = dst_column->get_bytes();
+            size_t old_size = bytes.size();
+            size_t new_size = old_size + state.serialized_size();
+            bytes.resize(new_size);
+            dst_column->get_offset().emplace_back(new_size);
+            uint8_t* serialized_data = bytes.data() + old_size;
+            state.serialize(serialized_data);
+            DCHECK_EQ(serialized_data, new_size + bytes.data());
+        }
+    }
 
     std::string get_name() const override { return std::string(AllInSqlFunctions::delta_method); }
 };

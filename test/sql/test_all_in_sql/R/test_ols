@@ -103,3 +103,14 @@ select round(eval_ml_method(model.params, [X1, X2, X3, weight]), 5) as Y_prime f
 -302.24417
 -302.19639
 -- !result
+
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ ols_train(Y, [X1, X2, X3, weight], true) as params from ols_test_tbl;
+-- result:
+[LOOSE]{"coef": [-45.842475164561165, -29.268450120177476, 3548.67796150496, -52.06827470684013, 356.2168900632196], "name": "ols", "num_variables": 4, "use_bias": true}
+-- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ ols_train(Y, [X1, X2, X3, weight], true) as params from ols_test_tbl;
+-- result:
+[LOOSE]{"coef": [-45.842475164561165, -29.268450120177476, 3548.67796150496, -52.06827470684013, 356.2168900632196], "name": "ols", "num_variables": 4, "use_bias": true}
+-- !result

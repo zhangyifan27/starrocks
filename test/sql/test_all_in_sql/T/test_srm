@@ -42,3 +42,15 @@ select 'srm',
   srm(denominator, treatment, [0, 0]),
   srm(denominator, treatment, [1])
 from srm_test_tbl;
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ 'srm',  
+  srm(numerator, treatment, [1, 1]),
+  srm(denominator, treatment, [1, 2]),
+  srm(denominator, treatment, [0, 0]),
+  srm(denominator, treatment, [1])
+from srm_test_tbl;
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ 'srm',  
+  srm(numerator, treatment, [1, 1]),
+  srm(denominator, treatment, [1, 2]),
+  srm(denominator, treatment, [0, 0]),
+  srm(denominator, treatment, [1])
+from srm_test_tbl;

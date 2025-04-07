@@ -48,3 +48,28 @@ select 'mann_whitney',
   mann_whitney_u_test(denominator, treatment, 'two-sided', 0),
   mann_whitney_u_test(denominator, treatment, 'two-sided', 1)
 from mann_whitney_test_tbl;
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ 'mann_whitney',  
+  mann_whitney_u_test(numerator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(numerator, treatment, 'two-sided', 1),
+  mann_whitney_u_test(numerator, treatment, 'less', 0),
+  mann_whitney_u_test(numerator, treatment, 'less', 1),
+  mann_whitney_u_test(numerator, treatment, 'greater', 0),
+  mann_whitney_u_test(numerator, treatment, 'greater', 1),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 1),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 1)
+from mann_whitney_test_tbl;
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ 'mann_whitney',  
+  mann_whitney_u_test(numerator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(numerator, treatment, 'two-sided', 1),
+  mann_whitney_u_test(numerator, treatment, 'less', 0),
+  mann_whitney_u_test(numerator, treatment, 'less', 1),
+  mann_whitney_u_test(numerator, treatment, 'greater', 0),
+  mann_whitney_u_test(numerator, treatment, 'greater', 1),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 1),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 0),
+  mann_whitney_u_test(denominator, treatment, 'two-sided', 1)
+from mann_whitney_test_tbl;

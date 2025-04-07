@@ -76,6 +76,8 @@ public:
     void register_sumcount();
     void register_distinct();
     void register_variance();
+    void register_skewness();
+    void register_kurtosis();
     void register_all_in_sql();
     void register_window();
     void register_utility();

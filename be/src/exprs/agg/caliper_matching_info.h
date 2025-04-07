@@ -22,10 +22,10 @@
 #include <any>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
+#include <cstddef>
 #include <cstdint>
 #include <ctime>
 #include <string>
-#include <unordered_set>
 
 #include "agent/master_info.h"
 #include "column/json_column.h"
@@ -44,18 +44,24 @@ namespace starrocks {
 
 class CaliperMatchingInfoStats {
 public:
-    using TupleHash = MathHelpers::TupleHash;
+    constexpr static size_t MAX_NUM_SCORES = 200'000;
 
     void add(bool treatment, int64_t node_key, int64_t score, size_t group_hash) {
         _all_scores.emplace(score);
+        if (_matching_info.count({node_key, score, group_hash}) == 0) {
+            _matching_info[{node_key, score, group_hash}] = std::array<size_t, 2>{0, 0};
+        }
         _matching_info[{node_key, score, group_hash}][treatment] += 1;
     }
 
     // (score, group_hash) -> (count_treatment0, count_treatment1)
-    std::unordered_map<std::tuple<int64_t, size_t>, std::array<size_t, 2>, TupleHash> get_total_info() const {
-        std::unordered_map<std::tuple<int64_t, size_t>, std::array<size_t, 2>, TupleHash> total_info;
+    std::map<std::tuple<int64_t, size_t>, std::array<size_t, 2>> get_total_info() const {
+        std::map<std::tuple<int64_t, size_t>, std::array<size_t, 2>> total_info;
         for (auto&& [key, counts] : _matching_info) {
             auto [_, score, group_hash] = key;
+            if (total_info.count({score, group_hash}) == 0) {
+                total_info[{score, group_hash}] = std::array<size_t, 2>{0, 0};
+            }
             total_info[{score, group_hash}][0] += counts[0];
             total_info[{score, group_hash}][1] += counts[1];
         }
@@ -64,6 +70,9 @@ public:
 
     void merge(CaliperMatchingInfoStats const& other) {
         for (auto&& [key, counts] : other._matching_info) {
+            if (_matching_info.count(key) == 0) {
+                _matching_info[key] = std::array<size_t, 2>{0, 0};
+            }
             _matching_info[key][0] += counts[0];
             _matching_info[key][1] += counts[1];
             _all_scores.emplace(std::get<1>(key));
@@ -107,14 +116,14 @@ public:
 
     int num_scores() const { return _all_scores.size(); }
 
-    std::unordered_map<std::tuple<int64_t, int64_t, size_t>, std::array<size_t, 2>, TupleHash> const& get_info() const {
+    std::map<std::tuple<int64_t, int64_t, size_t>, std::array<size_t, 2>> const& get_info() const {
         return _matching_info;
     }
 
     void to_json(vpack::Builder& builder) const {
         auto total_info = get_total_info();
-        std::unordered_map<std::tuple<int64_t, size_t>, std::array<size_t, 2>, TupleHash> end_indices;
-        std::unordered_map<std::tuple<int64_t, size_t>, std::array<size_t, 2>, TupleHash> remaining_match_counts;
+        std::map<std::tuple<int64_t, size_t>, std::array<size_t, 2>> end_indices;
+        std::map<std::tuple<int64_t, size_t>, std::array<size_t, 2>> remaining_match_counts;
         size_t current_idx = 1;
         for (auto& [key, cnt] : total_info) {
             size_t match = std::min(cnt[0], cnt[1]);
@@ -123,8 +132,7 @@ public:
             end_indices[key] = {current_idx, current_idx};
         }
 
-        std::unordered_map<int64_t, std::unordered_map<int64_t, std::unordered_map<size_t, std::array<size_t, 4>>>>
-                result_matching_info;
+        std::map<int64_t, std::map<int64_t, std::map<size_t, std::array<size_t, 4>>>> result_matching_info;
 
         for (auto [info_key, count] : _matching_info) {
             auto [node_key, score, group_hash] = info_key;
@@ -167,14 +175,17 @@ public:
 
 private:
     // (node_key, score, group_hash) -> (cnt_treatment0, cnt_treatment1)
-    std::unordered_map<std::tuple<int64_t, int64_t, size_t>, std::array<size_t, 2>, TupleHash> _matching_info;
-    std::unordered_set<int64_t> _all_scores;
+    std::map<std::tuple<int64_t, int64_t, size_t>, std::array<size_t, 2>> _matching_info;
+    std::set<int64_t> _all_scores;
 };
 
 class CaliperMatchingInfoAggState {
 public:
     CaliperMatchingInfoAggState() = default;
-    CaliperMatchingInfoAggState(const uint8_t* data) { deserialize(data); }
+    CaliperMatchingInfoAggState(const uint8_t* data) {
+        deserialize(data);
+        _node_key = get_backend_id().value_or(-1);
+    }
 
     bool is_uninitialized() const { return !_is_init; }
 
@@ -208,7 +219,10 @@ public:
     size_t serialized_size() const { return sizeof(_step) + _stats.serialized_size(); }
 
     void build_result_json(vpack::Builder& builder) const {
-        DCHECK(_is_init);
+        if (!_is_init) {
+            vpack::ObjectBuilder obj_builder(&builder);
+            return;
+        }
         _stats.to_json(builder);
     }
 
@@ -246,7 +260,7 @@ public:
             }
             double step = 0;
             const Column* step_col = columns[2];
-            if (!FunctionHelper::get_data_of_column<DoubleColumn>(step_col, 0, step)) {
+            if (!FunctionHelper::get_data_of_column<DoubleColumn>(step_col, row_num, step)) {
                 ctx->set_error("Internal Error: fail to get `step`.");
                 return;
             }
@@ -264,12 +278,15 @@ public:
                 if (i.is_null()) {
                     return;
                 }
-                group_hash ^= std::hash<std::string>()(i.get_slice().to_string());
+                group_hash = std::hash<std::string>()(i.get_slice().to_string()) ^
+                             (0x9e3779b9 + (group_hash << 6) + (group_hash >> 2));
             }
         }
         this->data(state).update(treatment, distance, group_hash);
-        if (this->data(state).num_scores() > 1000) {
-            ctx->set_error("Internal Error: number of scores is larger than 1000.");
+        if (this->data(state).num_scores() > CaliperMatchingInfoStats::MAX_NUM_SCORES) {
+            ctx->set_error(fmt::format("Internal Error: number of buckets is larger than {}.",
+                                       CaliperMatchingInfoStats::MAX_NUM_SCORES)
+                                   .c_str());
         }
     }
 
@@ -291,8 +308,10 @@ public:
             return;
         }
         this->data(state).merge(other);
-        if (this->data(state).num_scores() > 1000) {
-            ctx->set_error("Internal Error: number of scores is larger than 1000.");
+        if (this->data(state).num_scores() > CaliperMatchingInfoStats::MAX_NUM_SCORES) {
+            ctx->set_error(fmt::format("Internal Error: number of buckets is larger than {}.",
+                                       CaliperMatchingInfoStats::MAX_NUM_SCORES)
+                                   .c_str());
         }
     }
 
@@ -313,7 +332,6 @@ public:
     }
 
     void finalize_to_column(FunctionContext* ctx, ConstAggDataPtr __restrict state, Column* to) const override {
-        DCHECK(!this->data(state).is_uninitialized());
         if (to->is_nullable()) {
             auto* dst_nullable_col = down_cast<NullableColumn*>(to);
             dst_nullable_col->null_column_data().emplace_back(false);
@@ -328,7 +346,26 @@ public:
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
                                      ColumnPtr* dst) const override {
-        ctx->set_error("Logical Error: `convert_to_serialize_format` not supported.");
+        DCHECK((*dst)->is_binary());
+        auto* dst_column = down_cast<BinaryColumn*>((*dst).get());
+
+        std::vector<const Column*> cols;
+        std::for_each(src.begin(), src.end(), [&cols](const ColumnPtr& col) { cols.emplace_back(col.get()); });
+        for (size_t i = 0; i < chunk_size; ++i) {
+            CaliperMatchingInfoAggState state;
+            update(ctx, cols.data(), reinterpret_cast<AggDataPtr>(&state), i);
+            if (ctx->has_error()) {
+                return;
+            }
+            Bytes& bytes = dst_column->get_bytes();
+            size_t old_size = bytes.size();
+            size_t new_size = old_size + state.serialized_size();
+            bytes.resize(new_size);
+            dst_column->get_offset().emplace_back(new_size);
+            uint8_t* serialized_data = bytes.data() + old_size;
+            state.serialize(serialized_data);
+            DCHECK_EQ(serialized_data, new_size + bytes.data());
+        }
     }
 
     std::string get_name() const override { return std::string(AllInSqlFunctions::caliper_matching_info); }

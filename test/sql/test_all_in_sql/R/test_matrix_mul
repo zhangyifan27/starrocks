@@ -66,3 +66,13 @@ from matrix_mul_test_tbl;
 -- result:
 [ARRAY][[194524133455916.9, 1.7034357441498885e+9, 4.6829676965013504e+8], [1.7034357441498885e+9, 26600866, 6397365], [4.6829676965013504e+8, 6397365, 1998727]]
 -- !result
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ matrix_multiplication([Y, X1, X2], false, false)
+from matrix_mul_test_tbl;
+-- result:
+[ARRAY][[194524133455916.9, 1.7034357441498885e+9, 4.6829676965013504e+8], [1.7034357441498885e+9, 26600866, 6397365], [4.6829676965013504e+8, 6397365, 1998727]]
+-- !result
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ matrix_multiplication([Y, X1, X2], false, false)
+from matrix_mul_test_tbl;
+-- result:
+[ARRAY][[194524133455916.9, 1.7034357441498885e+9, 4.6829676965013504e+8], [1.7034357441498885e+9, 26600866, 6397365], [4.6829676965013504e+8, 6397365, 1998727]]
+-- !result

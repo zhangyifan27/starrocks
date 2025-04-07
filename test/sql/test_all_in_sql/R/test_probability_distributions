@@ -118,27 +118,27 @@ select gauss_error_function(NULL);
 -- !result
 select percent_point_function(10.01);
 -- result:
-[LOOSE]E: (1064, 'Error in function boost::math::quantile(const normal_distribution<double>&, double): Probability argument is 10.01, but must be >= 0 and <= 1 !')
+[ERROR]E: (1064, 'Error in function boost::math::quantile(const normal_distribution<double>&, double): Probability argument is 10.01, but must be >= 0 and <= 1 !')
 -- !result
 select percent_point_function(1.01);
 -- result:
-[LOOSE]E: (1064, 'Error in function boost::math::quantile(const normal_distribution<double>&, double): Probability argument is 1.01, but must be >= 0 and <= 1 !')
+[ERROR]E: (1064, 'Error in function boost::math::quantile(const normal_distribution<double>&, double): Probability argument is 1.01, but must be >= 0 and <= 1 !')
 -- !result
 select percent_point_function(1.00);
 -- result:
-[LOOSE]E: (1064, 'Error in function boost::math::erfc_inv<double>(double, double): Overflow Error')
+[ERROR]E: (1064, 'Error in function boost::math::erfc_inv<double>(double, double): Overflow Error')
 -- !result
 select percent_point_function(0.0);
 -- result:
-[LOOSE]E: (1064, 'Error in function boost::math::erfc_inv<double>(double, double): Overflow Error')
+[ERROR]E: (1064, 'Error in function boost::math::erfc_inv<double>(double, double): Overflow Error')
 -- !result
 select percent_point_function(-0.01);
 -- result:
-[LOOSE]E: (1064, 'Error in function boost::math::quantile(const normal_distribution<double>&, double): Probability argument is -0.01, but must be >= 0 and <= 1 !')
+[ERROR]E: (1064, 'Error in function boost::math::quantile(const normal_distribution<double>&, double): Probability argument is -0.01, but must be >= 0 and <= 1 !')
 -- !result
 select percent_point_function(-1);
 -- result:
-[LOOSE]E: (1064, 'Error in function boost::math::quantile(const normal_distribution<double>&, double): Probability argument is -1, but must be >= 0 and <= 1 !')
+[ERROR]E: (1064, 'Error in function boost::math::quantile(const normal_distribution<double>&, double): Probability argument is -1, but must be >= 0 and <= 1 !')
 -- !result
 
 select gauss_error_function(x / 1000.0)

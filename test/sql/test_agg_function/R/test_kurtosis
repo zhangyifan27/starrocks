@@ -1,0 +1,165 @@
+-- name: test_kurtosis
+
+drop database if exists kurt_test_db;
+-- result:
+-- !result
+create database kurt_test_db;
+-- result:
+-- !result
+use kurt_test_db;
+-- result:
+-- !result
+drop table if exists kurt_test_tbl;
+-- result:
+-- !result
+create table kurt_test_tbl
+(
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean,
+    `numerator_pre` bigint,
+    `denominator_pre` boolean,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `X3_string` string,
+    `X7_needcut` bigint,
+    `X8_needcut` bigint,
+    `weight` double,
+    `distance` double,
+    `uin` bigint
+)
+properties (
+    "replication_num"="1"
+);
+-- result:
+-- !result
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test.csv -XPUT -H column_separator:, ${url}/api/kurt_test_db/kurt_test_tbl/_stream_load
+-- result:
+-- !result
+sync;
+-- result:
+-- !result
+
+select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from kurt_test_tbl;
+-- result:
+[LOOSE]793200 646026213 323166914
+-- !result
+
+select kurt_samp(x1) as res 
+from (
+    select 53 as x1 
+    union all 
+    select 61 as x1 
+    union all 
+    select 49 as x1 
+    union all 
+    select 66 as x1 
+    union all 
+    select 78 as x1 
+    union all 
+    select 47 as x1 
+)t;
+-- result:
+[LOOSE]1.4254367752133699
+-- !result
+
+
+select kurt_pop(x1) as res 
+from (
+    select 53 as x1 
+    union all 
+    select 61 as x1 
+    union all 
+    select 49 as x1 
+    union all 
+    select 66 as x1 
+    union all 
+    select 78 as x1 
+    union all 
+    select 47 as x1 
+)t;
+-- result:
+[LOOSE]2.052628956307253
+-- !result
+
+select kurt_samp(x1) as res from (select * from kurt_test_tbl limit 0)t;
+-- result:
+[LOOSE]None
+-- !result
+
+select kurt_pop(x1) as res from (select * from kurt_test_tbl limit 0)t;
+-- result:
+[LOOSE]None
+-- !result
+
+select kurt_samp(x1) as res from (select * from kurt_test_tbl limit 1)t;
+-- result:
+[LOOSE]nan
+-- !result
+
+select kurt_pop(x1) as res from (select * from kurt_test_tbl limit 1)t;
+-- result:
+[LOOSE]nan
+-- !result
+
+select kurt_samp(x1) as res from (select * from kurt_test_tbl order by y limit 2)t;
+-- result:
+[LOOSE]nan
+-- !result
+
+select kurt_pop(x1) as res from (select * from kurt_test_tbl order by y limit 2)t;
+-- result:
+[LOOSE]nan
+-- !result
+
+select kurt_samp(x1) as res from (select * from kurt_test_tbl order by uin limit 100)t;
+-- result:
+[LOOSE]3.1402722050945484
+-- !result
+
+select kurt_pop(x1) as res from (select * from kurt_test_tbl order by uin limit 100)t;
+-- result:
+[LOOSE]3.2040324508667988
+-- !result
+
+select kurt_samp(x1) as res from kurt_test_tbl;
+-- result:
+[LOOSE]2.939733522605314
+-- !result
+
+select kurt_pop(x1) as res from kurt_test_tbl;
+-- result:
+[LOOSE]2.944500838190233
+-- !result
+
+select kurt_samp(if(treatment = 1, null, x1)) as res from kurt_test_tbl;
+-- result:
+[LOOSE]2.9514358339390747
+-- !result
+
+select kurt_pop(if(treatment = 1, null, x1)) as res from kurt_test_tbl;
+-- result:
+[LOOSE]2.9514507111588113
+-- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ kurt_samp(x1) as res from kurt_test_tbl;
+-- result:
+[LOOSE]2.9514358339390747
+-- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ kurt_pop(x1) as res from kurt_test_tbl;
+-- result:
+[LOOSE]2.9514507111588113
+-- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ kurt_samp(x1) as res from kurt_test_tbl;
+-- result:
+[LOOSE]2.9514358339390747
+-- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ kurt_pop(x1) as res from kurt_test_tbl;
+-- result:
+[LOOSE]2.9514507111588113
+-- !result

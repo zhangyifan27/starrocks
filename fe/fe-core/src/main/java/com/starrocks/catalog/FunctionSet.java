@@ -275,6 +275,10 @@ public class FunctionSet {
     public static final String COVAR_POP = "covar_pop";
     public static final String COVAR_SAMP = "covar_samp";
     public static final String CORR = "corr";
+    public static final String SKEW_POP = "skew_pop";
+    public static final String SKEW_SAMP = "skew_samp";
+    public static final String KURT_POP = "kurt_pop";
+    public static final String KURT_SAMP = "kurt_samp";
     public static final String ANY_VALUE = "any_value";
     public static final String STD = "std";
     public static final String HLL_UNION = "hll_union";
@@ -549,6 +553,18 @@ public class FunctionSet {
     private static final Logger LOGGER = LogManager.getLogger(FunctionSet.class);
 
     private static final Set<Type> STDDEV_ARG_TYPE =
+            ImmutableSet.<Type>builder()
+                    .addAll(Type.FLOAT_TYPES)
+                    .addAll(Type.INTEGER_TYPES)
+                    .build();
+    
+    private static final Set<Type> SKEWNESS_ARG_TYPE =
+            ImmutableSet.<Type>builder()
+                    .addAll(Type.FLOAT_TYPES)
+                    .addAll(Type.INTEGER_TYPES)
+                    .build();
+
+    private static final Set<Type> KURTOSIS_ARG_TYPE =
             ImmutableSet.<Type>builder()
                     .addAll(Type.FLOAT_TYPES)
                     .addAll(Type.INTEGER_TYPES)
@@ -1158,6 +1174,12 @@ public class FunctionSet {
         // Stddev
         registerBuiltinStddevAggFunction();
 
+        // skewness
+        registerBuiltinSkewnessFunction();
+
+        // kurtosis
+        registerBuiltinKurtosisFunction();
+
         // Percentile
         registerBuiltinPercentileAggFunction();
 
@@ -1455,7 +1477,7 @@ public class FunctionSet {
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.DOUBLE,
                         Type.ARRAY_DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
 
-        // expression, side, treatment, data, [cuped, alpha]
+        // expression, side, treatment, data, [cuped, alpha, pse, mde, power, edge_worth]
         addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN,
                         Type.ARRAY_DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
@@ -1473,7 +1495,22 @@ public class FunctionSet {
                 Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR, 
                         Type.DOUBLE, Type.ARRAY_VARCHAR), Type.JSON, Type.VARBINARY, false, true, false));
 
-        // Y, treatment, percentiles, uin[, num_bootstrap=500[, alpha=0.05[, power=0.8[, mde=0.01]]]]]
+        addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR, 
+                        Type.DOUBLE, Type.ARRAY_VARCHAR, Type.DOUBLE, Type.DOUBLE), 
+                        Type.JSON, Type.VARBINARY, false, true, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR, 
+                        Type.DOUBLE, Type.ARRAY_VARCHAR, Type.DOUBLE, Type.DOUBLE, Type.BIGINT), 
+                        Type.JSON, Type.VARBINARY, false, true, false));
+        
+        // Y, treatment, percentiles, uin[, num_bootstrap=500[, alpha=0.05[, power=0.8[, mde=0.01,[ hash_type]]]]]]
+        addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT, 
+                        Type.DOUBLE, Type.DOUBLE, Type.DOUBLE, Type.INT), 
+                Type.JSON, Type.VARBINARY, false, true, false));
+
         addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
                 Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT, 
                         Type.DOUBLE, Type.DOUBLE, Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
@@ -1523,6 +1560,11 @@ public class FunctionSet {
         addBuiltin(AggregateFunction.createBuiltin(XEXPT_TTEST_2SAMP,
                 Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE, Type.DOUBLE,
                         Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE), Type.JSON, Type.VARBINARY, false, true,
+                false));
+
+        addBuiltin(AggregateFunction.createBuiltin(XEXPT_TTEST_2SAMP,
+                Lists.newArrayList(Type.BIGINT, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.VARCHAR, Type.DOUBLE, Type.DOUBLE,
+                        Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.INT), Type.JSON, Type.VARBINARY, false, true,
                 false));
 
         addBuiltin(AggregateFunction.createBuiltin(OLS_TRAIN,
@@ -1634,6 +1676,28 @@ public class FunctionSet {
                     false, true, false));
             addBuiltin(AggregateFunction.createBuiltin(CORR,
                     Lists.newArrayList(t, t), Type.DOUBLE, Type.VARBINARY,
+                    false, true, false));
+        }
+    }
+
+    private void registerBuiltinSkewnessFunction() {
+        for (Type t : SKEWNESS_ARG_TYPE) {
+            addBuiltin(AggregateFunction.createBuiltin(SKEW_POP,
+                    Lists.newArrayList(t), Type.DOUBLE, Type.VARBINARY,
+                    false, true, false));
+            addBuiltin(AggregateFunction.createBuiltin(SKEW_SAMP,
+                    Lists.newArrayList(t), Type.DOUBLE, Type.VARBINARY,
+                    false, true, false));
+        }
+    }
+
+    private void registerBuiltinKurtosisFunction() {
+        for (Type t : KURTOSIS_ARG_TYPE) {
+            addBuiltin(AggregateFunction.createBuiltin(KURT_POP,
+                    Lists.newArrayList(t), Type.DOUBLE, Type.VARBINARY,
+                    false, true, false));
+            addBuiltin(AggregateFunction.createBuiltin(KURT_SAMP,
+                    Lists.newArrayList(t), Type.DOUBLE, Type.VARBINARY,
                     false, true, false));
         }
     }

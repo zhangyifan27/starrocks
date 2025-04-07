@@ -64,7 +64,8 @@ class XexptTtest2SampParams {
 public:
     bool operator==(const XexptTtest2SampParams& other) const {
         return _num_variables == other._num_variables && _alpha == other._alpha &&
-               _cuped_expression == other._cuped_expression && _mde == other._mde && _power == other._power;
+               _cuped_expression == other._cuped_expression && _mde == other._mde && _power == other._power &&
+               _metric_type == other._metric_type && _ratios == other._ratios;
     }
 
     bool is_uninitialized() const { return _num_variables == -1; }
@@ -77,10 +78,11 @@ public:
         _power = TtestCommon::kDefaultPowerValue;
         _metric_type = XexptTtest2SampMetricType::Unknown;
         _ratios = std::vector<double>{1, 1};
+        _hash_type = UinHashType::x32;
     }
 
     void init(int num_variables, std::string const& cuped_expression, double alpha, double mde, double power,
-              XexptTtest2SampMetricType metric_type, std::vector<double> const& ratios) {
+              XexptTtest2SampMetricType metric_type, std::vector<double> const& ratios, UinHashType hash_type) {
         _num_variables = num_variables;
         _alpha = alpha;
         _cuped_expression = cuped_expression;
@@ -88,6 +90,7 @@ public:
         _power = power;
         _metric_type = metric_type;
         _ratios = ratios;
+        _hash_type = hash_type;
     }
 
     void serialize(uint8_t*& data) const {
@@ -104,6 +107,8 @@ public:
         SerializeHelpers::serialize(&_mde, data);
         SerializeHelpers::serialize(&_power, data);
         SerializeHelpers::serialize(_ratios.data(), data, 2);
+        int hash_type_tmp = static_cast<int>(_hash_type);
+        SerializeHelpers::serialize(&hash_type_tmp, data);
     }
 
     void deserialize(const uint8_t*& data) {
@@ -122,6 +127,9 @@ public:
         SerializeHelpers::deserialize(data, &_mde);
         SerializeHelpers::deserialize(data, &_power);
         SerializeHelpers::deserialize(data, _ratios.data(), 2);
+        int hash_type_tmp;
+        SerializeHelpers::deserialize(data, &hash_type_tmp);
+        _hash_type = static_cast<UinHashType>(hash_type_tmp);
     }
 
     size_t serialized_size() const {
@@ -129,7 +137,7 @@ public:
             return sizeof(_num_variables);
         }
         return sizeof(_num_variables) + sizeof(_metric_type) + sizeof(_alpha) + sizeof(uint32_t) +
-               _cuped_expression.length() + sizeof(_mde) + sizeof(_power) + 2 * sizeof(double);
+               _cuped_expression.length() + sizeof(_mde) + sizeof(_power) + 2 * sizeof(double) + sizeof(int);
     }
 
     int num_variables() const { return _num_variables; }
@@ -148,6 +156,8 @@ public:
 
     std::string const& Y_expression() const { return _Y_expression; }
 
+    UinHashType hash_type() const { return _hash_type; }
+
 private:
     std::string const _Y_expression{"x1/x2"};
     XexptTtest2SampMetricType _metric_type;
@@ -157,6 +167,7 @@ private:
     double _mde{TtestCommon::kDefaultMDEValue};
     double _power{TtestCommon::kDefaultPowerValue};
     std::vector<double> _ratios{1, 1};
+    UinHashType _hash_type{UinHashType::x32};
 };
 
 class XexptTtest2SampStats {
@@ -176,9 +187,11 @@ public:
         this->_num_columns = num_columns;
     }
 
-    void update(const double* input, int num_variables, uint64_t uin) {
+    void update(const double* input, int num_variables, uint64_t uin, UinHashType hash_type) {
         CHECK(num_variables == _num_columns);
-        uint64_t uin_hash = _hash(uin) / XexptTtest2SampStats::kBucketDivisor;
+        uint64_t uin_hash =
+                (hash_type == UinHashType::x32 ? _hash.operator()<uint32_t>(uin) : _hash.operator()<uint64_t>(uin)) /
+                XexptTtest2SampStats::kBucketDivisor;
         _count += 1;
         for (uint32_t i = 0; i < _num_columns; ++i) {
             _column_buckets(i, uin_hash) += input[i];
@@ -236,12 +249,13 @@ public:
 
     void init(int num_variables, std::optional<std::string> const& cuped_expression, std::optional<double> alpha,
               std::optional<double> mde, std::optional<double> power,
-              std::optional<XexptTtest2SampMetricType> metric_type, std::optional<std::vector<double>> const& ratios) {
+              std::optional<XexptTtest2SampMetricType> metric_type, std::optional<std::vector<double>> const& ratios,
+              std::optional<UinHashType> hash_type) {
         _ttest_params.init(num_variables, cuped_expression.value_or(std::string{}),
                            alpha.value_or(TtestCommon::kDefaultAlphaValue), mde.value_or(TtestCommon::kDefaultMDEValue),
                            power.value_or(TtestCommon::kDefaultPowerValue),
                            metric_type.value_or(XexptTtest2SampMetricType::Avg),
-                           ratios.value_or(std::vector<double>{1, 1}));
+                           ratios.value_or(std::vector<double>{1, 1}), hash_type.value_or(UinHashType::x32));
     }
 
     void update(const double* input, int num_variables, int32_t uin, TreatmentType treatment) {
@@ -251,7 +265,7 @@ public:
         if (_all_stats.count(treatment) == 0) {
             _all_stats[treatment].init(num_variables);
         }
-        _all_stats[treatment].update(input, num_variables, uin);
+        _all_stats[treatment].update(input, num_variables, uin, _ttest_params.hash_type());
     }
 
     void merge(XexptTtest2SampAggregateState const& other) {
@@ -371,11 +385,11 @@ public:
 
         DeltaMethodStats delta_method_stats_avg;
         delta_method_stats_avg.init(_ttest_params.num_variables());
-        std::map<TreatmentType, DeltaMethodStats> delta_method_stats_avg_sub_stats;
+        std::map<TreatmentType, DeltaMethodStats<false>> delta_method_stats_avg_sub_stats;
 
         DeltaMethodStats delta_method_stats_sum;
         delta_method_stats_sum.init(_ttest_params.num_variables());
-        std::map<TreatmentType, DeltaMethodStats> delta_method_stats_sum_sub_stats;
+        std::map<TreatmentType, DeltaMethodStats<false>> delta_method_stats_sum_sub_stats;
 
         int32_t key_idx = 0;
         for (auto const& [key, stats] : _all_stats) {
@@ -482,20 +496,20 @@ public:
         if (_ttest_params.cuped_expression().empty()) {
             auto const& stat0 = delta_method_stats_avg_sub_stats.at(group_names[0]);
             auto const& stat1 = delta_method_stats_avg_sub_stats.at(group_names[1]);
-            std_samp_avg.push_back(sqrt(DeltaMethodStats::calc_delta_method(expr_tree, stat0.count(), stat0.means(),
-                                                                            stat0.cov_matrix(), false)) *
+            std_samp_avg.push_back(sqrt(DeltaMethodStats<false>::calc_delta_method(
+                                           expr_tree, stat0.count(), stat0.means(), stat0.cov_matrix(), false)) *
                                    sqrt(denominators[0]));
-            std_samp_avg.push_back(sqrt(DeltaMethodStats::calc_delta_method(expr_tree, stat1.count(), stat1.means(),
-                                                                            stat1.cov_matrix(), false)) *
+            std_samp_avg.push_back(sqrt(DeltaMethodStats<false>::calc_delta_method(
+                                           expr_tree, stat1.count(), stat1.means(), stat1.cov_matrix(), false)) *
                                    sqrt(denominators[1]));
             if (_ttest_params.metric_type() == XexptTtest2SampMetricType::Sum) {
                 auto const& stat0 = delta_method_stats_sum_sub_stats.at(group_names[0]);
                 auto const& stat1 = delta_method_stats_sum_sub_stats.at(group_names[1]);
-                std_samp.push_back(sqrt(DeltaMethodStats::calc_delta_method(expr_tree, stat0.count(), stat0.means(),
-                                                                            stat0.cov_matrix(), false)) *
+                std_samp.push_back(sqrt(DeltaMethodStats<false>::calc_delta_method(
+                                           expr_tree, stat0.count(), stat0.means(), stat0.cov_matrix(), false)) *
                                    sqrt(denominators[0]));
-                std_samp.push_back(sqrt(DeltaMethodStats::calc_delta_method(expr_tree, stat1.count(), stat1.means(),
-                                                                            stat1.cov_matrix(), false)) *
+                std_samp.push_back(sqrt(DeltaMethodStats<false>::calc_delta_method(
+                                           expr_tree, stat1.count(), stat1.means(), stat1.cov_matrix(), false)) *
                                    sqrt(denominators[1]));
             }
         } else {
@@ -757,6 +771,7 @@ public:
             std::optional<double> mde;
             std::optional<double> power;
             std::optional<std::vector<double>> ratios;
+            std::optional<UinHashType> hash_type;
 
             if (num_args >= 4) {
                 std::string tmp_str;
@@ -770,16 +785,33 @@ public:
             if (num_args >= 5) {
                 if (FunctionHelper::get_data_of_column<XexptTtest2SampAlphaColumnType>(columns[4], row_num, tmp)) {
                     alpha = tmp;
+                    if (alpha < 0 || alpha > 1) {
+                        ctx->set_error(
+                                fmt::format("Invalid Argument: alpha({}) is not a valid ttest alpha.", alpha.value())
+                                        .c_str());
+                        return;
+                    }
                 }
             }
             if (num_args >= 6) {
                 if (FunctionHelper::get_data_of_column<XexptTtest2SampMDEColumnType>(columns[5], row_num, tmp)) {
                     mde = tmp;
+                    if (mde < 0) {
+                        ctx->set_error(fmt::format("Invalid Argument: mde({}) is not a valid ttest mde.", mde.value())
+                                               .c_str());
+                        return;
+                    }
                 }
             }
             if (num_args >= 7) {
                 if (FunctionHelper::get_data_of_column<XexptTtest2SampPowerColumnType>(columns[6], row_num, tmp)) {
                     power = tmp;
+                    if (power < 0 || power > 1) {
+                        ctx->set_error(
+                                fmt::format("Invalid Argument: power({}) is not a valid ttest power.", power.value())
+                                        .c_str());
+                        return;
+                    }
                 }
             }
             if (num_args >= 8) {
@@ -811,15 +843,23 @@ public:
                     ratios = std::move(ratios_vec);
                 }
             }
+            if (num_args >= 10) {
+                int hash_type_int;
+                if (FunctionHelper::get_data_of_column<RunTimeColumnType<TYPE_INT>>(columns[9], row_num,
+                                                                                    hash_type_int)) {
+                    if (hash_type_int != static_cast<int>(UinHashType::x32) &&
+                        hash_type_int != static_cast<int>(UinHashType::x64)) {
+                        ctx->set_error(
+                                fmt::format("Invalid Argument: hash_type({}) is not a valid hash type.", hash_type_int)
+                                        .c_str());
+                        return;
+                    }
+                    hash_type = static_cast<UinHashType>(hash_type_int);
+                }
+            }
 
-            LOG(INFO) << fmt::format(
-                    "xexpt ttest args - cuped_expression: {}, alpha: {}, mde: {}, power: {}, metric_type: {}, ratios: "
-                    "({}, {})",
-                    cuped_expression.value_or("null"), alpha.value_or(TtestCommon::kDefaultAlphaValue),
-                    mde.value_or(TtestCommon::kDefaultMDEValue), power.value_or(TtestCommon::kDefaultPowerValue),
-                    (int)metric_type.value_or(XexptTtest2SampMetricType::Avg),
-                    ratios.value_or(std::vector<double>{1, 1})[0], ratios.value_or(std::vector<double>{1, 1})[1]);
-            this->data(state).init(input_opt->size(), cuped_expression, alpha, mde, power, metric_type, ratios);
+            this->data(state).init(input_opt->size(), cuped_expression, alpha, mde, power, metric_type, ratios,
+                                   hash_type);
         }
 
         const Column* uin_col = columns[0];
@@ -905,7 +945,28 @@ public:
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
-                                     ColumnPtr* dst) const override {}
+                                     ColumnPtr* dst) const override {
+        DCHECK((*dst)->is_binary());
+        auto* dst_column = down_cast<BinaryColumn*>((*dst).get());
+
+        std::vector<const Column*> cols;
+        std::for_each(src.begin(), src.end(), [&cols](const ColumnPtr& col) { cols.emplace_back(col.get()); });
+        for (size_t i = 0; i < chunk_size; ++i) {
+            XexptTtest2SampAggregateState<TreatmentType> state;
+            update(ctx, cols.data(), reinterpret_cast<AggDataPtr>(&state), i);
+            if (ctx->has_error()) {
+                return;
+            }
+            Bytes& bytes = dst_column->get_bytes();
+            size_t old_size = bytes.size();
+            size_t new_size = old_size + state.serialized_size();
+            bytes.resize(new_size);
+            dst_column->get_offset().emplace_back(new_size);
+            uint8_t* serialized_data = bytes.data() + old_size;
+            state.serialize(serialized_data);
+            DCHECK_EQ(serialized_data, new_size + bytes.data());
+        }
+    }
 
     std::string get_name() const override { return std::string(AllInSqlFunctions::xexpt_ttest_2samp); }
 };

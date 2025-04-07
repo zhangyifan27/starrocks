@@ -77,7 +77,8 @@ StatusOr<ColumnPtr> CaliperMatchingFunction::caliper_matching(FunctionContext* c
                 if (i.is_null()) {
                     return Status::InvalidArgument("exacts cannot be null.");
                 }
-                group_hash ^= std::hash<std::string>()(i.get_slice().to_string());
+                group_hash = std::hash<std::string>()(i.get_slice().to_string()) ^
+                             (0x9e3779b9 + (group_hash << 6) + (group_hash >> 2));
             }
         }
         auto treatment = treatment_viewer.value(row);

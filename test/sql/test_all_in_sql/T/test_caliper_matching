@@ -1,0 +1,34 @@
+-- name: test_caliper_matching
+
+drop database if exists caliper_matching_test_db;
+create database caliper_matching_test_db;
+use caliper_matching_test_db;
+drop table if exists caliper_matching_test_tbl;
+create table `caliper_matching_test_tbl`
+(
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean,
+    `numerator_pre` bigint,
+    `denominator_pre` boolean,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `X3_string` string,
+    `X7_needcut` bigint,
+    `X8_needcut` bigint,
+    `weight` double,
+    `distance` double,
+    `uin` bigint
+)
+properties (
+    "replication_num"="1"
+);
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test.csv -XPUT  -H column_separator:, ${url}/api/caliper_matching_test_db/caliper_matching_test_tbl/_stream_load
+sync;
+select count(*), floor(sum(`numerator`)), floor(sum(`y`)) from caliper_matching_test_tbl;
+select caliper_matching_info(treatment, distance, 0.1) from caliper_matching_test_tbl;
+select caliper_matching_info(treatment, distance, 0.1, [X3_string]) from caliper_matching_test_tbl;
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ caliper_matching_info(treatment, distance, 0.1) from caliper_matching_test_tbl;
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ caliper_matching_info(treatment, distance, 0.1) from caliper_matching_test_tbl;

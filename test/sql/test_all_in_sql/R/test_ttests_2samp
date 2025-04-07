@@ -72,3 +72,13 @@ select ttests_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2,
 -- result:
 [LOOSE]{"causal-function": "ttests_2samp", "results": [{"control": 0, "estimate": -61.58739506918562, "lower": "-inf", "mean0": 845.2368831067347, "mean1": 783.6494880375491, "p-value": 0.18858455026566764, "stderr": 69.7380799509184, "t-statistic": -0.883124329097256, "treatment": 1, "upper": -176.29646278324114}], "summary": "\ncontrol     treatment   mean0       mean1       estimate    stderr      t-statistic p-value     lower       upper       \n0           1           845.236883  783.649488  -61.587395  69.738080   -0.883124   0.188585    -inf        -176.296463 \n"}
 -- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ ttests_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95) from ttests_2samp_test_tbl;
+-- result:
+[LOOSE]{"causal-function": "ttests_2samp", "results": [{"control": 0, "estimate": -61.58739506918562, "lower": "-inf", "mean0": 845.2368831067347, "mean1": 783.6494880375491, "p-value": 0.18858455026566764, "stderr": 69.7380799509184, "t-statistic": -0.883124329097256, "treatment": 1, "upper": -176.29646278324114}], "summary": "\ncontrol     treatment   mean0       mean1       estimate    stderr      t-statistic p-value     lower       upper       \n0           1           845.236883  783.649488  -61.587395  69.738080   -0.883124   0.188585    -inf        -176.296463 \n"}
+-- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ ttests_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95) from ttests_2samp_test_tbl;
+-- result:
+[LOOSE]{"causal-function": "ttests_2samp", "results": [{"control": 0, "estimate": -61.58739506918562, "lower": "-inf", "mean0": 845.2368831067347, "mean1": 783.6494880375491, "p-value": 0.18858455026566764, "stderr": 69.7380799509184, "t-statistic": -0.883124329097256, "treatment": 1, "upper": -176.29646278324114}], "summary": "\ncontrol     treatment   mean0       mean1       estimate    stderr      t-statistic p-value     lower       upper       \n0           1           845.236883  783.649488  -61.587395  69.738080   -0.883124   0.188585    -inf        -176.296463 \n"}
+-- !result

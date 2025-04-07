@@ -51,3 +51,6 @@ with model as (
     from wls_test_tbl
 )
 select round(avg(eval_ml_method(model.params, [X1, X2, X3])), 5) from wls_test_tbl, model;
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ wls(Y, [X1, X2, X3], weight, true) from wls_test_tbl;
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ wls(Y, [X1, X2, X3], weight, true) from wls_test_tbl;

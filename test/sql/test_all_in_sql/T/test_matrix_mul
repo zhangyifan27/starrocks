@@ -49,3 +49,7 @@ from matrix_mul_test_tbl;
 select matrix_multiplication([Y, X1, X2], false, false)
 from matrix_mul_test_tbl;
 
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ matrix_multiplication([Y, X1, X2], false, false)
+from matrix_mul_test_tbl;
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ matrix_multiplication([Y, X1, X2], false, false)
+from matrix_mul_test_tbl;

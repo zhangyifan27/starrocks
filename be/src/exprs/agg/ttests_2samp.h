@@ -332,7 +332,7 @@ public:
 
 private:
     Ttests2SampParams ttest_params;
-    std::map<uint32_t, DeltaMethodStats> all_stats;
+    std::map<uint32_t, DeltaMethodStats<false>> all_stats;
 };
 
 class Ttests2SampAggregateFunction
@@ -497,7 +497,28 @@ public:
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
-                                     ColumnPtr* dst) const override {}
+                                     ColumnPtr* dst) const override {
+        DCHECK((*dst)->is_binary());
+        auto* dst_column = down_cast<BinaryColumn*>((*dst).get());
+
+        std::vector<const Column*> cols;
+        std::for_each(src.begin(), src.end(), [&cols](const ColumnPtr& col) { cols.emplace_back(col.get()); });
+        for (size_t i = 0; i < chunk_size; ++i) {
+            Ttests2SampAggregateState state;
+            update(ctx, cols.data(), reinterpret_cast<AggDataPtr>(&state), i);
+            if (ctx->has_error()) {
+                return;
+            }
+            Bytes& bytes = dst_column->get_bytes();
+            size_t old_size = bytes.size();
+            size_t new_size = old_size + state.serialized_size();
+            bytes.resize(new_size);
+            dst_column->get_offset().emplace_back(new_size);
+            uint8_t* serialized_data = bytes.data() + old_size;
+            state.serialize(serialized_data);
+            DCHECK_EQ(serialized_data, new_size + bytes.data());
+        }
+    }
 
     std::string get_name() const override { return std::string(AllInSqlFunctions::ttests_2samp); }
 };

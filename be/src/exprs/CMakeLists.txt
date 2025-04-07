@@ -28,6 +28,8 @@ set(EXPR_FILES
   agg/factory/aggregate_resolver_stream.cpp
   agg/factory/aggregate_resolver_utility.cpp
   agg/factory/aggregate_resolver_variance.cpp
+  agg/factory/aggregate_resolver_skewness.cpp
+  agg/factory/aggregate_resolver_kurtosis.cpp
   agg/factory/aggregate_resolver_window.cpp
   jit/ir_helper.cpp
   jit/jit_engine.cpp

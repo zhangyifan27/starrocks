@@ -16,6 +16,7 @@
 
 #include <velocypack/Builder.h>
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <cstddef>
@@ -24,6 +25,7 @@
 #include <iterator>
 #include <limits>
 #include <sstream>
+#include <string>
 
 #include "column/const_column.h"
 #include "column/vectorized_fwd.h"
@@ -50,7 +52,10 @@ class Ttest2SampParams {
 public:
     bool operator==(const Ttest2SampParams& other) const {
         return _alternative == other._alternative && _alpha == other._alpha &&
-               _cuped_expression == other._cuped_expression && _num_pses == other._num_pses;
+               _cuped_expression == other._cuped_expression && _num_pses == other._num_pses &&
+               _Y_expression == other._Y_expression && _num_variables == other._num_variables &&
+               _use_edge_worth_test == other._use_edge_worth_test;
+        ;
     }
 
     bool is_uninitialized() const { return _alternative == TtestAlternative::Unknown; }
@@ -62,16 +67,21 @@ public:
         std::string().swap(_Y_expression);
         std::string().swap(_cuped_expression);
         _num_pses = 0;
+        _use_edge_worth_test = false;
     }
 
     void init(TtestAlternative alternative, int num_variables, std::string const& Y_expression,
-              std::string const& cuped_expression, double alpha, int num_pses) {
+              std::string const& cuped_expression, double alpha, int num_pses, double mde, double power,
+              bool use_edge_worth_test) {
         _alternative = alternative;
         _num_variables = num_variables;
         _alpha = alpha;
         _Y_expression = Y_expression;
         _cuped_expression = cuped_expression;
         _num_pses = num_pses;
+        _mde = mde;
+        _power = power;
+        _use_edge_worth_test = use_edge_worth_test;
     }
 
     void serialize(uint8_t*& data) const {
@@ -88,6 +98,10 @@ public:
         SerializeHelpers::serialize(&Y_expression_length, data);
         SerializeHelpers::serialize(_Y_expression.data(), data, Y_expression_length);
         SerializeHelpers::serialize(&_num_pses, data);
+        SerializeHelpers::serialize(&_mde, data);
+        SerializeHelpers::serialize(&_power, data);
+        char use_edge_worth_test = _use_edge_worth_test;
+        SerializeHelpers::serialize(&use_edge_worth_test, data);
     }
 
     void deserialize(const uint8_t*& data) {
@@ -106,6 +120,11 @@ public:
         _Y_expression.resize(Y_expression_length);
         SerializeHelpers::deserialize(data, _Y_expression.data(), Y_expression_length);
         SerializeHelpers::deserialize(data, &_num_pses);
+        SerializeHelpers::deserialize(data, &_mde);
+        SerializeHelpers::deserialize(data, &_power);
+        char use_edge_worth_test;
+        SerializeHelpers::deserialize(data, &use_edge_worth_test);
+        _use_edge_worth_test = use_edge_worth_test;
     }
 
     size_t serialized_size() const {
@@ -113,7 +132,8 @@ public:
             return sizeof(_alternative);
         }
         return sizeof(_alternative) + sizeof(_num_variables) + sizeof(_alpha) + sizeof(uint32_t) +
-               _cuped_expression.length() + sizeof(uint32_t) + _Y_expression.length() + sizeof(_num_pses);
+               _cuped_expression.length() + sizeof(uint32_t) + _Y_expression.length() + sizeof(_num_pses) +
+               sizeof(_mde) + sizeof(_power) + sizeof(char);
     }
 
     TtestAlternative alternative() const { return _alternative; }
@@ -128,6 +148,12 @@ public:
 
     int num_pses() const { return _num_pses; }
 
+    double mde() const { return _mde; }
+
+    double power() const { return _power; }
+
+    bool use_edge_worth_test() const { return _use_edge_worth_test; }
+
 private:
     TtestAlternative _alternative{TtestAlternative::Unknown};
     int _num_pses;
@@ -135,6 +161,9 @@ private:
     double _alpha{0.05};
     std::string _Y_expression;
     std::string _cuped_expression;
+    double _mde{TtestCommon::kDefaultMDEValue};
+    double _power{TtestCommon::kDefaultPowerValue};
+    bool _use_edge_worth_test{false};
 };
 
 class Ttest2SampAggregateState {
@@ -154,8 +183,10 @@ public:
 
     void init(TtestAlternative alternative, int num_variables, std::string const& Y_expression,
               std::string const& cuped_expression = "", double alpha = TtestCommon::kDefaultAlphaValue,
-              int num_pses = 0) {
-        _ttest_params.init(alternative, num_variables, Y_expression, cuped_expression, alpha, num_pses);
+              int num_pses = 0, double mde = TtestCommon::kDefaultMDEValue,
+              double power = TtestCommon::kDefaultPowerValue, bool use_edge_worth_test = false) {
+        _ttest_params.init(alternative, num_variables, Y_expression, cuped_expression, alpha, num_pses, mde, power,
+                           use_edge_worth_test);
         if (!_ttest_params.is_uninitialized()) {
             _delta_method_stats0.init(num_variables);
             _delta_method_stats1.init(num_variables);
@@ -293,7 +324,7 @@ public:
 
     Status calc_means_and_vars_with_pse(double& mean0, double& mean1, double& var0, double& var1,
                                         std::string& warning_prefix) const {
-        DeltaMethodStats delta_method_stats;
+        DeltaMethodStats<true> delta_method_stats;
         delta_method_stats.init(_ttest_params.num_variables());
         delta_method_stats.merge(_delta_method_stats0);
         delta_method_stats.merge(_delta_method_stats1);
@@ -307,7 +338,7 @@ public:
             auto [pse2group, index] = *l;
             auto [pse, group] = pse2group;
             auto r = l;
-            std::vector<DeltaMethodStats> substats;
+            std::vector<DeltaMethodStats<true>> substats;
             while (r != _pse2index.end() && r->first.first == pse) {
                 if (_group_stats.count(r->second) == 0) {
                     return Status::InternalError("Some covariance matrix is missing.");
@@ -327,7 +358,7 @@ public:
                 only_one_sample = true;
                 continue;
             }
-            DeltaMethodStats stats;
+            DeltaMethodStats<true> stats;
             stats.init(_ttest_params.num_variables());
             stats.merge(substats[0]);
             stats.merge(substats[1]);
@@ -402,7 +433,7 @@ public:
         std::string warning_prefix;
 
         if (_ttest_params.num_pses() == 0) {
-            DeltaMethodStats delta_method_stats;
+            DeltaMethodStats<true> delta_method_stats;
             delta_method_stats.init(_ttest_params.num_variables());
             delta_method_stats.merge(_delta_method_stats0);
             delta_method_stats.merge(_delta_method_stats1);
@@ -442,9 +473,53 @@ public:
         double t_stat = estimate / stderr_var;
         size_t count = _delta_method_stats0.count() + _delta_method_stats1.count();
 
-        double p_value = TtestCommon::calc_pvalue(t_stat, _ttest_params.alternative());
-        auto [lower, upper] = TtestCommon::calc_confidence_interval(estimate, stderr_var, count, _ttest_params.alpha(),
-                                                                    _ttest_params.alternative());
+        double p_value, lower, upper;
+
+        if (!_ttest_params.use_edge_worth_test()) {
+            p_value = TtestCommon::calc_pvalue(t_stat, _ttest_params.alternative());
+            std::tie(lower, upper) = TtestCommon::calc_confidence_interval(
+                    estimate, stderr_var, count, _ttest_params.alpha(), _ttest_params.alternative());
+        } else {
+            // Edge worth test
+            double m3_0 = _delta_method_stats0.calc_moment3();
+            double m3_1 = _delta_method_stats1.calc_moment3();
+            double treat_num = _delta_method_stats1.calc_sum(1);
+            double ctrl_num = _delta_method_stats0.calc_sum(1);
+            double total_num = treat_num + ctrl_num;
+            double s_numerator = std::pow(total_num / treat_num, 2) * m3_1 - std::pow(total_num / ctrl_num, 2) * m3_0;
+            double s_denominator = std::pow(total_num * var1 + total_num * var0, 1.5);
+            double skewness = s_numerator / s_denominator;
+            p_value = TtestCommon::calc_pvalue_edge_worth(t_stat, _ttest_params.alternative(), skewness, total_num);
+            std::tie(lower, upper) =
+                    TtestCommon::calc_confidence_interval_edge_worth(estimate, stderr_var, count, _ttest_params.alpha(),
+                                                                     _ttest_params.alternative(), skewness, total_num);
+        }
+
+        double mde = _ttest_params.mde();
+        double power = _ttest_params.power();
+        double result_power = std::numeric_limits<double>::quiet_NaN();
+        double result_mde = std::numeric_limits<double>::quiet_NaN();
+        int64_t recommend_samples = -1;
+        if (std::fabs(estimate) > 1e-7) {
+            double alpha = _ttest_params.alpha();
+            boost::math::normal normal_dist(0, 1);
+            result_power =
+                    1 - cdf(normal_dist, quantile(normal_dist, 1 - alpha / 2) - std::fabs(mean0 * mde) / stderr_var) +
+                    cdf(normal_dist, quantile(normal_dist, alpha / 2) - std::fabs(mean0 * mde) / stderr_var);
+            result_mde = (quantile(normal_dist, 1 - alpha / 2) + quantile(normal_dist, power)) * stderr_var / mean0;
+            if (_ttest_params.Y_expression() == "x1/x2") {
+                std::array<double, 2> std_samp_avg{}, denominators{};
+                denominators[0] = _delta_method_stats0.calc_sum(1);
+                denominators[1] = _delta_method_stats1.calc_sum(1);
+                std_samp_avg[0] = std::sqrt(var0 * denominators[0]);
+                std_samp_avg[1] = std::sqrt(var1 * denominators[1]);
+                double std_ratio = std_samp_avg[0] / std_samp_avg[1];
+                double cnt_ratio = denominators[0] / denominators[1];
+                double alpha_power = quantile(normal_dist, 1 - alpha / 2) - quantile(normal_dist, 1 - power);
+                recommend_samples = ((std_ratio * std_ratio + cnt_ratio) / cnt_ratio) * std::pow(alpha_power, 2) *
+                                    std::pow(std_samp_avg[1] / mean0, 2) / std::pow(mde, 2);
+            }
+        }
 
         std::stringstream result_ss;
         result_ss << warning_prefix;
@@ -457,6 +532,9 @@ public:
         result_ss << MathHelpers::to_string_with_precision("p-value");
         result_ss << MathHelpers::to_string_with_precision("lower");
         result_ss << MathHelpers::to_string_with_precision("upper");
+        result_ss << MathHelpers::to_string_with_precision("power(MDE=" + std::to_string(mde) + ")");
+        result_ss << MathHelpers::to_string_with_precision("recommend_samples");
+        result_ss << MathHelpers::to_string_with_precision("MDE(power=" + std::to_string(power) + ")");
         result_ss << "\n";
         result_ss << MathHelpers::to_string_with_precision(mean0);
         result_ss << MathHelpers::to_string_with_precision(mean1);
@@ -466,6 +544,9 @@ public:
         result_ss << MathHelpers::to_string_with_precision(p_value);
         result_ss << MathHelpers::to_string_with_precision(lower);
         result_ss << MathHelpers::to_string_with_precision(upper);
+        result_ss << MathHelpers::to_string_with_precision(result_power);
+        result_ss << MathHelpers::to_string_with_precision(recommend_samples);
+        result_ss << MathHelpers::to_string_with_precision(result_mde);
         result_ss << "\n";
 
         builder.add("mean0", to_json(mean0));
@@ -476,6 +557,9 @@ public:
         builder.add("p-value", to_json(p_value));
         builder.add("lower", to_json(lower));
         builder.add("upper", to_json(upper));
+        builder.add("power", to_json(result_power));
+        builder.add("recommend_samples", to_json(recommend_samples));
+        builder.add("MDE", to_json(result_mde));
         schema.add_field("mean0", "double");
         schema.add_field("mean1", "double");
         schema.add_field("estimate", "double");
@@ -484,6 +568,9 @@ public:
         schema.add_field("p-value", "double");
         schema.add_field("lower", "double");
         schema.add_field("upper", "double");
+        schema.add_field("power", "double");
+        schema.add_field("recommend_samples", "int");
+        schema.add_field("MDE", "double");
 
         if (!warning_prefix.empty()) {
             builder.add("warning", to_json(warning_prefix));
@@ -501,9 +588,9 @@ public:
 
 private:
     Ttest2SampParams _ttest_params;
-    DeltaMethodStats _delta_method_stats0;
-    DeltaMethodStats _delta_method_stats1;
-    std::map<uint64_t, DeltaMethodStats> _group_stats;
+    DeltaMethodStats<true> _delta_method_stats0;
+    DeltaMethodStats<true> _delta_method_stats1;
+    std::map<uint64_t, DeltaMethodStats<true>> _group_stats;
     std::map<std::pair<uint64_t, uint64_t>, uint64_t> _pse2index;
 };
 
@@ -581,10 +668,46 @@ public:
                 num_pses = datum_array.value().size();
             }
 
-            LOG(INFO) << fmt::format(
-                    "ttest args - expression: {}, alternative: {}, cuped_expression: {}, alpha: {}, num_pses: {}",
-                    expression, (int)alternative, cuped_expression, alpha, num_pses);
-            this->data(state).init(alternative, array_size, expression, cuped_expression, alpha, num_pses);
+            double mde = TtestCommon::kDefaultMDEValue;
+            if (ctx->get_num_args() >= 8) {
+                auto mde_datum = columns[7]->get(0);
+                if (mde_datum.is_null()) {
+                    ctx->set_error("Invalid Argument: mde cannot be null.");
+                    return;
+                }
+                mde = mde_datum.get_double();
+                if (mde <= 0) {
+                    ctx->set_error("Invalid Argument: mde should be positive.");
+                    return;
+                }
+            }
+
+            double power = TtestCommon::kDefaultPowerValue;
+            if (ctx->get_num_args() >= 9) {
+                auto power_datum = columns[8]->get(0);
+                if (power_datum.is_null()) {
+                    ctx->set_error("Invalid Argument: power cannot be null.");
+                    return;
+                }
+                power = power_datum.get_double();
+                if (power <= 0 || power >= 1) {
+                    ctx->set_error("Invalid Argument: power should be in (0, 1).");
+                    return;
+                }
+            }
+
+            bool use_edge_worth_test = false;
+            if (ctx->get_num_args() >= 10) {
+                auto use_edge_worth_test_datum = columns[9]->get(0);
+                if (use_edge_worth_test_datum.is_null()) {
+                    ctx->set_error("Invalid Argument: use_edge_worth_test cannot be null.");
+                    return;
+                }
+                use_edge_worth_test = use_edge_worth_test_datum.get_int64();
+            }
+
+            this->data(state).init(alternative, array_size, expression, cuped_expression, alpha, num_pses, mde, power,
+                                   use_edge_worth_test);
         }
 
         auto treatment_datum = columns[2]->get(row_num);
@@ -657,7 +780,8 @@ public:
         auto* column = down_cast<BinaryColumn*>(to);
         Bytes& bytes = column->get_bytes();
         size_t old_size = bytes.size();
-        size_t new_size = old_size + this->data(state).serialized_size();
+        size_t this_size = this->data(state).serialized_size();
+        size_t new_size = old_size + this_size;
         bytes.resize(new_size);
         column->get_offset().emplace_back(new_size);
         uint8_t* serialized_data = bytes.data() + old_size;
@@ -687,7 +811,28 @@ public:
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
-                                     ColumnPtr* dst) const override {}
+                                     ColumnPtr* dst) const override {
+        DCHECK((*dst)->is_binary());
+        auto* dst_column = down_cast<BinaryColumn*>((*dst).get());
+
+        std::vector<const Column*> cols;
+        std::for_each(src.begin(), src.end(), [&cols](const ColumnPtr& col) { cols.emplace_back(col.get()); });
+        for (size_t i = 0; i < chunk_size; ++i) {
+            Ttest2SampAggregateState state;
+            update(ctx, cols.data(), reinterpret_cast<AggDataPtr>(&state), i);
+            if (ctx->has_error()) {
+                return;
+            }
+            Bytes& bytes = dst_column->get_bytes();
+            size_t old_size = bytes.size();
+            size_t new_size = old_size + state.serialized_size();
+            bytes.resize(new_size);
+            dst_column->get_offset().emplace_back(new_size);
+            uint8_t* serialized_data = bytes.data() + old_size;
+            state.serialize(serialized_data);
+            DCHECK_EQ(serialized_data, new_size + bytes.data());
+        }
+    }
 
     std::string get_name() const override { return std::string(AllInSqlFunctions::ttest_2samp); }
 };

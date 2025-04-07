@@ -42,3 +42,6 @@ select ttests_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2,
 
 select ttests_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95) from ttests_2samp_test_tbl;
 
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ ttests_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95) from ttests_2samp_test_tbl;
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ ttests_2samp('x1/x2', 'less', treatment, [numerator, denominator, X1, X2, X3], 'X=x3/x4+x5', 0.95) from ttests_2samp_test_tbl;

@@ -50,14 +50,16 @@ public:
 
     BucketQuantileContainer() = default;
 
-    Status add(double x, std::string const& treatment, int64_t uin) {
+    Status add(double x, std::string const& treatment, uint64_t uin, UinHashType hash_type = UinHashType::x32) {
         if (!_groups.count(treatment)) {
             if (_groups.size() >= 2) {
                 return Status::InvalidArgument("only support 2 groups");
             }
             _groups[treatment].resize(kNumBuckets);
         }
-        uint64_t bucket_id = _hash(uin) / kBucketDivisor;
+        uint64_t bucket_id =
+                (hash_type == UinHashType::x32 ? _hash.operator()<uint32_t>(uin) : _hash.operator()<uint64_t>(uin)) /
+                kBucketDivisor;
         _groups[treatment][bucket_id].push_back(x);
         return Status::OK();
     }
@@ -423,8 +425,8 @@ public:
 
     QuantileTestAggregateState(const uint8_t*& data) { deserialize(data); }
 
-    Status init(std::vector<double> const& percentiles, int32_t bootstrap_times, double alpha, double power,
-                double mde) {
+    Status init(std::vector<double> const& percentiles, int32_t bootstrap_times, double alpha, double power, double mde,
+                UinHashType hash_type) {
         if (percentiles.empty()) {
             return Status::InvalidArgument("percentiles should not be empty.");
         }
@@ -467,10 +469,13 @@ public:
         this->alpha = alpha;
         this->power = power;
         this->mde = mde;
+        this->hash_type = hash_type;
         return Status::OK();
     }
 
-    Status update(double x, std::string const& treatment, int64_t uin) { return _container.add(x, treatment, uin); }
+    Status update(double x, std::string const& treatment, uint64_t uin) {
+        return _container.add(x, treatment, uin, hash_type);
+    }
 
     Status merge(QuantileTestAggregateState& other) {
         if (percentiles != other.percentiles) {
@@ -640,6 +645,7 @@ private:
     double alpha = 0.05;
     double power = 0.8;
     double mde = 0.01;
+    UinHashType hash_type{UinHashType::x32};
 };
 
 class QuantileTestAggregateFunction
@@ -699,7 +705,23 @@ public:
                     return;
                 }
             }
-            auto st = this->data(state).init(percentiles, bootstrap_times, alpha, power, mde);
+            UinHashType hash_type = UinHashType::x32;
+            if (ctx->get_num_args() >= 9) {
+                const Column* hash_type_col = columns[8];
+                int hash_type_int;
+                if (!FunctionHelper::get_data_of_column<RunTimeColumnType<TYPE_INT>>(hash_type_col, row_num,
+                                                                                     hash_type_int)) {
+                    ctx->set_error("Internal Error: fail to get `hash_type`.");
+                    return;
+                }
+                if (hash_type_int != static_cast<int>(UinHashType::x32) &&
+                    hash_type_int != static_cast<int>(UinHashType::x64)) {
+                    ctx->set_error("Internal Error: invalid `hash_type`.");
+                    return;
+                }
+                hash_type = static_cast<UinHashType>(hash_type_int);
+            }
+            auto st = this->data(state).init(percentiles, bootstrap_times, alpha, power, mde, hash_type);
             if (!st.ok()) {
                 ctx->set_error(st.to_string().c_str());
                 return;
@@ -720,7 +742,7 @@ public:
             ctx->set_error("Internal Error: fail to get `treatment`.");
             return;
         }
-        int64_t uin;
+        uint64_t uin;
         const Column* uin_col = columns[3];
         if (!FunctionHelper::get_data_of_column<RunTimeColumnType<TYPE_BIGINT>>(uin_col, row_num, uin)) {
             ctx->set_error("Internal Error: fail to get `uin`.");
@@ -790,7 +812,28 @@ public:
     }
 
     void convert_to_serialize_format(FunctionContext* ctx, const Columns& src, size_t chunk_size,
-                                     ColumnPtr* dst) const override {}
+                                     ColumnPtr* dst) const override {
+        DCHECK((*dst)->is_binary());
+        auto* dst_column = down_cast<BinaryColumn*>((*dst).get());
+
+        std::vector<const Column*> cols;
+        std::for_each(src.begin(), src.end(), [&cols](const ColumnPtr& col) { cols.emplace_back(col.get()); });
+        for (size_t i = 0; i < chunk_size; ++i) {
+            QuantileTestAggregateState state;
+            update(ctx, cols.data(), reinterpret_cast<AggDataPtr>(&state), i);
+            if (ctx->has_error()) {
+                return;
+            }
+            Bytes& bytes = dst_column->get_bytes();
+            size_t old_size = bytes.size();
+            size_t new_size = old_size + state.serialized_size();
+            bytes.resize(new_size);
+            dst_column->get_offset().emplace_back(new_size);
+            uint8_t* serialized_data = bytes.data() + old_size;
+            state.serialize(serialized_data);
+            DCHECK_EQ(serialized_data, new_size + bytes.data());
+        }
+    }
 
     std::string get_name() const override { return std::string(AllInSqlFunctions::quantile_test); }
 };

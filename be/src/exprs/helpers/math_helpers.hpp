@@ -243,7 +243,10 @@ public:
         explicit MurmurHash3(const uint32_t& seed = 0) : _seed(seed) {}
 
         // use murmurhash x86 32bit
-        uint32_t operator()(const uint32_t& key) const {
+        template <typename T = uint32_t>
+        uint32_t operator()(const T& key) const {
+            static_assert(std::is_same_v<T, uint32_t> || std::is_same_v<T, uint64_t>,
+                          "key type must be uint32_t or uint64_t");
             uint32_t result;
             murmur_hash3_x86_32(&key, sizeof(key), _seed, &result);
             return result;
@@ -251,21 +254,6 @@ public:
 
     private:
         uint32_t _seed{0};
-    };
-
-    struct TupleHash {
-        template <typename... TYPES>
-        size_t operator()(std::tuple<TYPES...> const& tuple) const {
-            size_t hash_value = 0;
-            std::apply(
-                    [&](const auto&... element) {
-                        ((hash_value ^=
-                          std::hash<std::remove_const_t<std::remove_reference_t<decltype(element)>>>()(element)),
-                         ...);
-                    },
-                    tuple);
-            return hash_value;
-        }
     };
 
 private:

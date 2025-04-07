@@ -1,0 +1,165 @@
+-- name: test_skew
+
+drop database if exists skew_test_db;
+-- result:
+-- !result
+create database skew_test_db;
+-- result:
+-- !result
+use skew_test_db;
+-- result:
+-- !result
+drop table if exists skew_test_tbl;
+-- result:
+-- !result
+create table skew_test_tbl
+(
+    `treatment` boolean,
+    `numerator` double,
+    `denominator` boolean,
+    `numerator_pre` bigint,
+    `denominator_pre` boolean,
+    `Y` double,
+    `X1` int,
+    `X2` int,
+    `X3` int,
+    `X3_string` string,
+    `X7_needcut` bigint,
+    `X8_needcut` bigint,
+    `weight` double,
+    `distance` double,
+    `uin` bigint
+)
+properties (
+    "replication_num"="1"
+);
+-- result:
+-- !result
+shell: curl --location-trusted -u root: -T ${root_path}/lib/../common/data/stream_load/all_in_sql_test.csv -XPUT -H column_separator:, ${url}/api/skew_test_db/skew_test_tbl/_stream_load
+-- result:
+-- !result
+sync;
+-- result:
+-- !result
+
+select count(*), floor(sum(`numerator`)), floor(sum(`Y`)) from skew_test_tbl;
+-- result:
+[LOOSE]793200 646026213 323166914
+-- !result
+
+select skew_samp(x1) as res 
+from (
+    select 53 as x1 
+    union all 
+    select 61 as x1 
+    union all 
+    select 49 as x1 
+    union all 
+    select 66 as x1 
+    union all 
+    select 78 as x1 
+    union all 
+    select 47 as x1 
+)t;
+-- result:
+[LOOSE]0.4347958613451424
+-- !result
+
+
+select skew_pop(x1) as res 
+from (
+    select 53 as x1 
+    union all 
+    select 61 as x1 
+    union all 
+    select 49 as x1 
+    union all 
+    select 66 as x1 
+    union all 
+    select 78 as x1 
+    union all 
+    select 47 as x1 
+)t;
+-- result:
+[LOOSE]0.5715540028046954
+-- !result
+
+select skew_samp(x1) as res from (select * from skew_test_tbl limit 0)t;
+-- result:
+[LOOSE]None
+-- !result
+
+select skew_pop(x1) as res from (select * from skew_test_tbl limit 0)t;
+-- result:
+[LOOSE]None
+-- !result
+
+select skew_samp(x1) as res from (select * from skew_test_tbl limit 1)t;
+-- result:
+[LOOSE]nan
+-- !result
+
+select skew_pop(x1) as res from (select * from skew_test_tbl limit 1)t;
+-- result:
+[LOOSE]nan
+-- !result
+
+select skew_samp(x1) as res from (select * from skew_test_tbl order by y limit 2)t;
+-- result:
+[LOOSE]nan
+-- !result
+
+select skew_pop(x1) as res from (select * from skew_test_tbl order by y limit 2)t;
+-- result:
+[LOOSE]nan
+-- !result
+
+select skew_samp(x1) as res from (select * from skew_test_tbl order by uin limit 100)t;
+-- result:
+[LOOSE]0.4969086519831856
+-- !result
+
+select skew_pop(x1) as res from (select * from skew_test_tbl order by uin limit 100)t;
+-- result:
+[LOOSE]0.5044565514874556
+-- !result
+
+select skew_samp(x1) as res from skew_test_tbl;
+-- result:
+[LOOSE]0.3805331918589261
+-- !result
+
+select skew_pop(x1) as res from skew_test_tbl;
+-- result:
+[LOOSE]0.380533911476535
+-- !result
+
+select skew_samp(if(treatment = 1, null, x1)) as res from skew_test_tbl;
+-- result:
+[LOOSE]0.3773798057510159
+-- !result
+
+select skew_pop(if(treatment = 1, null, x1)) as res from skew_test_tbl;
+-- result:
+[LOOSE]0.3773812324359599
+-- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ skew_samp(x1) as res from skew_test_tbl;
+-- result:
+[LOOSE]0.3805331918589261
+-- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_preaggregation',new_planner_agg_stage = '2') */ skew_pop(x1) as res from skew_test_tbl;
+-- result:
+[LOOSE]0.380533911476535
+-- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ skew_samp(x1) as res from skew_test_tbl;
+-- result:
+[LOOSE]0.3805331918589261
+-- !result
+
+select /*+ SET_VAR (streaming_preaggregation_mode = 'force_streaming',new_planner_agg_stage = '2') */ skew_pop(x1) as res from skew_test_tbl;
+-- result:
+[LOOSE]0.380533911476535
+-- !result
