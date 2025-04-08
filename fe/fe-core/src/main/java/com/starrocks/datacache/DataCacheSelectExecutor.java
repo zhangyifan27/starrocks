@@ -16,6 +16,7 @@ package com.starrocks.datacache;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
+import com.google.gson.annotations.SerializedName;
 import com.starrocks.analysis.TableName;
 import com.starrocks.common.UserException;
 import com.starrocks.monitor.unit.ByteSizeValue;
@@ -53,6 +54,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class DataCacheSelectExecutor {
     private static final Logger LOG = LogManager.getLogger(DataCacheSelectExecutor.class);
 
+    @SerializedName(value = "dataCacheRecords")
     private final Map<Long, Map<TableName, List<DataCacheRecord>>> dataCacheRecords = new ConcurrentHashMap<>();
 
     private final ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor();
@@ -225,7 +227,7 @@ public class DataCacheSelectExecutor {
     }
 
     public void save(ImageWriter imageWriter) throws IOException, SRMetaBlockException {
-        SRMetaBlockWriter writer = imageWriter.getBlockWriter(SRMetaBlockID.DATA_CACHE_MGR, 33);
+        SRMetaBlockWriter writer = imageWriter.getBlockWriter(SRMetaBlockID.DATA_CACHE_MGR, 1);
         writer.writeJson(this);
         writer.close();
     }
