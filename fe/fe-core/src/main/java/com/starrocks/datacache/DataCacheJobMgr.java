@@ -28,6 +28,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
 
@@ -154,7 +155,7 @@ public class DataCacheJobMgr {
                 start = "CAST(date_format(years_sub(days_sub(to_date(now()), dayofyear(now()) - 1), 1), '%Y%m%d') AS INT)";
                 end = "CAST(date_format(days_sub(to_date(now()), dayofyear(now()) - 1), '%Y%m%d') AS INT)";
             }
-        } else { // date or datetime
+        } else if (partitionFiledType.isDateType()) { // date or datetime
             if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
                 start = "hours_sub(hours_add(to_date(now()), hour(now())), 1)";
                 end = "hours_add(to_date(now()), hour(now()))";
@@ -167,6 +168,22 @@ public class DataCacheJobMgr {
             } else { // YEAR
                 start = "years_sub(days_sub(to_date(now()), dayofyear(now()) - 1), 1)";
                 end = "days_sub(to_date(now()), dayofyear(now()) - 1)";
+            }
+        } else { // String type
+            String partitionFiledFormat = stmt.getPartitionFiledFormat();
+            if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
+                start = "date_format(hours_sub(hours_add(to_date(now()), hour(now())), 1)," + partitionFiledFormat + ")";
+                end = "date_format(hours_add(to_date(now()), hour(now()))," + partitionFiledFormat + ")";
+            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
+                start = "date_format(days_sub(to_date(now()), 1)," + partitionFiledFormat + ")";
+                end = "date_format(to_date(now())," + partitionFiledFormat + ")";
+            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
+                start = "date_format(months_sub(days_sub(to_date(now()), dayofmonth(now()) - 1), 1),"
+                        + partitionFiledFormat + ")";
+                end = "date_format(days_sub(to_date(now()), dayofmonth(now()) - 1),"  + partitionFiledFormat + ")";
+            } else { // YEAR
+                start = "date_format(years_sub(days_sub(to_date(now()), dayofyear(now()) - 1), 1)," + partitionFiledFormat + ")";
+                end = "date_format(days_sub(to_date(now()), dayofyear(now()) - 1)," + partitionFiledFormat + ")";
             }
         }
         whereSql.append(start).append(" AND ").append(partitionFiled).append(" < ").append(end);
@@ -211,19 +228,24 @@ public class DataCacheJobMgr {
             }
             whereSql.append("\"").append(start).append("\"").append(" AND ").append(partitionFiled).append(" < ")
                     .append("\"").append(end).append("\"");
-        } else { // datetime
+        } else { // datetime | string
+            DateTimeFormatter dateTimeFormatter = DateUtils.DATE_TIME_FORMATTER_UNIX;
+            if (partitionFiledType.isStringType()) {
+                String partitionFiledFormat = stmt.getPartitionFiledFormat();
+                dateTimeFormatter = DateUtils.unixDatetimeFormatter(partitionFiledFormat);
+            }
             if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
-                start = DateUtils.DATE_TIME_FORMATTER_UNIX.format(now.minusHours(beforeUnit + 1).truncatedTo(ChronoUnit.HOURS));
-                end = DateUtils.DATE_TIME_FORMATTER_UNIX.format(now.minusHours(beforeUnit).truncatedTo(ChronoUnit.HOURS));
+                start = dateTimeFormatter.format(now.minusHours(beforeUnit + 1).truncatedTo(ChronoUnit.HOURS));
+                end = dateTimeFormatter.format(now.minusHours(beforeUnit).truncatedTo(ChronoUnit.HOURS));
             } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
-                start = DateUtils.DATE_TIME_FORMATTER_UNIX.format(now.minusDays(beforeUnit + 1).truncatedTo(ChronoUnit.DAYS));
-                end = DateUtils.DATE_TIME_FORMATTER_UNIX.format(now.minusDays(beforeUnit).truncatedTo(ChronoUnit.DAYS));
+                start = dateTimeFormatter.format(now.minusDays(beforeUnit + 1).truncatedTo(ChronoUnit.DAYS));
+                end = dateTimeFormatter.format(now.minusDays(beforeUnit).truncatedTo(ChronoUnit.DAYS));
             } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
-                start = DateUtils.DATE_TIME_FORMATTER_UNIX.format(now.minusMonths(beforeUnit + 1).truncatedTo(ChronoUnit.MONTHS));
-                end = DateUtils.DATE_TIME_FORMATTER_UNIX.format(now.minusMonths(beforeUnit).truncatedTo(ChronoUnit.MONTHS));
+                start = dateTimeFormatter.format(now.minusMonths(beforeUnit + 1).truncatedTo(ChronoUnit.MONTHS));
+                end = dateTimeFormatter.format(now.minusMonths(beforeUnit).truncatedTo(ChronoUnit.MONTHS));
             } else { // YEAR
-                start = DateUtils.DATE_TIME_FORMATTER_UNIX.format(now.minusYears(beforeUnit + 1).truncatedTo(ChronoUnit.YEARS));
-                end = DateUtils.DATE_TIME_FORMATTER_UNIX.format(now.minusYears(beforeUnit).truncatedTo(ChronoUnit.YEARS));
+                start = dateTimeFormatter.format(now.minusYears(beforeUnit + 1).truncatedTo(ChronoUnit.YEARS));
+                end = dateTimeFormatter.format(now.minusYears(beforeUnit).truncatedTo(ChronoUnit.YEARS));
             }
             whereSql.append("\"").append(start).append("\"").append(" AND ").append(partitionFiled).append(" < ")
                     .append("\"").append(end).append("\"");
