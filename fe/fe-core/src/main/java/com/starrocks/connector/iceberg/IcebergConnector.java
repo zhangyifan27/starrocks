@@ -66,6 +66,7 @@ public class IcebergConnector implements Connector {
     private IcebergCatalogType nativeCatalogType;
     private ExecutorService icebergJobPlanningExecutor;
     private ExecutorService refreshOtherFeExecutor;
+    private ExecutorService backgroundExecutor;
     private final IcebergCatalogProperties icebergCatalogProperties;
     private Cache<TableIdentifier, IcebergTable> icebergTableCache;
     private com.github.benmanes.caffeine.cache.Cache<String, IcebergCatalog> icebergCatalogCache;
@@ -155,19 +156,27 @@ public class IcebergConnector implements Connector {
         conf.set(HADOOP_TAUTH_KEY, TAuthUtils.getTauthPlatformCMK());
         conf.set(HADOOP_TAUTH_PROXY_USER, username);
         LOG.info("Create IcebergCatalog for user {}", username);
+        IcebergCatalog nativeCatalog;
         switch (nativeCatalogType) {
             case HIVE_CATALOG:
-                return new IcebergHiveCatalog(catalogName, conf, properties);
+                nativeCatalog = new IcebergHiveCatalog(catalogName, conf, properties);
+                break;
             case GLUE_CATALOG:
-                return new IcebergGlueCatalog(catalogName, conf, properties);
+                nativeCatalog = new IcebergGlueCatalog(catalogName, conf, properties);
+                break;
             case REST_CATALOG:
-                return new IcebergRESTCatalog(catalogName, conf, properties);
+                nativeCatalog =  new IcebergRESTCatalog(catalogName, conf, properties);
+                break;
             case HADOOP_CATALOG:
-                return new IcebergHadoopCatalog(catalogName, conf, properties);
+                nativeCatalog =  new IcebergHadoopCatalog(catalogName, conf, properties);
+                break;
             default:
                 throw new StarRocksConnectorException("Property %s is missing or not supported now.",
                         ICEBERG_CATALOG_TYPE);
         }
+
+        return new CachingIcebergCatalog(catalogName, nativeCatalog,
+                icebergCatalogProperties, buildBackgroundJobPlanningExecutor());
     }
 
     class IcebergCatalogRemovalListener
@@ -183,7 +192,7 @@ public class IcebergConnector implements Connector {
         }
     }
 
-    private ExecutorService buildIcebergJobPlanningExecutor() {
+    public ExecutorService buildIcebergJobPlanningExecutor() {
         if (icebergJobPlanningExecutor == null) {
             icebergJobPlanningExecutor = newWorkerPool(catalogName + "-sr-iceberg-worker-pool",
                     icebergCatalogProperties.getIcebergJobPlanningThreadNum());
@@ -200,9 +209,12 @@ public class IcebergConnector implements Connector {
         return refreshOtherFeExecutor;
     }
 
-    private ExecutorService buildBackgroundJobPlanningExecutor() {
-        return newWorkerPool(catalogName + "-background-iceberg-worker-pool",
-                icebergCatalogProperties.getBackgroundIcebergJobPlanningThreadNum());
+    public ExecutorService buildBackgroundJobPlanningExecutor() {
+        if (backgroundExecutor == null) {
+            backgroundExecutor = newWorkerPool(catalogName + "-background-iceberg-worker-pool",
+                    icebergCatalogProperties.getBackgroundIcebergJobPlanningThreadNum());
+        }
+        return backgroundExecutor;
     }
 
     @Override
