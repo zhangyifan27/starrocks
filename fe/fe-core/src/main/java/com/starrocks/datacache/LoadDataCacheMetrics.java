@@ -18,6 +18,8 @@ import com.starrocks.monitor.unit.ByteSizeValue;
 import com.starrocks.monitor.unit.TimeValue;
 import com.starrocks.thrift.TLoadDataCacheMetrics;
 
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.concurrent.TimeUnit;
 
 public class LoadDataCacheMetrics {
@@ -25,6 +27,7 @@ public class LoadDataCacheMetrics {
     private final TimeValue readTimeNs;
     private final ByteSizeValue writeBytes;
     private final TimeValue writeTimeNs;
+    private final HashSet<String> uniqueErrorCodes;
 
     // The number of metrics merged
     private final long count;
@@ -32,12 +35,13 @@ public class LoadDataCacheMetrics {
     private final DataCacheMetrics lastDataCacheMetrics;
 
     private LoadDataCacheMetrics(ByteSizeValue readBytes, TimeValue readTimeNs, ByteSizeValue writeBytes,
-                                 TimeValue writeTimeNs, long count,
+                                 TimeValue writeTimeNs, HashSet<String> uniqueErrorCodes, long count,
                                  DataCacheMetrics lastDataCacheMetrics) {
         this.readBytes = readBytes;
         this.readTimeNs = readTimeNs;
         this.writeBytes = writeBytes;
         this.writeTimeNs = writeTimeNs;
+        this.uniqueErrorCodes = uniqueErrorCodes;
         this.count = count;
         this.lastDataCacheMetrics = lastDataCacheMetrics;
     }
@@ -51,9 +55,17 @@ public class LoadDataCacheMetrics {
                 new ByteSizeValue(before.getWriteBytes().getBytes() + now.getWriteBytes().getBytes());
         TimeValue mergedWriteTimeNs =
                 new TimeValue(before.getWriteTimeNs().nanos() + now.getWriteTimeNs().nanos(), TimeUnit.NANOSECONDS);
+        HashSet<String> uniqueErrorCodes = before.uniqueErrorCodes;
+        for (String ec : now.uniqueErrorCodes) {
+            if (uniqueErrorCodes.size() > 2) {
+                break;
+            }
+            uniqueErrorCodes.add(ec);
+            now.uniqueErrorCodes.remove(ec);
+        }
         long mergedCount = before.getCount() + now.getCount();
         return new LoadDataCacheMetrics(mergedReadBytes, mergedReadTimeNs, mergedWriteBytes, mergedWriteTimeNs,
-                mergedCount, now.getLastDataCacheMetrics());
+                uniqueErrorCodes, mergedCount, now.getLastDataCacheMetrics());
     }
 
     public static LoadDataCacheMetrics buildFromThrift(TLoadDataCacheMetrics tLoadDataCacheMetrics) {
@@ -61,6 +73,7 @@ public class LoadDataCacheMetrics {
         long readTimeNs = 0;
         long writeBytes = 0;
         long writeTimeNs = 0;
+        HashSet<String> uniqueErrorCodes = new HashSet<>();
         long count = 0;
         DataCacheMetrics dataCacheMetrics;
         if (tLoadDataCacheMetrics.isSetRead_bytes()) {
@@ -75,6 +88,9 @@ public class LoadDataCacheMetrics {
         if (tLoadDataCacheMetrics.isSetWrite_time_ns()) {
             writeTimeNs = tLoadDataCacheMetrics.write_time_ns;
         }
+        if (tLoadDataCacheMetrics.isSetError_codes()) {
+            uniqueErrorCodes.addAll(Arrays.asList(tLoadDataCacheMetrics.error_codes.split("\\|")));
+        }
         if (tLoadDataCacheMetrics.isSetCount()) {
             count = tLoadDataCacheMetrics.count;
         }
@@ -86,7 +102,8 @@ public class LoadDataCacheMetrics {
         }
 
         return new LoadDataCacheMetrics(new ByteSizeValue(readBytes), new TimeValue(readTimeNs, TimeUnit.NANOSECONDS),
-                new ByteSizeValue(writeBytes), new TimeValue(writeTimeNs, TimeUnit.NANOSECONDS), count, dataCacheMetrics);
+                new ByteSizeValue(writeBytes), new TimeValue(writeTimeNs, TimeUnit.NANOSECONDS), uniqueErrorCodes,
+                count, dataCacheMetrics);
     }
 
     public ByteSizeValue getReadBytes() {
@@ -103,6 +120,10 @@ public class LoadDataCacheMetrics {
 
     public TimeValue getWriteTimeNs() {
         return writeTimeNs;
+    }
+
+    public HashSet<String> getUniqueErrorCodes() {
+        return uniqueErrorCodes;
     }
 
     public long getCount() {

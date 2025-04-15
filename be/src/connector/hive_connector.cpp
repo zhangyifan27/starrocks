@@ -118,7 +118,8 @@ Status HiveDataSource::open(RuntimeState* state) {
                                                   .modification_time = _scan_range.modification_time,
                                                   .datacache_evict_probability = 100,
                                                   .datacache_priority = datacache_priority,
-                                                  .datacache_ttl_seconds = datacache_ttl_seconds};
+                                                  .datacache_ttl_seconds = datacache_ttl_seconds,
+                                                  .mode = state->query_options().cache_select_mode};
         } else if (state->query_options().__isset.enable_scan_datacache &&
                    state->query_options().enable_scan_datacache) {
             // set datacache options for normal query

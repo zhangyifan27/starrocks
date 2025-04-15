@@ -85,7 +85,7 @@ fi
 # Set JEMALLOC_CONF environment variable if not already set
 if [[ -z "$JEMALLOC_CONF" ]]; then
     if [ ${RUN_CN} -eq 1 ]; then
-      let narenas=`get_cpu_num` * 4
+      let narenas=`get_cpu_num`*4
       echo "running on cn, use fixed arena size ${narenas}"
       JEMALLOC_OPTIONS="narenas:${narenas}"
     else

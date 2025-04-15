@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "block_cache/starcache_wrapper.h"
+#include <starcache/common/types.h>
 
 #include <filesystem>
 
@@ -39,6 +40,9 @@ Status StarCacheWrapper::init(const CacheOptions& options) {
     _cache_adaptor.reset(starcache::create_default_adaptor(options.skip_read_factor));
     opt.cache_adaptor = _cache_adaptor.get();
     opt.instance_name = "dla_cache";
+    if (config::star_cache_ttl_reaper_interval > 0) {
+        opt.ttl_check_interval_ms = config::star_cache_ttl_reaper_interval;
+    }
     opt.enable_frequency_base = config::enable_frequency_base;
     _enable_tiered_cache = options.enable_tiered_cache;
     _cache = std::make_unique<starcache::StarCache>();
@@ -130,9 +134,26 @@ bool StarCacheWrapper::exist(const std::string& key) const {
     return _cache->exist(key);
 }
 
-Status StarCacheWrapper::remove(const std::string& key) {
-    _cache->remove(key);
-    return Status::OK();
+Status StarCacheWrapper::remove(const std::string& key, DeleteStats* stats) {
+    starcache::DeleteStats delete_stats;
+    Status s = to_status(_cache->remove(key, &delete_stats));
+    if (stats) {
+        stats->remove_bytes = delete_stats.remove_bytes;
+        stats->remove_block_count = delete_stats.remove_block_count;
+    }
+    return s;
+}
+
+Status StarCacheWrapper::get_item_stats(const std::string& key, CacheItemStats* stats) {
+    starcache::CacheItemStats item_stats;
+    Status s = to_status(_cache->get_item_stats(key, &item_stats));
+    if (stats) {
+        stats->block_count = item_stats.block_count;
+        stats->disk_bytes = item_stats.disk_bytes;
+        stats->mem_bytes = item_stats.mem_bytes;
+    }
+
+    return s;
 }
 
 Status StarCacheWrapper::update_mem_quota(size_t quota_bytes, bool flush_to_disk) {

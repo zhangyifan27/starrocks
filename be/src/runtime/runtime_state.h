@@ -553,7 +553,7 @@ private:
     DescriptorTbl* _desc_tbl = nullptr;
 
     // Lock protecting _error_log and _unreported_error_idx
-    std::mutex _error_log_lock;
+    mutable std::mutex _error_log_lock;
 
     // Logs error messages.
     std::vector<std::string> _error_log;

@@ -15,6 +15,7 @@
 #include "io/cache_input_stream.h"
 
 #include <fmt/format.h>
+#include <starcache/common/types.h>
 
 #include <utility>
 
@@ -284,18 +285,59 @@ Status CacheInputStream::read_at_fully(int64_t offset, void* out, int64_t count)
     std::vector<ReadFromRemoteIORange> need_read_from_remote{};
 
     for (int64_t i = start_block_id; i <= end_block_id; i++) {
-        size_t off = std::max(offset, i * _block_size);
-        size_t end = std::min((i + 1) * _block_size, end_offset);
-        size_t size = end - off;
-        Status st = _read_block_from_local(off, size, p);
-        if (st.is_not_found() || st.is_resource_busy()) {
-            // Not found block from local or disk is busy, we need to load it from remote
-            need_read_from_remote.emplace_back(off, p, size);
-        } else if (!st.ok()) {
-            return st;
+        int64_t off = std::max(offset, i * _block_size);
+        int64_t end = std::min((i + 1) * _block_size, end_offset);
+        int64_t size = end - off;
+        if (_mode == DELETE) {
+            int64_t aligned_begin = off / _block_size * _block_size;
+            int64_t aligned_end = std::min((off + size + _block_size - 1) / _block_size * _block_size, _size);
+            int64_t delete_size = aligned_end - aligned_begin;
+            DeleteStats stats;
+            Status s = _cache->remove(_cache_key, aligned_begin, delete_size, &stats);
+            if (s.ok()) {
+                _stats.write_cache_count += 1;
+                _stats.write_cache_bytes += stats.remove_bytes;
+                _stats.write_disk_cache_bytes += stats.remove_bytes;
+            } else if (s.is_not_found()) {
+                // ignore not found
+            } else {
+                LOG(WARNING) << "delete cache item failed. " << s.code_as_string();
+                return s;
+            }
+
+            continue;
+        } else if (_mode == DESC) {
+            int64_t aligned_offset = off / _block_size * _block_size;
+            CacheItemStats stats;
+            Status s = _cache->get_item_stats(_cache_key, aligned_offset, &stats);
+            if (s.ok()) {
+                _stats.read_cache_bytes += std::min((size_t)size, stats.disk_bytes + stats.mem_bytes);
+                _stats.read_disk_cache_bytes += stats.disk_bytes;
+                _stats.read_mem_cache_bytes += stats.mem_bytes;
+                _stats.read_cache_count += 1;
+            } else if (s.is_not_found()) {
+                // ignore not found
+            } else {
+                LOG(WARNING) << "check cache item failed. " << s.code_as_string();
+                return s;
+            }
+
+            continue;
+        } else {
+            Status st = _read_block_from_local(off, size, p);
+            if (st.is_not_found() || st.is_resource_busy()) {
+                // Not found block from local or disk is busy, we need to load it from remote
+                need_read_from_remote.emplace_back(off, p, size);
+            } else if (!st.ok()) {
+                return st;
+            }
+
+            offset += size;
+            p += size;
         }
-        offset += size;
-        p += size;
+    }
+    if (_mode != DEFAULT) {
+        return Status::OK();
     }
     DCHECK(p == pe);
 
@@ -428,6 +470,11 @@ void CacheInputStream::_populate_to_cache(const char* p, int64_t offset, int64_t
         } else if (r.is_already_exist() || r.is_resource_busy()) {
             _stats.skip_write_cache_count += 1;
             _stats.skip_write_cache_bytes += size;
+            LOG(WARNING) << "write block cache failed, errmsg: " << r.message();
+        }
+
+        if (_enable_populate_error_logs && (!r.ok() && !r.is_already_exist() && !r.is_resource_busy())) {
+            _populate_cache_status.emplace_back(std::move(r));
         }
     };
 

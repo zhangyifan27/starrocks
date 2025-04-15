@@ -89,7 +89,7 @@ Status CacheLibWrapper::read_buffer(const std::string& key, size_t off, size_t s
     return Status::OK();
 }
 
-Status CacheLibWrapper::remove(const std::string& key) {
+Status CacheLibWrapper::remove(const std::string& key, DeleteStats* stats) {
     _cache->remove(key);
     return Status::OK();
 }

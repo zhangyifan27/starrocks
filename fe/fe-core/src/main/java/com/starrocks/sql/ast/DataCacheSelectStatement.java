@@ -20,11 +20,13 @@ import com.starrocks.catalog.InternalCatalog;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.sql.analyzer.AstToSQLBuilder;
 import com.starrocks.sql.parser.NodePosition;
+import com.starrocks.thrift.TCacheSelectMode;
 
 import java.util.Map;
 
 public class DataCacheSelectStatement extends DdlStmt {
 
+    private TCacheSelectMode mode;
     private final InsertStmt insertStmt;
 
     private final Map<String, String> properties;
@@ -41,12 +43,26 @@ public class DataCacheSelectStatement extends DdlStmt {
     private boolean createByJob = false;
     // =================================================================================
 
-    public DataCacheSelectStatement(InsertStmt insertStmt, Map<String, String> properties, NodePosition pos) {
+    public DataCacheSelectStatement(TCacheSelectMode mode, InsertStmt insertStmt,
+                                    Map<String, String> properties, NodePosition pos) {
         super(pos);
+        this.mode = mode;
         this.insertStmt = insertStmt;
         this.properties = properties;
         Preconditions.checkNotNull(properties, "properties can't be null");
         insertStmt.setOrigStmt(new OriginStatement("CACHE " + AstToSQLBuilder.toSQL(insertStmt.getQueryStatement())));
+    }
+
+    public Boolean isDelete() {
+        return mode == TCacheSelectMode.DELETE;
+    }
+
+    public Boolean isDesc() {
+        return mode == TCacheSelectMode.DESC;
+    }
+
+    public TCacheSelectMode mode() {
+        return mode;
     }
 
     public InsertStmt getInsertStmt() {

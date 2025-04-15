@@ -2527,7 +2527,7 @@ Status TabletUpdates::_apply_compaction_commit(const EditVersionInfo& version_in
                 max_rowset_id, max_src_rssid, _debug_compaction_stats(info->inputs, rowset_id),
                 st.ok() ? "" : st.message());
         LOG(ERROR) << msg << debug_string();
-        failure_handler(msg + _debug_version_info(true), st.code());
+        failure_handler(msg + _debug_version_info(true), TStatusCode::CORRUPTION);
         DCHECK(st.ok()) << msg;
     }
     return apply_st;

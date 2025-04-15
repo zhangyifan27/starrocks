@@ -26,6 +26,7 @@
 
 #include <string>
 
+#include "block_cache/block_cache_hit_rate_counter.hpp"
 #include "common/config.h"
 #include "common/tracer.h"
 #include "http/http_channel.h"
@@ -348,6 +349,19 @@ void MetricsAction::handle(HttpRequest* req) {
 #endif
 #endif
         str.assign(visitor.to_string());
+    }
+
+    if (config::datacache_enable) {
+        auto append_metric_fn = [&](const std::string& name, auto&& value, std::string* s) {
+            s->append(fmt::format("{} {}\n", name, value));
+        };
+
+        BlockCacheHitRateCounter* cache_hit_counter = BlockCacheHitRateCounter::instance();
+        append_metric_fn("hit_bytes", cache_hit_counter->get_hit_bytes(), &str);
+        append_metric_fn("miss_bytes", cache_hit_counter->get_miss_bytes(), &str);
+        append_metric_fn("hit_rate", cache_hit_counter->hit_rate(), &str);
+        append_metric_fn("hit_bytes_last_minute", cache_hit_counter->get_hit_bytes_last_minute(), &str);
+        append_metric_fn("miss_bytes_last_minute", cache_hit_counter->get_miss_bytes_last_minute(), &str);
     }
 
     req->add_output_header(HttpHeaders::CONTENT_TYPE, "text/plain; version=0.0.4");

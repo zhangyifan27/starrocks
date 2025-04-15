@@ -34,6 +34,7 @@
 
 #include "runtime/runtime_state.h"
 
+#include <fmt/format.h>
 #include <boost/algorithm/string/join.hpp>
 #include <cstring>
 #include <memory>
@@ -538,6 +539,12 @@ void RuntimeState::update_load_datacache_metrics(TReportExecStatusParams* load_p
     metrics.__set_write_bytes(_num_datacache_write_bytes.load(std::memory_order_relaxed));
     metrics.__set_write_time_ns(_num_datacache_write_time_ns.load(std::memory_order_relaxed));
     metrics.__set_count(_num_datacache_count.load(std::memory_order_relaxed));
+    {
+        std::lock_guard<std::mutex> l(_error_log_lock);
+        if (_error_log.size() > 0) {
+            metrics.__set_error_codes(fmt::format("{}", fmt::join(_error_log, "|")));
+        }
+    }
 
     if (_query_options.catalog == "default_catalog") {
 #ifdef USE_STAROS

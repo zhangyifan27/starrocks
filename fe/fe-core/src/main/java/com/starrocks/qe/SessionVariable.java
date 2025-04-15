@@ -60,6 +60,7 @@ import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.common.QueryDebugOptions;
 import com.starrocks.storagevolume.StorageVolume;
 import com.starrocks.system.BackendResourceStat;
+import com.starrocks.thrift.TCacheSelectMode;
 import com.starrocks.thrift.TCloudConfiguration;
 import com.starrocks.thrift.TCompressionType;
 import com.starrocks.thrift.TOverflowMode;
@@ -501,6 +502,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String ENABLE_DATACACHE_ASYNC_POPULATE_MODE = "enable_datacache_async_populate_mode";
     public static final String ENABLE_DATACACHE_IO_ADAPTOR = "enable_datacache_io_adaptor";
     public static final String DATACACHE_EVICT_PROBABILITY = "datacache_evict_probability";
+    public static final String CACHE_SELECT_MODE = "cache_select_mode";
 
     // The following configurations will be deprecated, and we use the `datacache` suffix instead.
     // But it is temporarily necessary to keep them for a period of time to be compatible with
@@ -1806,6 +1808,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     private boolean enableCacheSelect = false;
 
+    @VariableMgr.VarAttr(name = CACHE_SELECT_MODE, flag = VariableMgr.INVISIBLE)
+    private int cacheSelectMode = 0;
+
     @VariableMgr.VarAttr(name = ENABLE_DYNAMIC_PRUNE_SCAN_RANGE)
     private boolean enableDynamicPruneScanRange = true;
 
@@ -2523,6 +2528,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setEnableCacheSelect(boolean enableCacheSelect) {
         this.enableCacheSelect = enableCacheSelect;
+    }
+
+    public void setCacheSelectMode(int mode) {
+        this.cacheSelectMode = mode;
     }
 
     public boolean isCboUseDBLock() {
@@ -4589,6 +4598,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         tResult.setEnable_wait_dependent_event(enableWaitDependentEvent);
         tResult.setConnector_max_split_size(connectorMaxSplitSize);
         tResult.setOrc_use_column_names(orcUseColumnNames);
+        tResult.setCache_select_mode(TCacheSelectMode.findByValue(cacheSelectMode));
         return tResult;
     }
 

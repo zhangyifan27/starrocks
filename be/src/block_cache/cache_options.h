@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "common/status.h"
+#include "gen_cpp/InternalService_types.h"
 
 namespace starrocks {
 
@@ -34,6 +35,7 @@ struct DataCacheOptions {
     int32_t datacache_evict_probability = 100;
     int8_t datacache_priority = 0;
     int64_t datacache_ttl_seconds = 0;
+    TCacheSelectMode::type mode;
 };
 
 struct DirSpace {
@@ -89,5 +91,16 @@ struct ReadCacheOptions {
         int64_t read_mem_bytes = 0;
         int64_t read_disk_bytes = 0;
     } stats;
+};
+
+struct DeleteStats {
+    size_t remove_bytes = 0;
+    size_t remove_block_count = 0;
+};
+
+struct CacheItemStats {
+    size_t mem_bytes = 0;
+    size_t disk_bytes = 0;
+    size_t block_count = 0;
 };
 } // namespace starrocks

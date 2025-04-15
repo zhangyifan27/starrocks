@@ -62,7 +62,10 @@ public:
     bool exist(const starcache::CacheKey& cache_key, off_t offset, size_t size) const;
 
     // Remove data from cache. The offset and size must be aligned by block size
-    Status remove(const CacheKey& cache_key, off_t offset, size_t size);
+    Status remove(const CacheKey& cache_key, off_t offset, size_t size, DeleteStats* stats = nullptr);
+
+    // Get the cache item stats, such as the cache item size, internal block size, etc.
+    Status get_item_stats(const CacheKey& cache_key, off_t offset, CacheItemStats* stats);
 
     // Update the datacache memory quota.
     Status update_mem_quota(size_t quota_bytes, bool flush_to_disk);

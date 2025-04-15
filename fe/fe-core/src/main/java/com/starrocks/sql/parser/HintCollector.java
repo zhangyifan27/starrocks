@@ -20,13 +20,16 @@ import com.starrocks.qe.SessionVariable;
 import org.antlr.v4.runtime.CommonTokenStream;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
+import org.antlr.v4.runtime.tree.TerminalNode;
 import org.apache.commons.collections4.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class HintCollector extends StarRocksBaseVisitor<Void> {
 
@@ -74,7 +77,13 @@ public class HintCollector extends StarRocksBaseVisitor<Void> {
 
     @Override
     public Void visitDataCacheSelectStatement(StarRocksParser.DataCacheSelectStatementContext context) {
-        extractHintToRight(context, context.SELECT().getSymbol().getTokenIndex());
+        // The parser guarantees that there is exactly one value
+        // that is definitely non-null here, so calling get() directly is safe.
+        TerminalNode hintNode = Stream.of(context.SELECT(), context.DELETE(), context.DESC())
+                .filter(Objects::nonNull)
+                .findFirst()
+                .get();
+        extractHintToRight(context, hintNode.getSymbol().getTokenIndex());
         return null;
     }
 

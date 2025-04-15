@@ -146,7 +146,7 @@ bool BlockCache::exist(const starcache::CacheKey& cache_key, off_t offset, size_
     return _kv_cache->exist(block_key);
 }
 
-Status BlockCache::remove(const CacheKey& cache_key, off_t offset, size_t size) {
+Status BlockCache::remove(const CacheKey& cache_key, off_t offset, size_t size, DeleteStats* stats) {
     if (offset % _block_size != 0) {
         LOG(WARNING) << "remove block key: " << cache_key << " with invalid args, offset: " << offset
                      << ", size: " << size;
@@ -159,7 +159,19 @@ Status BlockCache::remove(const CacheKey& cache_key, off_t offset, size_t size) 
 
     size_t index = offset / _block_size;
     std::string block_key = fmt::format("{}/{}", cache_key, index);
-    return _kv_cache->remove(block_key);
+    return _kv_cache->remove(block_key, stats);
+}
+
+Status BlockCache::get_item_stats(const CacheKey& cache_key, off_t offset, CacheItemStats* stats) {
+    if (offset % _block_size != 0) {
+        LOG(WARNING) << "get item stats with invalid args, offset: " << offset;
+        return Status::InvalidArgument(
+                strings::Substitute("offset and size must be aligned by block size $0", _block_size));
+    }
+
+    size_t index = offset / _block_size;
+    std::string block_key = fmt::format("{}/{}", cache_key, index);
+    return _kv_cache->get_item_stats(block_key, stats);
 }
 
 Status BlockCache::update_mem_quota(size_t quota_bytes, bool flush_to_disk) {

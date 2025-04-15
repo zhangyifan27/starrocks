@@ -24,8 +24,10 @@ import com.starrocks.qe.ShowResultSetMetaData;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.system.ComputeNode;
 import com.starrocks.system.SystemInfoService;
+import com.starrocks.thrift.TCacheSelectMode;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -36,6 +38,21 @@ public class DataCacheSelectMetrics {
             .addColumn(new Column("WRITE_CACHE_SIZE", ScalarType.createVarcharType()))
             .addColumn(new Column("AVG_WRITE_CACHE_TIME", ScalarType.createVarcharType()))
             .addColumn(new Column("TOTAL_CACHE_USAGE", ScalarType.createVarcharType()))
+            .addColumn(new Column("UNIQUE_ERROR_CODES", ScalarType.createVarcharType()))
+            .build();
+
+    private static final ShowResultSetMetaData DELETE_META_DATA = ShowResultSetMetaData.builder()
+            .addColumn(new Column("READ_CACHE_SIZE", ScalarType.createVarcharType()))
+            .addColumn(new Column("DELETE_CACHE_SIZE", ScalarType.createVarcharType()))
+            .addColumn(new Column("AVG_WRITE_CACHE_TIME", ScalarType.createVarcharType()))
+            .addColumn(new Column("TOTAL_CACHE_USAGE", ScalarType.createVarcharType()))
+            .addColumn(new Column("UNIQUE_ERROR_CODES", ScalarType.createVarcharType()))
+            .build();
+
+    private static final ShowResultSetMetaData DESC_META_DATA = ShowResultSetMetaData.builder()
+            .addColumn(new Column("READ_CACHE_SIZE", ScalarType.createVarcharType()))
+            .addColumn(new Column("TOTAL_CACHE_USAGE", ScalarType.createVarcharType()))
+            .addColumn(new Column("UNIQUE_ERROR_CODES", ScalarType.createVarcharType()))
             .build();
 
     private static final ShowResultSetMetaData VERBOSE_META_DATA = ShowResultSetMetaData.builder()
@@ -45,6 +62,7 @@ public class DataCacheSelectMetrics {
             .addColumn(new Column("WRITE_CACHE_SIZE", ScalarType.createVarcharType()))
             .addColumn(new Column("AVG_WRITE_CACHE_TIME", ScalarType.createVarcharType()))
             .addColumn(new Column("TOTAL_CACHE_USAGE", ScalarType.createVarcharType()))
+            .addColumn(new Column("UNIQUE_ERROR_CODES", ScalarType.createVarcharType()))
             .build();
 
     private final Map<Long, LoadDataCacheMetrics> beMetrics = new HashMap<>();
@@ -53,11 +71,11 @@ public class DataCacheSelectMetrics {
         beMetrics.merge(backendId, metrics, LoadDataCacheMetrics::mergeMetrics);
     }
 
-    public ShowResultSet getShowResultSet(boolean isVerbose) {
+    public ShowResultSet getShowResultSet(boolean isVerbose, TCacheSelectMode mode) {
         if (isVerbose) {
             return getVerboseShowResultSet();
         } else {
-            return getSimpleShowResultSet();
+            return getSimpleShowResultSet(mode);
         }
     }
 
@@ -91,19 +109,21 @@ public class DataCacheSelectMetrics {
             row.add(metrics.getWriteBytes().toString());
             row.add(new TimeValue(avgWriteTimeNs, TimeUnit.NANOSECONDS).toString());
             row.add(String.format("%.2f%%", metrics.getLastDataCacheMetrics().getCacheUsage() * 100));
+            row.add(String.join("|", metrics.getUniqueErrorCodes()));
 
             rows.add(row);
         }
         return new ShowResultSet(VERBOSE_META_DATA, rows);
     }
 
-    private ShowResultSet getSimpleShowResultSet() {
+    private ShowResultSet getSimpleShowResultSet(TCacheSelectMode mode) {
         long readCacheSize = 0;
         long writeCacheSize = 0;
         long writeCacheTime = 0;
         long totalCount = 0;
         long totalCacheSize = 0;
         long totalUsedCacheSize = 0;
+        HashSet<String> uniqueErrorCodes = new HashSet<>();
 
         for (Map.Entry<Long, LoadDataCacheMetrics> entry : beMetrics.entrySet()) {
             LoadDataCacheMetrics metrics = entry.getValue();
@@ -115,6 +135,9 @@ public class DataCacheSelectMetrics {
                     metrics.getLastDataCacheMetrics().getMemQuoteBytes().getBytes();
             totalUsedCacheSize += metrics.getLastDataCacheMetrics().getDiskUsedBytes().getBytes() +
                     metrics.getLastDataCacheMetrics().getMemUsedBytes().getBytes();
+            if (uniqueErrorCodes.size() < 3) {
+                uniqueErrorCodes.addAll(metrics.getUniqueErrorCodes());
+            }
         }
 
         List<List<String>> rows = Lists.newArrayList();
@@ -122,20 +145,27 @@ public class DataCacheSelectMetrics {
         rows.add(row);
 
         row.add(new ByteSizeValue(readCacheSize).toString());
-        row.add(new ByteSizeValue(writeCacheSize).toString());
-
-        // get avg write cache time
-        long avgWriteCacheTime = 0;
-        if (totalCount != 0) { // avoid divide by 0
-            avgWriteCacheTime = writeCacheTime / totalCount;
+        if (mode != TCacheSelectMode.DESC) {
+            row.add(new ByteSizeValue(writeCacheSize).toString());
+            // get avg write cache time
+            long avgWriteCacheTime = 0;
+            if (totalCount != 0) { // avoid divide by 0
+                avgWriteCacheTime = writeCacheTime / totalCount;
+            }
+            row.add(new TimeValue(avgWriteCacheTime, TimeUnit.NANOSECONDS).toString());
         }
-        row.add(new TimeValue(avgWriteCacheTime, TimeUnit.NANOSECONDS).toString());
 
         double totalUsedCacheRatio = 0;
         if (totalCacheSize != 0) { // avoid divide by 0
             totalUsedCacheRatio = (double) totalUsedCacheSize / totalCacheSize;
         }
         row.add(String.format("%.2f%%", totalUsedCacheRatio * 100));
+        row.add(String.join("|", uniqueErrorCodes));
+        if (mode == TCacheSelectMode.DELETE) {
+            return new ShowResultSet(DELETE_META_DATA, rows);
+        } else if (mode == TCacheSelectMode.DESC) {
+            return new ShowResultSet(DESC_META_DATA, rows);
+        }
         return new ShowResultSet(SIMPLE_META_DATA, rows);
     }
 

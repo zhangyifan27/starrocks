@@ -63,6 +63,7 @@ public:
     ~MetricsActionTest() override = default;
     void SetUp() override {
         config::dump_metrics_with_bvar = false;
+        config::datacache_enable = false;
         _evhttp_req = evhttp_request_new(nullptr, nullptr);
 #ifdef USE_STAROS
         // disable staros metrics output to avoid confusing the test result.

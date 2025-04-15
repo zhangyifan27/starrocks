@@ -16,6 +16,7 @@
 
 #include "block_cache/kv_cache.h"
 #include "common/status.h"
+#include "starcache/common/types.h"
 #include "starcache/star_cache.h"
 #include "starcache/time_based_cache_adaptor.h"
 
@@ -40,7 +41,9 @@ public:
 
     bool exist(const std::string& key) const override;
 
-    Status remove(const std::string& key) override;
+    Status remove(const std::string& key, DeleteStats* stats = nullptr) override;
+
+    Status get_item_stats(const std::string& key, CacheItemStats* stats) override;
 
     Status update_mem_quota(size_t quota_bytes, bool flush_to_disk) override;
 

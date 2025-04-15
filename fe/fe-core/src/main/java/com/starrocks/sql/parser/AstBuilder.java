@@ -471,6 +471,7 @@ import com.starrocks.sql.ast.warehouse.SuspendWarehouseStmt;
 import com.starrocks.sql.common.PListCell;
 import com.starrocks.sql.util.EitherOr;
 import com.starrocks.statistic.StatsConstants;
+import com.starrocks.thrift.TCacheSelectMode;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.RuleContext;
 import org.antlr.v4.runtime.Token;
@@ -3404,6 +3405,8 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
 
     @Override
     public ParseNode visitDataCacheSelectStatement(StarRocksParser.DataCacheSelectStatementContext ctx) {
+        boolean isDelete = ctx.DELETE() != null;
+        boolean isDesc = ctx.DESC() != null;
         // cache select only support select one table at a time
         // create a single table relation
         TableRelation tableRelation = null;
@@ -3443,7 +3446,13 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             }
         }
 
-        return new DataCacheSelectStatement(insertStmt, properties, createPos(ctx));
+        TCacheSelectMode mode = TCacheSelectMode.DEFAULT;
+        if (isDelete) {
+            mode = TCacheSelectMode.DELETE;
+        } else if (isDesc) {
+            mode = TCacheSelectMode.DESC;
+        }
+        return new DataCacheSelectStatement(mode, insertStmt, properties, createPos(ctx));
     }
 
 

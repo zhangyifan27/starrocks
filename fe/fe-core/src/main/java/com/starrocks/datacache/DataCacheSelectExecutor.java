@@ -36,6 +36,7 @@ import com.starrocks.sql.ast.DataCacheSelectStatement;
 import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.system.ComputeNode;
 import com.starrocks.system.SystemInfoService;
+import com.starrocks.thrift.TCacheSelectMode;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -82,6 +83,11 @@ public class DataCacheSelectExecutor {
         tmpSessionVariable.setDataCachePriority(statement.getPriority());
         tmpSessionVariable.setDatacacheTTLSeconds(statement.getTTLSeconds());
         tmpSessionVariable.setEnableCacheSelect(true);
+        if (statement.isDelete()) {
+            tmpSessionVariable.setCacheSelectMode(TCacheSelectMode.DELETE.getValue());
+        } else if (statement.isDesc()) {
+            tmpSessionVariable.setCacheSelectMode(TCacheSelectMode.DESC.getValue());
+        }
         connectContext.setSessionVariable(tmpSessionVariable);
 
         InsertStmt insertStmt = statement.getInsertStmt();

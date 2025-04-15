@@ -60,6 +60,12 @@ Status CacheSelectScanner::do_get_next(RuntimeState* runtime_state, ChunkPtr* ch
         RETURN_IF_ERROR(_fetch_iceberg_delete_files());
     }
 
+    if (_status_set.size() > 0) {
+        for (const auto& s : _status_set) {
+            runtime_state->log_error(s);
+        }
+    }
+
     return Status::EndOfFile("");
 }
 
@@ -132,6 +138,11 @@ Status CacheSelectScanner::_fetch_orc() {
     }
 
     std::vector<DiskRange> disk_ranges{};
+
+    // header + content <|> stripe statistics + footer + postscript + end
+    const auto footer_start = 3 + reader->getContentLength();
+    disk_ranges.emplace_back(footer_start, reader->getFileLength() - footer_start);
+
     {
         uint64_t stripe_number = reader->getNumberOfStripes();
         std::vector<DiskRange> stripe_disk_ranges{};
@@ -161,7 +172,7 @@ Status CacheSelectScanner::_fetch_orc() {
         }
     }
 
-    return _write_disk_ranges(_shared_buffered_input_stream, _cache_input_stream, disk_ranges);
+    return _write_disk_ranges(_shared_buffered_input_stream, _cache_input_stream, disk_ranges, &_status_set);
 }
 
 Status CacheSelectScanner::_fetch_parquet() {
@@ -180,7 +191,7 @@ Status CacheSelectScanner::_fetch_parquet() {
         disk_ranges.emplace_back(io_range.offset, io_range.size);
     }
 
-    return _write_disk_ranges(_shared_buffered_input_stream, _cache_input_stream, disk_ranges);
+    return _write_disk_ranges(_shared_buffered_input_stream, _cache_input_stream, disk_ranges, &_status_set);
 }
 
 // Split text into multiply disk ranges, then fetch it
@@ -202,7 +213,7 @@ Status CacheSelectScanner::_fetch_textfile() {
         offset += remain_length;
     }
 
-    return _write_disk_ranges(_shared_buffered_input_stream, _cache_input_stream, disk_ranges);
+    return _write_disk_ranges(_shared_buffered_input_stream, _cache_input_stream, disk_ranges, &_status_set);
 }
 
 // for iceberg delete files, we fetch an entire file directly
@@ -232,12 +243,13 @@ Status CacheSelectScanner::_write_entire_file(const std::string& file_path, size
     std::vector<DiskRange> disk_ranges{};
     disk_ranges.emplace_back(0, file_size);
 
-    return _write_disk_ranges(shared_buffered_input_stream, cache_input_stream, disk_ranges);
+    return _write_disk_ranges(shared_buffered_input_stream, cache_input_stream, disk_ranges, &_status_set);
 }
 
 Status CacheSelectScanner::_write_disk_ranges(std::shared_ptr<io::SharedBufferedInputStream>& shared_input_stream,
                                               std::shared_ptr<io::CacheInputStream>& cache_input_stream,
-                                              const std::vector<DiskRange>& disk_ranges) {
+                                              const std::vector<DiskRange>& disk_ranges,
+                                              std::set<std::string>* status_set) {
     std::vector<DiskRange> merged_disk_ranges{};
     DiskRangeHelper::merge_adjacent_disk_ranges(disk_ranges, config::io_coalesce_read_max_distance_size,
                                                 config::io_coalesce_read_max_buffer_size, merged_disk_ranges);
@@ -255,6 +267,15 @@ Status CacheSelectScanner::_write_disk_ranges(std::shared_ptr<io::SharedBuffered
         RETURN_IF_ERROR(
                 cache_select_input_stream->write_at_fully(merged_disk_range.offset(), merged_disk_range.length()));
     }
+
+    const auto& status_arr = cache_select_input_stream->populate_status();
+    if (!status_arr.empty()) {
+        for (auto& s : status_arr) {
+            std::string code = s.code_as_string();
+            status_set->emplace(std::move(code));
+        }
+    }
+
     return Status::OK();
 }
 

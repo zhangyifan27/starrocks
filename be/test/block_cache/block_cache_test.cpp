@@ -110,15 +110,16 @@ TEST_F(BlockCacheTest, hybrid_cache) {
 
     // remove cache
     char value[1024] = {0};
-    status = cache->remove(cache_key, 0, batch_size);
-    ASSERT_TRUE(status.ok());
-
-    auto res = cache->read_buffer(cache_key, 0, batch_size, value);
-    ASSERT_TRUE(res.status().is_not_found());
-
-    // not found
-    res = cache->read_buffer(cache_key, block_size * 1000, batch_size, value);
-    ASSERT_TRUE(res.status().is_not_found());
+    
+    // 删除所有缓存条目
+    for (size_t i = 0; i < rounds; ++i) {
+        status = cache->remove(cache_key + std::to_string(i), 0, batch_size);
+        ASSERT_TRUE(status.ok()) << status.message();
+        
+        // 验证每个缓存条目是否已被删除
+        auto res = cache->read_buffer(cache_key + std::to_string(i), 0, batch_size, value);
+        ASSERT_TRUE(res.status().is_not_found());
+    }
 
     cache->shutdown();
     fs::remove_all(cache_dir).ok();

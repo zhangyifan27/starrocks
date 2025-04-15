@@ -43,7 +43,8 @@ private:
     Status _write_entire_file(const std::string& file_path, size_t file_size);
     static Status _write_disk_ranges(std::shared_ptr<io::SharedBufferedInputStream>& shared_input_stream,
                                      std::shared_ptr<io::CacheInputStream>& cache_input_stream,
-                                     const std::vector<DiskRange>& disk_ranges);
+                                     const std::vector<DiskRange>& disk_ranges, std::set<std::string>* status_set);
+    std::set<std::string> _status_set;
 };
 
 } // namespace starrocks

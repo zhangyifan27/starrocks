@@ -1756,7 +1756,7 @@ clearDataCacheRulesStatement
     ;
 
 dataCacheSelectStatement
-    : CACHE SELECT selectItem (',' selectItem)* FROM qualifiedName (WHERE where=expression)? properties?
+    : CACHE (SELECT | DELETE | DESC) selectItem (',' selectItem)* FROM qualifiedName (WHERE where=expression)? properties?
     ;
 
 createDataCacheJobStatement

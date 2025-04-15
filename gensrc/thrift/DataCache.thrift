@@ -48,4 +48,5 @@ struct TLoadDataCacheMetrics {
     // the number of metrics merged
     5: optional i64 count;
     6: optional TDataCacheMetrics metrics;
+    101: optional string error_codes;
 }

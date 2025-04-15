@@ -1486,4 +1486,7 @@ CONF_mBool(enable_dynamic_batch_size_for_json_parse_many, "true");
 CONF_mInt32(preallocate_array_elements_per_row, "0");
 
 CONF_mBool(enable_frequency_base, "false");
+
+// default ttl_repaer schedule time interval
+CONF_mInt32(star_cache_ttl_reaper_interval, "10000");
 } // namespace starrocks::config

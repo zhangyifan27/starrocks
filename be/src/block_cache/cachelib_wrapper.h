@@ -54,7 +54,7 @@ public:
 
     Status read_object(const std::string& key, DataCacheHandle* handle, ReadCacheOptions* options) override;
 
-    Status remove(const std::string& key) override;
+    Status remove(const std::string& key, DeleteStats* stats = nullptr) override;
 
     Status update_mem_quota(size_t quota_bytes, bool flush_to_disk) override;
 

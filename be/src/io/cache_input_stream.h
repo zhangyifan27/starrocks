@@ -95,12 +95,39 @@ public:
         }
     }
 
+    void set_populate_error_logs(bool enable) {
+        _enable_populate_error_logs = enable;
+        if (!enable) {
+            _populate_cache_status.clear();
+        }
+    }
+
+    std::vector<Status>& populate_status() {
+        return _populate_cache_status;
+    }
+
 protected:
     struct BlockBuffer {
         int64_t offset;
         IOBuffer buffer;
     };
+
     using SharedBufferPtr = SharedBufferedInputStream::SharedBufferPtr;
+    enum Mode {
+        DEFAULT,
+        DELETE,
+        DESC,
+    };
+
+    Mode _thrift_to_mode(const TCacheSelectMode::type& mode) {
+        if (mode == TCacheSelectMode::DELETE) {
+            return DELETE;
+        } else if (mode == TCacheSelectMode::DESC) {
+            return DESC;
+        } else {
+            return DEFAULT;
+        }
+    }
 
     // Read block from local, if not found, will return Status::NotFound();
     virtual Status _read_block_from_local(const int64_t offset, const int64_t size, char* out);
@@ -128,6 +155,9 @@ protected:
     std::unordered_map<int64_t, BlockBuffer> _block_map;
     int8_t _priority = 0;
     uint64_t _ttl_seconds = 0;
+    bool _enable_populate_error_logs = false;
+    Mode _mode = DEFAULT;
+    std::vector<Status> _populate_cache_status;
 
 private:
     inline int64_t _calculate_remote_latency_per_block(int64_t io_bytes, int64_t read_time_ns);

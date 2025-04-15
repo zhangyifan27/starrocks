@@ -134,6 +134,12 @@ enum TTimeUnit {
     MINUTE = 4;
 }
 
+enum TCacheSelectMode {
+    DEFAULT = 0,
+    DELETE = 1,
+    DESC = 2,
+}
+
 struct TQueryQueueOptions {
   1: optional bool enable_global_query_queue;
   2: optional bool enable_group_level_query_queue;
@@ -322,6 +328,7 @@ struct TQueryOptions {
   140: optional string catalog;
 
   141: optional i32 datacache_evict_probability;
+  301: optional TCacheSelectMode cache_select_mode;
 }
 
 

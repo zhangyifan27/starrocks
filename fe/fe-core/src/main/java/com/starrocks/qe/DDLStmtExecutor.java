@@ -1095,7 +1095,7 @@ public class DDLStmtExecutor {
                 throw new RuntimeException(e.getMessage());
             }
 
-            return metrics.getShowResultSet(statement.isVerbose());
+            return metrics.getShowResultSet(statement.isVerbose(), statement.mode());
         }
 
         @Override

@@ -22,12 +22,15 @@ namespace starrocks::io {
 class CacheSelectInputStream final : public CacheInputStream {
 public:
     explicit CacheSelectInputStream(const std::shared_ptr<SharedBufferedInputStream>& stream,
-                                    const std::string& filename, size_t size, int64_t modification_time)
+                                    const std::string& filename, size_t size, int64_t modification_time,
+                                    const TCacheSelectMode::type& mode = TCacheSelectMode::DEFAULT)
             : CacheInputStream(stream, filename, size, modification_time) {
         set_enable_populate_cache(true);
         set_enable_async_populate_mode(false);
         set_enable_cache_io_adaptor(false);
         set_enable_block_buffer(false);
+        set_populate_error_logs(true);
+        _mode = _thrift_to_mode(mode);
     }
 
     ~CacheSelectInputStream() override = default;

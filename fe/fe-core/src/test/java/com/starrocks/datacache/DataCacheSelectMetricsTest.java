@@ -17,6 +17,7 @@ package com.starrocks.datacache;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.system.Backend;
 import com.starrocks.system.ComputeNode;
+import com.starrocks.thrift.TCacheSelectMode;
 import com.starrocks.thrift.TDataCacheMetrics;
 import com.starrocks.thrift.TDataCacheStatus;
 import com.starrocks.thrift.TLoadDataCacheMetrics;
@@ -89,18 +90,18 @@ public class DataCacheSelectMetricsTest {
         dataCacheSelectMetrics.updateLoadDataCacheMetrics(be2Id, be2Metrics);
         dataCacheSelectMetrics.updateLoadDataCacheMetrics(cn1Id, cn1Metrics);
 
-        List<List<String>> rows = dataCacheSelectMetrics.getShowResultSet(false).getResultRows();
-        Assert.assertEquals("6MB,6GB,20s,50.00%", String.join(",", rows.get(0)));
-        rows = dataCacheSelectMetrics.getShowResultSet(true).getResultRows();
+        List<List<String>> rows = dataCacheSelectMetrics.getShowResultSet(false, TCacheSelectMode.DEFAULT).getResultRows();
+        Assert.assertEquals("6MB,6GB,20s,50.00%,", String.join(",", rows.get(0)));
+        rows = dataCacheSelectMetrics.getShowResultSet(true, TCacheSelectMode.DEFAULT).getResultRows();
         for (List<String> row : rows) {
             if (row.get(0).equals("127.0.0.2")) {
-                Assert.assertEquals("127.0.0.2,1MB,1s,1GB,10s,50.00%", String.join(",", row));
+                Assert.assertEquals("127.0.0.2,1MB,1s,1GB,10s,50.00%,", String.join(",", row));
             }
             if (row.get(0).equals("127.0.0.3")) {
-                Assert.assertEquals("127.0.0.3,2MB,2s,2GB,35s,50.00%", String.join(",", row));
+                Assert.assertEquals("127.0.0.3,2MB,2s,2GB,35s,50.00%,", String.join(",", row));
             }
             if (row.get(0).equals("127.0.0.4")) {
-                Assert.assertEquals("127.0.0.4,3MB,3s,3GB,15s,50.00%", String.join(",", row));
+                Assert.assertEquals("127.0.0.4,3MB,3s,3GB,15s,50.00%,", String.join(",", row));
             }
         }
 
