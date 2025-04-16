@@ -172,18 +172,19 @@ public class DataCacheJobMgr {
         } else { // String type
             String partitionFiledFormat = stmt.getPartitionFiledFormat();
             if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
-                start = "date_format(hours_sub(hours_add(to_date(now()), hour(now())), 1)," + partitionFiledFormat + ")";
-                end = "date_format(hours_add(to_date(now()), hour(now()))," + partitionFiledFormat + ")";
+                start = "date_format(hours_sub(hours_add(to_date(now()), hour(now())), 1),'" + partitionFiledFormat + "')";
+                end = "date_format(hours_add(to_date(now()), hour(now())),'" + partitionFiledFormat + "')";
             } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
-                start = "date_format(days_sub(to_date(now()), 1)," + partitionFiledFormat + ")";
-                end = "date_format(to_date(now())," + partitionFiledFormat + ")";
+                start = "date_format(days_sub(to_date(now()), 1),'" + partitionFiledFormat + "')";
+                end = "date_format(to_date(now()),'" + partitionFiledFormat + "')";
             } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
-                start = "date_format(months_sub(days_sub(to_date(now()), dayofmonth(now()) - 1), 1),"
-                        + partitionFiledFormat + ")";
-                end = "date_format(days_sub(to_date(now()), dayofmonth(now()) - 1),"  + partitionFiledFormat + ")";
+                start = "date_format(months_sub(days_sub(to_date(now()), dayofmonth(now()) - 1), 1),'"
+                        + partitionFiledFormat + "')";
+                end = "date_format(days_sub(to_date(now()), dayofmonth(now()) - 1),'"  + partitionFiledFormat + "')";
             } else { // YEAR
-                start = "date_format(years_sub(days_sub(to_date(now()), dayofyear(now()) - 1), 1)," + partitionFiledFormat + ")";
-                end = "date_format(days_sub(to_date(now()), dayofyear(now()) - 1)," + partitionFiledFormat + ")";
+                start = "date_format(years_sub(days_sub(to_date(now()), dayofyear(now()) - 1), 1),'"
+                        + partitionFiledFormat + "')";
+                end = "date_format(days_sub(to_date(now()), dayofyear(now()) - 1),'" + partitionFiledFormat + "')";
             }
         }
         whereSql.append(start).append(" AND ").append(partitionFiled).append(" < ").append(end);
