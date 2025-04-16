@@ -53,6 +53,8 @@ public abstract class Coordinator {
     public void setProgressMaxTotalTime(long totalTimeMs) {}
     public void resetProgressMaxTotalTime() {}
 
+    public void setQueryProgressFinished(boolean isFinished) {}
+
     public interface Factory {
         Coordinator createQueryScheduler(ConnectContext context,
                                          List<PlanFragment> fragments,

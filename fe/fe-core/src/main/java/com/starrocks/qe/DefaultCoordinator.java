@@ -121,6 +121,7 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
@@ -186,6 +187,11 @@ public class DefaultCoordinator extends Coordinator {
     private boolean isBinaryRow = false;
 
     private ExecutionSchedule schedule;
+    private AtomicBoolean queryProgressFinished = new AtomicBoolean(false);
+
+    public void setQueryProgressFinished(boolean isFinished) {
+        this.queryProgressFinished.set(isFinished);
+    }
 
     public static class Factory implements Coordinator.Factory {
 
@@ -842,7 +848,10 @@ public class DefaultCoordinator extends Coordinator {
                 completedInstances.merge(state.getFragmentId(), 1, Integer::sum);
             }
         }
-
+        // if query is normal finish, force update completedInstances = fragmentToInstances
+        if (queryProgressFinished.get()) {
+            completedInstances = fragmentToInstances;
+        }
         // calculate scan progress and progressBar generate
         calculateProgress(fragmentToInstances, completedInstances, sb);
 

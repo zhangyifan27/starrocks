@@ -1378,6 +1378,14 @@ public class StmtExecutor {
                     statisticsForAuditLog.statsItems.isEmpty()) {
                 return;
             }
+
+            if (coord != null) {
+                coord.setQueryProgressFinished(true);
+                coord.resetProgressMaxTotalTime();
+                QeProcessorImpl.INSTANCE.addQueryProgress(context.getExecutionId(),
+                        coord.getQueryProgressInfo());
+            }
+
             // collect table-level metrics
             Set<Long> tableIds = Sets.newHashSet();
             for (QueryStatisticsItemPB item : statisticsForAuditLog.statsItems) {
