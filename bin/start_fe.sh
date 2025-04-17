@@ -66,11 +66,12 @@ check_and_update_max_processes
 # PID_DIR
 export LOG_DIR="$STARROCKS_HOME/log"
 export PID_DIR=`cd "$curdir"; pwd`
-export_env_from_conf $STARROCKS_HOME/conf/fe.conf
 
 if [ -e $STARROCKS_HOME/conf/hadoop_env.sh ]; then
     source $STARROCKS_HOME/conf/hadoop_env.sh
 fi
+
+export_env_from_conf $STARROCKS_HOME/conf/fe.conf
 
 # java
 if [[ -z ${JAVA_HOME} ]]; then
