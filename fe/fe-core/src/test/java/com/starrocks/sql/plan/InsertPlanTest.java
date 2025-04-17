@@ -18,6 +18,7 @@ import com.google.common.collect.Lists;
 import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
+import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.Config;
@@ -1027,5 +1028,43 @@ public class InsertPlanTest extends PlanTestBase {
                 "     cardinality=1\n" +
                 "     avgRowSize=2.0\n";
         Assert.assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testHiveTableTypeCondition() throws Exception {
+        // Test normal Hive table
+        HiveTable normalHiveTable = new HiveTable();
+        new MockUp<HiveTable>() {
+            @Mock
+            public boolean isHiveTable() {
+                return true;
+            }
+
+            @Mock
+            public boolean isThiveTable() {
+                return false;
+            }
+        };
+
+        // Verify conditions
+        Assert.assertFalse("Normal Hive table should not pass THive condition check",
+                normalHiveTable.isHiveTable() && normalHiveTable.isThiveTable());
+
+        // Test THive table
+        HiveTable thiveTable = new HiveTable();
+        new MockUp<HiveTable>() {
+            @Mock
+            public boolean isHiveTable() {
+                return true;
+            }
+
+            @Mock
+            public boolean isThiveTable() {
+                return true;
+            }
+        };
+
+        Assert.assertTrue("THive table should pass THive condition check",
+                thiveTable.isHiveTable() && thiveTable.isThiveTable());
     }
 }
