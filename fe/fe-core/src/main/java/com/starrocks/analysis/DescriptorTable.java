@@ -41,6 +41,7 @@ import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.IdGenerator;
 import com.starrocks.thrift.TDescriptorTable;
+import com.starrocks.thrift.TSlotDescriptor;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -48,6 +49,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Repository for tuple (and slot) descriptors.
@@ -65,6 +67,8 @@ public class DescriptorTable {
     private final IdGenerator<TupleId> tupleIdGenerator_ = TupleId.createGenerator();
     private final IdGenerator<SlotId> slotIdGenerator_ = SlotId.createGenerator();
     private final HashMap<SlotId, SlotDescriptor> slotDescs = Maps.newHashMap();
+    // Set to track slots that should be treated as constants (e.g., from AssertOneRowOperator)
+    private final Set<SlotId> constantSlots = new HashSet<>();
 
     public DescriptorTable() {
     }
@@ -148,6 +152,27 @@ public class DescriptorTable {
         }
     }
 
+    /**
+     * Marks slots as constants - meaning their values won't change during query execution.
+     * This is specifically useful for slots coming from AssertOneRowOperator which guarantees
+     * at most one row of output.
+     *
+     * @param ids list of slot IDs to mark as constants
+     */
+    public void markSlotsAsConstants(List<SlotId> ids) {
+        constantSlots.addAll(ids);
+    }
+
+    /**
+     * Checks if a slot is marked as a constant.
+     *
+     * @param id slot ID to check
+     * @return true if the slot is marked as a constant
+     */
+    public boolean isSlotConstant(SlotId id) {
+        return constantSlots.contains(id);
+    }
+
     // Computes physical layout parameters of all descriptors.
     // Call this only after the last descriptor was added.
     public void computeMemLayout() {
@@ -171,7 +196,12 @@ public class DescriptorTable {
                     referencedTbls.putIfAbsent(tupleD.getTable().getId(), tupleD.getTable());
                 }
                 for (SlotDescriptor slotD : tupleD.getMaterializedSlots()) {
-                    result.addToSlotDescriptors(slotD.toThrift());
+                    TSlotDescriptor tSlotDesc = slotD.toThrift();
+                    // Add constant column information if this slot is marked as constant
+                    if (isSlotConstant(slotD.getId())) {
+                        tSlotDesc.setIs_constant(true);
+                    }
+                    result.addToSlotDescriptors(tSlotDesc);
                 }
             }
         }
@@ -202,7 +232,12 @@ public class DescriptorTable {
                     referencedTbls.putIfAbsent(tupleD.getTable().getId(), tupleD.getTable());
                 }
                 for (SlotDescriptor slotD : tupleD.getMaterializedSlots()) {
-                    result.addToSlotDescriptors(slotD.toThrift());
+                    TSlotDescriptor tSlotDesc = slotD.toThrift();
+                    // Add constant column information if this slot is marked as constant
+                    if (isSlotConstant(slotD.getId())) {
+                        tSlotDesc.setIs_constant(true);
+                    }
+                    result.addToSlotDescriptors(tSlotDesc);
                 }
             }
         }

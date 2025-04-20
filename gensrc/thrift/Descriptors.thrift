@@ -56,6 +56,9 @@ struct TSlotDescriptor {
   // for example, the physical name of a column in a parquet file.
   // used in delta lake column mapping name mode
   14: optional string col_physical_name
+  // indicates if this slot represents a value that is constant throughout query execution
+  // this is used for constant propagation and optimization in the BE
+  15: optional bool is_constant
 }
 
 struct TTupleDescriptor {

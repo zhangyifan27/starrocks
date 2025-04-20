@@ -38,8 +38,12 @@ ConstColumn::ConstColumn(ColumnPtr data, size_t size) : _data(std::move(data)), 
 
 void ConstColumn::append(const Column& src, size_t offset, size_t count) {
     if (_size == 0) {
-        const auto& src_column = down_cast<const ConstColumn&>(src);
-        _data->append(*src_column.data_column(), 0, 1);
+        if (LIKELY(src.is_constant())) {
+            const auto& src_column = down_cast<const ConstColumn&>(src);
+            _data->append(*src_column.data_column(), 0, 1);
+        } else {
+            _data->append(src, offset, 1);
+        }
     }
     _size += count;
 }

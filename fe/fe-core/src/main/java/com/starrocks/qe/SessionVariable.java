@@ -825,6 +825,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String PRUNE_PARTITION_SIMPLE_QUERY_MAX_LIMIT = "prune_partition_simple_query_max_limit";
     public static final String PRUNE_PARTITION_SIMPLE_QUERY_AVG_ROW_SIZE = "prune_partition_simple_query_avg_row_size";
 
+    // Whether to enable the optimization of marking `assertOneRow` exprs to be constant. 
+    public static final String ENABLE_MARK_ONE_ROW_EXPR_CONSTANT = "enable_mark_one_row_expr_constant";
+
     public static final List<String> DEPRECATED_VARIABLES = ImmutableList.<String>builder()
             .add(CODEGEN_LEVEL)
             .add(MAX_EXECUTION_TIME)
@@ -1975,6 +1978,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VarAttr(name = ENABLE_CBO_VIEW_BASED_MV_REWRITE)
     private boolean enableCBOViewBasedMvRewrite = false;
+
+    @VarAttr(name = ENABLE_MARK_ONE_ROW_EXPR_CONSTANT)
+    private boolean enableMarkOneRowExprConstant = false;
 
     /**
      * Materialized view rewrite rule output limit: how many MVs would be chosen in a Rule for an OptExpr ?
@@ -3850,6 +3856,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean isEnableCBOViewBasedMvRewrite() {
         return this.enableCBOViewBasedMvRewrite;
+    }
+
+    public void setEnableMarkOneRowExprConstant(boolean enableMarkOneRowExprConstant) {
+        this.enableMarkOneRowExprConstant = enableMarkOneRowExprConstant;
+    }
+
+    public boolean isEnableMarkOneRowExprConstant() {
+        return this.enableMarkOneRowExprConstant;
     }
 
     public int getCboMaterializedViewRewriteRuleOutputLimit() {

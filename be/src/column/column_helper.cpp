@@ -277,6 +277,10 @@ ColumnPtr ColumnHelper::create_column(const TypeDescriptor& type_desc, bool null
     return create_column(type_desc, nullable, false, 0);
 }
 
+ColumnPtr ColumnHelper::create_column(const TypeDescriptor& type_desc, bool nullable, bool is_const) {
+    return create_column(type_desc, nullable, is_const, 0, false, true);
+}
+
 struct ColumnBuilder {
     template <LogicalType ltype>
     ColumnPtr operator()(const TypeDescriptor& type_desc, size_t size) {
@@ -302,9 +306,9 @@ struct ColumnBuilder {
 };
 
 ColumnPtr ColumnHelper::create_column(const TypeDescriptor& type_desc, bool nullable, bool is_const, size_t size,
-                                      bool use_adaptive_nullable_column) {
+                                      bool use_adaptive_nullable_column, bool use_empty_const_nullable_column) {
     auto type = type_desc.type;
-    if (is_const && (nullable || type == TYPE_NULL)) {
+    if (is_const && (nullable || type == TYPE_NULL) && LIKELY(!use_empty_const_nullable_column || size > 0)) {
         return ColumnHelper::create_const_null_column(size);
     } else if (type == TYPE_NULL) {
         if (use_adaptive_nullable_column) {
@@ -348,6 +352,13 @@ ColumnPtr ColumnHelper::create_column(const TypeDescriptor& type_desc, bool null
     }
 
     if (is_const) {
+        if (UNLIKELY(use_empty_const_nullable_column && nullable && size == 0)) {
+            if (use_adaptive_nullable_column) {
+                p = AdaptiveNullableColumn::create(p, NullColumn::create(size, DATUM_NULL));
+            } else {
+                p = NullableColumn::create(p, NullColumn::create(size, DATUM_NULL));
+            }
+        }
         return ConstColumn::create(p, size);
     }
     if (nullable) {

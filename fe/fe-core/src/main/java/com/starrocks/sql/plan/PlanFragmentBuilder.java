@@ -2911,6 +2911,23 @@ public class PlanFragmentBuilder {
                     new AssertNumRowsNode(context.getNextNodeId(), inputFragment.getPlanRoot(),
                             new AssertNumRowsElement(assertOneRow.getCheckRows(), assertOneRow.getTips(),
                                     assertOneRow.getAssertion()));
+                                    
+            if (context.getConnectContext().getSessionVariable().isEnableMarkOneRowExprConstant()) {
+                // If this operator indicates its output columns are constants (since it emits at most one row),
+                // mark these columns in the descriptor table so they can be propagated to the BE
+                // Collect all slot IDs from this node's output tuples
+                for (TupleId id : node.getTupleIds()) {
+                    List<SlotId> slotIds = context.getDescTbl().getTupleDesc(id).getSlots().stream()
+                            .map(SlotDescriptor::getId)
+                            .collect(Collectors.toList());
+
+                    // Mark all output slots as constants
+                    if (!slotIds.isEmpty()) {
+                        context.getDescTbl().markSlotsAsConstants(slotIds);
+                    }
+                }
+            }
+
             node.computeStatistics(optExpression.getStatistics());
             node.setCost(optExpression.getOwnCost());
             currentExecGroup.add(node);

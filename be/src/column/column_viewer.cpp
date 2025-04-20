@@ -38,8 +38,15 @@ ColumnViewer<Type>::ColumnViewer(const ColumnPtr& column)
         _column->append_default();
     } else if (column->is_constant()) {
         auto v = ColumnHelper::as_raw_column<ConstColumn>(column);
-        _column = ColumnHelper::cast_to<Type>(v->data_column());
-        _null_column = ColumnHelper::one_size_not_null_column;
+        if (v->is_nullable()) {
+            // const nullable column, but the data column is not null.
+            auto v2 = ColumnHelper::as_raw_column<NullableColumn>(v->data_column());
+            _column = ColumnHelper::cast_to<Type>(v2->data_column());
+            _null_column = ColumnHelper::one_size_not_null_column;
+        } else {
+            _column = ColumnHelper::cast_to<Type>(v->data_column());
+            _null_column = ColumnHelper::one_size_not_null_column;
+        }
     } else if (column->is_nullable()) {
         auto v = ColumnHelper::as_raw_column<NullableColumn>(column);
         _column = ColumnHelper::cast_to<Type>(v->data_column());

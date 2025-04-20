@@ -76,7 +76,8 @@ SlotDescriptor::SlotDescriptor(SlotId id, std::string name, TypeDescriptor type)
           _slot_size(_type.get_slot_size()),
           _is_materialized(false),
           _is_output_column(false),
-          _is_nullable(true) {}
+          _is_nullable(true),
+          _is_constant(false) {}
 
 SlotDescriptor::SlotDescriptor(const TSlotDescriptor& tdesc)
         : _id(tdesc.id),
@@ -90,7 +91,8 @@ SlotDescriptor::SlotDescriptor(const TSlotDescriptor& tdesc)
           _slot_size(_type.get_slot_size()),
           _is_materialized(tdesc.isMaterialized),
           _is_output_column(tdesc.__isset.isOutputColumn ? tdesc.isOutputColumn : true),
-          _is_nullable(tdesc.__isset.isNullable ? tdesc.isNullable : true) {}
+          _is_nullable(tdesc.__isset.isNullable ? tdesc.isNullable : true),
+          _is_constant(tdesc.__isset.is_constant ? tdesc.is_constant : false) {}
 
 SlotDescriptor::SlotDescriptor(const PSlotDescriptor& pdesc)
         : _id(pdesc.id()),
@@ -104,7 +106,8 @@ SlotDescriptor::SlotDescriptor(const PSlotDescriptor& pdesc)
           _is_materialized(pdesc.is_materialized()),
           _is_output_column(true),
           // keep same as is_nullable()
-          _is_nullable(_null_indicator_offset.bit_mask != 0) {}
+          _is_nullable(_null_indicator_offset.bit_mask != 0),
+          _is_constant(false) {}
 
 void SlotDescriptor::to_protobuf(PSlotDescriptor* pslot) const {
     pslot->set_id(_id);
@@ -124,7 +127,9 @@ void SlotDescriptor::to_protobuf(PSlotDescriptor* pslot) const {
 std::string SlotDescriptor::debug_string() const {
     std::stringstream out;
     out << "Slot(id=" << _id << " type=" << _type << " name=" << _col_name << " col_unique_id=" << _col_unique_id
-        << " col_physical_name=" << _col_physical_name << " null=" << _null_indicator_offset.debug_string() << ")";
+        << " col_physical_name=" << _col_physical_name << " null=" << _null_indicator_offset.debug_string()
+        << " is_materialized=" << _is_materialized << " is_output_column=" << _is_output_column
+        << " is_nullable=" << _is_nullable << " is_constant=" << _is_constant << ")";
     return out.str();
 }
 
