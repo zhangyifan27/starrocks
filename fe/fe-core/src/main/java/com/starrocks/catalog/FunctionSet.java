@@ -505,6 +505,7 @@ public class FunctionSet {
     public static final String MANN_WHITNEY_U_TEST = "mann_whitney_u_test";
     public static final String CAUSAL_FOREST = "causal_forest";
     public static final String QUANTILE_TEST = "quantile_test";
+    public static final String KOLMOGOROV_SMIRNOV_TEST = "kolmogorov_smirnov_test";
 
     // JSON functions
     public static final Function JSON_QUERY_FUNC = new Function(
@@ -1637,6 +1638,10 @@ public class FunctionSet {
         addBuiltin(AggregateFunction.createBuiltin(CAUSAL_FOREST,
                 Lists.newArrayList(Type.JSON, Type.DOUBLE, Type.BOOLEAN, Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN),
                 Type.JSON, Type.VARBINARY, false, true, false));
+        
+        addBuiltin(AggregateFunction.createBuiltin(KOLMOGOROV_SMIRNOV_TEST,
+                Lists.newArrayList(Type.DOUBLE, Type.BOOLEAN, Type.VARCHAR, Type.VARCHAR), Type.JSON,
+                Type.VARBINARY, false, true, false));
     }
 
     private void registerBuiltinStddevAggFunction() {

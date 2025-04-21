@@ -22,6 +22,7 @@
 #include "exprs/agg/factory/aggregate_factory.hpp"
 #include "exprs/agg/factory/aggregate_resolver.hpp"
 #include "exprs/agg/group_set.h"
+#include "exprs/agg/kolmogorov_smirnov_test.h"
 #include "exprs/agg/mann_whitney.h"
 #include "exprs/agg/matrix_multiplication.h"
 #include "exprs/agg/ols.h"
@@ -261,6 +262,11 @@ void AggregateFuncResolver::register_all_in_sql() {
             std::string(AllInSqlFunctions::quantile_test),
             std::vector{TYPE_DOUBLE, TYPE_VARCHAR, TYPE_ARRAY, TYPE_BIGINT}, false,
             std::make_shared<QuantileTestAggregateFunction>());
+
+    add_aggregate_mapping<TYPE_JSON, KolmogorovSmirnovAggState>(
+            std::string(AllInSqlFunctions::kolmogorov_smirnov_test),
+            std::vector{TYPE_DOUBLE, TYPE_BOOLEAN, TYPE_VARCHAR, TYPE_VARCHAR}, false,
+            std::make_shared<KolmogorovSmirnovAggFunction>());
 }
 
 } // namespace starrocks
