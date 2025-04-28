@@ -17,6 +17,7 @@ package com.starrocks.sql.optimizer.rule.transformation;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.starrocks.catalog.AggregateFunction;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.FunctionSet;
@@ -222,7 +223,7 @@ public class PartitionColumnMinMaxRewriteRule extends TransformationRule {
         PartitionInfo partitionInfo = table.getPartitionInfo();
         Set<Long> nullPartitions = partitionInfo.getNullValuePartitions();
 
-        List<Long> pruned = Lists.newArrayList();
+        Set<Long> pruned = Sets.newHashSet();
         if (hasMinMax.first) {
             List<Long> sorted = partitionInfo.getSortedPartitions(true);
             sorted.retainAll(nonEmptyPartitionIds);
@@ -255,7 +256,7 @@ public class PartitionColumnMinMaxRewriteRule extends TransformationRule {
 
         LogicalOlapScanOperator scan = new LogicalOlapScanOperator.Builder()
                 .withOperator(scanOperator)
-                .setSelectedPartitionId(pruned)
+                .setSelectedPartitionId(pruned.stream().collect(Collectors.toList()))
                 .build();
 
         return OptExpression.create(aggregationOperator, OptExpression.create(scan));
