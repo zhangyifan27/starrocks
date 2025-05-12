@@ -33,6 +33,7 @@
 #include "exprs/helpers/expr_tree.hpp"
 #include "exprs/helpers/serialize_helpers.hpp"
 #include "gutil/casts.h"
+#include "gutil/integral_types.h"
 #include "storage/types.h"
 #include "types/logical_type.h"
 #include "util/slice.h"
@@ -110,7 +111,7 @@ public:
         _sum_x = other._sum_x;
         _sum_xy = other._sum_xy;
         if constexpr (is_skew) {
-            _sum_x3 = other._sum_x3;
+            _sum_xyz = other._sum_xyz;
         }
     }
     DeltaMethodStats(DeltaMethodStats&& other) noexcept {
@@ -119,7 +120,7 @@ public:
         _sum_x = std::move(other._sum_x);
         _sum_xy = std::move(other._sum_xy);
         if constexpr (is_skew) {
-            _sum_x3 = std::move(other._sum_x3);
+            _sum_xyz = std::move(other._sum_xyz);
         }
         other.reset();
     }
@@ -134,7 +135,14 @@ public:
         _sum_xy = ublas::triangular_matrix<double, ublas::upper>(length, length);
         std::fill(_sum_xy.data().begin(), _sum_xy.data().end(), 0);
         if constexpr (is_skew) {
-            _sum_x3 = ublas::vector<double>(length, 0);
+            _sum_xyz = ublas::vector<double>(length * (length + 1) * (length + 2) / 6, 0);
+            for (uint32_t i = 0, idx = 0; i < length; ++i) {
+                for (uint32_t j = i; j < length; ++j) {
+                    for (uint32_t k = j; k < length; ++k) {
+                        _sum_x3_idx_map[std::array<uint32_t, 3>{i, j, k}] = idx++;
+                    }
+                }
+            }
         }
     }
 
@@ -144,7 +152,7 @@ public:
         ublas::vector<double>().swap(_sum_x);
         ublas::triangular_matrix<double, ublas::upper>().swap(_sum_xy);
         if constexpr (is_skew) {
-            ublas::vector<double>().swap(_sum_x3);
+            ublas::vector<double>().swap(_sum_xyz);
         }
     }
 
@@ -160,7 +168,11 @@ public:
         }
         if constexpr (is_skew) {
             for (uint32_t i = 0; i < _num_variables; ++i) {
-                _sum_x3(i) += input[i] * input[i] * input[i];
+                for (uint32_t j = i; j < _num_variables; ++j) {
+                    for (uint32_t k = j; k < _num_variables; ++k) {
+                        _sum_xyz(_sum_x3_idx_map[std::array<uint32_t, 3>{i, j, k}]) += input[i] * input[j] * input[k];
+                    }
+                }
             }
         }
         _count += 1;
@@ -172,7 +184,7 @@ public:
         _sum_xy += other._sum_xy;
         _count += other._count;
         if constexpr (is_skew) {
-            _sum_x3 += other._sum_x3;
+            _sum_xyz += other._sum_xyz;
         }
     }
 
@@ -204,7 +216,8 @@ public:
         SerializeHelpers::serialize(_sum_x.data().begin(), data, _num_variables);
         SerializeHelpers::serialize(_sum_xy.data().begin(), data, _num_variables * (_num_variables + 1) / 2);
         if constexpr (is_skew) {
-            SerializeHelpers::serialize(_sum_x3.data().begin(), data, _num_variables);
+            SerializeHelpers::serialize(_sum_xyz.data().begin(), data,
+                                        _num_variables * (_num_variables + 1) * (_num_variables + 2) / 6);
         }
     }
 
@@ -214,7 +227,15 @@ public:
         SerializeHelpers::deserialize(data, _sum_x.data().begin(), _num_variables);
         SerializeHelpers::deserialize(data, _sum_xy.data().begin(), _num_variables * (_num_variables + 1) / 2);
         if constexpr (is_skew) {
-            SerializeHelpers::deserialize(data, _sum_x3.data().begin(), _num_variables);
+            SerializeHelpers::deserialize(data, _sum_xyz.data().begin(),
+                                          _num_variables * (_num_variables + 1) * (_num_variables + 2) / 6);
+            for (uint32_t i = 0, idx = 0; i < _num_variables; ++i) {
+                for (uint32_t j = i; j < _num_variables; ++j) {
+                    for (uint32_t k = j; k < _num_variables; ++k) {
+                        _sum_x3_idx_map[std::array<uint32_t, 3>{i, j, k}] = idx++;
+                    }
+                }
+            }
         }
     }
 
@@ -222,7 +243,8 @@ public:
         DCHECK(!is_uninitialized());
         if constexpr (is_skew) {
             return sizeof(_count) + sizeof(double) * _num_variables +
-                   sizeof(double) * _num_variables * (_num_variables + 1) / 2 + sizeof(double) * _num_variables;
+                   sizeof(double) * _num_variables * (_num_variables + 1) / 2 +
+                   sizeof(double) * _num_variables * (_num_variables + 1) * (_num_variables + 2) / 6;
         }
         return sizeof(_count) + sizeof(double) * _num_variables +
                sizeof(double) * _num_variables * (_num_variables + 1) / 2;
@@ -289,25 +311,48 @@ public:
         return ret;
     }
 
-    double calc_moment3() const {
+    double calc_moment3(size_t i) const {
         DCHECK(_count > 0);
         DCHECK(_num_variables >= 2);
-        double bucket_mean = (_sum_x[0] - _sum_x[1]) / _count;
-        double m3 = 0;
-        m3 += _sum_x3[0] - 3 * bucket_mean * _sum_xy(0, 0) + 3 * _sum_x[0] * std::pow(bucket_mean, 2) -
-              _count * std::pow(bucket_mean, 3);
-        m3 /= _sum_x[1];
+        double m3 = calc_sum_xyz(i, i, i) - 3 * _sum_x[i] * _sum_xy(i, i) / _count +
+                    2 * _sum_x[i] * _sum_x[i] * _sum_x[i] / (_count * _count);
+        m3 /= _count;
         return m3;
     }
 
-    double calc_sum(size_t i) const { return _sum_x[i]; }
+    double calc_sum_x(uint32_t i) const {
+        DCHECK(i < _num_variables);
+        return _sum_x[i];
+    }
+
+    double calc_sum_xy(uint32_t i, uint32_t j) const {
+        DCHECK(i < _num_variables);
+        DCHECK(j < _num_variables);
+        if (i > j) {
+            std::swap(i, j);
+        }
+        return _sum_xy(i, j);
+    }
+
+    double calc_sum_xyz(uint32_t i, uint32_t j, uint32_t k) const {
+        DCHECK(i < _num_variables);
+        DCHECK(j < _num_variables);
+        DCHECK(k < _num_variables);
+        std::array<uint32_t, 3> ijk = {i, j, k};
+        std::sort(ijk.begin(), ijk.end());
+        i = ijk[0];
+        j = ijk[1];
+        k = ijk[2];
+        return _sum_xyz[_sum_x3_idx_map.at(std::array<uint32_t, 3>{i, j, k})];
+    }
 
 private:
     int _num_variables{-1};
     size_t _count{0};
     ublas::vector<double> _sum_x;
     ublas::triangular_matrix<double, ublas::upper> _sum_xy;
-    ublas::vector<double> _sum_x3;
+    ublas::vector<double> _sum_xyz;
+    std::map<std::array<uint32_t, 3>, size_t> _sum_x3_idx_map;
 };
 
 class DeltaMethodAggregateState {

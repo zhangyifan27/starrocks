@@ -225,17 +225,15 @@ public:
     static double calc_pvalue_edge_worth(double t_stat, TtestAlternative alternative, double skewness,
                                          double total_num) {
         boost::math::normal normal_dist(0, 1);
-        auto pdf_correction = [&](double x) {
-            return skewness * (2 * x * x + 1) * pdf(normal_dist, x) / 6 / sqrt(total_num);
-        };
         double p_value = 0;
         if (alternative == TtestAlternative::TwoSided) {
-            p_value = 2 * std::min(cdf(normal_dist, t_stat) + pdf_correction(t_stat),
-                                   1 - cdf(normal_dist, t_stat) - pdf_correction(t_stat));
+            p_value =
+                    2 * std::min(cdf(normal_dist, t_stat) + pdf_correction_edge_worth(skewness, total_num, t_stat),
+                                 1 - cdf(normal_dist, t_stat) - pdf_correction_edge_worth(skewness, total_num, t_stat));
         } else if (alternative == TtestAlternative::Less) {
-            p_value = cdf(normal_dist, t_stat) + pdf_correction(t_stat);
+            p_value = cdf(normal_dist, t_stat) + pdf_correction_edge_worth(skewness, total_num, t_stat);
         } else if (alternative == TtestAlternative::Greater) {
-            p_value = 1 - cdf(normal_dist, t_stat) - pdf_correction(t_stat);
+            p_value = 1 - cdf(normal_dist, t_stat) - pdf_correction_edge_worth(skewness, total_num, t_stat);
         }
         if (p_value > 1) {
             p_value = 1;
@@ -269,22 +267,44 @@ public:
         }
         return {lower, upper};
     }
-    static std::pair<double, double> calc_confidence_interval_edge_worth(double estimate, double stderr_var,
-                                                                         size_t count, double alpha,
-                                                                         TtestAlternative alternative, double skewness,
-                                                                         double total_num) {
+    static void calc_confidence_interval_and_power_edge_worth(double avg0, double stderr_var, double delta,
+                                                              double alpha, double skewness, double total_num,
+                                                              TtestAlternative alternative, double& power,
+                                                              double& lower, double& upper) {
         boost::math::normal normal_dist(0, 1);
-        auto quantile_correction = [&](double quantile) {
-            return skewness * (2 * quantile * quantile + 1) / 6 / sqrt(total_num);
-        };
-        double ci_width_lower =
-                (quantile(normal_dist, alpha / 2) - quantile_correction(quantile(normal_dist, alpha / 2))) * stderr_var;
-        double ci_width_upper =
-                (quantile(normal_dist, 1 - alpha / 2) - quantile_correction(quantile(normal_dist, 1 - alpha / 2))) *
-                stderr_var;
-        double lower = estimate - ci_width_lower;
-        double upper = estimate + ci_width_upper;
-        return {lower, upper};
+        double diff_term = avg0 * delta / stderr_var;
+        DCHECK(alternative != TtestAlternative::Unknown);
+        if (alternative == TtestAlternative::TwoSided) {
+            lower = quantile(normal_dist, alpha / 2) - diff_term -
+                    quantile_correction_edge_worth(skewness, total_num, quantile(normal_dist, alpha / 2));
+            upper = quantile(normal_dist, 1 - alpha / 2) - diff_term -
+                    quantile_correction_edge_worth(skewness, total_num, quantile(normal_dist, 1 - alpha / 2));
+            power = 1 - cdf(normal_dist, upper) + cdf(normal_dist, lower) -
+                    pdf_correction_edge_worth(skewness, total_num, upper) +
+                    pdf_correction_edge_worth(skewness, total_num, lower);
+        } else if (alternative == TtestAlternative::Less) {
+            double z = quantile(normal_dist, 1 - alpha);
+            lower = -std::numeric_limits<double>::infinity();
+            upper = z - diff_term - quantile_correction_edge_worth(skewness, total_num, z);
+            power = 1 - cdf(normal_dist, upper) - pdf_correction_edge_worth(skewness, total_num, upper);
+        } else if (alternative == TtestAlternative::Greater) {
+            double z = quantile(normal_dist, alpha);
+            lower = z - diff_term - quantile_correction_edge_worth(skewness, total_num, z);
+            upper = std::numeric_limits<double>::infinity();
+            power = cdf(normal_dist, lower) + pdf_correction_edge_worth(skewness, total_num, lower);
+        } else {
+            __builtin_unreachable();
+        }
+    }
+
+    static double pdf_correction_edge_worth(double skewness, double n, double t_stat) {
+        boost::math::normal normal_dist(0, 1);
+        return skewness * (2 * t_stat * t_stat + 1) * pdf(normal_dist, t_stat) / 6 / std::sqrt(n);
+    }
+
+    static double quantile_correction_edge_worth(double skewness, double n, double quantile) {
+        boost::math::normal normal_dist(0, 1);
+        return skewness * (2 * quantile * quantile + 1) / 6 / std::sqrt(n);
     }
 };
 

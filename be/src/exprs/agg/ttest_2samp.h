@@ -432,11 +432,11 @@ public:
         double mean0 = 0, mean1 = 0, var0 = 0, var1 = 0;
         std::string warning_prefix;
 
+        DeltaMethodStats<true> delta_method_stats;
+        delta_method_stats.init(_ttest_params.num_variables());
+        delta_method_stats.merge(_delta_method_stats0);
+        delta_method_stats.merge(_delta_method_stats1);
         if (_ttest_params.num_pses() == 0) {
-            DeltaMethodStats<true> delta_method_stats;
-            delta_method_stats.init(_ttest_params.num_variables());
-            delta_method_stats.merge(_delta_method_stats0);
-            delta_method_stats.merge(_delta_method_stats1);
             if (!TtestCommon::calc_means_and_vars(
                         _ttest_params.Y_expression(), _ttest_params.cuped_expression(), _ttest_params.num_variables(),
                         _delta_method_stats0.count(), _delta_method_stats1.count(), _delta_method_stats0.means(),
@@ -474,51 +474,137 @@ public:
         size_t count = _delta_method_stats0.count() + _delta_method_stats1.count();
 
         double p_value, lower, upper;
+        double result_power = std::numeric_limits<double>::quiet_NaN();
+
+        double alpha = _ttest_params.alpha();
+        double mde = _ttest_params.mde();
+        double power = _ttest_params.power();
+        double result_mde = std::numeric_limits<double>::quiet_NaN();
+        int64_t recommend_samples = -1;
+        boost::math::normal normal_dist(0, 1);
 
         if (!_ttest_params.use_edge_worth_test()) {
             p_value = TtestCommon::calc_pvalue(t_stat, _ttest_params.alternative());
             std::tie(lower, upper) = TtestCommon::calc_confidence_interval(
                     estimate, stderr_var, count, _ttest_params.alpha(), _ttest_params.alternative());
+            if (std::fabs(estimate) > 1e-7) {
+                result_power =
+                        1 -
+                        cdf(normal_dist, quantile(normal_dist, 1 - alpha / 2) - std::fabs(mean0 * mde) / stderr_var) +
+                        cdf(normal_dist, quantile(normal_dist, alpha / 2) - std::fabs(mean0 * mde) / stderr_var);
+            }
         } else {
-            // Edge worth test
-            double m3_0 = _delta_method_stats0.calc_moment3();
-            double m3_1 = _delta_method_stats1.calc_moment3();
-            double treat_num = _delta_method_stats1.calc_sum(1);
-            double ctrl_num = _delta_method_stats0.calc_sum(1);
+            if (_ttest_params.Y_expression() != "x1/x2" ||
+                _delta_method_stats0.calc_sum_x(1) != _delta_method_stats0.count() ||
+                _delta_method_stats1.calc_sum_x(1) != _delta_method_stats1.count()) {
+                // edge worth test只在累计人均指标有效
+                builder.add("error", to_json("Invalid cuped expression."));
+                schema.add_field("error", "string");
+                builder.add("schema", to_json(schema.print()));
+                return;
+            }
+            double treat_num = _delta_method_stats1.count();
+            double ctrl_num = _delta_method_stats0.count();
             double total_num = treat_num + ctrl_num;
-            double s_numerator = std::pow(total_num / treat_num, 2) * m3_1 - std::pow(total_num / ctrl_num, 2) * m3_0;
-            double s_denominator = std::pow(total_num * var1 + total_num * var0, 1.5);
-            double skewness = s_numerator / s_denominator;
+            double lamda = treat_num / (treat_num + ctrl_num);
+            double skewness, unpool_std, avg0;
+            if (!_ttest_params.cuped_expression().empty()) {
+                if (!(_ttest_params.cuped_expression() == "x3" ||
+                      (_ttest_params.cuped_expression() == "x3/x4" &&
+                       _delta_method_stats0.calc_sum_x(3) == _delta_method_stats0.count() &&
+                       _delta_method_stats1.calc_sum_x(3) == _delta_method_stats1.count()))) {
+                    // cuped edge worth test只在累计人均指标有效
+                    builder.add("error", to_json("Invalid cuped expression."));
+                    schema.add_field("error", "string");
+                    builder.add("schema", to_json(schema.print()));
+                    return;
+                }
+                // cuped edge worth test
+                // 0 -> numerator, 1 -> denominator(1), 2 -> numerator_pre, [3 -> denominator_pre]
+                double t_Y3 = _delta_method_stats1.calc_sum_xyz(0, 0, 0) / treat_num;
+                double t_Y2X = _delta_method_stats1.calc_sum_xyz(0, 0, 2) / treat_num;
+                double t_YX2 = _delta_method_stats1.calc_sum_xyz(0, 2, 2) / treat_num;
+                double t_X3 = _delta_method_stats1.calc_sum_xyz(2, 2, 2) / treat_num;
+
+                double t_Y2 = _delta_method_stats1.calc_sum_xy(0, 0) / treat_num;
+                double t_YX = _delta_method_stats1.calc_sum_xy(0, 2) / treat_num;
+                double t_X2 = _delta_method_stats1.calc_sum_xy(2, 2) / treat_num;
+
+                double t_Y = _delta_method_stats1.calc_sum_x(0) / treat_num;
+                double t_X = _delta_method_stats1.calc_sum_x(2) / treat_num;
+
+                double c_Y3 = _delta_method_stats0.calc_sum_xyz(0, 0, 0) / ctrl_num;
+                double c_Y2X = _delta_method_stats0.calc_sum_xyz(0, 0, 2) / ctrl_num;
+                double c_YX2 = _delta_method_stats0.calc_sum_xyz(0, 2, 2) / ctrl_num;
+                double c_X3 = _delta_method_stats0.calc_sum_xyz(2, 2, 2) / ctrl_num;
+
+                double c_Y2 = _delta_method_stats0.calc_sum_xy(0, 0) / ctrl_num;
+                double c_YX = _delta_method_stats0.calc_sum_xy(0, 2) / ctrl_num;
+                double c_X2 = _delta_method_stats0.calc_sum_xy(2, 2) / ctrl_num;
+
+                double c_Y = _delta_method_stats0.calc_sum_x(0) / ctrl_num;
+                double c_X = _delta_method_stats0.calc_sum_x(2) / ctrl_num;
+
+                double YX = delta_method_stats.calc_sum_xy(0, 2) / total_num;
+                double X2 = delta_method_stats.calc_sum_xy(2, 2) / total_num;
+
+                double Y = delta_method_stats.calc_sum_x(0) / total_num;
+                double X = delta_method_stats.calc_sum_x(2) / total_num;
+
+                double theta = (YX - Y * X) / (X2 - X * X);
+
+                double t_Y_cuped = t_Y - theta * t_X;
+                double c_Y_cuped = c_Y - theta * c_X;
+
+                double t_var_Y_cuped =
+                        (t_Y2 - t_Y * t_Y) + (theta * theta) * (t_X2 - t_X * t_X) - 2 * theta * (t_YX - t_Y * t_X);
+                double c_var_Y_cuped =
+                        (c_Y2 - c_Y * c_Y) + (theta * theta) * (c_X2 - c_X * c_X) - 2 * theta * (c_YX - c_Y * c_X);
+
+                double t_Y3_cuped =
+                        t_Y3 - 3 * theta * t_Y2X + 3 * (theta * theta) * t_YX2 - (theta * theta * theta) * t_X3;
+                double c_Y3_cuped =
+                        c_Y3 - 3 * theta * c_Y2X + 3 * (theta * theta) * c_YX2 - (theta * theta * theta) * c_X3;
+
+                double t_k3_cuped = t_Y3_cuped - 3 * t_var_Y_cuped * t_Y_cuped - t_Y_cuped * t_Y_cuped * t_Y_cuped;
+                double c_k3_cuped = c_Y3_cuped - 3 * c_var_Y_cuped * c_Y_cuped - c_Y_cuped * c_Y_cuped * c_Y_cuped;
+
+                double A_n_cuped = t_k3_cuped / (lamda * lamda) - c_k3_cuped / ((1 - lamda) * (1 - lamda));
+                double A_d_cuped = std::pow(t_var_Y_cuped / lamda + c_var_Y_cuped / (1 - lamda), 1.5);
+                skewness = A_n_cuped / A_d_cuped;
+                unpool_std = std::sqrt(t_var_Y_cuped / treat_num + c_var_Y_cuped / ctrl_num);
+                avg0 = c_Y_cuped;
+                stderr_var = unpool_std;
+            } else {
+                // Edge worth test
+                double m3_0 = _delta_method_stats0.calc_moment3(0);
+                double m3_1 = _delta_method_stats1.calc_moment3(0);
+                double A_n = m3_1 / (lamda * lamda) - m3_0 / ((1 - lamda) * (1 - lamda));
+                double A_d = std::pow(
+                        var1 * _delta_method_stats1.count() / lamda + var0 * _delta_method_stats0.count() / (1 - lamda),
+                        1.5);
+                skewness = A_n / A_d;
+                unpool_std = stderr_var;
+                avg0 = mean0;
+            }
             p_value = TtestCommon::calc_pvalue_edge_worth(t_stat, _ttest_params.alternative(), skewness, total_num);
-            std::tie(lower, upper) =
-                    TtestCommon::calc_confidence_interval_edge_worth(estimate, stderr_var, count, _ttest_params.alpha(),
-                                                                     _ttest_params.alternative(), skewness, total_num);
+            TtestCommon::calc_confidence_interval_and_power_edge_worth(avg0, unpool_std, mde, _ttest_params.alpha(),
+                                                                       skewness, total_num, _ttest_params.alternative(),
+                                                                       result_power, lower, upper);
         }
 
-        double mde = _ttest_params.mde();
-        double power = _ttest_params.power();
-        double result_power = std::numeric_limits<double>::quiet_NaN();
-        double result_mde = std::numeric_limits<double>::quiet_NaN();
-        int64_t recommend_samples = -1;
-        if (std::fabs(estimate) > 1e-7) {
-            double alpha = _ttest_params.alpha();
-            boost::math::normal normal_dist(0, 1);
-            result_power =
-                    1 - cdf(normal_dist, quantile(normal_dist, 1 - alpha / 2) - std::fabs(mean0 * mde) / stderr_var) +
-                    cdf(normal_dist, quantile(normal_dist, alpha / 2) - std::fabs(mean0 * mde) / stderr_var);
+        if (_ttest_params.Y_expression() == "x1/x2") {
+            std::array<double, 2> std_samp_avg{}, denominators{};
+            denominators[0] = _delta_method_stats0.calc_sum_x(1);
+            denominators[1] = _delta_method_stats1.calc_sum_x(1);
+            std_samp_avg[0] = std::sqrt(var0 * denominators[0]);
+            std_samp_avg[1] = std::sqrt(var1 * denominators[1]);
+            double std_ratio = std_samp_avg[0] / std_samp_avg[1];
+            double cnt_ratio = denominators[0] / denominators[1];
+            double alpha_power = quantile(normal_dist, 1 - alpha / 2) - quantile(normal_dist, 1 - power);
+            recommend_samples = ((std_ratio * std_ratio + cnt_ratio) / cnt_ratio) * std::pow(alpha_power, 2) *
+                                std::pow(std_samp_avg[1] / mean0, 2) / std::pow(mde, 2);
             result_mde = (quantile(normal_dist, 1 - alpha / 2) + quantile(normal_dist, power)) * stderr_var / mean0;
-            if (_ttest_params.Y_expression() == "x1/x2") {
-                std::array<double, 2> std_samp_avg{}, denominators{};
-                denominators[0] = _delta_method_stats0.calc_sum(1);
-                denominators[1] = _delta_method_stats1.calc_sum(1);
-                std_samp_avg[0] = std::sqrt(var0 * denominators[0]);
-                std_samp_avg[1] = std::sqrt(var1 * denominators[1]);
-                double std_ratio = std_samp_avg[0] / std_samp_avg[1];
-                double cnt_ratio = denominators[0] / denominators[1];
-                double alpha_power = quantile(normal_dist, 1 - alpha / 2) - quantile(normal_dist, 1 - power);
-                recommend_samples = ((std_ratio * std_ratio + cnt_ratio) / cnt_ratio) * std::pow(alpha_power, 2) *
-                                    std::pow(std_samp_avg[1] / mean0, 2) / std::pow(mde, 2);
-            }
         }
 
         std::stringstream result_ss;
@@ -704,6 +790,13 @@ public:
                     return;
                 }
                 use_edge_worth_test = use_edge_worth_test_datum.get_int64();
+            }
+
+            if (use_edge_worth_test &&
+                (expression != "x1/x2" ||
+                 (!cuped_expression.empty() && cuped_expression != "x3/x4" && cuped_expression != "x3"))) {
+                ctx->set_error("Invalid Argument: invalid expression.");
+                return;
             }
 
             this->data(state).init(alternative, array_size, expression, cuped_expression, alpha, num_pses, mde, power,
