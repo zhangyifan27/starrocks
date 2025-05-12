@@ -247,4 +247,21 @@ private:
     }
 };
 
+class JDBCDeleteTaskWorkerPool final : public TaskWorkerPool<JDBCDeleteTaskReq> {
+public:
+    JDBCDeleteTaskWorkerPool(ExecEnv* env, int worker_num) : TaskWorkerPool(env, worker_num) {
+        _callback_function = _worker_thread_callback;
+    }
+
+private:
+    static void* _worker_thread_callback(void* arg_this);
+
+    Status _run_internal(const TJDBCDeleteReq& request);
+
+    AgentTaskRequestPtr _convert_task(const TAgentTaskRequest& task, time_t recv_time) override {
+        return std::make_shared<JDBCDeleteTaskReq>(task, task.jdbc_delete_req, recv_time);
+    }
+
+    void _report_error(const AgentTaskRequestPtr& raw_req, TStatusCode::type code, const std::string& error_msg);
+};
 } // namespace starrocks

@@ -53,6 +53,7 @@ import com.starrocks.thrift.TCreateTabletReq;
 import com.starrocks.thrift.TDownloadReq;
 import com.starrocks.thrift.TDropAutoIncrementMapReq;
 import com.starrocks.thrift.TDropTabletReq;
+import com.starrocks.thrift.TJDBCDeleteReq;
 import com.starrocks.thrift.TMoveDirReq;
 import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TPublishVersionRequest;
@@ -403,6 +404,12 @@ public class AgentBatchTask implements Runnable {
                 UpdateSchemaTask updateSchemaTask = (UpdateSchemaTask) task;
                 TUpdateSchemaReq req = updateSchemaTask.toThrift();
                 tAgentTaskRequest.setUpdate_schema_req(req);
+                return tAgentTaskRequest;
+            }
+            case JDBC_DELETE: {
+                JDBCDeleteTask jdbcDeleteTask = (JDBCDeleteTask) task;
+                TJDBCDeleteReq req = jdbcDeleteTask.toThrift();
+                tAgentTaskRequest.setJdbc_delete_req(req);
                 return tAgentTaskRequest;
             }
             default:

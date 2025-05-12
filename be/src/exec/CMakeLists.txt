@@ -224,6 +224,7 @@ set(EXEC_FILES
     pipeline/sink/dictionary_cache_sink_operator.cpp
     pipeline/sink/mysql_table_sink_operator.cpp
     pipeline/sink/memory_scratch_sink_operator.cpp
+    pipeline/sink/jdbc_table_sink_operator.cpp
     pipeline/select_operator.cpp
     pipeline/nljoin/nljoin_context.cpp
     pipeline/nljoin/nljoin_build_operator.cpp

@@ -19,6 +19,7 @@ import com.google.common.base.Strings;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.analysis.DescriptorTable;
 import com.starrocks.catalog.Resource.ResourceType;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.thrift.TJDBCTable;
@@ -250,6 +251,11 @@ public class JDBCTable extends Table {
     @Override
     public boolean isSupported() {
         return true;
+    }
+
+    @Override
+    public boolean supportInsert() {
+        return Config.enable_pg_jdbc_dml;
     }
 
     public ProtocolType getProtocolType() {

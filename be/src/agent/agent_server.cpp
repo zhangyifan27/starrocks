@@ -144,6 +144,7 @@ private:
     std::unique_ptr<PushTaskWorkerPool> _push_workers;
     std::unique_ptr<PublishVersionTaskWorkerPool> _publish_version_workers;
     std::unique_ptr<DeleteTaskWorkerPool> _delete_workers;
+    std::unique_ptr<JDBCDeleteTaskWorkerPool> _jdbc_delete_workers;
 
     // These 3 worker-pool do not accept tasks from FE.
     // It is self triggered periodically and reports to Fe master
@@ -299,6 +300,9 @@ void AgentServer::Impl::init_or_die() {
     CREATE_AND_START_POOL(_report_datacache_metrics_workers, ReportDataCacheMetricsTaskWorkerPool,
                           REPORT_DATACACHE_METRICS_WORKER_COUNT)
     CREATE_AND_START_POOL(_report_task_workers, ReportTaskWorkerPool, REPORT_TASK_WORKER_COUNT)
+    CREATE_AND_START_POOL(
+            _jdbc_delete_workers, JDBCDeleteTaskWorkerPool,
+            (config::delete_worker_count_normal_priority + config::delete_worker_count_high_priority) / 2);
 #undef CREATE_AND_START_POOL
 }
 
@@ -341,6 +345,7 @@ void AgentServer::Impl::stop() {
     STOP_POOL(REPORT_WORKGROUP, _report_resource_usage_workers);
     STOP_POOL(REPORT_DATACACHE_METRICS, _report_datacache_metrics_workers);
     STOP_POOL(REPORT_TASK, _report_task_workers);
+    STOP_POOL(JDBC_DELETE, _jdbc_delete_workers);
 #undef STOP_POOL
 }
 
@@ -396,6 +401,7 @@ void AgentServer::Impl::submit_tasks(TAgentResult& agent_result, const std::vect
             HANDLE_TYPE(TTaskType::DROP_AUTO_INCREMENT_MAP, drop_auto_increment_map_req);
             HANDLE_TYPE(TTaskType::REMOTE_SNAPSHOT, remote_snapshot_req);
             HANDLE_TYPE(TTaskType::REPLICATE_SNAPSHOT, replicate_snapshot_req);
+            HANDLE_TYPE(TTaskType::JDBC_DELETE, jdbc_delete_req);
 
         case TTaskType::REALTIME_PUSH:
             if (!task.__isset.push_req) {
@@ -549,6 +555,11 @@ void AgentServer::Impl::submit_tasks(TAgentResult& agent_result, const std::vect
         case TTaskType::ALTER:
             HANDLE_TASK(TTaskType::ALTER, all_tasks, run_alter_tablet_task, AlterTabletAgentTaskRequest,
                         alter_tablet_req_v2, _exec_env);
+            break;
+        case TTaskType::JDBC_DELETE:
+            for (const auto* task : all_tasks) {
+                _jdbc_delete_workers->submit_task(*task);
+            }
             break;
         default:
             ret_st = Status::InvalidArgument(strings::Substitute("tasks(type=$0) has wrong task type", task_type));

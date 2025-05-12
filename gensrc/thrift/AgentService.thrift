@@ -453,6 +453,11 @@ struct TPluginMetaInfo {
     4: optional string source
 }
 
+struct TJDBCDeleteReq {
+    1: required Descriptors.TJDBCTable jdbc_table
+    2: optional list<string> delete_conditions
+}
+
 struct TAgentTaskRequest {
     1: required TAgentServiceVersion protocol_version
     2: required Types.TTaskType task_type
@@ -487,6 +492,8 @@ struct TAgentTaskRequest {
     30: optional TReplicateSnapshotRequest replicate_snapshot_req
     31: optional TUpdateSchemaReq update_schema_req
     32: optional TCompactionControlReq compaction_control_req
+
+    101: optional TJDBCDeleteReq jdbc_delete_req
 }
 
 struct TAgentResult {

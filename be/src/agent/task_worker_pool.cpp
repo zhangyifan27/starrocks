@@ -51,6 +51,7 @@
 #include "block_cache/block_cache.h"
 #include "block_cache/datacache_utils.h"
 #include "common/status.h"
+#include "exec/jdbc_scanner.h"
 #include "exec/pipeline/query_context.h"
 #include "exec/workgroup/work_group.h"
 #include "fs/fs_util.h"
@@ -866,8 +867,102 @@ AgentStatus TaskWorkerPoolBase::get_tablet_info(TTabletId tablet_id, TSchemaHash
     return status;
 }
 
+void JDBCDeleteTaskWorkerPool::_report_error(const AgentTaskRequestPtr& raw_req, TStatusCode::type code,
+                                             const std::string& error_msg) {
+    TFinishTaskRequest finish_request;
+    finish_request.__set_backend(BackendOptions::get_localBackend());
+    finish_request.__set_task_type(raw_req->task_type);
+    finish_request.__set_signature(raw_req->signature);
+    TStatus t_status;
+    t_status.__set_status_code(code);
+    t_status.__set_error_msgs({error_msg});
+    finish_task(finish_request);
+}
+
+Status JDBCDeleteTaskWorkerPool::_run_internal(const TJDBCDeleteReq& request) {
+    const auto& jdbc_table = request.jdbc_table;
+    const auto& filters = request.delete_conditions;
+
+    auto jdbc_ctx_st = JDBCScanContext::convert_jdbc_table_to_context(jdbc_table);
+    std::stringstream ss;
+    ss << "DELETE FROM " << jdbc_table.jdbc_table;
+    if (filters.empty()) {
+        // cannot execute delete without where clause
+        LOG(WARNING) << "cannot run delete without where clause";
+        return Status::InvalidArgument("cannot run delete without where clause");
+    }
+
+    ss << " WHERE ";
+    for (int i = 0; i < filters.size(); i++) {
+        ss << (i == 0 ? "" : " AND ") << "(" << filters[i] << ")";
+    }
+
+    std::string delete_sql = ss.str();
+    LOG(INFO) << "prepare execute delete sql " << delete_sql;
+    // TODO: this profile is useless, remove it from the arglist of JDBCExecutor
+    RuntimeProfile profile("jdbc_delete");
+    RuntimeState state(_env);
+    JDBCExecutor writer(jdbc_ctx_st.value(), &profile);
+    DeferOp close_writer([&writer, &state] {
+        WARN_IF_ERROR(writer.close(&state), "close jdbc writer failed");
+    });
+
+    if (Status s = writer.open(&state); !s.ok()) {
+        std::string err_msg = fmt::format("open jdbc bridge failed, error: {}", s.to_string());
+        LOG(WARNING) << err_msg;
+        return Status::InternalError(err_msg);
+    }
+
+    if (auto st = writer.execute_raw(delete_sql); !st.ok()) {
+        std::string err_msg = fmt::format("execute delete failed, error: ", st.status().to_string());
+        LOG(WARNING) << err_msg;
+        return Status::InternalError(err_msg);
+    }
+
+    return Status::OK();
+}
+
+void* JDBCDeleteTaskWorkerPool::_worker_thread_callback(void* arg_this) {
+    auto* worker_pool_this = (JDBCDeleteTaskWorkerPool*)arg_this;
+
+    while (true) {
+        AgentTaskRequestPtr agent_task_req;
+        do {
+            agent_task_req = worker_pool_this->_pop_task();
+            if (agent_task_req == nullptr) {
+                worker_pool_this->_worker_thread_condition_variable->notify_one();
+                break;
+            }
+        } while (false);
+
+        if (worker_pool_this->_stopped) {
+            break;
+        }
+
+        if (agent_task_req == nullptr) {
+            sleep(1);
+            continue;
+        }
+
+        TStatus task_status;
+        auto s = worker_pool_this->_run_internal(agent_task_req->task_req);
+        s.to_thrift(&task_status);
+
+        TFinishTaskRequest finish_task_request;
+        finish_task_request.__set_backend(BackendOptions::get_localBackend());
+        finish_task_request.__set_task_type(agent_task_req->task_type);
+        finish_task_request.__set_signature(agent_task_req->signature);
+        finish_task_request.__set_task_status(task_status);
+        finish_task(finish_task_request);
+        remove_task_info(agent_task_req->task_type, agent_task_req->signature);
+    }
+
+    return nullptr;
+}
+
 template class TaskWorkerPool<PushReqAgentTaskRequest>;
 template class TaskWorkerPool<PublishVersionAgentTaskRequest>;
 template class TaskWorkerPool<AgentTaskRequestWithoutReqBody>;
+template class TaskWorkerPool<JDBCDeleteTaskReq>;
 
 } // namespace starrocks

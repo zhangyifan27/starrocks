@@ -62,6 +62,7 @@
 #include "exec/pipeline/sink/file_sink_operator.h"
 #include "exec/pipeline/sink/hive_table_sink_operator.h"
 #include "exec/pipeline/sink/iceberg_table_sink_operator.h"
+#include "exec/pipeline/sink/jdbc_table_sink_operator.h"
 #include "exec/pipeline/sink/memory_scratch_sink_operator.h"
 #include "exec/pipeline/sink/mysql_table_sink_operator.h"
 #include "exec/pipeline/sink/table_function_table_sink_operator.h"
@@ -76,6 +77,7 @@
 #include "runtime/export_sink.h"
 #include "runtime/hive_table_sink.h"
 #include "runtime/iceberg_table_sink.h"
+#include "runtime/jdbc_table_sink.h"
 #include "runtime/memory_scratch_sink.h"
 #include "runtime/multi_cast_data_stream_sink.h"
 #include "runtime/mysql_table_sink.h"
@@ -213,6 +215,13 @@ Status DataSink::create_data_sink(RuntimeState* state, const TDataSink& thrift_s
             return Status::InternalError("dictionary cache only support pipeline engine");
         }
         *sink = std::make_unique<DictionaryCacheSink>();
+        break;
+    }
+    case TDataSinkType::JDBC_TABLE_SINK: {
+        if (!thrift_sink.__isset.jdbc_table_sink) {
+            return Status::InternalError("Missing jdbc_table_sink");
+        }
+        *sink = std::make_unique<JDBCTableSink>(state->obj_pool(), output_exprs);
         break;
     }
 
@@ -430,6 +439,13 @@ Status DataSink::decompose_data_sink_to_pipeline(pipeline::PipelineBuilderContex
         OpFactoryPtr op = std::make_shared<DictionaryCacheSinkOperatorFactory>(
                 context->next_operator_id(), request.output_sink().dictionary_cache_sink, fragment_ctx);
 
+        prev_operators.emplace_back(op);
+        context->add_pipeline(std::move(prev_operators));
+    } else if (typeid(*this) == typeid(starrocks::JDBCTableSink)) {
+        auto* jdbc_table_sink = down_cast<starrocks::JDBCTableSink*>(this);
+        OpFactoryPtr op = std::make_shared<JDBCTableSinkOperatorFactory>(
+                context->next_operator_id(), request.output_sink().jdbc_table_sink, jdbc_table_sink->get_output_expr(),
+                dop, fragment_ctx);
         prev_operators.emplace_back(op);
         context->add_pipeline(std::move(prev_operators));
     } else {

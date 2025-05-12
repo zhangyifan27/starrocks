@@ -213,7 +213,8 @@ enum TTaskType {
     REPLICATE_SNAPSHOT,
     UPDATE_SCHEMA,
     COMPACTION_CONTROL,
-    NUM_TASK_TYPE
+    JDBC_DELETE,
+    NUM_TASK_TYPE,
 }
 
 enum TStmtType {

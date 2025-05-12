@@ -40,6 +40,7 @@ struct JDBCScanContext {
     std::string passwd;
     std::string sql;
     std::map<std::string, std::string> properties;
+    static StatusOr<JDBCScanContext> convert_jdbc_table_to_context(const TJDBCTable& jdbc_table);
 };
 
 struct JDBCScannerProfile {
@@ -52,17 +53,17 @@ struct JDBCScannerProfile {
 class JDBCScanner {
 public:
     JDBCScanner(JDBCScanContext context, const TupleDescriptor* tuple_desc, RuntimeProfile* runtime_profile)
-            : _scan_ctx(std::move(context)), _slot_descs(tuple_desc->slots()), _runtime_profile(runtime_profile) {}
+            : _scan_ctx(std::move(context)), _tuple_desc(tuple_desc), _runtime_profile(runtime_profile) {}
 
-    ~JDBCScanner() = default;
+    virtual ~JDBCScanner() = default;
 
-    [[nodiscard]] Status open(RuntimeState* state);
+    [[nodiscard]] virtual Status open(RuntimeState* state);
 
     [[nodiscard]] Status get_next(RuntimeState* state, ChunkPtr* chunk, bool* eos);
 
-    [[nodiscard]] Status close(RuntimeState* state);
+    [[nodiscard]] virtual Status close(RuntimeState* state);
 
-private:
+protected:
     void _init_profile();
 
     StatusOr<LogicalType> _precheck_data_type(const std::string& java_class, SlotDescriptor* slot_desc);
@@ -87,6 +88,7 @@ private:
 
     JDBCScanContext _scan_ctx;
     // result column slot desc
+    const TupleDescriptor* _tuple_desc;
     std::vector<SlotDescriptor*> _slot_descs;
     // java class name for each result column
     std::vector<std::string> _column_class_names;
@@ -125,4 +127,33 @@ private:
     static const int32_t DEFAULT_JDBC_CONNECTION_POOL_SIZE = 8;
     static const int32_t MINIMUM_ALLOWED_JDBC_CONNECTION_IDLE_TIMEOUT_MS = 10000;
 };
+
+class JDBCExecutor : public JDBCScanner {
+public:
+    JDBCExecutor(JDBCScanContext context, RuntimeProfile* runtime_profile)
+        : JDBCScanner(std::move(context), nullptr, runtime_profile) {}
+    ~JDBCExecutor() override = default;
+
+    Status open(RuntimeState* state) override;
+
+    Status write(Chunk* chunk, const std::vector<ExprContext*>& output_exprs);
+
+    // run raw sql set in JDBCScanContext::sql
+    StatusOr<int> execute_raw(const std::string& sql);
+
+    Status close(RuntimeState* state) override;
+
+private:
+    Status _init_jdbc_executor();
+
+private:
+    JavaGlobalRef _jdbc_executor = nullptr;
+    std::unique_ptr<JVMClass> _jdbc_executor_cls;
+
+    jmethodID _jdbc_write;
+    jmethodID _executor_close;
+    jmethodID _execute_raw;
+};
+
+
 } // namespace starrocks

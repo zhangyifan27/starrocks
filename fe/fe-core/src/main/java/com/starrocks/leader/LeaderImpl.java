@@ -75,6 +75,7 @@ import com.starrocks.common.ErrorReportException;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.NotImplementedException;
 import com.starrocks.common.Pair;
+import com.starrocks.common.Status;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.concurrent.lock.LockTimeoutException;
 import com.starrocks.common.util.concurrent.lock.LockType;
@@ -105,6 +106,7 @@ import com.starrocks.task.CreateReplicaTask.RecoverySource;
 import com.starrocks.task.DirMoveTask;
 import com.starrocks.task.DownloadTask;
 import com.starrocks.task.DropAutoIncrementMapTask;
+import com.starrocks.task.JDBCDeleteTask;
 import com.starrocks.task.PublishVersionTask;
 import com.starrocks.task.PushTask;
 import com.starrocks.task.RemoteSnapshotTask;
@@ -271,6 +273,16 @@ public class LeaderImpl {
                             AgentTaskQueue.removeTask(pushTask.getBackendId(), TTaskType.REALTIME_PUSH,
                                     task.getSignature());
                         }
+                    } else if (taskType == TTaskType.JDBC_DELETE) {
+                        JDBCDeleteTask jdbcDeleteTask = (JDBCDeleteTask) task;
+                        LOG.warn("JDBC delete failed. backendId: {} error msg: {}", jdbcDeleteTask.getBackendId(),
+                                taskStatus.getError_msgs().toString());
+                        String failMsg = "Backend: " + jdbcDeleteTask.getBackendId() + " error msg: " +
+                                taskStatus.getError_msgs().toString();
+                        jdbcDeleteTask.setStatus(new Status(TStatusCode.INTERNAL_ERROR, failMsg));
+                        jdbcDeleteTask.countDownLatch();
+                        AgentTaskQueue.removeTask(jdbcDeleteTask.getBackendId(), TTaskType.JDBC_DELETE,
+                                jdbcDeleteTask.getSignature());
                     }
                     return result;
                 }
@@ -347,6 +359,9 @@ public class LeaderImpl {
                     break;
                 case UPDATE_SCHEMA:
                     finishUpdateSchemaTask(task, request);
+                    break;
+                case JDBC_DELETE:
+                    finishJDBCDelete(task, request);
                     break;
                 default:
                     break;
@@ -500,6 +515,12 @@ public class LeaderImpl {
         } finally {
             AgentTaskQueue.removeTask(task.getBackendId(), task.getTaskType(), task.getSignature());
         }
+    }
+
+    private void finishJDBCDelete(AgentTask task, TFinishTaskRequest request) {
+        JDBCDeleteTask jdbcDeleteTask = (JDBCDeleteTask) task;
+        jdbcDeleteTask.countDownLatch();
+        AgentTaskQueue.removeTask(task.getBackendId(), task.getTaskType(), task.getSignature());
     }
 
     private void finishRealtimePush(AgentTask task, TFinishTaskRequest request) {

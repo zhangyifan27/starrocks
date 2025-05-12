@@ -35,4 +35,8 @@ public class JDBCBridge {
     public JDBCScanner getScanner(JDBCScanContext scanContext) throws Exception {
         return new JDBCScanner(this.driverLocation, scanContext);
     }
+
+    public JDBCExecutor getExecutor(JDBCScanContext scanContext) throws Exception {
+        return new JDBCExecutor(this.driverLocation, scanContext);
+    }
 }

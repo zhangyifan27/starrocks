@@ -2327,7 +2327,7 @@ public class StmtExecutor {
 
             context.setStatisticsJob(AnalyzerUtils.isStatisticsJob(context, parsedStmt));
             if (!(targetTable.isIcebergTable() || targetTable.isHiveTable() || targetTable.isTableFunctionTable() ||
-                    targetTable.isBlackHoleTable())) {
+                    targetTable.isBlackHoleTable() || targetTable.isJDBCTable())) {
                 jobId = context.getGlobalStateMgr().getLoadMgr().registerLoadJob(
                         label,
                         database.getFullName(),
@@ -2441,7 +2441,7 @@ public class StmtExecutor {
                         );
                     } else if (targetTable instanceof SystemTable || targetTable.isHiveTable() ||
                             targetTable.isIcebergTable() || targetTable.isTableFunctionTable() ||
-                            targetTable.isBlackHoleTable()) {
+                            targetTable.isBlackHoleTable() || targetTable.isJDBCTable()) {
                         // schema table does not need txn
                     } else {
                         transactionMgr.abortTransaction(
@@ -2467,7 +2467,7 @@ public class StmtExecutor {
                 if (!(targetTable instanceof ExternalOlapTable || targetTable instanceof OlapTable)) {
                     if (!(targetTable instanceof SystemTable || targetTable.isIcebergTable() ||
                             targetTable.isHiveTable() || targetTable.isTableFunctionTable() ||
-                            targetTable.isBlackHoleTable())) {
+                            targetTable.isBlackHoleTable() || targetTable.isJDBCTable())) {
                         // schema table and iceberg table does not need txn
                         mgr.abortTransaction(database.getId(), transactionId,
                                 ERR_NO_PARTITIONS_HAVE_DATA_LOAD.formatErrorMsg(),
@@ -2528,6 +2528,9 @@ public class StmtExecutor {
             } else if (targetTable.isBlackHoleTable()) {
                 txnStatus = TransactionStatus.VISIBLE;
                 label = "FAKE_BLACKHOLE_TABLE_SINK_LABEL";
+            } else if (targetTable.isJDBCTable()) {
+                txnStatus = TransactionStatus.VISIBLE;
+                label = "FAKE_JDBC_SINK_LABEL";
             } else if (isExplainAnalyze) {
                 transactionMgr.abortTransaction(database.getId(), transactionId, "Explain Analyze",
                         Coordinator.getCommitInfos(coord), Coordinator.getFailInfos(coord), null);

@@ -59,6 +59,9 @@ public:
                                                        const Column** columns, int num_cols, int num_rows,
                                                        std::vector<jobject>* res);
 
+    static Status convert_to_boxed_array(const std::vector<LogicalType>& types, std::vector<DirectByteBuffer>* buffers,
+                                         const Column** columns, int num_cols, int num_rows, std::vector<jobject>* res);
+
     static Status convert_to_boxed_array_thive(FunctionContext* ctx, std::vector<DirectByteBuffer>* buffers,
                                                const Column** columns, int num_cols, int num_rows,
                                                std::vector<jobject>* res);

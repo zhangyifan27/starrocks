@@ -3522,4 +3522,10 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean check_warehouse_usage_privilege = true;
+
+    @ConfField(mutable = true)
+    public static String tdw_pg_jdbc_driver_url = "https://repo1.maven.org/maven2/org/postgresql/postgresql/42.3.3/postgresql-42.3.3.jar";
+
+    @ConfField(mutable = true)
+    public static boolean enable_pg_jdbc_dml = false;
 }

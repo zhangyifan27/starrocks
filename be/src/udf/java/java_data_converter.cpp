@@ -394,4 +394,40 @@ jobject JavaDataTypeConverter::convert_constant_column(const Column* column, Log
     env->DeleteLocalRef(jval);
     return res;
 }
+
+Status JavaDataTypeConverter::convert_to_boxed_array(const std::vector<LogicalType>& types,
+                                                     std::vector<DirectByteBuffer>* buffers, const Column** columns,
+                                                     int num_cols, int num_rows, std::vector<jobject>* res) {
+    CHECK(types.size() == num_cols);
+    auto& helper = JVMFunctionHelper::getInstance();
+    JNIEnv* env = helper.getEnv();
+    ConvertDirectBufferVistor vistor(*buffers);
+    for (int i = 0; i < num_cols; ++i) {
+        jobject arg = nullptr;
+        if (columns[i]->only_null()) {
+            arg = helper.create_array(num_rows);
+        } else if (columns[i]->is_constant()) {
+            auto& data_column = down_cast<const ConstColumn*>(columns[i])->data_column();
+            data_column->resize(1);
+            jobject jval = cast_to_jvalue<false>(types[i], true, data_column.get(), 0).l;
+            arg = helper.create_object_array(jval, num_rows);
+            env->DeleteLocalRef(jval);
+        } else {
+            int buffers_offset = buffers->size();
+            RETURN_IF_ERROR(columns[i]->accept(&vistor));
+            int buffers_sz = buffers->size() - buffers_offset;
+            arg = helper.create_boxed_array(types[i], num_rows, columns[i]->is_nullable(), &(*buffers)[buffers_offset],
+                                            buffers_sz);
+        }
+
+        if (arg == nullptr) {
+            std::string err_msg = "OOM may happened in Java Heap";
+            return Status::InternalError(err_msg);
+        }
+
+        res->emplace_back(arg);
+    }
+    return Status::OK();
+}
+
 } // namespace starrocks

@@ -61,6 +61,7 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.ExpressionRangePartitionInfoV2;
 import com.starrocks.catalog.FunctionSet;
+import com.starrocks.catalog.JDBCTable;
 import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.ListPartitionInfo;
 import com.starrocks.catalog.MaterializedIndex;
@@ -190,17 +191,22 @@ public class DeleteMgr implements Writable, MemoryTrackable {
         }
 
         DeleteJob deleteJob = null;
+
         try {
             List<Partition> partitions = Lists.newArrayList();
             Locker locker = new Locker();
             locker.lockDatabase(db, LockType.READ);
             try {
-                if (!table.isOlapOrCloudNativeTable()) {
+                if (!table.isOlapOrCloudNativeTable() && (!Config.enable_pg_jdbc_dml || !table.isJDBCTable())) {
                     throw new DdlException("Delete is not supported on " + table.getType() + " table");
                 }
 
                 List<Predicate> conditions = DeleteAnalyzer.replaceParameterInExpr(stmt.getDeleteConditions());
-                deleteJob = createJob(stmt, conditions, db, (OlapTable) table, partitions);
+                if (table.isJDBCTable()) {
+                    deleteJob = createJDBCDeleteJob(stmt, conditions, db, (JDBCTable) table);
+                } else {
+                    deleteJob = createJob(stmt, conditions, db, (OlapTable) table, partitions);
+                }
                 if (deleteJob == null) {
                     return;
                 }
@@ -942,4 +948,16 @@ public class DeleteMgr implements Writable, MemoryTrackable {
         long size = dbToDeleteInfos.values().stream().mapToInt(List::size).sum();
         return Lists.newArrayList(Pair.create(samples, size));
     }
+
+    private DeleteJob createJDBCDeleteJob(DeleteStmt stmt, List<Predicate> conditions, Database db, JDBCTable jdbcTable)
+            throws DdlException, AnalysisException, RunningTxnExceedException {
+        long jobId = GlobalStateMgr.getCurrentState().getNextId();
+        String label = "jdbc_delete_" + UUID.randomUUID();
+
+        DeleteJob deleteJob = new JDBCDeleteJob(jobId, label);
+        deleteJob.setDeleteConditions(conditions);
+        idToDeleteJob.put(deleteJob.getTransactionId(), deleteJob);
+        return deleteJob;
+    }
+
 }

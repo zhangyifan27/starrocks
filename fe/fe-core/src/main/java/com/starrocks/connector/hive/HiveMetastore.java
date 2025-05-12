@@ -126,6 +126,9 @@ public class HiveMetastore implements IHiveMetastore {
             return HiveMetastoreApiConverter.toHudiTable(table, catalogName);
         } else if (HiveMetastoreApiConverter.isKuduTable(table.getSd().getInputFormat())) {
             return HiveMetastoreApiConverter.toKuduTable(table, catalogName);
+        } else if (sd.getSerdeInfo() != null &&
+                HiveMetastoreApiConverter.isPGTable(sd.getSerdeInfo().getParameters(), table.getParameters())) {
+            return HiveMetastoreApiConverter.toPgJDBCTable(table, catalogName);
         } else {
             validateHiveTableType(table.getTableType());
             if (AcidUtils.isFullAcidTable(table)) {
@@ -400,3 +403,4 @@ public class HiveMetastore implements IHiveMetastore {
         }
     }
 }
+

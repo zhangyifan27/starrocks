@@ -25,8 +25,10 @@
 #include "exprs/clone_expr.h"
 #include "exprs/expr.h"
 #include "exprs/expr_context.h"
+#include "runtime/jdbc_driver_manager.h"
 #include "runtime/types.h"
 #include "types/logical_type.h"
+#include "udf/java/java_data_converter.h"
 #include "udf/java/java_udf.h"
 #include "util/defer_op.h"
 
@@ -39,6 +41,24 @@ namespace starrocks {
         env->DeleteLocalRef(thr);                                                       \
         return Status::InternalError(fmt::format("{}, error: {}", error_message, err)); \
     }
+
+StatusOr<JDBCScanContext> JDBCScanContext::convert_jdbc_table_to_context(const TJDBCTable& jdbc_table) {
+    std::string driver_location;
+    Status s = JDBCDriverManager::getInstance()->get_driver_location(
+            jdbc_table.jdbc_driver_name, jdbc_table.jdbc_driver_url, jdbc_table.jdbc_driver_checksum, &driver_location);
+    if (!s.ok()) {
+        LOG(ERROR) << "get JDBC driver location failed. " << s.to_string();
+        return s;
+    }
+    JDBCScanContext jdbc_ctx;
+    jdbc_ctx.driver_path = driver_location;
+    jdbc_ctx.driver_class_name = jdbc_table.jdbc_driver_class;
+    jdbc_ctx.jdbc_url = jdbc_table.jdbc_url;
+    jdbc_ctx.user = jdbc_table.jdbc_user;
+    jdbc_ctx.passwd = jdbc_table.jdbc_passwd;
+
+    return jdbc_ctx;
+}
 
 Status JDBCScanner::open(RuntimeState* state) {
     RETURN_IF_ERROR(detect_java_runtime());
@@ -397,6 +417,8 @@ Status JDBCScanner::_init_column_class_name(RuntimeState* state) {
     int len = helper.list_size(column_class_names);
 
     _result_chunk = std::make_shared<Chunk>();
+    DCHECK(_tuple_desc != nullptr);
+    _slot_descs = _tuple_desc->slots();
     for (int i = 0; i < len; i++) {
         jobject jelement = helper.list_get(column_class_names, i);
         LOCAL_REF_GUARD_ENV(env, jelement);
@@ -528,6 +550,118 @@ Status JDBCScanner::_fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chunk
             column = down_cast<NullableColumn*>(result.get())->data_column();
         }
     }
+    return Status::OK();
+}
+
+Status JDBCExecutor::open(RuntimeState* state) {
+    RETURN_IF_ERROR(detect_java_runtime());
+    _init_profile();
+    RETURN_IF_ERROR(_init_jdbc_bridge());
+    RETURN_IF_ERROR(_init_jdbc_scan_context(state));
+    RETURN_IF_ERROR(_init_jdbc_executor());
+
+    return Status::OK();
+}
+
+Status JDBCExecutor::_init_jdbc_executor() {
+    auto* env = JVMFunctionHelper::getInstance().getEnv();
+
+    jmethodID get_executor =
+            env->GetMethodID(_jdbc_bridge_cls->clazz(), "getExecutor",
+                             "(Lcom/starrocks/jdbcbridge/JDBCScanContext;)Lcom/starrocks/jdbcbridge/JDBCExecutor;");
+    DCHECK(get_executor != nullptr);
+    auto jdbc_executor = env->CallObjectMethod(_jdbc_bridge.handle(), get_executor, _jdbc_scan_context.handle());
+    _jdbc_executor = env->NewGlobalRef(jdbc_executor);
+    LOCAL_REF_GUARD_ENV(env, jdbc_executor);
+    CHECK_JAVA_EXCEPTION(env, "get JDBCExecutor failed");
+
+    auto jdbc_executor_cls = env->FindClass("com/starrocks/jdbcbridge/JDBCExecutor");
+    _jdbc_executor_cls = std::make_unique<JVMClass>(env->NewGlobalRef(jdbc_executor_cls));
+    LOCAL_REF_GUARD_ENV(env, jdbc_executor);
+
+    DCHECK(_jdbc_executor_cls != nullptr);
+    _jdbc_write = env->GetMethodID(_jdbc_executor_cls->clazz(), "write", "([I[[Ljava/lang/Object;)I");
+    DCHECK(_jdbc_write != nullptr);
+    _executor_close = env->GetMethodID(_jdbc_executor_cls->clazz(), "close", "()V");
+    DCHECK(_executor_close != nullptr);
+    _execute_raw = env->GetMethodID(_jdbc_executor_cls->clazz(), "executeRaw", "(Ljava/lang/String;)I");
+    DCHECK(_execute_raw != nullptr);
+    jmethodID writer_open = env->GetMethodID(_jdbc_executor_cls->clazz(), "open", "()V");
+    DCHECK(writer_open != nullptr);
+    env->CallVoidMethod(_jdbc_executor.handle(), writer_open);
+    CHECK_JAVA_EXCEPTION(env, "open JDBCExecutor failed");
+
+    return Status::OK();
+}
+
+Status JDBCExecutor::write(Chunk* chunk, const std::vector<ExprContext*>& output_exprs) {
+    auto& helper = JVMFunctionHelper::getInstance();
+    auto* env = helper.getEnv();
+    std::vector<DirectByteBuffer> buffers;
+    std::vector<jobject> input_col_objs;
+    std::vector<LogicalType> types(output_exprs.size());
+    Columns result_columns(output_exprs.size());
+    std::vector<const Column*> input_columns(output_exprs.size());
+    for (int i = 0; i < output_exprs.size(); i++) {
+        ASSIGN_OR_RETURN(result_columns[i], output_exprs[i]->evaluate(chunk));
+        types[i] = output_exprs[i]->root()->type().type;
+        input_columns[i] = result_columns[i].get();
+    }
+
+    auto st = JavaDataTypeConverter::convert_to_boxed_array(types, &buffers, input_columns.data(), output_exprs.size(),
+                                                            chunk->num_rows(), &input_col_objs);
+    if (!st.ok()) {
+        LOG(WARNING) << "convert chunk to java array failed. " << st.to_string();
+        return st;
+    }
+
+    jobjectArray input_data = (jobjectArray)helper.create_array(output_exprs.size());
+    LOCAL_REF_GUARD_ENV(env, input_data);
+    for (int i = 0; i < input_col_objs.size(); i++) {
+        env->SetObjectArrayElement(input_data, i, input_col_objs[i]);
+    }
+
+    jintArray input_column_type = env->NewIntArray(output_exprs.size());
+    jint input_column_type_data[output_exprs.size()];
+    for (int i=0; i < types.size(); i++) {
+        input_column_type_data[i] = types[i];
+    }
+    env->SetIntArrayRegion(input_column_type, 0, output_exprs.size(), input_column_type_data);
+
+    // do write
+    jint rows_write = env->CallIntMethod(_jdbc_executor.handle(), _jdbc_write, input_column_type, input_data);
+    CHECK_JAVA_EXCEPTION(env, "write failed");
+    VLOG_ROW << rows_write << " rows written to table through JDBC";
+
+    return Status::OK();
+}
+
+StatusOr<int> JDBCExecutor::execute_raw(const std::string& sql) {
+    auto& helper = JVMFunctionHelper::getInstance();
+    auto* env = helper.getEnv();
+
+    jstring sql_obj = helper.to_jstring(sql);
+    jint rows_updated = env->CallIntMethod(_jdbc_executor.handle(), _execute_raw, sql_obj);
+    CHECK_JAVA_EXCEPTION(env, fmt::format("failed to execute sql {}", sql));
+    LOG(INFO) << rows_updated << " rows were affected by " << sql;
+
+    return rows_updated;
+}
+Status JDBCExecutor::close(RuntimeState* state) {
+    auto* env = JVMFunctionHelper::getInstance().getEnv();
+    if (_jdbc_executor.handle() == nullptr) {
+        return Status::OK();
+    }
+    env->CallVoidMethod(_jdbc_executor.handle(), _executor_close);
+    CHECK_JAVA_EXCEPTION(env, "close JDBCExecutor failed");
+
+    _jdbc_executor.clear();
+    _jdbc_scan_context.clear();
+    _jdbc_bridge.clear();
+    _jdbc_util_cls.reset();
+    _jdbc_executor_cls.reset();
+    _jdbc_bridge_cls.reset();
+
     return Status::OK();
 }
 

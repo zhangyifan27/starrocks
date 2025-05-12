@@ -19,6 +19,7 @@ import com.google.common.collect.Lists;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.HudiTable;
+import com.starrocks.catalog.JDBCTable;
 import com.starrocks.catalog.Type;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.HiveClassNames;
@@ -27,10 +28,14 @@ import com.starrocks.connector.hive.HiveStorageFormat;
 import com.starrocks.connector.hudi.HudiConnector;
 import com.starrocks.connector.informationschema.InformationSchemaConnector;
 import com.starrocks.connector.metadata.TableMetaConnector;
+import com.starrocks.thrift.TJDBCTable;
+import com.starrocks.thrift.TTableDescriptor;
 import mockit.Expectations;
 import mockit.Mocked;
 import org.apache.avro.Schema;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
+import org.apache.hadoop.hive.metastore.api.PrincipalType;
+import org.apache.hadoop.hive.metastore.api.SerDeInfo;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
 import org.apache.hudi.common.table.HoodieTableMetaClient;
@@ -220,5 +225,55 @@ public class HiveMetastoreApiConverterTest {
 
         Assert.assertEquals("my_comment", table.getParameters().get("comment"));
         Assert.assertEquals("0", table.getParameters().get("numRows"));
+    }
+
+    @Test
+    public void testTDWPGToJDBCTable() {
+        List<FieldSchema> cols = List.of(
+                new FieldSchema("dtstatdate", "string", "null"),
+                new FieldSchema("sostype", "string", "null"),
+                new FieldSchema("sapptype", "string", "null")
+        );
+
+        Map<String, String> serdeProperties = Map.of(
+                "db_type", "pg",
+                "user_name", "u_ieg_idog",
+                "ip", "idata-pgxz-tdw.tencent-distribute.com",
+                "table_name", "kinn_ret_yulei_exploreMajiuScatter_v7",
+                "sql", "1",
+                "db_name", "tdwdata",
+                "pgxz_group", "",
+                "port", "5432",
+                "pgxz_key", "",
+                "pwd", "idog"
+        );
+        SerDeInfo serdeInfo = new SerDeInfo("", "org.apache.hadoop.hive.serde2.lazy.LazySimpleSerDe", serdeProperties);
+
+        StorageDescriptor sd = new StorageDescriptor(cols, "hdfs://0.0.0.0:8030/warehouse/hy_idog_oss.db/kinn_ret_yulei_exploremajiuscatter_v7",
+                "org.apache.hadoop.mapred.TextInputFormat", "org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat",
+                false, 0, serdeInfo, new ArrayList<>(), new ArrayList<>(), new HashMap<>());
+
+        Map<String, String> tableParameters = Map.of(
+                "trans_state", "1",
+                "EXTERNAL", "TRUE",
+                "thive.meta.snapshot", "1713751199233",
+                "type", "pgdata",
+                "table_type", "thive"
+        );
+        Table table = new Table("kinn_ret_yulei_exploremajiuscatter_v7", "hy_idog_oss", "tdw_leschen", 1627542964, 1627542964,
+                0, sd, new ArrayList<>(), tableParameters, null, null, "EXTERNAL_TABLE");
+        table.setRewriteEnabled(false);
+        table.setOwnerType(PrincipalType.USER);
+
+        JDBCTable jdbcTable = HiveMetastoreApiConverter.toPgJDBCTable(table, "JDBCCatalog");
+        TTableDescriptor tTable = jdbcTable.toThrift(null);
+
+        Assert.assertTrue(tTable.isSetJdbcTable());
+
+        TJDBCTable tJdbcTable = tTable.getJdbcTable();
+        Assert.assertEquals(tJdbcTable.getJdbc_driver_class(), "org.postgresql.Driver");
+        Assert.assertEquals(tJdbcTable.getJdbc_table(), "kinn_ret_yulei_exploreMajiuScatter_v7");
+        Assert.assertEquals(tJdbcTable.getJdbc_user(), "u_ieg_idog");
+        Assert.assertEquals(tJdbcTable.getJdbc_passwd(), "idog");
     }
 }

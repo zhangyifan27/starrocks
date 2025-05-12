@@ -57,7 +57,8 @@ enum TDataSinkType {
     TABLE_FUNCTION_TABLE_SINK,
     BLACKHOLE_TABLE_SINK,
     DICTIONARY_CACHE_SINK,
-    MULTI_OLAP_TABLE_SINK
+    MULTI_OLAP_TABLE_SINK,
+    JDBC_TABLE_SINK
 }
 
 enum TResultSinkType {
@@ -268,6 +269,11 @@ struct TTableFunctionTableSink {
     2: optional CloudConfiguration.TCloudConfiguration cloud_configuration
 }
 
+struct TJDBCTableSink {
+    1: required Descriptors.TJDBCTable jdbc_table
+    2: optional i32 tuple_id
+}
+
 struct TDataSink {
   1: required TDataSinkType type
   2: optional TDataStreamSink stream_sink
@@ -284,4 +290,5 @@ struct TDataSink {
   14: optional TDictionaryCacheSink dictionary_cache_sink
   15: optional list<TDataSink> multi_olap_table_sinks
   16: optional i64 sink_id
+  101: optional TJDBCTableSink jdbc_table_sink
 }

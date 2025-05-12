@@ -25,6 +25,8 @@ import com.starrocks.catalog.Database;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.HiveView;
 import com.starrocks.catalog.HudiTable;
+import com.starrocks.catalog.JDBCResource;
+import com.starrocks.catalog.JDBCTable;
 import com.starrocks.catalog.KuduTable;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.Config;
@@ -111,6 +113,7 @@ import static com.starrocks.connector.ColumnTypeConverter.fromHudiTypeToHiveType
 import static com.starrocks.connector.hive.HiveMetadata.STARROCKS_QUERY_ID;
 import static com.starrocks.connector.hive.RemoteFileInputFormat.fromHdfsInputFormatClass;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.toResourceName;
+import static com.starrocks.utils.MD5Utils.computeChecksum;
 import static java.util.Objects.requireNonNull;
 import static org.apache.hadoop.hive.common.StatsSetupConst.NUM_FILES;
 import static org.apache.hadoop.hive.common.StatsSetupConst.ROW_COUNT;
@@ -121,6 +124,7 @@ public class HiveMetastoreApiConverter {
     private static final Logger LOG = LogManager.getLogger(HiveMetastoreApiConverter.class);
     private static final String SPARK_SQL_SOURCE_PROVIDER = "spark.sql.sources.provider";
     private static final Set<String> STATS_PROPERTIES = ImmutableSet.of(ROW_COUNT, TOTAL_SIZE, NUM_FILES);
+    private static final String JDBC_PG_DRIVER_CLASS = "org.postgresql.Driver";
 
     private static boolean isDeltaLakeTable(Map<String, String> tableParams) {
         return tableParams.containsKey(SPARK_SQL_SOURCE_PROVIDER) &&
@@ -133,6 +137,15 @@ public class HiveMetastoreApiConverter {
 
     public static boolean isKuduTable(String inputFormat) {
         return inputFormat != null && KuduTable.isKuduInputFormat(inputFormat);
+    }
+
+    private static boolean isPGTableParams(Map<String, String> params) {
+        return params != null &&
+                params.containsKey("db_type") && params.get("db_type").equalsIgnoreCase("pg");
+    }
+
+    public static boolean isPGTable(Map<String, String> sdParams, Map<String, String> tableParams) {
+        return isPGTableParams(sdParams) || isPGTableParams(tableParams);
     }
 
     public static String toTableLocation(StorageDescriptor sd, Map<String, String> tableParams) {
@@ -355,6 +368,34 @@ public class HiveMetastoreApiConverter {
                 .setTableType(HudiTable.fromInputFormat(table.getSd().getInputFormat()));
 
         return tableBuilder.build();
+    }
+
+    public static JDBCTable toPgJDBCTable(Table table, String catalogName) {
+        long id = ConnectorTableId.CONNECTOR_ID_GENERATOR.getNextId().asInt();
+        String tableName = table.getTableName();
+        String dbName = table.getDbName();
+        List<Column> fullSchema = toFullSchemasForHiveTable(table);
+        List<Column> partitionColumns = new ArrayList<>();
+        for (FieldSchema partitionKey : table.getPartitionKeys()) {
+            String comment = "";
+            Type type;
+            try {
+                comment = partitionKey.getComment();
+                type = ColumnTypeConverter.fromHiveType(partitionKey.getType());
+            } catch (InternalError | Exception e) {
+                LOG.error("Failed to convert hive type {} on {}", partitionKey.getType(), table.getTableName(), e);
+                type = Type.UNKNOWN_TYPE;
+            }
+            Column column = new Column(partitionKey.getName(), type, true, comment);
+            partitionColumns.add(column);
+        }
+        Map<String, String> properties;
+        try {
+            properties = toPgJDBCProperties(table);
+            return new JDBCTable(id, tableName, fullSchema, partitionColumns, dbName, catalogName, properties);
+        } catch (Exception e) {
+            throw new StarRocksConnectorException(e.getMessage());
+        }
     }
 
     public static Partition toPartition(StorageDescriptor sd, Map<String, String> params) {
@@ -663,6 +704,25 @@ public class HiveMetastoreApiConverter {
         HiveColumnStats hiveColumnStatistics = new HiveColumnStats();
         hiveColumnStatistics.initialize(columnStatisticsObj.getStatsData(), rowNums);
         return hiveColumnStatistics;
+    }
+
+    public static Map<String, String> toPgJDBCProperties(Table table) throws Exception {
+        SerDeInfo serdeInfo = table.getSd().getSerdeInfo();
+        Map<String, String> originProps = serdeInfo.getParameters();
+        String pgIp = originProps.get("ip");
+        Integer pgPort = Integer.valueOf(originProps.get("port"));
+        String dbName = originProps.get("db_name");
+        Map<String, String> properties = new HashMap<>();
+        properties.put(JDBCResource.URI, String.format("jdbc:postgresql://%s:%d/%s", pgIp, pgPort, dbName));
+        properties.put(JDBCResource.DRIVER_URL, Config.tdw_pg_jdbc_driver_url);
+        properties.put(JDBCResource.DRIVER_CLASS, JDBC_PG_DRIVER_CLASS);
+        properties.put(JDBCTable.JDBC_TABLENAME, originProps.get("table_name"));
+        properties.put(JDBCResource.USER, originProps.get("user_name"));
+        properties.put(JDBCResource.PASSWORD, originProps.get("pwd"));
+        properties.put(JDBCResource.CHECK_SUM, computeChecksum(
+                properties.get(JDBCResource.DRIVER_URL)));
+
+        return properties;
     }
 
     public static Map<String, String> updateStatisticsParameters(Map<String, String> parameters,
