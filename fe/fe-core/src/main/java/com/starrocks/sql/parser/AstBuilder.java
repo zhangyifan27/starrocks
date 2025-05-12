@@ -533,6 +533,15 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                     FunctionSet.FROM_UNIXTIME, FunctionSet.FROM_UNIXTIME_MS,
                     FunctionSet.STR2DATE);
 
+    private static final Map<String, String> HIVE2SR_FUNCTION_MAPPINGS = Map.of(
+            "collect_list", FunctionSet.ARRAY_AGG,
+            "collect_set", FunctionSet.ARRAY_AGG_DISTINCT,
+            "wm_concat", FunctionSet.GROUP_CONCAT,
+            "string_to_map", FunctionSet.STR_TO_MAP,
+            "sort_array", FunctionSet.ARRAY_SORT
+    );
+
+
     protected AstBuilder(long sqlMode) {
         this(sqlMode, new IdentityHashMap<>());
     }
@@ -6389,6 +6398,10 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                 functionName = fnName.getFunction();
             }
         }
+        if (HIVE2SR_FUNCTION_MAPPINGS.containsKey(functionName.toLowerCase())) {
+            fnName = FunctionName.createFnName(HIVE2SR_FUNCTION_MAPPINGS.get(fullFunctionName.toLowerCase()));
+            functionName = fnName.getFunction();
+        }
         if (functionName.equals(FunctionSet.TIME_SLICE) || functionName.equals(FunctionSet.DATE_SLICE)) {
             if (context.expression().size() == 2) {
                 Expr e1 = (Expr) visit(context.expression(0));
@@ -6549,6 +6562,16 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             return new MapExpr(Type.ANY_MAP, exprs, pos);
         }
 
+        if (functionName.equals(FunctionSet.ARRAY)) {
+            List<Expr> exprs;
+            if (context.expression() != null) {
+                exprs = visit(context.expression(), Expr.class);
+            } else {
+                exprs = Collections.emptyList();
+            }
+            return new ArrayExpr(null, exprs, pos);
+        }
+
         if (functionName.equals(FunctionSet.SUBSTR) || functionName.equals(FunctionSet.SUBSTRING)) {
             List<Expr> exprs = Lists.newArrayList();
             if (context.expression().size() == 2) {
@@ -6656,6 +6679,11 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             throw new ParsingException(PARSER_ERROR_MSG.wrongNumOfArgs(functionName), pos);
         }
         List<Expr> exprs = visit(context.aggregationFunction().expression(), Expr.class);
+        // count(condition_exp, exp1, exp2) -> count(if(condition_exp, exp1, exp2))
+        if (functionName.equalsIgnoreCase(FunctionSet.COUNT) && !isDistinct && exprs.size() == 3) {
+            exprs = List.of(new CaseExpr(null, List.of(new CaseWhenClause(exprs.get(0), exprs.get(1))),
+                    exprs.get(2)));
+        }
         if (isGroupConcat && !exprs.isEmpty() && context.aggregationFunction().SEPARATOR() == null) {
             if (isLegacyGroupConcat) {
                 if (exprs.size() == 1) {
@@ -6692,7 +6720,8 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             orderByElements = orderByElements.stream().filter(x -> !x.getExpr().isConstant()).collect(toList());
         }
         if (CollectionUtils.isNotEmpty(orderByElements)) {
-            orderByElements.stream().forEach(e -> exprs.add(e.getExpr()));
+            List<Expr> finalExprs = exprs;
+            orderByElements.stream().forEach(e -> finalExprs.add(e.getExpr()));
         }
         FunctionCallExpr functionCallExpr = new FunctionCallExpr(functionName,
                 context.aggregationFunction().ASTERISK_SYMBOL() == null ?

@@ -24,6 +24,7 @@ import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.analyzer.AstToSQLBuilder;
 import com.starrocks.sql.ast.ImportColumnsStmt;
 import com.starrocks.sql.ast.PrepareStmt;
 import com.starrocks.sql.ast.StatementBase;
@@ -63,7 +64,15 @@ public class SqlParser {
     public static List<StatementBase> parse(String sql, SessionVariable sessionVariable) {
         try {
             if (sessionVariable.getSqlDialect().equalsIgnoreCase("trino")) {
-                return parseWithTrinoDialect(sql, sessionVariable);
+                String normalizedSql = sql;
+                // With trino dialect, it would treat token quoted with double quotes as identifier, and it would be treated
+                // as string literal in Starrocks dialect. Here would convert string literal quoted with double quotes
+                // to string literal quoted with single quote, thus it would also be treated as string literal with trino dialect.
+                if (sessionVariable.normalizeDoubleQuotesLiteral()) {
+                    List<StatementBase> stmts = SqlParser.parseWithStarRocksDialect(sql, sessionVariable);
+                    normalizedSql = AstToSQLBuilder.toSQL(stmts.get(0));
+                }
+                return parseWithTrinoDialect(normalizedSql, sessionVariable);
             } else {
                 return parseWithStarRocksDialect(sql, sessionVariable);
             }

@@ -741,4 +741,19 @@ public class ArrayTypeTest extends PlanTestBase {
                 "  |  output: multi_distinct_count(array_length(array_map" +
                 "(<slot 10> -> CAST(<slot 10> AS DECIMAL64(13,3)) + 1, 5: d_2)))");
     }
+
+    @Test
+    public void testArrayFunction() throws Exception {
+        String sql = "select `array`(c1, c1) from test_array";
+        String plan = getFragmentPlan(sql);
+        assertContains(plan, "[2: c1,2: c1]");
+
+        sql = "select `array`() from test_array";
+        plan = getFragmentPlan(sql);
+        assertContains(plan, "[]");
+
+        sql = "select array_length(`array`(c1, c1)) from test_array";
+        plan = getFragmentPlan(sql);
+        assertContains(plan, "array_length");
+    }
 }

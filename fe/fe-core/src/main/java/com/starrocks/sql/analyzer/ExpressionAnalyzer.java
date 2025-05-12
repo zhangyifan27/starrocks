@@ -1270,6 +1270,12 @@ public class ExpressionAnalyzer {
                 }
 
             } else {
+                // Replace function `max` on array column with function `max_array`.
+                if (FunctionSet.MAX.equals(fnName) && !node.getChildren().isEmpty()
+                        && node.getChildren().get(0).getType().isArrayType()) {
+                    fnName = FunctionSet.MAX_ARRAY;
+                    node.resetFnName(null, FunctionSet.MAX_ARRAY);
+                }
                 fn = Expr.getBuiltinFunction(fnName, argumentTypes, Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
             }
 
@@ -1534,6 +1540,7 @@ public class ExpressionAnalyzer {
                 case FunctionSet.ARRAY_DIFFERENCE:
                 case FunctionSet.ARRAY_DISTINCT:
                 case FunctionSet.ARRAY_LENGTH:
+                case FunctionSet.MAX_ARRAY:
                 case FunctionSet.ARRAY_TO_BITMAP: {
                     if (node.getChildren().size() != 1) {
                         throw new SemanticException(fnName + " should have only one input", node.getPos());

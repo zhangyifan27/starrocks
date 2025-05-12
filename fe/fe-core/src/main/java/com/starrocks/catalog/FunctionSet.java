@@ -171,7 +171,6 @@ public class FunctionSet {
     public static final String ST_POLYGONFROMTEXT = "st_polygonfromtext";
     public static final String ST_X = "st_x";
     public static final String ST_Y = "st_y";
-
     // String functions
     public static final String APPEND_TRAILING_CHAR_IF_ABSENT = "append_trailing_char_if_absent";
     public static final String ASCII = "ascii";
@@ -254,6 +253,7 @@ public class FunctionSet {
     public static final String COUNT_IF = "count_if";
     public static final String HLL_UNION_AGG = "hll_union_agg";
     public static final String MAX = "max";
+    public static final String MAX_ARRAY = "max_array";
     public static final String MAX_BY = "max_by";
     public static final String MAX_BY_V2 = "max_by_v2";
     public static final String MIN_BY = "min_by";
@@ -460,6 +460,8 @@ public class FunctionSet {
     public static final String ARRAY_MAP = "array_map";
     public static final String TRANSFORM = "transform";
 
+    public static final String ARRAY = "array";
+
     // map functions:
     public static final String MAP = "map";
     public static final String MAP_APPLY = "map_apply";
@@ -471,6 +473,9 @@ public class FunctionSet {
     public static final String MAP_CONCAT = "map_concat";
 
     public static final String MAP_FROM_ARRAYS = "map_from_arrays";
+
+    public static final String MAP_FROM_ENTRIES = "map_from_entries";
+
     public static final String MAP_KEYS = "map_keys";
     public static final String MAP_SIZE = "map_size";
     public static final String TRANSFORM_VALUES = "transform_values";
@@ -1087,6 +1092,10 @@ public class FunctionSet {
             addBuiltin(AggregateFunction.createBuiltin(ANY_VALUE,
                     Lists.newArrayList(t), t, t, true, false, false));
 
+            // Max
+            addBuiltin(AggregateFunction.createBuiltin(MAX,
+                    Lists.newArrayList(t), t, t, true, true, false));
+
             if (t.isPseudoType()) {
                 continue; // Only function `Count` support pseudo types now.
             }
@@ -1095,9 +1104,6 @@ public class FunctionSet {
             addBuiltin(AggregateFunction.createBuiltin(MIN,
                     Lists.newArrayList(t), t, t, true, true, false));
 
-            // Max
-            addBuiltin(AggregateFunction.createBuiltin(MAX,
-                    Lists.newArrayList(t), t, t, true, true, false));
 
             // MAX_BY
             for (Type t1 : Type.getSupportedTypes()) {
@@ -1168,6 +1174,9 @@ public class FunctionSet {
         registerBuiltinArrayAggDistinctFunction();
 
         registerBuiltinArrayUniqueAggFunction();
+
+        // max_array
+        registerBuiltinMaxArrayFunction();
 
         // Avg
         registerBuiltinAvgAggFunction();
@@ -1405,6 +1414,28 @@ public class FunctionSet {
         addBuiltin(AggregateFunction.createBuiltin(FunctionSet.ARRAY_AGG_DISTINCT,
                 Lists.newArrayList(Type.TIME), Type.ARRAY_DATETIME, Type.ARRAY_DATETIME,
                 false, false, false));
+    }
+
+    private void registerBuiltinMaxArrayFunction() {
+        for (ScalarType type : Type.getNumericTypes()) {
+            Type arrayType = new ArrayType(type);
+            addBuiltin(AggregateFunction.createBuiltin(FunctionSet.MAX_ARRAY,
+                    Lists.newArrayList(arrayType), arrayType, arrayType,
+                    true, false, false));
+        }
+        for (ScalarType type : Type.STRING_TYPES) {
+            Type arrayType = new ArrayType(type);
+            addBuiltin(AggregateFunction.createBuiltin(FunctionSet.MAX_ARRAY,
+                    Lists.newArrayList(arrayType), arrayType, arrayType,
+                    true, false, false));
+        }
+
+        for (ScalarType type : Type.DATE_TYPES) {
+            Type arrayType = new ArrayType(type);
+            addBuiltin(AggregateFunction.createBuiltin(FunctionSet.MAX_ARRAY,
+                    Lists.newArrayList(arrayType), arrayType, arrayType,
+                    true, false, false));
+        }
     }
 
     private void registerBuiltinArrayUniqueAggFunction() {

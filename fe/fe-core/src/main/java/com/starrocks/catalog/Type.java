@@ -792,6 +792,16 @@ public abstract class Type implements Cloneable {
                 !isMapType();
     }
 
+    // Only support numeric/char/varchar/array of numeric/char/varchar type.
+    public boolean canMax() {
+        if (isArrayType()) {
+            Type itemType = ((ArrayType) this).getItemType();
+            return itemType.isNumericType() || itemType.isVarchar() || itemType.isChar();
+        }
+        return !isOnlyMetricType() && !isJsonType() && !isFunctionType() && !isBinaryType() && !isStructType() &&
+                !isMapType();
+    }
+
     public boolean canPartitionBy() {
         // TODO(mofei) support partition by for JSON
         if (isArrayType()) {

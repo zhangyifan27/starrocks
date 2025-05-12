@@ -270,8 +270,13 @@ public class FunctionAnalyzer {
                     functionCallExpr.getPos());
         }
 
+        if (fnName.getFunction().equals(FunctionSet.MAX)) {
+            if (!arg.getType().canMax()) {
+                throw new SemanticException(Type.NOT_SUPPORT_AGG_ERROR_MSG);
+            }
+        }
+
         if ((fnName.getFunction().equals(FunctionSet.MIN)
-                || fnName.getFunction().equals(FunctionSet.MAX)
                 || fnName.getFunction().equals(FunctionSet.NDV)
                 || fnName.getFunction().equals(FunctionSet.APPROX_COUNT_DISTINCT)
                 || fnName.getFunction().equals(FunctionSet.UNIQ_COMBINED))

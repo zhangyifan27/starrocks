@@ -145,6 +145,18 @@ public class PolymorphicFunctionAnalyzer {
         }
     }
 
+    private static class MapFromEntriesDeduce implements java.util.function.Function<Type[], Type> {
+        @Override
+        public Type apply(Type[] types) {
+            ArrayType paramType = (ArrayType) types[0];
+            StructType structType = (StructType) paramType.getItemType();
+            if (structType.getFields().size() != 2) {
+                throw new SemanticException("Function " + FunctionSet.MAP_FROM_ENTRIES + " only support structs with 2 fields!");
+            }
+            return new MapType(structType.getFields().get(0).getType(), structType.getFields().get(1).getType());
+        }
+    }
+
     // map_apply/array_map(lambda of function, map/array) -> return type of lambda
     private static class LambdaDeduce implements java.util.function.Function<Type[], Type> {
         @Override
@@ -205,6 +217,7 @@ public class PolymorphicFunctionAnalyzer {
             // it's mock, need handle it in expressionAnalyzer
             .put(FunctionSet.NAMED_STRUCT, new RowDeduce())
             .put(FunctionSet.ANY_VALUE, types -> types[0])
+            .put(FunctionSet.MAP_FROM_ENTRIES, new MapFromEntriesDeduce())
             .build();
 
     private static Function resolveByDeducingReturnType(Function fn, Type[] inputArgTypes) {

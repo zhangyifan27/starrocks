@@ -343,6 +343,10 @@ vectorized_functions = [
      'StringFunctions::regexp_replace_prepare', 'StringFunctions::regexp_close'],
     [30332, 'replace', True, True, 'VARCHAR', ['VARCHAR', 'VARCHAR', 'VARCHAR'], 'StringFunctions::replace',
      'StringFunctions::replace_prepare', 'StringFunctions::replace_close'],
+    [30333, 'regexp_split', True, True, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR'], 'StringFunctions::regexp_split',
+     'StringFunctions::regexp_extract_prepare', 'StringFunctions::regexp_close'],
+    [30334, 'regexp_split', True, True, 'ARRAY_VARCHAR', ['VARCHAR', 'VARCHAR', 'INT'], 'StringFunctions::regexp_split',
+     'StringFunctions::regexp_extract_prepare', 'StringFunctions::regexp_close'],
     [30400, "money_format", True, False, "VARCHAR", ["BIGINT"], "StringFunctions::money_format_bigint"],
     [30401, "money_format", True, False, "VARCHAR", ["LARGEINT"], "StringFunctions::money_format_largeint"],
     [30402, "money_format", True, False, "VARCHAR", ["DECIMALV2"], "StringFunctions::money_format_decimalv2val"],
@@ -1342,6 +1346,7 @@ vectorized_functions = [
     [170005, 'map_filter', True, False, 'ANY_MAP', ['ANY_MAP', 'ARRAY_BOOLEAN'], 'MapFunctions::map_filter'],
     [170006, 'distinct_map_keys', True, False, 'ANY_MAP', ['ANY_MAP'], 'MapFunctions::distinct_map_keys'],
     [170007, 'map_concat', True, False, 'ANY_MAP', ['ANY_MAP', "..."], 'MapFunctions::map_concat'],
+    [170008, 'map_from_entries', True, False, 'ANY_MAP', ['ANY_ARRAY'], 'MapFunctions::map_from_entries'],
 
     # map, array common functions
     [170100, 'cardinality', True, False, 'INT', ['ANY_MAP'], 'MapFunctions::map_size'],

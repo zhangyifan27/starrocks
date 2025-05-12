@@ -45,6 +45,18 @@ struct ArrayAggDispatcher {
     }
 };
 
+struct MaxArrayDispatcher {
+    template <LogicalType lt>
+    void operator()(AggregateFuncResolver* resolver) {
+        if constexpr (lt_is_aggregate<lt>) {
+            auto func = std::make_shared<MaxArrayAggregateFunction<lt>>();
+            using AggState = MaxArrayAggregateState<lt>;
+            resolver->add_aggregate_mapping<lt, TYPE_ARRAY, AggState, AggregateFunctionPtr, false>("max_array", false,
+                                                                                                  func);
+        }
+    }
+};
+
 struct ArrayUnionAggDispatcher {
     template <LogicalType lt>
     void operator()(AggregateFuncResolver* resolver) {
@@ -124,6 +136,7 @@ void AggregateFuncResolver::register_avg() {
         type_dispatch_all(type, ArrayAggDistinctDispatcher(), this);
         type_dispatch_all(type, ArrayUnionAggDispatcher(), this);
         type_dispatch_all(type, ArrayUniqueAggDispatcher(), this);
+        type_dispatch_all(type, MaxArrayDispatcher(), this);
     }
     type_dispatch_all(TYPE_JSON, ArrayAggDispatcher(), this);
     add_decimal_mapping<TYPE_DECIMAL32, TYPE_DECIMAL128, true>("decimal_avg");

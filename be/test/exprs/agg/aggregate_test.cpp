@@ -2806,4 +2806,106 @@ TEST_F(AggregateTest, test_array_agg_nullable_distinct) {
     ASSERT_EQ(26, offsets->get_data().back());
 }
 
+// NOLINTNEXTLINE
+TEST_F(AggregateTest, max_array) {
+    {
+        const AggregateFunction* func = get_aggregate_function("max_array", TYPE_INT, TYPE_ARRAY, true);
+        auto state = ManagedAggrState::create(ctx, func);
+        auto c = ArrayColumn::create(NullableColumn::create(Int32Column::create(), NullColumn::create()),
+                              UInt32Column::create());
+        c->append_datum(DatumArray{});
+        c->append_datum(DatumArray{(int32_t)1});
+        c->append_datum(DatumArray{(int32_t)2, (int32_t)2});
+        c->append_datum(DatumArray{(int32_t)1, (int32_t)3});
+
+        const Column* row_column = c.get();
+        func->update_batch_single_state(ctx, c->size(), &row_column, state->state());
+
+        auto elem = Int32Column::create();
+        auto offsets = UInt32Column::create(0);
+        auto result_column = ArrayColumn::create(ColumnHelper::cast_to_nullable_column(elem), offsets);
+
+        func->finalize_to_column(ctx, state->state(), result_column.get());
+        ASSERT_EQ(result_column->debug_item(0), "[2,2]");
+    }
+    {
+        const AggregateFunction* func = get_aggregate_function("max_array", TYPE_TINYINT, TYPE_ARRAY, true);
+        auto state = ManagedAggrState::create(ctx, func);
+        auto c = ArrayColumn::create(NullableColumn::create(Int8Column::create(), NullColumn::create()),
+                              UInt32Column::create());
+        c->append_datum(DatumArray{});
+        c->append_datum(DatumArray{(int8_t)1});
+        c->append_datum(DatumArray{(int8_t)0, (int8_t)1});
+        c->append_datum(DatumArray{(int8_t)1, (int8_t)1});
+
+        const Column* row_column = c.get();
+        func->update_batch_single_state(ctx, c->size(), &row_column, state->state());
+
+        auto elem = Int8Column::create();
+        auto offsets = UInt32Column::create(0);
+        auto result_column = ArrayColumn::create(ColumnHelper::cast_to_nullable_column(elem), offsets);
+
+        func->finalize_to_column(ctx, state->state(), result_column.get());
+        ASSERT_EQ(result_column->debug_item(0), "[1]");
+    }
+    {
+        const AggregateFunction* func = get_aggregate_function("max_array", TYPE_DOUBLE, TYPE_ARRAY, true);
+        auto state = ManagedAggrState::create(ctx, func);
+        auto c = ArrayColumn::create(NullableColumn::create(DoubleColumn::create(), NullColumn::create()),
+                              UInt32Column::create());
+        c->append_datum(DatumArray{});
+        c->append_datum(DatumArray{(double) 0.39});
+        c->append_datum(DatumArray{(double)0.396, (double)2});
+        c->append_datum(DatumArray{(double)0.248, (double)0});
+
+        const Column* row_column = c.get();
+        func->update_batch_single_state(ctx, c->size(), &row_column, state->state());
+
+        auto elem = DoubleColumn::create();
+        auto offsets = UInt32Column::create(0);
+        auto result_column = ArrayColumn::create(ColumnHelper::cast_to_nullable_column(elem), offsets);
+
+        func->finalize_to_column(ctx, state->state(), result_column.get());
+        ASSERT_EQ(result_column->debug_item(0), "[0.396,2]");
+    }
+    {
+        const AggregateFunction* func = get_aggregate_function("max_array", TYPE_VARCHAR, TYPE_ARRAY, true);
+        auto state = ManagedAggrState::create(ctx, func);
+        auto c = ArrayColumn::create(NullableColumn::create(BinaryColumn::create(), NullColumn::create()),
+                              UInt32Column::create());
+        c->append_datum(DatumArray{});
+        c->append_datum(DatumArray{"afdagag"});
+        c->append_datum(DatumArray{"ae", "c"});
+        c->append_datum(DatumArray{"b"});
+
+        const Column* row_column = c.get();
+        func->update_batch_single_state(ctx, c->size(), &row_column, state->state());
+
+        auto elem = BinaryColumn::create();
+        auto offsets = UInt32Column::create(0);
+        auto result_column = ArrayColumn::create(ColumnHelper::cast_to_nullable_column(elem), offsets);
+
+        func->finalize_to_column(ctx, state->state(), result_column.get());
+        ASSERT_EQ(result_column->debug_item(0), "['b']");
+    }
+    // Empty
+    {
+        const AggregateFunction* func = get_aggregate_function("max_array", TYPE_INT, TYPE_ARRAY, true);
+        auto state = ManagedAggrState::create(ctx, func);
+        auto c = ArrayColumn::create(NullableColumn::create(Int32Column::create(), NullColumn::create()),
+                              UInt32Column::create());
+        c->append_datum(Datum(DatumArray()));
+
+        const Column* row_column = c.get();
+        func->update_batch_single_state(ctx, c->size(), &row_column, state->state());
+
+        auto elem = Int32Column::create();
+        auto offsets = UInt32Column::create(0);
+        auto result_column = ArrayColumn::create(ColumnHelper::cast_to_nullable_column(elem), offsets);
+
+        func->finalize_to_column(ctx, state->state(), result_column.get());
+        ASSERT_EQ(result_column->debug_item(0), "[]");
+    }
+}
+
 } // namespace starrocks

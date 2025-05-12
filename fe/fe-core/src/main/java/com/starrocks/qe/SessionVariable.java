@@ -645,6 +645,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String SQL_DIALECT = "sql_dialect";
 
+    public static final String NORMALIZE_DOUBLE_QUOTES_LITERAL = "normalize_double_quotes_literal";
+
     public static final String ENABLE_OUTER_JOIN_REORDER = "enable_outer_join_reorder";
 
     public static final String CBO_REORDER_THRESHOLD_USE_EXHAUSTIVE = "cbo_reorder_threshold_use_exhaustive";
@@ -2031,6 +2033,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VarAttr(name = SQL_DIALECT)
     private String sqlDialect = "StarRocks";
+
+    @VarAttr(name = NORMALIZE_DOUBLE_QUOTES_LITERAL)
+    private boolean normalizeDoubleQuotesLiteral = false;
 
     @VarAttr(name = ENABLE_OUTER_JOIN_REORDER)
     private boolean enableOuterJoinReorder = true;
@@ -3950,8 +3955,16 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         return this.sqlDialect;
     }
 
+    public boolean normalizeDoubleQuotesLiteral() {
+        return normalizeDoubleQuotesLiteral;
+    }
+
     public void setSqlDialect(String dialect) {
         this.sqlDialect = dialect;
+    }
+
+    public void setNormalizeDoubleQuotesLiteral(boolean normalizeDoubleQuotesLiteral) {
+        this.normalizeDoubleQuotesLiteral = normalizeDoubleQuotesLiteral;
     }
 
     public boolean isEnableOuterJoinReorder() {

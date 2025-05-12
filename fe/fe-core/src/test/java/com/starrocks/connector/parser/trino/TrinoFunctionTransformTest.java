@@ -496,4 +496,12 @@ public class TrinoFunctionTransformTest extends TrinoTestBase {
         sql = "select merge(approx_set(\"tc\")) from tall";
         assertPlanContains(sql, "hll_raw_agg(hll_hash(CAST(3: tc AS VARCHAR)))");
     }
+
+    @Test
+    public void testNormalizeDoubleQuotesLiteral() throws Exception {
+        connectContext.getSessionVariable().setNormalizeDoubleQuotesLiteral(true);
+        String sql = "select row(\"Apple\",\"Pear\") from tall;";
+        assertPlanContains(sql, "'Apple'");
+        connectContext.getSessionVariable().setNormalizeDoubleQuotesLiteral(false);
+    }
 }

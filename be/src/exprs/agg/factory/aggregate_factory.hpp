@@ -24,6 +24,7 @@
 #include "exprs/agg/any_value.h"
 #include "exprs/agg/approx_top_k.h"
 #include "exprs/agg/array_agg.h"
+#include "exprs/agg/max_array.h"
 #include "exprs/agg/avg.h"
 #include "exprs/agg/bitmap_agg.h"
 #include "exprs/agg/bitmap_intersect.h"
