@@ -255,11 +255,11 @@ public class OptThivePartitionPruner {
         // partition prune use id_hive_part = 'xxx'
         thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
         thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions);
+                hivePartColumnToNullPartitions, defaultPartitionIds);
 
         // PARTITION(p_20241125) specify partition
         thiveComputeSpecifyPartition(operator, hivePartPartitionColumnRefOperators.get(0),
-                hivePartColumnToPartitionValuesMap);
+                hivePartColumnToPartitionValuesMap, defaultPartitionIds);
 
         addConjunctsForThive(operator);
         computeMinMaxConjuncts(operator, columnToPartitionValuesMap.keySet(),
@@ -269,7 +269,8 @@ public class OptThivePartitionPruner {
     public static void thiveComputeSpecifyPartition(LogicalScanOperator operator,
                                                     ColumnRefOperator hivePartColumnRefOperator,
                                                     Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr,
-                                                            Set<Long>>> hivePartColumnToPartitionValuesMap)
+                                                    Set<Long>>> hivePartColumnToPartitionValuesMap,
+                                                    Set<Long> defaultPartitionIds)
             throws AnalysisException {
         if (operator.getPartitionNames() != null) {
             ConcurrentNavigableMap<LiteralExpr, Set<Long>> partitionValueMap =
@@ -282,10 +283,18 @@ public class OptThivePartitionPruner {
                     selectedPartitionIds.addAll(partitions);
                 }
             }
-            ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
-            Collection<Long> oldSelectedPartitionIds = scanOperatorPredicates.getSelectedPartitionIds();
-            //change oldSelectedPartitionIds
-            oldSelectedPartitionIds.retainAll(selectedPartitionIds);
+            // PARTITION('default')
+            if (defaultPartitionIds != null && selectedPartitionIds != null && selectedPartitionIds.size() > 0 &&
+                    defaultPartitionIds.size() == selectedPartitionIds.size() &&
+                    defaultPartitionIds.containsAll(selectedPartitionIds)) {
+                ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
+                scanOperatorPredicates.setSelectedPartitionIds(selectedPartitionIds);
+            } else {
+                ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
+                Collection<Long> oldSelectedPartitionIds = scanOperatorPredicates.getSelectedPartitionIds();
+                //change oldSelectedPartitionIds
+                oldSelectedPartitionIds.retainAll(selectedPartitionIds);
+            }
         }
     }
 
@@ -430,11 +439,11 @@ public class OptThivePartitionPruner {
         // partition prune use id_hive_part = 'xxx'
         thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
         thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions);
+                hivePartColumnToNullPartitions, defaultPartitionIds);
 
         // PARTITION(par_20241030) specify partition
         thiveComputeSpecifyPartition(operator, hivePartPartitionColumnRefOperators.get(0),
-                hivePartColumnToPartitionValuesMap);
+                hivePartColumnToPartitionValuesMap, defaultPartitionIds);
 
         addConjunctsForThive(operator);
         List<ColumnRefOperator> partitionColumnRefOperators = new ArrayList<>();
@@ -543,14 +552,23 @@ public class OptThivePartitionPruner {
 
     static void thiveHivePartColumnComputePartitionInfo(LogicalScanOperator operator,
                                                         Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr,
-                                                                Set<Long>>> columnToPartitionValues,
-                                                        Map<ColumnRefOperator, Set<Long>> columnToNullPartitions)
+                                                        Set<Long>>> columnToPartitionValues,
+                                                        Map<ColumnRefOperator, Set<Long>> columnToNullPartitions,
+                                                        Set<Long> defaultPartitionIds)
             throws AnalysisException {
+        // hivePartColumnToPartitionValuesMap id_hive_part = {default = [0], p_2021 = [1], p_2011 = [2], p_2001 = [3]}
+        // partition prune use id_hive_part = 'xxx'
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
         ListPartitionPruner partitionPruner = new ListPartitionPruner(columnToPartitionValues, columnToNullPartitions,
                 scanOperatorPredicates.getPartitionConjuncts(), null);
         Collection<Long> selectedPartitionIds = partitionPruner.prune();
-        if (selectedPartitionIds != null) {
+        // id_hive_part = 'default'
+        if (defaultPartitionIds != null && selectedPartitionIds != null && selectedPartitionIds.size() > 0 &&
+                defaultPartitionIds.size() == selectedPartitionIds.size() &&
+                defaultPartitionIds.containsAll(selectedPartitionIds)) {
+            scanOperatorPredicates.setSelectedPartitionIds(selectedPartitionIds);
+        } else if (selectedPartitionIds != null) {
+            // exclude thive default partition by default in selectedPartitionIds
             Collection<Long> oldSelectedPartitionIds = scanOperatorPredicates.getSelectedPartitionIds();
             //change oldSelectedPartitionIds
             oldSelectedPartitionIds.retainAll(selectedPartitionIds);
@@ -636,7 +654,7 @@ public class OptThivePartitionPruner {
 
         thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
         thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions);
+                hivePartColumnToNullPartitions, defaultPartitionIds);
 
         addConjunctsForThive(operator);
     }
@@ -744,7 +762,7 @@ public class OptThivePartitionPruner {
 
         thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
         thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions);
+                hivePartColumnToNullPartitions, level1ListDefaultPartitionIds);
 
         addConjunctsForThive(operator);
     }
@@ -836,7 +854,7 @@ public class OptThivePartitionPruner {
 
         thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
         thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions);
+                hivePartColumnToNullPartitions, level1ListDefaultPartitionIds);
 
         addConjunctsForThive(operator);
     }
@@ -1021,7 +1039,7 @@ public class OptThivePartitionPruner {
 
         thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
         thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions);
+                hivePartColumnToNullPartitions, level2ListDefaultPartitionIds);
 
         addConjunctsForThive(operator);
     }
@@ -1091,7 +1109,7 @@ public class OptThivePartitionPruner {
 
         thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
         thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions);
+                hivePartColumnToNullPartitions, null);
 
         addConjunctsForThive(operator);
     }
@@ -1153,7 +1171,7 @@ public class OptThivePartitionPruner {
 
         thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
         thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions);
+                hivePartColumnToNullPartitions, null);
 
         addConjunctsForThive(operator);
     }
