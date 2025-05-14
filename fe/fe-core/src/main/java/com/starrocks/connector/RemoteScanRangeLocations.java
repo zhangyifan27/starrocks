@@ -129,7 +129,6 @@ public class RemoteScanRangeLocations {
             long totalSize = 0;
             long count = 0;
             List<DescriptorTable.ReferencedPartitionInfo> tmpPartitionInfos = new ArrayList<>();
-            descTbl.cleanReferencedPartitions(table);
             for (int i = partitionKeys.size() - 1; i >= 0; i--) {
                 try {
                     List<RemoteFileInfo> remoteFileInfos = GlobalStateMgr.getCurrentState().getMetadataMgr()
@@ -145,7 +144,6 @@ public class RemoteScanRangeLocations {
                     if (partitionBytes > 0) {
                         partitions.addAll(remoteFileInfos);
                         tmpPartitionInfos.add(partitionInfos.get(i));
-                        descTbl.addReferencedPartitions(table, partitionInfos.get(i));
                         totalSize += partitionBytes;
                         count++;
                         // Assuming avg row 4KB in size, if total file size > 4KB * limit found enough files.
@@ -162,6 +160,12 @@ public class RemoteScanRangeLocations {
                 } catch (Exception e) {
                     LOG.error("Failed to get remote files", e);
                     throw e;
+                }
+            }
+            if (tmpPartitionInfos.size() > 0) {
+                descTbl.cleanReferencedPartitions(table);
+                for (DescriptorTable.ReferencedPartitionInfo partitionInfo : tmpPartitionInfos) {
+                    descTbl.addReferencedPartitions(table, partitionInfo);
                 }
             }
         } else {
