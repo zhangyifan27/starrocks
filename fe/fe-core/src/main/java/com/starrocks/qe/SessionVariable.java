@@ -1704,7 +1704,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     }
 
     @VarAttr(name = EXCLUDE_THIVE_DEFAULT_PARTITION)
-    private boolean excludeThiveDefaultPartition = true;
+    private boolean excludeThiveDefaultPartition = false;
 
     public void setPartialUpdateMode(String mode) {
         this.partialUpdateMode = mode;
