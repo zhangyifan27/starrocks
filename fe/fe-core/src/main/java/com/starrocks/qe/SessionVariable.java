@@ -724,6 +724,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String WAREHOUSE_NAME = "warehouse";
 
+    public static final String COMPUTE_NODE_SELECTOR = "compute_node_selector";
+
     public static final String HDFS_BACKEND_SELECTOR_HASH_ALGORITHM = "hdfs_backend_selector_hash_algorithm";
 
     public static final String HDFS_BACKEND_SELECTOR_FORCE_REBALANCE = "hdfs_backend_selector_force_rebalance";
@@ -2106,7 +2108,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     @VarAttr(name = ENABLE_COUNT_STAR_OPTIMIZATION, flag = VariableMgr.INVISIBLE)
     private boolean enableCountStarOptimization = true;
 
-    @VariableMgr.VarAttr(name = WAREHOUSE_NAME, flag = VariableMgr.SESSION_ONLY)
+    @VariableMgr.VarAttr(name = WAREHOUSE_NAME, alias = COMPUTE_NODE_SELECTOR, flag = VariableMgr.SESSION_ONLY)
     private String warehouseName = WarehouseManager.DEFAULT_WAREHOUSE_NAME;
 
     @VarAttr(name = ENABLE_PARTITION_COLUMN_VALUE_ONLY_OPTIMIZATION, flag = VariableMgr.INVISIBLE)
