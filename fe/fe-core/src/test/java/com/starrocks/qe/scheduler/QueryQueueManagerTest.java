@@ -1575,6 +1575,18 @@ public class QueryQueueManagerTest extends SchedulerTestBase {
         }
     }
 
+    @Test
+    public void testTimeoutCheck() throws Exception {
+        GlobalVariable.setQueryQueuePendingTimeoutSecond(1);
+        Thread.sleep(2000L);
+
+        {
+            GlobalVariable.setEnableQueryQueueSelect(false);
+            DefaultCoordinator coordinator = getSchedulerWithQueryId("select count(1) from lineitem");
+            manager.maybeWait(connectContext, coordinator);
+        }
+    }
+
     private static class MockFrontendServiceClient extends FrontendService.Client {
         private final FrontendService.Iface frontendService = new FrontendServiceImpl(null);
 
