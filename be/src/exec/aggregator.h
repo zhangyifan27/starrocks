@@ -568,6 +568,13 @@ protected:
 
     void _release_agg_memory();
 
+    Status _check_agg_params_valid(ColumnPtr& col,size_t i,size_t j){
+        if (j == 1 && _agg_functions[i]->get_name() == "maxmin_by" && col->is_constant()){
+            return Status::InvalidArgument("MAXMIN_BY function cannot use ConstColumn as 2nd param");
+        }
+        return Status::OK();
+    }
+
     template <class HashMapWithKey>
     friend struct AllocateState;
 };

@@ -741,6 +741,7 @@ Status Aggregator::evaluate_agg_input_column(Chunk* chunk, std::vector<ExprConte
             // if function has at least two argument, unpack const column selectively
             // for function like corr, FE forbid second args to be const, we will always unpack const column for it
             // for function like percentile_disc, the second args is const, do not unpack it
+            RETURN_IF_ERROR(_check_agg_params_valid(col, i, j));
             if (agg_expr_ctxs[j]->root()->is_constant()) {
                 _agg_input_columns[i][j] = std::move(col);
             } else {
