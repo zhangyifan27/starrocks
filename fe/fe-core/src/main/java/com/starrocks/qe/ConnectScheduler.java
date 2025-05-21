@@ -70,6 +70,7 @@ public class ConnectScheduler {
     private final AtomicInteger maxConnections;
     private final AtomicInteger numberConnection;
     private final AtomicInteger nextConnectionId;
+    private final AtomicInteger numberArrowFlightConnection;
 
     private final Map<Long, ConnectContext> connectionMap = Maps.newConcurrentMap();
     private final Map<String, ArrowFlightSqlConnectContext> arrowFlightSqlConnectContextMap = Maps.newConcurrentMap();
@@ -82,6 +83,7 @@ public class ConnectScheduler {
     public ConnectScheduler(int maxConnections) {
         this.maxConnections = new AtomicInteger(maxConnections);
         numberConnection = new AtomicInteger(0);
+        numberArrowFlightConnection = new AtomicInteger(0);
         nextConnectionId = new AtomicInteger(0);
         // Use a thread to check whether connection is timeout. Because
         // 1. If use a scheduler, the task maybe a huge number when query is messy.
@@ -134,7 +136,8 @@ public class ConnectScheduler {
         context.setConnectionId(nextConnectionId.getAndAdd(1));
         context.resetConnectionStartTime();
         // no necessary for nio or Http.
-        if (context instanceof NConnectContext || context instanceof HttpConnectContext) {
+        if (context instanceof NConnectContext || context instanceof HttpConnectContext ||
+                context instanceof ArrowFlightSqlConnectContext) {
             return true;
         }
         if (executor.submit(new LoopHandler(context)) == null) {
@@ -209,6 +212,44 @@ public class ConnectScheduler {
             if (ctx instanceof ArrowFlightSqlConnectContext) {
                 ArrowFlightSqlConnectContext context = (ArrowFlightSqlConnectContext) ctx;
                 arrowFlightSqlConnectContextMap.remove(context.getToken());
+            }
+        } finally {
+            connStatsLock.unlock();
+        }
+
+        if (removed) {
+            ctx.cleanTemporaryTable();
+        }
+    }
+
+    public Pair<Boolean, String> registerArrowFlightConnection(ArrowFlightSqlConnectContext ctx) {
+        try {
+            connStatsLock.lock();
+            if (numberArrowFlightConnection.get() >= Config.arrow_flight_max_connections) {
+                return new Pair<>(false, "Reach cluster-wide connection limit, arrow_flight_max_connections=" +
+                        Config.arrow_flight_max_connections + ", arrowFlightSqlConnectContextMap.size=" +
+                        arrowFlightSqlConnectContextMap.size() + ", node=" +
+                        ctx.getGlobalStateMgr().getNodeMgr().getSelfNode());
+            }
+            numberArrowFlightConnection.incrementAndGet();
+            arrowFlightSqlConnectContextMap.put(ctx.getToken(), ctx);
+            LOG.info("ArrowFlightConnection registered. token={}, currConn={}", ctx.getToken(),
+                    numberArrowFlightConnection.get());
+            return new Pair<>(true, null);
+        } finally {
+            connStatsLock.unlock();
+        }
+    }
+
+    public void unregisterArrowFlightConnection(ArrowFlightSqlConnectContext ctx) {
+        boolean removed;
+        try {
+            connStatsLock.lock();
+            removed = arrowFlightSqlConnectContextMap.remove(ctx.getToken()) != null;
+            if (removed) {
+                numberArrowFlightConnection.decrementAndGet();
+                LOG.info("ArrowFlightConnection unregistered. token={}, currConn={}", ctx.getToken(),
+                        numberArrowFlightConnection.get());
             }
         } finally {
             connStatsLock.unlock();

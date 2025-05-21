@@ -17,6 +17,7 @@ package com.starrocks.service.arrow.flight.sql;
 import com.google.protobuf.ByteString;
 import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Tracers;
+import com.starrocks.common.util.UUIDUtil;
 import com.starrocks.metric.MetricRepo;
 import com.starrocks.mysql.MysqlCommand;
 import com.starrocks.proto.PFetchArrowSchemaRequest;
@@ -68,6 +69,8 @@ public class ArrowFlightSqlConnectProcessor extends ConnectProcessor {
         StatementBase parsedStmt = ((ArrowFlightSqlConnectContext) ctx).getStatement();
         String sql = parsedStmt.getOrigStmt().originStmt;
 
+        // Set a new query id for this query.
+        ctx.setQueryId(UUIDUtil.genUUID());
         executor = new StmtExecutor(ctx, parsedStmt);
         ctx.setExecutor(executor);
         ctx.setIsLastStmt(true);

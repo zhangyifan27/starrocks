@@ -22,16 +22,23 @@ import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.cache.RemovalNotification;
 import com.starrocks.common.Config;
+import com.starrocks.common.ThreadPoolManager;
 import com.starrocks.common.util.UUIDUtil;
-import com.starrocks.qe.ConnectContext;
 import com.starrocks.service.ExecuteEnv;
+import com.starrocks.service.arrow.flight.sql.ArrowFlightSqlConnectContext;
 import com.starrocks.sql.ast.UserIdentity;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
 public class ArrowFlightSqlTokenManager implements AutoCloseable {
+    private static final Logger LOG = LogManager.getLogger(ArrowFlightSqlTokenManager.class);
 
     private LoadingCache<String, ArrowFlightSqlTokenInfo> tokenCache;
+
+    private ScheduledExecutorService cleanupExecutor;
 
     public ArrowFlightSqlTokenManager() {
         this.tokenCache =
@@ -39,11 +46,11 @@ public class ArrowFlightSqlTokenManager implements AutoCloseable {
                         .maximumSize(Config.arrow_token_cache_size)
                         .expireAfterWrite(Config.arrow_token_cache_expire, TimeUnit.MINUTES)
                         .removalListener((RemovalNotification<String, ArrowFlightSqlTokenInfo> notification) -> {
-                            ConnectContext context =
+                            ArrowFlightSqlConnectContext context =
                                     ExecuteEnv.getInstance().getScheduler()
                                             .getArrowFlightSqlConnectContext(notification.getKey());
                             if (context != null) {
-                                ExecuteEnv.getInstance().getScheduler().unregisterConnection(context);
+                                ExecuteEnv.getInstance().getScheduler().unregisterArrowFlightConnection(context);
                             }
                         })
                         .build(new CacheLoader<String, ArrowFlightSqlTokenInfo>() {
@@ -52,6 +59,11 @@ public class ArrowFlightSqlTokenManager implements AutoCloseable {
                                 return new ArrowFlightSqlTokenInfo();
                             }
                         });
+        this.cleanupExecutor = ThreadPoolManager.newDaemonScheduledThreadPool(1,
+                "Arrow-Flight-Sql-Token-Cleanup", true);
+        this.cleanupExecutor.scheduleAtFixedRate(() -> {
+            tokenCache.cleanUp();
+        }, 1, 1, TimeUnit.MINUTES);
     }
 
     public String createToken(UserIdentity currentUser) throws Exception {
@@ -60,6 +72,7 @@ public class ArrowFlightSqlTokenManager implements AutoCloseable {
         arrowFlightSqlTokenInfo.setToken(token);
         arrowFlightSqlTokenInfo.setCurrentUser(currentUser);
         tokenCache.put(token, arrowFlightSqlTokenInfo);
+        LOG.info("create token: {} for user: {}", token, currentUser);
         return token;
     }
 

@@ -3496,6 +3496,10 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static int arrow_token_cache_expire = 3600;
 
+    // Maximal number of connections of Arrow Flight Server per FE.
+    @ConfField(mutable = true)
+    public static int arrow_flight_max_connections = 4096;
+
     @ConfField(mutable = true)
     public static boolean enable_decommission_replica_relocating = true;
 
