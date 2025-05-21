@@ -14,6 +14,8 @@
 
 package com.starrocks.service.arrow.flight.sql.auth;
 
+import com.starrocks.mysql.security.TdwAuthenticate;
+import com.starrocks.privilege.AccessDeniedException;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.service.arrow.flight.sql.session.ArrowFlightSqlTokenManager;
 import com.starrocks.sql.ast.UserIdentity;
@@ -22,8 +24,11 @@ import org.apache.arrow.flight.CallStatus;
 import org.apache.arrow.flight.auth2.Auth2Constants;
 import org.apache.arrow.flight.auth2.BasicCallHeaderAuthenticator;
 import org.apache.arrow.flight.auth2.CallHeaderAuthenticator;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 public class ArrowFlightSqlCredentialValidator implements BasicCallHeaderAuthenticator.CredentialValidator {
+    private static final Logger LOG = LogManager.getLogger(ArrowFlightSqlCredentialValidator.class);
 
     private final ArrowFlightSqlTokenManager arrowFlightSqlTokenManager;
 
@@ -34,10 +39,21 @@ public class ArrowFlightSqlCredentialValidator implements BasicCallHeaderAuthent
     @Override
     public CallHeaderAuthenticator.AuthResult validate(String username, String password) throws Exception {
         GlobalStateMgr globalStateMgr = GlobalStateMgr.getCurrentState();
-        UserIdentity currentUser =
-                globalStateMgr.getAuthenticationMgr().checkPlainPassword(username, "0.0.0.0", password);
-        if (currentUser == null) {
-            throw CallStatus.UNAUTHENTICATED.withDescription("Access denied for " + username).toRuntimeException();
+        UserIdentity currentUser = null;
+        try {
+            if (TdwAuthenticate.useTAUTH(username)) {
+                currentUser = TdwAuthenticate.tauthAuthenticate(globalStateMgr.getAuthenticationMgr(), username);
+            } else {
+                currentUser = globalStateMgr.getAuthenticationMgr().checkPlainPassword(username, "0.0.0.0", password);
+            }
+            if (currentUser == null) {
+                LOG.error("Get user null for {}", username);
+                throw CallStatus.UNAUTHENTICATED.withDescription("Access denied for " + username).toRuntimeException();
+            }
+        } catch (AccessDeniedException e) {
+            LOG.error("validate user {} failed", username, e);
+            throw CallStatus.UNAUTHENTICATED.withDescription(
+                    "Access denied for " + username + " with " + e.getMessage()).toRuntimeException();
         }
 
         String encryptedToken = arrowFlightSqlTokenManager.createToken(currentUser);
