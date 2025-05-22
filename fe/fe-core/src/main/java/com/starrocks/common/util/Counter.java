@@ -168,7 +168,7 @@ public class Counter {
             mergedValue += counter.getValue();
         }
 
-        if (counters.get(0).isAvg()) {
+        if (counters != null && counters.size() > 0 && counters.get(0).isAvg()) {
             mergedValue /= counters.size();
         }
 
