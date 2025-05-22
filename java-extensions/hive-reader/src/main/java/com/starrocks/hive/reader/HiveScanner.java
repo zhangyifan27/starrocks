@@ -16,6 +16,9 @@ package com.starrocks.hive.reader;
 
 import StorageEngineClient.CombineFileSplit;
 import com.google.common.base.Strings;
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.RemovalNotification;
 import com.starrocks.connector.hadoop.HadoopExt;
 import com.starrocks.jni.connector.ColumnType;
 import com.starrocks.jni.connector.ColumnValue;
@@ -24,6 +27,7 @@ import com.starrocks.jni.connector.ScannerHelper;
 import com.starrocks.jni.connector.SelectedFields;
 import com.starrocks.utils.loader.ThreadContextClassLoader;
 import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.apache.hadoop.hive.common.JavaUtils;
 import org.apache.hadoop.hive.serde2.Deserializer;
@@ -48,6 +52,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import static com.google.common.base.Preconditions.checkArgument;
@@ -59,6 +64,20 @@ import static com.starrocks.hive.reader.HiveScannerUtils.decodeStringToSplit;
 public class HiveScanner extends ConnectorScanner {
 
     private static final Logger LOG = LogManager.getLogger(HiveScanner.class);
+    private static Cache<String, UserGroupInformation> CACHE_UGI = CacheBuilder.newBuilder()
+            .maximumSize(512)
+            .expireAfterAccess(3600, TimeUnit.SECONDS)
+            .removalListener((RemovalNotification<String, UserGroupInformation> notification) -> {
+                UserGroupInformation ugi = notification.getValue();
+                if (ugi != null) {
+                    try {
+                        FileSystem.closeAllForUGI(ugi);
+                        LOG.info("Close all file system for ugi={}", ugi);
+                    } catch (Exception e) {
+                        LOG.error("Failed to close all file system for ugi={}", ugi, e);
+                    }
+                }
+            }).build();
 
     private static final String SERDE_PROPERTY_PREFIX = "SerDe.";
 
@@ -357,8 +376,24 @@ public class HiveScanner extends ConnectorScanner {
                 Strings.isNullOrEmpty(tqPlatformUserCmk)) {
             return null;
         }
+        UserGroupInformation ugi = CACHE_UGI.getIfPresent(proxyUser);
+        if (ugi != null) {
+            return ugi;
+        }
+        return createNewUGI(tqPlatformUserName, proxyUser, tqPlatformUserCmk);
+    }
+
+    private static synchronized UserGroupInformation createNewUGI(String tqPlatformUserName, String proxyUser,
+                                                                  String tqPlatformUserCmk) {
+        UserGroupInformation ugi = CACHE_UGI.getIfPresent(proxyUser);
+        if (ugi != null) {
+            return ugi;
+        }
         UserGroupInformation platformUser =
                 UserGroupInformation.createUserByTAuthKey(tqPlatformUserName, tqPlatformUserCmk);
-        return UserGroupInformation.createProxyUser(proxyUser, platformUser);
+        ugi = UserGroupInformation.createProxyUser(proxyUser, platformUser);
+        CACHE_UGI.put(proxyUser, ugi);
+        LOG.info("proxyUser: " + proxyUser + ", ugi: " + ugi + ", CACHE_UGI size: " + CACHE_UGI.size());
+        return ugi;
     }
 }
