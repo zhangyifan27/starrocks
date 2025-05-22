@@ -38,6 +38,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
 import com.google.common.collect.ImmutableList;
 import com.starrocks.catalog.Database;
+import com.starrocks.catalog.OlapTable;
+import com.starrocks.catalog.Table;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Pair;
 import com.starrocks.common.util.DebugUtil;
@@ -58,7 +60,7 @@ import java.util.List;
 public class DbsProcDir implements ProcDirInterface {
     public static final ImmutableList<String> TITLE_NAMES = new ImmutableList.Builder<String>()
             .add("DbId").add("DbName").add("TableNum").add("Quota")
-            .add("LastConsistencyCheckTime").add("ReplicaQuota")
+            .add("LastConsistencyCheckTime").add("ReplicaQuota").add("UsedSpace")
             .build();
 
     private final GlobalStateMgr globalStateMgr;
@@ -133,6 +135,10 @@ public class DbsProcDir implements ProcDirInterface {
 
                 long replicaQuota = db.getReplicaQuota();
                 dbInfo.add(replicaQuota);
+                Pair<Double, String> totalSizePair = DebugUtil.getByteUint(getTableDataSize(db));
+                String readableSize = DebugUtil.DECIMAL_FORMAT_SCALE_3.format(totalSizePair.first) + " "
+                        + totalSizePair.second;
+                dbInfo.add(readableSize);
 
             } finally {
                 locker.unLockDatabase(db, LockType.READ);
@@ -153,5 +159,17 @@ public class DbsProcDir implements ProcDirInterface {
             result.addRow(row);
         }
         return result;
+    }
+
+
+    public Long getTableDataSize(Database database) {
+        long dataSize = 0L;
+        for (Table table : database.getTables()) {
+            if (!table.isOlapTable()) {
+                continue;
+            }
+            dataSize += ((OlapTable) table).getDataSize();
+        }
+        return dataSize;
     }
 }

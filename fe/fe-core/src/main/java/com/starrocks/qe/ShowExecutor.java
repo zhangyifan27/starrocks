@@ -1494,6 +1494,9 @@ public class ShowExecutor {
 
                     for (Table table : sortedTables) {
                         if (!table.isNativeTableOrMaterializedView()) {
+                            List<String> row = Arrays.asList(table.getName(), String.valueOf(0),
+                                    String.valueOf(0), table.getType().toString());
+                            totalRows.add(row);
                             continue;
                         }
 
@@ -1505,7 +1508,8 @@ public class ShowExecutor {
                         String readableSize = DebugUtil.DECIMAL_FORMAT_SCALE_3.format(tableSizePair.first) + " "
                                 + tableSizePair.second;
 
-                        List<String> row = Arrays.asList(table.getName(), readableSize, String.valueOf(replicaCount));
+                        List<String> row = Arrays.asList(table.getName(), readableSize,
+                                String.valueOf(replicaCount), table.getType().toString());
                         totalRows.add(row);
 
                         totalSize += tableSize;
@@ -1515,7 +1519,7 @@ public class ShowExecutor {
                     Pair<Double, String> totalSizePair = DebugUtil.getByteUint(totalSize);
                     String readableSize = DebugUtil.DECIMAL_FORMAT_SCALE_3.format(totalSizePair.first) + " "
                             + totalSizePair.second;
-                    List<String> total = Arrays.asList("Total", readableSize, String.valueOf(totalReplicaCount));
+                    List<String> total = Arrays.asList("Total", readableSize, String.valueOf(totalReplicaCount), "");
                     totalRows.add(total);
 
                     // quota
@@ -1525,7 +1529,7 @@ public class ShowExecutor {
                     String readableQuota = DebugUtil.DECIMAL_FORMAT_SCALE_3.format(quotaPair.first) + " "
                             + quotaPair.second;
 
-                    List<String> quotaRow = Arrays.asList("Quota", readableQuota, String.valueOf(replicaQuota));
+                    List<String> quotaRow = Arrays.asList("Quota", readableQuota, String.valueOf(replicaQuota), "");
                     totalRows.add(quotaRow);
 
                     // left
@@ -1534,7 +1538,7 @@ public class ShowExecutor {
                     Pair<Double, String> leftPair = DebugUtil.getByteUint(left);
                     String readableLeft = DebugUtil.DECIMAL_FORMAT_SCALE_3.format(leftPair.first) + " "
                             + leftPair.second;
-                    List<String> leftRow = Arrays.asList("Left", readableLeft, String.valueOf(replicaCountLeft));
+                    List<String> leftRow = Arrays.asList("Left", readableLeft, String.valueOf(replicaCountLeft), "");
                     totalRows.add(leftRow);
                 } else {
                     try {
