@@ -6679,11 +6679,6 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             throw new ParsingException(PARSER_ERROR_MSG.wrongNumOfArgs(functionName), pos);
         }
         List<Expr> exprs = visit(context.aggregationFunction().expression(), Expr.class);
-        // count(condition_exp, exp1, exp2) -> count(if(condition_exp, exp1, exp2))
-        if (functionName.equalsIgnoreCase(FunctionSet.COUNT) && !isDistinct && exprs.size() == 3) {
-            exprs = List.of(new CaseExpr(null, List.of(new CaseWhenClause(exprs.get(0), exprs.get(1))),
-                    exprs.get(2)));
-        }
         if (isGroupConcat && !exprs.isEmpty() && context.aggregationFunction().SEPARATOR() == null) {
             if (isLegacyGroupConcat) {
                 if (exprs.size() == 1) {

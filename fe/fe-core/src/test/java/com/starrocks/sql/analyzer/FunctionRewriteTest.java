@@ -38,9 +38,6 @@ public class FunctionRewriteTest {
         sql = "select wm_concat(v1, '-', 'v1') from t0;";
         assertPlanContains(sql, "group_concat");
 
-        sql = "select count(v1 > 0, v2, null) from t0;";
-        assertPlanContains(sql, "count");
-
         sql = "select string_to_map('a:1,b:2,c:3', ',', ':') from t0;";
         assertPlanContains(sql, "str_to_map");
 
