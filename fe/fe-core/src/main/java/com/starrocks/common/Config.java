@@ -3533,5 +3533,6 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean enable_pg_jdbc_dml = false;
 
+    @ConfField(mutable = true)
     public static boolean check_udf_usage_privilege = true;
 }
