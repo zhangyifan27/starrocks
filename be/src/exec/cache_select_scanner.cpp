@@ -51,8 +51,9 @@ Status CacheSelectScanner::do_get_next(RuntimeState* runtime_state, ChunkPtr* ch
     } else if (_scanner_params.scan_range->file_format == THdfsFileFormat::ORC) {
         RETURN_IF_ERROR(_fetch_orc());
     } else {
-        return Status::InternalError("Unsupported file format in cache select: " +
-                                     to_string(_scanner_params.scan_range->file_format));
+        LOG(INFO) << "CacheSelectScanner: unsupported file format: " << _scanner_params.scan_range->file_format
+                  << " try to cache file as it's a text file";
+        RETURN_IF_ERROR(_fetch_textfile());
     }
 
     // handle iceberg delete files
