@@ -51,6 +51,9 @@ public class AnalyzeSingleTest {
     public void testDbTableDelimiter() {
         analyzeSuccess("select v1 from test::t0");
         analyzeSuccess("desc test::t0");
+        analyzeSuccess("select test::t0.v1 from test::t0");
+        analyzeSuccess("select test::t0.v1 from test::t0 where test::t0.v2 = 1 and v1 = 2");
+        analyzeSuccess("select test::t0.* from test::t0 where test::t0.v2 = 1 and v1 = 2");
     }
 
     @Test
