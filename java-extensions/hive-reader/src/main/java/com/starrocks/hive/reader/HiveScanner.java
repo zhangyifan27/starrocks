@@ -19,6 +19,7 @@ import com.google.common.base.Strings;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.RemovalNotification;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.starrocks.connector.hadoop.HadoopExt;
 import com.starrocks.jni.connector.ColumnType;
 import com.starrocks.jni.connector.ColumnValue;
@@ -52,6 +53,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -78,6 +81,15 @@ public class HiveScanner extends ConnectorScanner {
                     }
                 }
             }).build();
+    private static ScheduledExecutorService CLEANUP_EXECUTOR = Executors
+            .newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setDaemon(true)
+                    .setNameFormat("cache-ugi-cleanup-scheduler").build());
+
+    static {
+        CLEANUP_EXECUTOR.scheduleAtFixedRate(() -> {
+            CACHE_UGI.cleanUp();
+        }, 1, 1, TimeUnit.MINUTES);
+    }
 
     private static final String SERDE_PROPERTY_PREFIX = "SerDe.";
 
