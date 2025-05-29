@@ -23,6 +23,7 @@ import com.starrocks.thrift.TExprNode;
 import com.starrocks.thrift.TExprNodeType;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class DictionaryGetExpr extends Expr {
 
@@ -61,16 +62,12 @@ public class DictionaryGetExpr extends Expr {
 
     @Override
     protected String toSqlImpl() {
-        String message = "DICTIONARY_GET(";
-        int size = (this.children.size() == 3) ? this.children.size() - 1 : this.children.size();
-        for (int i = 0; i < size; ++i) {
-            Expr expr = this.children.get(i);
-            message += expr.toSql();
-            message += ", ";
-        }
-        message += (nullIfNotExist ? "true" : "false");
-        message += ")";
-        return message;
+        StringBuilder message = new StringBuilder("DICTIONARY_GET(");
+        List<String> exprStrings =
+                children.subList(0, this.children.size()).stream().map(Expr::toSql).collect(Collectors.toList());
+        message.append(String.join(", ", exprStrings));
+        message.append(")");
+        return message.toString();
     }
 
     @Override
