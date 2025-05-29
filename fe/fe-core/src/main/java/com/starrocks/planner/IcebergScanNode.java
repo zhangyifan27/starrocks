@@ -32,6 +32,7 @@ import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.UserException;
+import com.starrocks.common.profile.Tracers;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.PartitionUtil;
@@ -239,6 +240,7 @@ public class IcebergScanNode extends ScanNode {
 
         Map<StructLike, Long> partitionKeyToId = Maps.newHashMap();
         Map<Long, List<Integer>> idToPartitionSlots = Maps.newHashMap();
+        Map<String, Long> scanFileSize = Maps.newHashMap();
         List<Integer> currentEqualityIds = new ArrayList<>();
         for (FileScanTask task : remoteFileDesc.getIcebergScanTasks()) {
             DataFile file = task.file();
@@ -286,6 +288,7 @@ public class IcebergScanNode extends ScanNode {
             }
             hdfsScanRange.setOffset(task.start());
             hdfsScanRange.setLength(task.length());
+            scanFileSize.put(file.path().toString(), scanFileSize.getOrDefault(file.path().toString(), 0L) + task.length());
             // For iceberg table we do not need partition id
             if (!idToPartitionSlots.containsKey(partitionId)) {
                 hdfsScanRange.setPartition_id(-1);
@@ -352,6 +355,14 @@ public class IcebergScanNode extends ScanNode {
         }
 
         scanNodePredicates.setSelectedPartitionIds(partitionKeyToId.values());
+
+        Tracers.record(Tracers.Module.EXTERNAL, "ScanDetail." + icebergTable.getRemoteDbName() + "." +
+                icebergTable.getRemoteTableName() + ".ScanPartitionNum", String.valueOf(partitionKeyToId.size()));
+        Tracers.record(Tracers.Module.EXTERNAL, "ScanDetail." + icebergTable.getRemoteDbName() + "." +
+                icebergTable.getRemoteTableName() + ".ScanFileSize", String.format("%.2fGB",
+                scanFileSize.values().stream().reduce(0L, Long::sum) / 1024.0 / 1024.0 / 1024.0));
+        Tracers.record(Tracers.Module.EXTERNAL, "ScanDetail." + icebergTable.getRemoteDbName() + "." +
+                icebergTable.getRemoteTableName() + ".ScanFileNum", String.valueOf(scanFileSize.size()));
     }
 
     private void prepareRequiredColumnsForDeletes(List<Integer> equalityIds) {

@@ -26,6 +26,7 @@
 #include "common/status.h"
 #include "fs/hdfs/fs_hdfs.h"
 #include "util/random.h"
+#include "util/starrocks_metrics.h"
 
 namespace starrocks {
 
@@ -35,6 +36,7 @@ public:
         if (hdfs_fs != nullptr) {
             // hdfs_fs maybe a nullptr, if it create failed.
             hdfsDisconnect(hdfs_fs);
+            StarRocksMetrics::instance()->fs_hdfs_fs_instance_count.decrement(1);
         }
     }
     std::string namenode;

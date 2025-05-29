@@ -90,6 +90,7 @@ import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.UUIDUtil;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
+import com.starrocks.connector.RemoteScanRangeLocations;
 import com.starrocks.http.HttpConnectContext;
 import com.starrocks.http.HttpResultSender;
 import com.starrocks.load.EtlJobType;
@@ -108,6 +109,7 @@ import com.starrocks.mysql.MysqlSerializer;
 import com.starrocks.persist.CreateInsertOverwriteJobLog;
 import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.planner.FileScanNode;
+import com.starrocks.planner.HdfsScanNode;
 import com.starrocks.planner.HiveTableSink;
 import com.starrocks.planner.OlapScanNode;
 import com.starrocks.planner.PlanFragment;
@@ -1371,6 +1373,8 @@ public class StmtExecutor {
 
         if (batch != null) {
             statisticsForAuditLog = batch.getQueryStatistics();
+            recordDetialInfoInProfile(execPlan);
+
             if (!isOutfileQuery) {
                 context.getState().setEof();
             } else {
@@ -1390,11 +1394,15 @@ public class StmtExecutor {
 
             // collect table-level metrics
             Set<Long> tableIds = Sets.newHashSet();
+            long scanRows = 0;
+            long scanBytes = 0;
             for (QueryStatisticsItemPB item : statisticsForAuditLog.statsItems) {
                 TableMetricsEntity entity = TableMetricsRegistry.getInstance().getMetricsEntity(item.tableId);
                 entity.counterScanRowsTotal.increase(item.scanRows);
                 entity.counterScanBytesTotal.increase(item.scanBytes);
                 tableIds.add(item.tableId);
+                scanRows += item.scanRows;
+                scanBytes += item.scanBytes;
             }
             for (Long tableId : tableIds) {
                 TableMetricsEntity entity = TableMetricsRegistry.getInstance().getMetricsEntity(tableId);
@@ -2891,5 +2899,35 @@ public class StmtExecutor {
         return !isInternalStmt
                 && !(parsedStmt instanceof ShowStmt)
                 && !(parsedStmt instanceof AdminSetConfigStmt);
+    }
+
+    private void recordDetialInfoInProfile(ExecPlan execPlan) {
+        String prefix = "ScanDetail";
+        List<ScanNode> scanNodes = execPlan.getScanNodes();
+        for (ScanNode scanNode : scanNodes) {
+            if (scanNode instanceof HdfsScanNode) {
+                HdfsScanNode hdfsScanNode = (HdfsScanNode) scanNode;
+                String tableName = prefix + "." + hdfsScanNode.getHiveTable().getDbName() + "." +
+                        hdfsScanNode.getHiveTable().getTableName();
+
+                RemoteScanRangeLocations remoteScanRangeLocations = hdfsScanNode.getScanRangeLocations();
+                int partitionNum = remoteScanRangeLocations.getPartitionNum();
+                double fileSize = remoteScanRangeLocations.getFileSizeBytes() / 1024.0 / 1024.0 / 1024.0;
+                long fileNum = remoteScanRangeLocations.getFileNum();
+                Tracers.record(Tracers.Module.EXTERNAL, tableName + ".ScanPartitionNum", String.valueOf(partitionNum));
+                Tracers.record(Tracers.Module.EXTERNAL, tableName + ".ScanFileSize", String.format("%.2fGB", fileSize));
+                Tracers.record(Tracers.Module.EXTERNAL, tableName + ".ScanFileNum", String.valueOf(fileNum));
+            }
+        }
+
+        String explainString = buildExplainString(execPlan, ResourceGroupClassifier.QueryType.SELECT,
+                parsedStmt.getExplainLevel());
+        Tracers.record(Tracers.Module.EXTERNAL, "Sql Explain", "\n" + explainString);
+
+        PQueryStatistics statistics = getQueryStatisticsForAuditLog();
+        if (statistics != null) {
+            Tracers.record(Tracers.Module.EXTERNAL, prefix + ".ScanRows", String.valueOf(statistics.scanRows));
+            Tracers.record(Tracers.Module.EXTERNAL, prefix + ".ScanBytes", String.valueOf(statistics.scanBytes));
+        }
     }
 }

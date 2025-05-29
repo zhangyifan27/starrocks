@@ -119,6 +119,7 @@ Status HdfsFsCache::get_connection(const std::string& namenode, std::shared_ptr<
     const uint32_t max_cache_clients = config::hdfs_client_max_cache_size;
     // Not found a cached client, create a new one
     hdfs_client = std::make_shared<HdfsFsClient>();
+    StarRocksMetrics::instance()->fs_hdfs_fs_instance_count.increment(1);
     hdfs_client->namenode = namenode;
     RETURN_IF_ERROR(create_hdfs_fs_handle(namenode, hdfs_client, options));
     if (UNLIKELY(_cache_keys.size() >= max_cache_clients)) {

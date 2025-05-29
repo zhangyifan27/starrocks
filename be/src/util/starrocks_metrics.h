@@ -404,6 +404,21 @@ public:
     METRIC_DEFINE_INT_COUNTER(short_circuit_request_total, MetricUnit::REQUESTS);
     METRIC_DEFINE_INT_COUNTER(short_circuit_request_duration_us, MetricUnit::MICROSECONDS);
 
+    // hdfs metrics
+    METRIC_DEFINE_UINT_GAUGE(fs_hdfs_fs_instance_count, MetricUnit::NOUNIT);
+    METRIC_DEFINE_UINT_COUNTER(fs_hdfs_fs_open_files, MetricUnit::NOUNIT);
+    METRIC_DEFINE_UINT_COUNTER(fs_hdfs_fs_create_files, MetricUnit::NOUNIT);
+    METRIC_DEFINE_UINT_COUNTER(fs_hdfs_read_count, MetricUnit::NOUNIT);
+    METRIC_DEFINE_UINT_COUNTER(fs_hdfs_read_io_size, MetricUnit::BYTES);
+    METRIC_DEFINE_UINT_COUNTER(fs_hdfs_write_count, MetricUnit::NOUNIT);
+    METRIC_DEFINE_UINT_COUNTER(fs_hdfs_write_io_size, MetricUnit::BYTES);
+
+    METRIC_DEFINE_UINT_COUNTER(fs_hdfs_create_fs_latency, MetricUnit::MICROSECONDS);
+    METRIC_DEFINE_UINT_COUNTER(fs_hdfs_fs_open_files_latency, MetricUnit::MICROSECONDS);
+    METRIC_DEFINE_UINT_COUNTER(fs_hdfs_fs_create_files_latency, MetricUnit::MICROSECONDS);
+    METRIC_DEFINE_UINT_COUNTER(fs_hdfs_read_io_latency, MetricUnit::MICROSECONDS);
+    METRIC_DEFINE_UINT_COUNTER(fs_hdfs_write_io_latency, MetricUnit::MICROSECONDS);
+
     static StarRocksMetrics* instance() {
         static StarRocksMetrics instance;
         return &instance;

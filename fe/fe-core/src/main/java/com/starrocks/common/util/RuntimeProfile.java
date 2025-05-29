@@ -541,6 +541,32 @@ public class RuntimeProfile {
             if (!this.infoStrings.containsKey(key)) {
                 this.infoStrings.put(key, value);
             } else if (!Objects.equals(value, this.infoStrings.get(key))) {
+                if (key.startsWith("Top_")) {
+                    String existValue = this.infoStrings.get(key);
+                    String[] existValues = existValue.split("\n");
+                    String[] values = value.split("\n");
+                    List<String> allValues = new ArrayList<>();
+                    for (String v : existValues) {
+                        allValues.add(v);
+                    }
+                    for (String v : values) {
+                        allValues.add(v);
+                    }
+                    Collections.sort(allValues, (a, b) -> {
+                        int aSortKey = Integer.parseInt(a.substring(0, a.indexOf(",")));
+                        int bSortKey = Integer.parseInt(b.substring(0, b.indexOf(",")));
+                        return aSortKey > bSortKey ? -1 : 1;
+                    });
+                    int prefixLen = "Top_".length();
+                    int n = Integer.parseInt(key.substring(prefixLen, key.indexOf("_", prefixLen)));
+                    if (n > 0 && allValues.size() > n) {
+                        allValues = allValues.subList(0, n);
+                    }
+                    String result = String.join("\n", allValues);
+                    this.infoStrings.put(key, result);
+                    return;
+                }
+
                 String originalKey = key;
                 int pos;
                 if ((pos = key.indexOf("__DUP(")) != -1) {

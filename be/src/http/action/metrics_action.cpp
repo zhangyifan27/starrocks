@@ -33,6 +33,7 @@
 #include "http/http_headers.h"
 #include "http/http_request.h"
 #include "util/metrics.h"
+#include "fs/hdfs/fs_hdfs.h"
 
 #ifdef USE_STAROS
 #include "metrics/metrics.h"
@@ -362,6 +363,11 @@ void MetricsAction::handle(HttpRequest* req) {
         append_metric_fn("hit_rate", cache_hit_counter->hit_rate(), &str);
         append_metric_fn("hit_bytes_last_minute", cache_hit_counter->get_hit_bytes_last_minute(), &str);
         append_metric_fn("miss_bytes_last_minute", cache_hit_counter->get_miss_bytes_last_minute(), &str);
+    }
+
+    auto top10 = HDFSTableReadIOSizeCounter::instance()->get_top_n_and_clear(10);
+    for (const auto& kv : top10) {
+        str.append(fmt::format("starrocks_be_fs_hdfs_top10_table_read_io_size={{table_name=\"{}\"}} {}\n", kv.first, kv.second));
     }
 
     req->add_output_header(HttpHeaders::CONTENT_TYPE, "text/plain; version=0.0.4");

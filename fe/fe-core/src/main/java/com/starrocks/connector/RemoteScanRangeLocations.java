@@ -564,4 +564,8 @@ public class RemoteScanRangeLocations {
     public long getFileSizeBytes() {
         return fileSizeBytes;
     }
+
+    public int getPartitionNum() {
+        return partitionInfos.size();
+    }
 }

@@ -386,9 +386,70 @@ void RuntimeProfile::get_all_children(std::vector<RuntimeProfile*>* children) {
     }
 }
 
+int get_top_n_from_key(const std::string& key) {
+    const std::string top_prefix = "Top_";
+    if (key.find(top_prefix) == std::string::npos) {
+        return -1;
+    }
+    int prefix_len = top_prefix.length();
+    size_t pos_n_end = key.find("_", prefix_len);
+    if (pos_n_end == std::string::npos) {
+        return -1;
+    }
+    int n = std::stoi(key.substr(prefix_len, pos_n_end - prefix_len));
+    if (n <= 0) {
+        return -1;
+    }
+    return n;
+}
+
+bool sort_by_first_int(const std::string& a, const std::string& b) {
+    int a_sort_key = std::stoi(a.substr(0, a.find(",")));
+    int b_sort_key = std::stoi(b.substr(0, b.find(",")));
+    return a_sort_key > b_sort_key;
+}
+
+void deserialize_top_n_info_string(const std::string& value, std::vector<std::string>& values) {
+    std::stringstream ss(value);
+    std::string line;
+    while (std::getline(ss, line, '\n')) {
+        values.push_back(line);
+    }
+}
+
+std::string serialize_top_n_info_string(const std::vector<std::string>& values) {
+    std::string json_array_str;
+    for (const auto& val : values) {
+        json_array_str += val + '\n';
+    }
+    return json_array_str;
+}
+
 void RuntimeProfile::add_info_string(const std::string& key, const std::string& value) {
     std::lock_guard<std::mutex> l(_info_strings_lock);
     auto it = _info_strings.find(key);
+
+    int n = get_top_n_from_key(key);
+    if (n > 0) {
+        // key format: Top_N_name (N is a number, eg: Top_10_ScanTimeFiles)
+        // value format: scan_file_time(ms),IP,path,offset,len
+        // sort by first element split by comma, and keep top n
+        if (it == _info_strings.end()) {
+            _info_strings.emplace(key, value);
+            _info_strings_display_order.push_back(key);
+        } else {
+            std::vector<std::string> values;
+            deserialize_top_n_info_string(value, values);
+            values.emplace_back(value);
+
+            std::sort(values.begin(), values.end(), sort_by_first_int);
+            if (values.size() > n) {
+                values.resize(n);
+            }
+            _info_strings[key] = serialize_top_n_info_string(values);
+        }
+        return;
+    }
 
     if (it == _info_strings.end()) {
         _info_strings.emplace(key, value);
@@ -421,6 +482,19 @@ void RuntimeProfile::copy_all_info_strings_from(RuntimeProfile* src_profile) {
         if (exist_ptr == nullptr) {
             add_info_string(key, value);
         } else if (value != *exist_ptr) {
+            int n = get_top_n_from_key(key);
+            if (n > 0) {
+                std::vector<std::string> values;
+                deserialize_top_n_info_string(*exist_ptr, values);
+                deserialize_top_n_info_string(value, values);
+                std::sort(values.begin(), values.end(), sort_by_first_int);
+                if (values.size() > n) {
+                    values.resize(n);
+                }
+                _info_strings[key] = serialize_top_n_info_string(values);
+                continue;
+            }
+
             std::string original_key = key;
             if (size_t pos; (pos = key.find("__DUP(")) != std::string::npos) {
                 original_key = key.substr(0, pos);

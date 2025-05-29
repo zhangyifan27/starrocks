@@ -76,6 +76,10 @@ public class HdfsScanNode extends ScanNode {
         return scanNodePredicates;
     }
 
+    public RemoteScanRangeLocations getScanRangeLocations() {
+        return scanRangeLocations;
+    }
+
     public HiveTable getHiveTable() {
         return hiveTable;
     }

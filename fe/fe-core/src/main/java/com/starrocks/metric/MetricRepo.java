@@ -225,6 +225,8 @@ public final class MetricRepo {
     public static Histogram HISTO_JOURNAL_WRITE_BATCH;
     public static Histogram HISTO_JOURNAL_WRITE_BYTES;
     public static Histogram HISTO_SHORTCIRCUIT_RPC_LATENCY;
+    public static Histogram HISTO_HMS_REQUEST_LATENCY;
+    public static Histogram HISTO_GET_REMOTE_FILES_LATENCY;
 
     // following metrics will be updated by metric calculator
     public static GaugeMetricImpl<Double> GAUGE_QUERY_PER_SECOND;
@@ -733,6 +735,8 @@ public final class MetricRepo {
         HISTO_JOURNAL_WRITE_BYTES =
                 METRIC_REGISTER.histogram(MetricRegistry.name("journal", "write", "bytes"));
         HISTO_SHORTCIRCUIT_RPC_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("shortcircuit", "latency", "ms"));
+        HISTO_HMS_REQUEST_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("hms", "request", "latency", "ms"));
+        HISTO_GET_REMOTE_FILES_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("get", "remotefiles", "latency", "ms"));
 
         HISTO_KAFKA_GET_PARTITIONS_LATENCY =
                 METRIC_REGISTER.histogram(MetricRegistry.name("kafka", "get", "partitions", "latency", "ms"));

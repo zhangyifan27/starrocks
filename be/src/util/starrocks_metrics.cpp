@@ -266,6 +266,20 @@ StarRocksMetrics::StarRocksMetrics() : _metrics(_s_registry_name) {
 
     REGISTER_STARROCKS_METRIC(short_circuit_request_total);
     REGISTER_STARROCKS_METRIC(short_circuit_request_duration_us);
+
+    REGISTER_STARROCKS_METRIC(fs_hdfs_fs_instance_count);
+    REGISTER_STARROCKS_METRIC(fs_hdfs_fs_open_files);
+    REGISTER_STARROCKS_METRIC(fs_hdfs_fs_create_files);
+    REGISTER_STARROCKS_METRIC(fs_hdfs_read_count);
+    REGISTER_STARROCKS_METRIC(fs_hdfs_read_io_size);
+    REGISTER_STARROCKS_METRIC(fs_hdfs_write_count);
+    REGISTER_STARROCKS_METRIC(fs_hdfs_write_io_size);
+
+    REGISTER_STARROCKS_METRIC(fs_hdfs_create_fs_latency);
+    REGISTER_STARROCKS_METRIC(fs_hdfs_fs_open_files_latency);
+    REGISTER_STARROCKS_METRIC(fs_hdfs_fs_create_files_latency);
+    REGISTER_STARROCKS_METRIC(fs_hdfs_read_io_latency);
+    REGISTER_STARROCKS_METRIC(fs_hdfs_write_io_latency);
 }
 
 void StarRocksMetrics::initialize(const std::vector<std::string>& paths, bool init_system_metrics,

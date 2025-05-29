@@ -339,9 +339,12 @@ void HdfsScanner::update_hdfs_counter(HdfsScanProfile* profile) {
     RuntimeProfile* runtime_profile = profile->runtime_profile;
     ADD_COUNTER(profile->runtime_profile, kHdfsIOProfileSectionPrefix, TUnit::NONE);
 
+    int64_t total_scan_time_ns = 0;
     for (int64_t i = 0, sz = statistics->size(); i < sz; i++) {
         auto&& name = statistics->name(i);
-        if (name == HdfsReadMetricsKey::kTotalOpenFSTimeNs || name == HdfsReadMetricsKey::kTotalOpenFileTimeNs) {
+        if (name == HdfsReadMetricsKey::kTotalOpenFSTimeNs || name == HdfsReadMetricsKey::kTotalOpenFileTimeNs ||
+            name == HdfsReadMetricsKey::kTotalReadTimeNs) {
+            total_scan_time_ns += statistics->value(i);
             auto&& counter = ADD_CHILD_COUNTER(runtime_profile, name, TUnit::TIME_NS, kHdfsIOProfileSectionPrefix);
             COUNTER_UPDATE(counter, statistics->value(i));
         } else if (name == HdfsReadMetricsKey::kTotalBytesRead || name == HdfsReadMetricsKey::kTotalLocalBytesRead ||
@@ -356,6 +359,10 @@ void HdfsScanner::update_hdfs_counter(HdfsScanProfile* profile) {
             COUNTER_UPDATE(counter, statistics->value(i));
         }
     }
+
+    runtime_profile->add_info_string("Top_10_ScanTimeFiles", fmt::format("{},{},{},{},{}", total_scan_time_ns / 1000000,
+        BackendOptions::get_localhost(), _scanner_params.path, _scanner_params.scan_range->offset,
+        _scanner_params.scan_range->length));
 }
 
 void HdfsScanner::do_update_counter(HdfsScanProfile* profile) {}

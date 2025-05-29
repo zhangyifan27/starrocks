@@ -29,32 +29,67 @@
 #include "testutil/sync_point.h"
 #include "udf/java/utils.h"
 #include "util/hdfs_util.h"
-
+#include "util/starrocks_metrics.h"
 using namespace fmt::literals;
 
 namespace starrocks {
 
+// remove the file name and partition info from the path
+std::string sr_fs_hdfs_get_table_name_from_path(const std::string& path) {
+    size_t pos = path.find_last_of('/');
+    if (pos == std::string::npos) {
+        return path;
+    }
+    std::string table_name = path.substr(0, pos);
+    while (true) {
+        size_t p = table_name.find_last_of('/');
+        if (p == std::string::npos) {
+            break;
+        }
+        std::string part = table_name.substr(p + 1);
+        if (part.find("p_") != std::string::npos || part.find("=") != std::string::npos) {
+            table_name = table_name.substr(0, p);
+        } else {
+            break;
+        }
+    }
+    return table_name;
+}
+
 class GetHdfsFileReadOnlyHandle {
 public:
     GetHdfsFileReadOnlyHandle(const FSOptions options, std::string path, int buffer_size)
-            : _options(std::move(options)), _path(std::move(path)), _buffer_size(buffer_size) {}
+            : _options(std::move(options)), _path(std::move(path)), _buffer_size(buffer_size) {
+        _table_name = sr_fs_hdfs_get_table_name_from_path(_path);
+    }
 
     StatusOr<hdfsFS> getOrCreateFS() {
+        bool is_first_open = false;
         if (_hdfs_client == nullptr) {
+            is_first_open = true;
             SCOPED_RAW_TIMER(&_total_open_fs_time_ns);
             std::string namenode;
             RETURN_IF_ERROR(get_namenode_from_path(_path, &namenode));
             RETURN_IF_ERROR(HdfsFsCache::instance()->get_connection(namenode, _hdfs_client, _options));
         }
+
+        DeferOp op([this, is_first_open] {
+            if (is_first_open) {
+                StarRocksMetrics::instance()->fs_hdfs_create_fs_latency.increment(_total_open_fs_time_ns / 1000);
+            }
+        });
         return _hdfs_client->hdfs_fs;
     }
 
     StatusOr<hdfsFile> getOrCreateFile() {
+        bool is_first_open = false;
         if (_file == nullptr) {
+            is_first_open = true;
             auto st = getOrCreateFS();
             SCOPED_RAW_TIMER(&_total_open_file_time_ns);
             if (!st.ok()) return st.status();
             _file = hdfsOpenFile(st.value(), _path.c_str(), O_RDONLY, _buffer_size, 0, 0);
+            StarRocksMetrics::instance()->fs_hdfs_fs_open_files.increment(1);
             if (_file == nullptr) {
                 if (errno == ENOENT) {
                     return Status::RemoteFileNotFound(fmt::format("hdfsOpenFile failed, backend={}, file={}",
@@ -66,6 +101,12 @@ public:
                 }
             }
         }
+
+        DeferOp op([this, is_first_open] {
+            if (is_first_open) {
+                StarRocksMetrics::instance()->fs_hdfs_fs_open_files_latency.increment(_total_open_file_time_ns / 1000);
+            }
+        });
         return _file;
     }
 
@@ -73,6 +114,7 @@ public:
     hdfsFile getFile() { return _file; }
     int64_t getTotalOpenFSTimeNs() const { return _total_open_fs_time_ns; }
     int64_t getTotalOpenFileTimeNs() const { return _total_open_file_time_ns; }
+    int64_t getTotalReadTimeNs() const { return _total_read_time_ns; }
     const std::string& getPath() const { return _path; }
     void setOffset(int64_t offset) { _offset = offset; }
 
@@ -105,12 +147,23 @@ public:
         RETURN_IF_ERROR(ensureOpened());
         hdfsFS fs = getFS();
         for (int i = 0; i < (retry + 1); i++) {
+            MonotonicStopWatch watch;
+            watch.start();
+
             tSize r = hdfsPread(fs, _file, _offset, data, static_cast<tSize>(size));
+
+            uint64_t elapsed_time_ns = watch.elapsed_time();
+            _total_read_time_ns += elapsed_time_ns;
+            StarRocksMetrics::instance()->fs_hdfs_read_io_latency.increment(elapsed_time_ns / 1000);
+            StarRocksMetrics::instance()->fs_hdfs_read_count.increment(1);
             if (r == -1) {
                 (void)close();
                 RETURN_IF_ERROR(ensureOpened());
             } else {
                 _offset += r;
+                StarRocksMetrics::instance()->fs_hdfs_read_io_size.increment(r);
+                HDFSTableReadIOSizeCounter::instance()->add(_table_name, r);
+
                 return r;
             }
         }
@@ -125,10 +178,19 @@ public:
         int64_t now = 0;
         uint8_t* buf = data;
 
+        uint64_t elapsed_time_ns = 0;
         while (now < size) {
             tSize r = 0;
             for (int i = 0; i < (retry + 1); i++) {
+                MonotonicStopWatch watch;
+                watch.start();
+
                 r = hdfsRead(fs, _file, buf + now, size - now);
+
+                elapsed_time_ns = watch.elapsed_time();
+                _total_read_time_ns += elapsed_time_ns;
+                StarRocksMetrics::instance()->fs_hdfs_read_io_latency.increment(elapsed_time_ns / 1000);
+                StarRocksMetrics::instance()->fs_hdfs_read_count.increment(1);
                 if (r != -1) break;
                 if (i == retry) {
                     return Status::IOError(fmt::format("fail to hdfsRead {}: {}", _path, get_hdfs_err_msg()));
@@ -141,6 +203,8 @@ public:
             if (r == 0) break;
             now += r;
             _offset += r;
+            StarRocksMetrics::instance()->fs_hdfs_read_io_size.increment(r);
+            HDFSTableReadIOSizeCounter::instance()->add(_table_name, r);
         }
         return now;
     }
@@ -160,11 +224,13 @@ public:
 private:
     const FSOptions _options;
     std::string _path;
+    std::string _table_name;
     int _buffer_size;
     std::shared_ptr<HdfsFsClient> _hdfs_client = nullptr;
     hdfsFile _file = nullptr;
     int64_t _total_open_fs_time_ns = 0;
     int64_t _total_open_file_time_ns = 0;
+    int64_t _total_read_time_ns = 0;
     int64_t _offset = 0;
 };
 
@@ -252,6 +318,7 @@ StatusOr<std::unique_ptr<io::NumericStatistics>> HdfsInputStream::get_numeric_st
         }
         stats->append(HdfsReadMetricsKey::kTotalOpenFSTimeNs, _handle->getTotalOpenFSTimeNs());
         stats->append(HdfsReadMetricsKey::kTotalOpenFileTimeNs, _handle->getTotalOpenFileTimeNs());
+        stats->append(HdfsReadMetricsKey::kTotalReadTimeNs, _handle->getTotalReadTimeNs());
 
         struct hdfsReadStatistics* hdfs_statistics = nullptr;
         auto r = hdfsFileGetReadStatistics(file, &hdfs_statistics);
@@ -325,7 +392,15 @@ private:
 };
 
 Status HDFSWritableFile::append(const Slice& data) {
+    MonotonicStopWatch watch;
+    watch.start();
+
     tSize r = hdfsWrite(_fs, _file, data.data, data.size);
+
+    uint64_t elapsed_time_ns = watch.elapsed_time();
+    StarRocksMetrics::instance()->fs_hdfs_write_io_latency.increment(elapsed_time_ns / 1000);
+    StarRocksMetrics::instance()->fs_hdfs_write_count.increment(1);
+
     if (r == -1) { // error
         auto error_msg = fmt::format("Fail to append {}: {}", _path, get_hdfs_err_msg());
         LOG(WARNING) << error_msg;
@@ -338,6 +413,7 @@ Status HDFSWritableFile::append(const Slice& data) {
         return Status::IOError(error_msg);
     }
     _offset += data.size;
+    StarRocksMetrics::instance()->fs_hdfs_write_io_size.increment(r);
     return Status::OK();
 }
 
@@ -598,6 +674,9 @@ StatusOr<std::unique_ptr<WritableFile>> HdfsFileSystem::new_writable_file(const 
         hdfs_write_buffer_size = _options.upload->__isset.hdfs_write_buffer_size_kb;
     }
 
+    MonotonicStopWatch watch;
+    watch.start();
+
     hdfsFile file = hdfsOpenFile(hdfs_client->hdfs_fs, path.c_str(), flags, hdfs_write_buffer_size, 0, 0);
     if (file == nullptr) {
         if (errno == ENOENT) {
@@ -607,6 +686,11 @@ StatusOr<std::unique_ptr<WritableFile>> HdfsFileSystem::new_writable_file(const 
                     fmt::format("hdfsOpenFile failed, file={}. err_msg: {}", path, get_hdfs_err_msg()));
         }
     }
+
+    StarRocksMetrics::instance()->fs_hdfs_fs_create_files.increment(1);
+    uint64_t elapsed_time_ns = watch.elapsed_time();
+    StarRocksMetrics::instance()->fs_hdfs_fs_create_files_latency.increment(elapsed_time_ns / 1000);
+
     return wrap_encrypted(std::make_unique<HDFSWritableFile>(hdfs_client->hdfs_fs, file, path, 0),
                           opts.encryption_info);
 }
