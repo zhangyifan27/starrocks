@@ -818,7 +818,8 @@ public class ExpressionAnalyzer {
                     session.getSessionVariable().isPreferThiveFunctions()) {
                 String fnName = node.getFnName().getFunction();
                 // Prefer to find the corresponding thive udf
-                for (String thiveFnName : Config.prefer_thive_function_names) {
+                Set<String> preferThiveFunctionNames = getPreferThiveFunctionNames();
+                for (String thiveFnName : preferThiveFunctionNames) {
                     if (fnName.equals(thiveFnName)) {
                         fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
                     }
@@ -875,6 +876,21 @@ public class ExpressionAnalyzer {
             node.setType(fn.getReturnType());
             node.setFn(fn);
             return null;
+        }
+
+        private Set<String> getPreferThiveFunctionNames() {
+            Set<String> preferThiveFunctionNames = new HashSet<>();
+            for (String thiveFnName : Config.prefer_thive_function_names) {
+                preferThiveFunctionNames.add(thiveFnName);
+            }
+            String sessionPreferThiveFunctions = session.getSessionVariable().getPreferThiveFunctions();
+            if (sessionPreferThiveFunctions != null && !sessionPreferThiveFunctions.isEmpty()) {
+                String[] thiveFnNames = sessionPreferThiveFunctions.trim().split(",");
+                for (String thiveFnName : thiveFnNames) {
+                    preferThiveFunctionNames.add(thiveFnName);
+                }
+            }
+            return preferThiveFunctionNames;
         }
 
         @Override
@@ -1076,7 +1092,8 @@ public class ExpressionAnalyzer {
             if (session.getSessionVariable().isEnableThiveFunction() &&
                     session.getSessionVariable().isPreferThiveFunctions()) {
                 // Prefer to find the corresponding thive udf
-                for (String thiveFnName : Config.prefer_thive_function_names) {
+                Set<String> preferThiveFunctionNames = getPreferThiveFunctionNames();
+                for (String thiveFnName : preferThiveFunctionNames) {
                     if (fnName.equals(thiveFnName)) {
                         fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
                     }

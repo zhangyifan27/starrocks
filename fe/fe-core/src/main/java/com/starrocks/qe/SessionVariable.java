@@ -736,6 +736,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String PREFER_THIVE_FUNCTIONS = "prefer_thive_functions";
 
+    public static final String PREFER_THIVE_FUNCTION_NAMES = "prefer_thive_function_names";
+
     public static final String EXCLUDE_THIVE_DEFAULT_PARTITION = "exclude_thive_default_partition";
 
     public static final String ENABLE_HIVE_MODE = "enable_hive_mode";
@@ -4089,6 +4091,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setPreferThiveFunctions(boolean preferThiveFunctions) {
         this.preferThiveFunctions = preferThiveFunctions;
+    }
+
+    @VarAttr(name = PREFER_THIVE_FUNCTION_NAMES, flag = VariableMgr.INVISIBLE)
+    private String preferThiveFunctionNames = "";
+
+    public String getPreferThiveFunctions() {
+        return preferThiveFunctionNames;
+    }
+
+    public void setPreferThiveFunctions(String preferThiveFunctionNames) {
+        this.preferThiveFunctionNames = preferThiveFunctionNames;
     }
 
     @VarAttr(name = EXPERIMENTAL_ENABLE_CAST_TO_INT_ROUND, flag = VariableMgr.INVISIBLE)
