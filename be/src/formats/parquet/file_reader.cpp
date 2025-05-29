@@ -54,7 +54,7 @@ static int64_t _get_column_start_offset(const tparquet::ColumnMetaData& column) 
     if (column.__isset.index_page_offset) {
         offset = std::min(offset, column.index_page_offset);
     }
-    if (column.__isset.dictionary_page_offset) {
+    if (column.__isset.dictionary_page_offset && column.dictionary_page_offset > 0) {
         offset = std::min(offset, column.dictionary_page_offset);
     }
     return offset;

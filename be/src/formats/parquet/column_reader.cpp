@@ -308,7 +308,7 @@ void ScalarColumnReader::collect_column_io_range(std::vector<io::SharedBufferedI
         const tparquet::ColumnMetaData& column_metadata = column.meta_data;
         if (_offset_index_ctx != nullptr && !_offset_index_ctx->page_selected.empty()) {
             // add dict page
-            if (column_metadata.__isset.dictionary_page_offset) {
+            if (column_metadata.__isset.dictionary_page_offset && column_metadata.dictionary_page_offset > 0) {
                 auto r = io::SharedBufferedInputStream::IORange(
                         column_metadata.dictionary_page_offset,
                         column_metadata.data_page_offset - column_metadata.dictionary_page_offset, active);
