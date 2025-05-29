@@ -629,6 +629,8 @@ public class StmtExecutor {
             if (parsedStmt instanceof QueryStatement) {
                 if (isSystemSelect()) {
                     context.getState().setIsQuery(false);
+                    // disable profile for system sql
+                    context.getSessionVariable().setEnableProfile(false);
                 } else {
                     context.getState().setRequestType(QueryState.RequestType.SELECT);
                 }
