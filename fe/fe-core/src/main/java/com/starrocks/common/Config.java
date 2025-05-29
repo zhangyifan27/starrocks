@@ -339,7 +339,7 @@ public class Config extends ConfigBase {
     public static boolean enable_init_dynamic_plugins = true;
 
     @ConfField
-    public static String init_dynamic_plugins = "NodeInfoToPulsar:https://mirrors.tencent.com/repository/generic/tianqiong_mirrors/starrocks/auditloader/release/auditloader-cluster.zip,AuditLoaderToPulsar:https://mirrors.tencent.com/repository/generic/tianqiong_mirrors/starrocks/auditloader/release/auditloader-pulsar.zip";
+    public static String init_dynamic_plugins = "NodeInfoToPulsar:https://mirrors.tencent.com/repository/generic/tianqiong_mirrors/starrocks/auditloader/release-1.0/auditloader-cluster.zip,AuditLoaderToPulsar:https://mirrors.tencent.com/repository/generic/tianqiong_mirrors/starrocks/auditloader/release-1.0/auditloader-pulsar.zip,AuditLogReporterToPulsar:https://mirrors.tencent.com/repository/generic/tianqiong_mirrors/starrocks/auditloader/release-1.0/auditlog-reporter-pulsar.zip,ProfileReporterToPulsar:https://mirrors.tencent.com/repository/generic/tianqiong_mirrors/starrocks/auditloader/release-1.0/profile-reporter-pulsar.zip";
 
     /**
      * Labels of finished or cancelled load jobs will be removed

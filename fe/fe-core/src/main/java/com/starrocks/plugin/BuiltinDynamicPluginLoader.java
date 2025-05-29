@@ -18,7 +18,6 @@
 package com.starrocks.plugin;
 
 import com.starrocks.common.UserException;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -32,14 +31,11 @@ import java.nio.file.Path;
 
 public class BuiltinDynamicPluginLoader extends DynamicPluginLoader {
     private static final Logger LOG = LogManager.getLogger(BuiltinDynamicPluginLoader.class);
-    public static final String CLUSTER_NAME = "cluster_name";
     protected String pluginName;
-    protected String clusterName;
 
-    BuiltinDynamicPluginLoader(String pluginDir, String pluginName, String source, String clusterName) {
+    BuiltinDynamicPluginLoader(String pluginDir, String pluginName, String source) {
         super(pluginDir, source, "");
         this.pluginName = pluginName;
-        this.clusterName = clusterName;
     }
 
     public void install() throws UserException, IOException {
@@ -66,9 +62,6 @@ public class BuiltinDynamicPluginLoader extends DynamicPluginLoader {
         this.plugin = dynamicLoadPlugin(true);
         pluginInstallValid();
         this.pluginContext.setPluginPath(this.installPath.toString());
-        if (StringUtils.isNotBlank(clusterName)) {
-            this.pluginInfo.getProperties().put(CLUSTER_NAME, clusterName);
-        }
         this.pluginInfo.getProperties().put(MD5SUM_KEY, getSourceChecksum(this.installPath));
         this.plugin.init(this.pluginInfo, this.pluginContext);
         this.pluginInfo.setName("__builtin_" + this.pluginInfo.getName());

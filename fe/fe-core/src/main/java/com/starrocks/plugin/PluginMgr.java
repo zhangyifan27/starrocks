@@ -75,8 +75,6 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-import static com.starrocks.plugin.BuiltinDynamicPluginLoader.CLUSTER_NAME;
-
 public class PluginMgr implements Writable {
     private static final Logger LOG = LogManager.getLogger(PluginMgr.class);
 
@@ -404,14 +402,7 @@ public class PluginMgr implements Writable {
             if (Config.enable_init_dynamic_plugins) {
                 clearUnusedBuiltinDynamicPlugins();
                 if (StringUtils.isNotBlank(Config.init_dynamic_plugins)) {
-                    String clusterName = "";
                     List<PluginInfo> pluginInfos = getAllDynamicPluginInfo();
-                    for (PluginInfo info : pluginInfos) {
-                        if (info.getProperties().containsKey(CLUSTER_NAME)) {
-                            clusterName = info.getProperties().get(CLUSTER_NAME);
-                            break;
-                        }
-                    }
                     for (String plugin : Config.init_dynamic_plugins.split(",")) {
                         try {
                             String[] pluginInfo = plugin.split(":", 2);
@@ -422,7 +413,7 @@ public class PluginMgr implements Writable {
                             }
                             LOG.info("Initialize builtin dynamic plugin: {}", pluginName);
                             PluginLoader loader = new BuiltinDynamicPluginLoader(
-                                    Config.plugin_dir, pluginName, pluginSource, clusterName);
+                                    Config.plugin_dir, pluginName, pluginSource);
                             loader.install();
                             loader.setStatus(PluginLoader.PluginStatus.INSTALLED);
                             this.plugins[loader.getPluginInfo().getTypeId()]
