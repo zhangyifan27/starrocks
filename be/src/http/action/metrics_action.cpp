@@ -367,7 +367,7 @@ void MetricsAction::handle(HttpRequest* req) {
 
     auto top10 = HDFSTableReadIOSizeCounter::instance()->get_top_n_and_clear(10);
     for (const auto& kv : top10) {
-        str.append(fmt::format("starrocks_be_fs_hdfs_top10_table_read_io_size={{table_name=\"{}\"}} {}\n", kv.first, kv.second));
+        str.append(fmt::format("starrocks_be_fs_hdfs_top10_table_read_io_size{{table_name=\"{}\"}} {}\n", kv.first, kv.second));
     }
 
     req->add_output_header(HttpHeaders::CONTENT_TYPE, "text/plain; version=0.0.4");
