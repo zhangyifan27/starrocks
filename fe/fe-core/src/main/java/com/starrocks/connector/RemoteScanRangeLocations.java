@@ -163,6 +163,7 @@ public class RemoteScanRangeLocations {
                 }
             }
             if (tmpPartitionInfos.size() > 0) {
+                partitionInfos = tmpPartitionInfos;
                 descTbl.cleanReferencedPartitions(table);
                 for (DescriptorTable.ReferencedPartitionInfo partitionInfo : tmpPartitionInfos) {
                     descTbl.addReferencedPartitions(table, partitionInfo);
