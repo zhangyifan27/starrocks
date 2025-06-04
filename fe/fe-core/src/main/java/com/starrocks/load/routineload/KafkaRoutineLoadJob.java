@@ -69,6 +69,8 @@ import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
 import com.starrocks.load.Load;
 import com.starrocks.load.RoutineLoadDesc;
+import com.starrocks.privilege.PrivilegeBuiltinConstants;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.WarehouseManager;
@@ -761,7 +763,13 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
         Map<String, String> maskedProperties = Maps.newHashMap();
         for (Map.Entry<String, String> entry : customProperties.entrySet()) {
             if (entry.getKey().contains("password") || entry.getKey().contains("secret")) {
-                maskedProperties.put(entry.getKey(), "******");
+                if (ConnectContext.get() != null && ConnectContext.get().getCurrentRoleIds() != null
+                        && ConnectContext.get().getCurrentRoleIds().contains(
+                        PrivilegeBuiltinConstants.CLUSTER_ADMIN_ROLE_ID)) {
+                    maskedProperties.put(entry.getKey(), entry.getValue());
+                } else {
+                    maskedProperties.put(entry.getKey(), "******");
+                }
             } else {
                 maskedProperties.put(entry.getKey(), entry.getValue());
             }
