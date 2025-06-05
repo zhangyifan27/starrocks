@@ -401,6 +401,7 @@ protected:
     std::shared_ptr<io::CacheInputStream> _cache_input_stream = nullptr;
     std::shared_ptr<io::SharedBufferedInputStream> _shared_buffered_input_stream = nullptr;
     int64_t _total_running_time = 0;
+    int64_t _start_scan_time_micros = 0;
 
     std::shared_ptr<DefaultMORProcessor> _mor_processor;
 };

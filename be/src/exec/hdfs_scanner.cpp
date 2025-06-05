@@ -172,6 +172,9 @@ Status HdfsScanner::_init_mor_processor(RuntimeState* runtime_state, const MORPa
 }
 
 Status HdfsScanner::get_next(RuntimeState* runtime_state, ChunkPtr* chunk) {
+    if (_start_scan_time_micros == 0) {
+        _start_scan_time_micros = GetCurrentTimeMicros();
+    }
     SCOPED_RAW_TIMER(&_total_running_time);
     RETURN_IF_CANCELLED(_runtime_state);
     RETURN_IF_ERROR(_runtime_state->check_mem_limit("get chunk from scanner"));
@@ -360,9 +363,9 @@ void HdfsScanner::update_hdfs_counter(HdfsScanProfile* profile) {
         }
     }
 
-    runtime_profile->add_info_string("Top_10_ScanTimeFiles", fmt::format("{},{},{},{},{}", total_scan_time_ns / 1000000,
-        BackendOptions::get_localhost(), _scanner_params.path, _scanner_params.scan_range->offset,
-        _scanner_params.scan_range->length));
+    runtime_profile->add_info_string("Top_10_ScanTimeFiles", fmt::format("{},{},{},{},{},{}", total_scan_time_ns / 1000000,
+        FormatTimestampForLog(_start_scan_time_micros), BackendOptions::get_localhost(), _scanner_params.path,
+        _scanner_params.scan_range->offset, _scanner_params.scan_range->length));
 }
 
 void HdfsScanner::do_update_counter(HdfsScanProfile* profile) {}

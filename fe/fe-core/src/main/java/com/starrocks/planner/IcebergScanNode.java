@@ -104,6 +104,10 @@ public class IcebergScanNode extends ScanNode {
 
     private Table hybridScanTable = null;
 
+    private long scanPartitionNum = 0;
+    private long scanFileSize = 0;
+    private long scanFileNum = 0;
+
     public IcebergScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName, TupleDescriptor equalityDeleteTupleDesc) {
         super(id, desc, planNodeName);
         this.icebergTable = (IcebergTable) desc.getTable();
@@ -240,7 +244,7 @@ public class IcebergScanNode extends ScanNode {
 
         Map<StructLike, Long> partitionKeyToId = Maps.newHashMap();
         Map<Long, List<Integer>> idToPartitionSlots = Maps.newHashMap();
-        Map<String, Long> scanFileSize = Maps.newHashMap();
+        Map<String, Long> scanFileSizes = Maps.newHashMap();
         List<Integer> currentEqualityIds = new ArrayList<>();
         for (FileScanTask task : remoteFileDesc.getIcebergScanTasks()) {
             DataFile file = task.file();
@@ -288,7 +292,7 @@ public class IcebergScanNode extends ScanNode {
             }
             hdfsScanRange.setOffset(task.start());
             hdfsScanRange.setLength(task.length());
-            scanFileSize.put(file.path().toString(), scanFileSize.getOrDefault(file.path().toString(), 0L) + task.length());
+            scanFileSizes.put(file.path().toString(), scanFileSizes.getOrDefault(file.path().toString(), 0L) + task.length());
             // For iceberg table we do not need partition id
             if (!idToPartitionSlots.containsKey(partitionId)) {
                 hdfsScanRange.setPartition_id(-1);
@@ -356,13 +360,9 @@ public class IcebergScanNode extends ScanNode {
 
         scanNodePredicates.setSelectedPartitionIds(partitionKeyToId.values());
 
-        Tracers.record(Tracers.Module.EXTERNAL, "ScanDetail." + icebergTable.getRemoteDbName() + "." +
-                icebergTable.getRemoteTableName() + ".ScanPartitionNum", String.valueOf(partitionKeyToId.size()));
-        Tracers.record(Tracers.Module.EXTERNAL, "ScanDetail." + icebergTable.getRemoteDbName() + "." +
-                icebergTable.getRemoteTableName() + ".ScanFileSize", String.format("%.2fGB",
-                scanFileSize.values().stream().reduce(0L, Long::sum) / 1024.0 / 1024.0 / 1024.0));
-        Tracers.record(Tracers.Module.EXTERNAL, "ScanDetail." + icebergTable.getRemoteDbName() + "." +
-                icebergTable.getRemoteTableName() + ".ScanFileNum", String.valueOf(scanFileSize.size()));
+        scanPartitionNum = partitionKeyToId.size();
+        scanFileSize = scanFileSizes.values().stream().reduce(0L, Long::sum);
+        scanFileNum = scanFileSizes.size();
     }
 
     private void prepareRequiredColumnsForDeletes(List<Integer> equalityIds) {
@@ -392,6 +392,22 @@ public class IcebergScanNode extends ScanNode {
 
     public HDFSScanNodePredicates getScanNodePredicates() {
         return scanNodePredicates;
+    }
+
+    public IcebergTable getIcebergTable() {
+        return icebergTable;
+    }
+
+    public long getScanPartitionNum() {
+        return scanPartitionNum;
+    }
+
+    public long getScanFileSize() {
+        return scanFileSize;
+    }
+
+    public long getScanFileNum() {
+        return scanFileNum;
     }
 
     @Override

@@ -40,6 +40,8 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.starrocks.common.Pair;
 import com.starrocks.common.Reference;
@@ -77,6 +79,8 @@ public class RuntimeProfile {
     public static final String TOTAL_TIME_COUNTER = "TotalTime";
     public static final String MERGED_INFO_PREFIX_MIN = "__MIN_OF_";
     public static final String MERGED_INFO_PREFIX_MAX = "__MAX_OF_";
+
+    private static final String TOPN_PREFIX = "Top_";
 
     private final Counter counterTotalTime;
 
@@ -539,31 +543,21 @@ public class RuntimeProfile {
                 return;
             }
             if (!this.infoStrings.containsKey(key)) {
-                this.infoStrings.put(key, value);
+                if (key.startsWith(TOPN_PREFIX)) {
+                    List<JsonObject> allJsonObjects = convertToJsonObjectList(key, value, true);
+                    Gson gson = new GsonBuilder().create();
+                    this.infoStrings.put(key, gson.toJson(allJsonObjects));
+                } else {
+                    this.infoStrings.put(key, value);
+                }
             } else if (!Objects.equals(value, this.infoStrings.get(key))) {
-                if (key.startsWith("Top_")) {
+                if (key.startsWith(TOPN_PREFIX)) {
                     String existValue = this.infoStrings.get(key);
-                    String[] existValues = existValue.split("\n");
-                    String[] values = value.split("\n");
-                    List<String> allValues = new ArrayList<>();
-                    for (String v : existValues) {
-                        allValues.add(v);
-                    }
-                    for (String v : values) {
-                        allValues.add(v);
-                    }
-                    Collections.sort(allValues, (a, b) -> {
-                        int aSortKey = Integer.parseInt(a.substring(0, a.indexOf(",")));
-                        int bSortKey = Integer.parseInt(b.substring(0, b.indexOf(",")));
-                        return aSortKey > bSortKey ? -1 : 1;
-                    });
-                    int prefixLen = "Top_".length();
-                    int n = Integer.parseInt(key.substring(prefixLen, key.indexOf("_", prefixLen)));
-                    if (n > 0 && allValues.size() > n) {
-                        allValues = allValues.subList(0, n);
-                    }
-                    String result = String.join("\n", allValues);
-                    this.infoStrings.put(key, result);
+                    List<JsonObject> allJsonObjects = convertToJsonObjectList(key, existValue, false);
+                    allJsonObjects.addAll(convertToJsonObjectList(key, value, false));
+                    allJsonObjects = sortAndMergeJsonObjectList(key, allJsonObjects);
+                    Gson gson = new GsonBuilder().create();
+                    this.infoStrings.put(key, gson.toJson(allJsonObjects));
                     return;
                 }
 
@@ -593,6 +587,87 @@ public class RuntimeProfile {
                 }
             }
         });
+    }
+
+    private List<JsonObject> sortAndMergeJsonObjectList(String key, List<JsonObject> jsonObjects) {
+        int n = 0;
+        if (key.startsWith(TOPN_PREFIX)) {
+            int prefixLen = TOPN_PREFIX.length();
+            int underscoreIndex = key.indexOf("_", prefixLen);
+            if (underscoreIndex != -1) {
+                try {
+                    n = Integer.parseInt(key.substring(prefixLen, underscoreIndex));
+                } catch (NumberFormatException e) {
+                    LOG.warn("Failed to parse number from key: {}", key);
+                }
+            }
+        }
+        // unique first
+        Set<JsonObject> uniqueJsonObjects = new HashSet<>(jsonObjects);
+        List<JsonObject> result = new ArrayList<>(uniqueJsonObjects);
+        // sort by ScanTime(ms)
+        Collections.sort(result, (a, b) -> {
+            int aScanTime = a.get("ScanTime(ms)").getAsInt();
+            int bScanTime = b.get("ScanTime(ms)").getAsInt();
+            return Integer.compare(bScanTime, aScanTime);
+        });
+        // keep the first n
+        if (n > 0 && result.size() > n) {
+            result = result.subList(0, n);
+        }
+        return result;
+    }
+
+    private List<JsonObject> convertToJsonObjectList(String key, String value, boolean sortAndMerge) {
+        List<JsonObject> jsonObjects = new ArrayList<>();
+        if (value == null) {
+            return jsonObjects;
+        }
+
+        if (value.startsWith("[")) {
+            // already JSON format
+            try {
+                Gson gson = new GsonBuilder().create();
+                JsonArray jsonArray = gson.fromJson(value, JsonArray.class);
+                for (JsonElement element : jsonArray) {
+                    jsonObjects.add(element.getAsJsonObject());
+                }
+            } catch (Exception e) {
+                LOG.error("Failed to parse JSON array: {}", value, e);
+            }
+        } else {
+            // original format, need to convert
+            for (String v : value.split("\n")) {
+                JsonObject obj = convertToJsonObject(v);
+                if (obj != null) {
+                    jsonObjects.add(obj);
+                }
+            }
+        }
+        if (sortAndMerge) {
+            return sortAndMergeJsonObjectList(key, jsonObjects);
+        }
+        return jsonObjects;
+    }
+
+    private JsonObject convertToJsonObject(String value) {
+        String[] parts = value.split(",");
+        if (parts.length >= 6) {
+            JsonObject obj = new JsonObject();
+            try {
+                obj.addProperty("ScanTime(ms)", Integer.parseInt(parts[0]));
+                obj.addProperty("StartTime", parts[1]);
+                obj.addProperty("BeIP", parts[2]);
+                obj.addProperty("FilePath", parts[3]);
+                obj.addProperty("offset", Long.parseLong(parts[4]));
+                obj.addProperty("length", Long.parseLong(parts[5]));
+                return obj;
+            } catch (NumberFormatException e) {
+                LOG.error("Failed to parse value: {}", value, e);
+                return null;
+            }
+        }
+        return null;
     }
 
     public void setName(String name) {

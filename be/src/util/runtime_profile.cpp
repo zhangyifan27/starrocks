@@ -404,8 +404,20 @@ int get_top_n_from_key(const std::string& key) {
 }
 
 bool sort_by_first_int(const std::string& a, const std::string& b) {
-    int a_sort_key = std::stoi(a.substr(0, a.find(",")));
-    int b_sort_key = std::stoi(b.substr(0, b.find(",")));
+    int a_sort_key = 0;
+    int b_sort_key = 0;
+    try {
+        size_t pos = a.find(",");
+        if (pos != std::string::npos && pos > 0) {
+            a_sort_key = std::stoi(a.substr(0, pos));
+        }
+        pos = b.find(",");
+        if (pos != std::string::npos && pos > 0) {
+            b_sort_key = std::stoi(b.substr(0, pos));
+        }
+    } catch (const std::exception& e) {
+        LOG(ERROR) << "a: " << a << ", b: " << b << ", failed to convert string to int: " << e.what();
+    }
     return a_sort_key > b_sort_key;
 }
 
@@ -425,6 +437,14 @@ std::string serialize_top_n_info_string(const std::vector<std::string>& values) 
     return json_array_str;
 }
 
+void keep_top_n_unique_values(std::vector<std::string>& values, int n) {
+    std::sort(values.begin(), values.end(), sort_by_first_int);
+    values.erase(std::unique(values.begin(), values.end()), values.end());
+    if (values.size() > n) {
+        values.resize(n);
+    }
+}
+
 void RuntimeProfile::add_info_string(const std::string& key, const std::string& value) {
     std::lock_guard<std::mutex> l(_info_strings_lock);
     auto it = _info_strings.find(key);
@@ -432,7 +452,7 @@ void RuntimeProfile::add_info_string(const std::string& key, const std::string& 
     int n = get_top_n_from_key(key);
     if (n > 0) {
         // key format: Top_N_name (N is a number, eg: Top_10_ScanTimeFiles)
-        // value format: scan_file_time(ms),IP,path,offset,len
+        // value format: scan_file_time(ms),start_time,IP,path,offset,len
         // sort by first element split by comma, and keep top n
         if (it == _info_strings.end()) {
             _info_strings.emplace(key, value);
@@ -441,11 +461,7 @@ void RuntimeProfile::add_info_string(const std::string& key, const std::string& 
             std::vector<std::string> values;
             deserialize_top_n_info_string(value, values);
             values.emplace_back(value);
-
-            std::sort(values.begin(), values.end(), sort_by_first_int);
-            if (values.size() > n) {
-                values.resize(n);
-            }
+            keep_top_n_unique_values(values, n);
             _info_strings[key] = serialize_top_n_info_string(values);
         }
         return;
@@ -487,10 +503,7 @@ void RuntimeProfile::copy_all_info_strings_from(RuntimeProfile* src_profile) {
                 std::vector<std::string> values;
                 deserialize_top_n_info_string(*exist_ptr, values);
                 deserialize_top_n_info_string(value, values);
-                std::sort(values.begin(), values.end(), sort_by_first_int);
-                if (values.size() > n) {
-                    values.resize(n);
-                }
+                keep_top_n_unique_values(values, n);
                 _info_strings[key] = serialize_top_n_info_string(values);
                 continue;
             }

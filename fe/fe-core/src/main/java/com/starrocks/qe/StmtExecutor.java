@@ -111,6 +111,7 @@ import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.planner.FileScanNode;
 import com.starrocks.planner.HdfsScanNode;
 import com.starrocks.planner.HiveTableSink;
+import com.starrocks.planner.IcebergScanNode;
 import com.starrocks.planner.OlapScanNode;
 import com.starrocks.planner.PlanFragment;
 import com.starrocks.planner.PlanNodeId;
@@ -1021,6 +1022,8 @@ public class StmtExecutor {
             return false;
         }
 
+        recordDetialInfoInProfile(plan);
+
         // This process will get information from the context, so it must be executed synchronously.
         // Otherwise, the context may be changed, for example, containing the wrong query id.
         profile = buildTopLevelProfile();
@@ -1373,8 +1376,6 @@ public class StmtExecutor {
 
         if (batch != null) {
             statisticsForAuditLog = batch.getQueryStatistics();
-            recordDetialInfoInProfile(execPlan);
-
             if (!isOutfileQuery) {
                 context.getState().setEof();
             } else {
@@ -2902,32 +2903,53 @@ public class StmtExecutor {
     }
 
     private void recordDetialInfoInProfile(ExecPlan execPlan) {
-        String prefix = "ScanDetail";
+        Map<String, Object> scanDetailMap = Maps.newHashMap();
+        List<Map<String, Object>> tableDetails = Lists.newArrayList();
+
         List<ScanNode> scanNodes = execPlan.getScanNodes();
         for (ScanNode scanNode : scanNodes) {
             if (scanNode instanceof HdfsScanNode) {
                 HdfsScanNode hdfsScanNode = (HdfsScanNode) scanNode;
-                String tableName = prefix + "." + hdfsScanNode.getHiveTable().getDbName() + "." +
-                        hdfsScanNode.getHiveTable().getTableName();
+                Map<String, Object> tableDetail = Maps.newHashMap();
+
+                tableDetail.put("NodeID", hdfsScanNode.getId().asInt());
+                tableDetail.put("TableName", hdfsScanNode.getHiveTable().getDbName() + "." +
+                        hdfsScanNode.getHiveTable().getTableName());
 
                 RemoteScanRangeLocations remoteScanRangeLocations = hdfsScanNode.getScanRangeLocations();
-                int partitionNum = remoteScanRangeLocations.getPartitionNum();
-                double fileSize = remoteScanRangeLocations.getFileSizeBytes() / 1024.0 / 1024.0 / 1024.0;
-                long fileNum = remoteScanRangeLocations.getFileNum();
-                Tracers.record(Tracers.Module.EXTERNAL, tableName + ".ScanPartitionNum", String.valueOf(partitionNum));
-                Tracers.record(Tracers.Module.EXTERNAL, tableName + ".ScanFileSize", String.format("%.2fGB", fileSize));
-                Tracers.record(Tracers.Module.EXTERNAL, tableName + ".ScanFileNum", String.valueOf(fileNum));
+                tableDetail.put("ScanPartitionNum", remoteScanRangeLocations.getPartitionNum());
+                tableDetail.put("ScanFileSize", String.format("%.2fGB",
+                        remoteScanRangeLocations.getFileSizeBytes() / 1024.0 / 1024.0 / 1024.0));
+                tableDetail.put("ScanFileNum", remoteScanRangeLocations.getFileNum());
+
+                tableDetails.add(tableDetail);
+            } else if (scanNode instanceof IcebergScanNode) {
+                IcebergScanNode icebergScanNode = (IcebergScanNode) scanNode;
+                Map<String, Object> tableDetail = Maps.newHashMap();
+
+                tableDetail.put("NodeID", icebergScanNode.getId().asInt());
+                tableDetail.put("TableName", icebergScanNode.getIcebergTable().getRemoteDbName() + "." +
+                        icebergScanNode.getIcebergTable().getRemoteTableName());
+                tableDetail.put("ScanPartitionNum", icebergScanNode.getScanPartitionNum());
+                tableDetail.put("ScanFileSize", String.format("%.2fGB",
+                        icebergScanNode.getScanFileSize() / 1024.0 / 1024.0 / 1024.0));
+                tableDetail.put("ScanFileNum", icebergScanNode.getScanFileNum());
+
+                tableDetails.add(tableDetail);
             }
         }
+        scanDetailMap.put("TableDetails", tableDetails);
+
+        PQueryStatistics statistics = getQueryStatisticsForAuditLog();
+        if (statistics != null) {
+            scanDetailMap.put("ScanRows", statistics.scanRows);
+            scanDetailMap.put("ScanBytes", statistics.scanBytes);
+        }
+
+        Tracers.record(Tracers.Module.EXTERNAL, "ScanDetail", GsonUtils.GSON.toJson(scanDetailMap));
 
         String explainString = buildExplainString(execPlan, ResourceGroupClassifier.QueryType.SELECT,
                 parsedStmt.getExplainLevel());
         Tracers.record(Tracers.Module.EXTERNAL, "Sql Explain", "\n" + explainString);
-
-        PQueryStatistics statistics = getQueryStatisticsForAuditLog();
-        if (statistics != null) {
-            Tracers.record(Tracers.Module.EXTERNAL, prefix + ".ScanRows", String.valueOf(statistics.scanRows));
-            Tracers.record(Tracers.Module.EXTERNAL, prefix + ".ScanBytes", String.valueOf(statistics.scanBytes));
-        }
     }
 }
