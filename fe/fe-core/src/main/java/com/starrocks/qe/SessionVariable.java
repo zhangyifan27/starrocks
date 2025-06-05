@@ -4071,7 +4071,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.enableStrictType = val;
     }
 
-    @VarAttr(name = ENABLE_THIVE_FUNCTION, flag = VariableMgr.INVISIBLE)
+    @VarAttr(name = ENABLE_THIVE_FUNCTION)
     private boolean enableThiveFunction = false;
 
     public boolean isEnableThiveFunction() {
@@ -4082,7 +4082,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.enableThiveFunction = val;
     }
 
-    @VarAttr(name = PREFER_THIVE_FUNCTIONS, flag = VariableMgr.INVISIBLE)
+    @VarAttr(name = PREFER_THIVE_FUNCTIONS)
     private boolean preferThiveFunctions = false;
 
     public boolean isPreferThiveFunctions() {
@@ -4093,7 +4093,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.preferThiveFunctions = preferThiveFunctions;
     }
 
-    @VarAttr(name = PREFER_THIVE_FUNCTION_NAMES, flag = VariableMgr.INVISIBLE)
+    @VarAttr(name = PREFER_THIVE_FUNCTION_NAMES)
     private String preferThiveFunctionNames = "";
 
     public String getPreferThiveFunctions() {
