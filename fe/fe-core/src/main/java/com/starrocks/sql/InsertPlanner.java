@@ -1072,7 +1072,12 @@ public class InsertPlanner {
         }
 
         Table targetTable = insertStmt.getTargetTable();
-        if (!(targetTable.isHiveTable() || targetTable.isIcebergTable())) {
+        if (targetTable.isHiveTable()) {
+            HiveTable hiveTable = (HiveTable) targetTable;
+            if (hiveTable.isThiveTable()) {
+                return false;
+            }
+        } else if (!(targetTable.isIcebergTable())) {
             return false;
         }
 
@@ -1104,6 +1109,8 @@ public class InsertPlanner {
         for (int i = 0; i < targetColumnNames.size(); i++) {
             String columnName = targetColumnNames.get(i);
             if (targetTable.getPartitionColumnNames().contains(columnName)) {
+                // insert into A(Thive) select a, b, ... from B(Thive), targetColumnNames.size = listItems.size + 1,
+                // will out of bounds here, need return before
                 Expr expr = listItems.get(i).getExpr();
                 if (!expr.isConstant()) {
                     return false;
