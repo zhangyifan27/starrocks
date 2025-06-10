@@ -630,7 +630,9 @@ public class StmtExecutor {
             }
 
             if (parsedStmt instanceof QueryStatement) {
-                if (isSystemSelect()) {
+                boolean isSystemSelect = isSystemSelect();
+                boolean enableProfile = context.getSessionVariable().isEnableProfile();
+                if (isSystemSelect) {
                     context.getState().setIsQuery(false);
                     // disable profile for system sql
                     context.getSessionVariable().setEnableProfile(false);
@@ -730,6 +732,10 @@ public class StmtExecutor {
                                     coord.getQueryProgressInfo());
                         }
                     }
+                }
+                if (isSystemSelect) {
+                    // recover enableProfile
+                    context.getSessionVariable().setEnableProfile(enableProfile);
                 }
             } else if (parsedStmt instanceof SetStmt) {
                 context.getState().setRequestType(QueryState.RequestType.SET);
