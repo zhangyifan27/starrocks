@@ -121,6 +121,8 @@ public class RangerTDWAccessController implements AccessController, AccessTypeCo
                         authorizer.checkPrivileges(Lists.newArrayList(privilege));
                         return true;
                     });
+                    //access allow, no exception throw
+                    return;
                 } catch (Throwable e2) {
                     String message = String.format(
                             "An exception was encountered while checking privileges, user: %s, platformUser:%s, table: %s",
