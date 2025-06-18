@@ -27,6 +27,7 @@ import com.starrocks.connector.PartitionUtil;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.events.MetastoreNotificationFetchException;
 import com.starrocks.connector.metastore.MetastoreTable;
+import com.starrocks.metric.MetricRepo;
 import org.apache.hadoop.hive.metastore.api.ColumnStatisticsObj;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.NotificationEventResponse;
@@ -192,30 +193,50 @@ public class HiveMetastore implements IHiveMetastore {
     }
 
     public Map<String, Partition> getPartitionsByNames(String dbName, String tblName, List<String> partitionNames) {
-        List<org.apache.hadoop.hive.metastore.api.Partition> partitions = new ArrayList<>();
-        // fetch partitions by batch per RPC
-        for (int start = 0; start < partitionNames.size(); start += Config.max_hive_partitions_per_rpc) {
-            int end = Math.min(start + Config.max_hive_partitions_per_rpc, partitionNames.size());
-            List<String> namesPerRPC = partitionNames.subList(start, end);
-            List<org.apache.hadoop.hive.metastore.api.Partition> partsPerRPC =
-                    client.getPartitionsByNames(dbName, tblName, namesPerRPC);
-            partitions.addAll(partsPerRPC);
+        try {
+            long startTime = System.currentTimeMillis();
+            if (MetricRepo.hasInit) {
+                MetricRepo.COUNTER_HMS_QUERY_ALL.increase(1L);
+            }
+            List<org.apache.hadoop.hive.metastore.api.Partition> partitions = new ArrayList<>();
+            // fetch partitions by batch per RPC
+            for (int start = 0; start < partitionNames.size(); start += Config.max_hive_partitions_per_rpc) {
+                int end = Math.min(start + Config.max_hive_partitions_per_rpc, partitionNames.size());
+                List<String> namesPerRPC = partitionNames.subList(start, end);
+                List<org.apache.hadoop.hive.metastore.api.Partition> partsPerRPC =
+                        client.getPartitionsByNames(dbName, tblName, namesPerRPC);
+                partitions.addAll(partsPerRPC);
+            }
+
+            Map<String, List<String>> partitionNameToPartitionValues = partitionNames.stream()
+                    .collect(Collectors.toMap(Function.identity(), PartitionUtil::toPartitionValues));
+
+            Map<List<String>, Partition> partitionValuesToPartition = partitions.stream()
+                    .collect(Collectors.toMap(
+                            org.apache.hadoop.hive.metastore.api.Partition::getValues,
+                            partition -> HiveMetastoreApiConverter.toPartition(partition.getSd(),
+                                    partition.getParameters())));
+
+            ImmutableMap.Builder<String, Partition> resultBuilder = ImmutableMap.builder();
+            for (Map.Entry<String, List<String>> entry : partitionNameToPartitionValues.entrySet()) {
+                Partition partition = partitionValuesToPartition.get(entry.getValue());
+                resultBuilder.put(entry.getKey(), partition);
+            }
+            if (MetricRepo.hasInit) {
+                long endTime = System.currentTimeMillis();
+                MetricRepo.COUNTER_HMS_QUERY_SUCCESS.increase(1L);
+                MetricRepo.HISTO_HMS_REQUEST_LATENCY.update(endTime - startTime);
+                if (endTime - startTime > Config.hive_meta_store_slow_log_ms) {
+                    MetricRepo.COUNTER_HMS_SLOW_QUERY.increase(1L);
+                }
+            }
+            return resultBuilder.build();
+        } catch (Exception e) {
+            if (MetricRepo.hasInit) {
+                MetricRepo.COUNTER_HMS_QUERY_ERR.increase(1L);
+            }
+            throw e;
         }
-
-        Map<String, List<String>> partitionNameToPartitionValues = partitionNames.stream()
-                .collect(Collectors.toMap(Function.identity(), PartitionUtil::toPartitionValues));
-
-        Map<List<String>, Partition> partitionValuesToPartition = partitions.stream()
-                .collect(Collectors.toMap(
-                        org.apache.hadoop.hive.metastore.api.Partition::getValues,
-                        partition -> HiveMetastoreApiConverter.toPartition(partition.getSd(), partition.getParameters())));
-
-        ImmutableMap.Builder<String, Partition> resultBuilder = ImmutableMap.builder();
-        for (Map.Entry<String, List<String>> entry : partitionNameToPartitionValues.entrySet()) {
-            Partition partition = partitionValuesToPartition.get(entry.getValue());
-            resultBuilder.put(entry.getKey(), partition);
-        }
-        return resultBuilder.build();
     }
 
     @Override
@@ -322,33 +343,53 @@ public class HiveMetastore implements IHiveMetastore {
     }
 
     public Map<String, HivePartitionStats> getPartitionStatistics(Table table, List<String> partitionNames) {
-        HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
-        String dbName = hmsTbl.getDbName();
-        String tblName = hmsTbl.getTableName();
-        List<String> dataColumns = hmsTbl.getDataColumnNames();
-        Map<String, Partition> partitions = getPartitionsByNames(hmsTbl.getDbName(), hmsTbl.getTableName(), partitionNames);
+        try {
+            long startTime = System.currentTimeMillis();
+            if (MetricRepo.hasInit) {
+                MetricRepo.COUNTER_HMS_QUERY_ALL.increase(1L);
+            }
+            HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
+            String dbName = hmsTbl.getDbName();
+            String tblName = hmsTbl.getTableName();
+            List<String> dataColumns = hmsTbl.getDataColumnNames();
+            Map<String, Partition> partitions =
+                    getPartitionsByNames(hmsTbl.getDbName(), hmsTbl.getTableName(), partitionNames);
 
-        Map<String, HiveCommonStats> partitionCommonStats = partitions.entrySet().stream()
-                .collect(toImmutableMap(Map.Entry::getKey, entry -> toHiveCommonStats(entry.getValue().getParameters())));
+            Map<String, HiveCommonStats> partitionCommonStats = partitions.entrySet().stream()
+                    .collect(toImmutableMap(Map.Entry::getKey,
+                            entry -> toHiveCommonStats(entry.getValue().getParameters())));
 
-        Map<String, Long> partitionRowNums = partitionCommonStats.entrySet().stream()
-                .collect(toImmutableMap(Map.Entry::getKey, entry -> entry.getValue().getRowNums()));
+            Map<String, Long> partitionRowNums = partitionCommonStats.entrySet().stream()
+                    .collect(toImmutableMap(Map.Entry::getKey, entry -> entry.getValue().getRowNums()));
 
-        ImmutableMap.Builder<String, HivePartitionStats> resultBuilder = ImmutableMap.builder();
-        Map<String, List<ColumnStatisticsObj>> partitionNameToColumnStatsObj =
-                client.getPartitionColumnStats(dbName, tblName, partitionNames, dataColumns);
+            ImmutableMap.Builder<String, HivePartitionStats> resultBuilder = ImmutableMap.builder();
+            Map<String, List<ColumnStatisticsObj>> partitionNameToColumnStatsObj =
+                    client.getPartitionColumnStats(dbName, tblName, partitionNames, dataColumns);
 
-        Map<String, Map<String, HiveColumnStats>> partitionColumnStats = HiveMetastoreApiConverter
-                .toPartitionColumnStatistics(partitionNameToColumnStatsObj, partitionRowNums);
+            Map<String, Map<String, HiveColumnStats>> partitionColumnStats = HiveMetastoreApiConverter
+                    .toPartitionColumnStatistics(partitionNameToColumnStatsObj, partitionRowNums);
 
-        for (String partitionName : partitionCommonStats.keySet()) {
-            HiveCommonStats commonStats = partitionCommonStats.get(partitionName);
-            Map<String, HiveColumnStats> columnStatistics = partitionColumnStats
-                    .getOrDefault(partitionName, ImmutableMap.of());
-            resultBuilder.put(partitionName, new HivePartitionStats(commonStats, columnStatistics));
+            for (String partitionName : partitionCommonStats.keySet()) {
+                HiveCommonStats commonStats = partitionCommonStats.get(partitionName);
+                Map<String, HiveColumnStats> columnStatistics = partitionColumnStats
+                        .getOrDefault(partitionName, ImmutableMap.of());
+                resultBuilder.put(partitionName, new HivePartitionStats(commonStats, columnStatistics));
+            }
+            if (MetricRepo.hasInit) {
+                long endTime = System.currentTimeMillis();
+                MetricRepo.COUNTER_HMS_QUERY_SUCCESS.increase(1L);
+                MetricRepo.HISTO_HMS_REQUEST_LATENCY.update(endTime - startTime);
+                if (endTime - startTime > Config.hive_meta_store_slow_log_ms) {
+                    MetricRepo.COUNTER_HMS_SLOW_QUERY.increase(1L);
+                }
+            }
+            return resultBuilder.build();
+        } catch (Exception e) {
+            if (MetricRepo.hasInit) {
+                MetricRepo.COUNTER_HMS_QUERY_ERR.increase(1L);
+            }
+            throw e;
         }
-
-        return resultBuilder.build();
     }
 
     public long getCurrentEventId() {

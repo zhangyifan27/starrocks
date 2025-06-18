@@ -79,6 +79,7 @@ import com.starrocks.system.Backend;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.transaction.DatabaseTransactionMgr;
 import com.starrocks.transaction.GlobalTransactionMgr;
+import org.apache.hadoop.hive.metastore.HiveMetaStoreClient;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -225,6 +226,10 @@ public final class MetricRepo {
     public static Histogram HISTO_JOURNAL_WRITE_BATCH;
     public static Histogram HISTO_JOURNAL_WRITE_BYTES;
     public static Histogram HISTO_SHORTCIRCUIT_RPC_LATENCY;
+    public static LongCounterMetric COUNTER_HMS_QUERY_ALL;
+    public static LongCounterMetric COUNTER_HMS_QUERY_ERR;
+    public static LongCounterMetric COUNTER_HMS_QUERY_SUCCESS;
+    public static LongCounterMetric COUNTER_HMS_SLOW_QUERY;
     public static Histogram HISTO_HMS_REQUEST_LATENCY;
     public static Histogram HISTO_GET_REMOTE_FILES_LATENCY;
 
@@ -387,6 +392,14 @@ public final class MetricRepo {
             gauge.addLabel(new MetricLabel("state", state.name()));
             STARROCKS_METRIC_REGISTER.addMetric(gauge);
         }
+        GaugeMetric<Integer> metaStoreConections = new GaugeMetric<Integer>(
+                "hivemetastore_connection_total", MetricUnit.CONNECTIONS, "total hive meta store connections") {
+            @Override
+            public Integer getValue() {
+                return HiveMetaStoreClient.connCount.get();
+            }
+        };
+        STARROCKS_METRIC_REGISTER.addMetric(metaStoreConections);
 
         // qps, rps, error rate and query latency
         // these metrics should be set an init value, in case that metric calculator is not running
@@ -706,6 +719,19 @@ public final class MetricRepo {
                 "sr lost metadata record size");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_LOST_TQ_METADATA_NUM);
 
+        COUNTER_HMS_QUERY_ALL =
+                new LongCounterMetric("hivemetastore_query_total", MetricUnit.REQUESTS, "total hivemetastore query");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_HMS_QUERY_ALL);
+        COUNTER_HMS_QUERY_ERR = new LongCounterMetric("hivemetastore_query_err", MetricUnit.REQUESTS,
+                "total error hivemetastore query");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_HMS_QUERY_ERR);
+        COUNTER_HMS_QUERY_SUCCESS = new LongCounterMetric("hivemetastore_query_success", MetricUnit.REQUESTS,
+                "total success hivemetastore query");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_HMS_QUERY_SUCCESS);
+        COUNTER_HMS_SLOW_QUERY = new LongCounterMetric("hivemetastore_slow_query", MetricUnit.REQUESTS,
+                "total slow hivemetastore query");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_HMS_SLOW_QUERY);
+
         List<Database> dbs = Lists.newArrayList();
         if (GlobalStateMgr.getCurrentState().getLocalMetastore().getIdToDb() != null) {
             for (Map.Entry<Long, Database> entry : GlobalStateMgr.getCurrentState().getLocalMetastore().getIdToDb().entrySet()) {
@@ -735,7 +761,7 @@ public final class MetricRepo {
         HISTO_JOURNAL_WRITE_BYTES =
                 METRIC_REGISTER.histogram(MetricRegistry.name("journal", "write", "bytes"));
         HISTO_SHORTCIRCUIT_RPC_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("shortcircuit", "latency", "ms"));
-        HISTO_HMS_REQUEST_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("hms", "request", "latency", "ms"));
+        HISTO_HMS_REQUEST_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("hivemetastore", "query", "latency", "ms"));
         HISTO_GET_REMOTE_FILES_LATENCY = METRIC_REGISTER.histogram(MetricRegistry.name("get", "remotefiles", "latency", "ms"));
 
         HISTO_KAFKA_GET_PARTITIONS_LATENCY =

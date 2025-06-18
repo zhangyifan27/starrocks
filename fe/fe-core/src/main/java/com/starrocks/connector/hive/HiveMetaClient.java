@@ -161,11 +161,26 @@ public class HiveMetaClient {
 
         long startTime = System.currentTimeMillis();
         try {
+            if (MetricRepo.hasInit) {
+                MetricRepo.COUNTER_HMS_QUERY_ALL.increase(1L);
+            }
             client = getClient();
             argClasses = argClasses == null ? ClassUtils.getCompatibleParamClasses(args) : argClasses;
             Method method = client.hiveClient.getClass().getDeclaredMethod(methodName, argClasses);
-            return (T) method.invoke(client.hiveClient, args);
+            Object result = (T) method.invoke(client.hiveClient, args);
+            if (MetricRepo.hasInit) {
+                long endTime = System.currentTimeMillis();
+                MetricRepo.COUNTER_HMS_QUERY_SUCCESS.increase(1L);
+                MetricRepo.HISTO_HMS_REQUEST_LATENCY.update(endTime - startTime);
+                if (endTime - startTime > Config.hive_meta_store_slow_log_ms) {
+                    MetricRepo.COUNTER_HMS_SLOW_QUERY.increase(1L);
+                }
+            }
+            return (T) result;
         } catch (Throwable e) {
+            if (MetricRepo.hasInit) {
+                MetricRepo.COUNTER_HMS_QUERY_ERR.increase(1L);
+            }
             LOG.error(messageIfError, e);
             connectionException = new StarRocksConnectorException(messageIfError + ", msg: " +
                     Util.getRealMessage(e), e);
@@ -179,10 +194,6 @@ public class HiveMetaClient {
                 client.close();
             } else if (client != null) {
                 client.finish();
-            }
-            long elapseMs = System.currentTimeMillis() - startTime;
-            if (MetricRepo.hasInit) {
-                MetricRepo.HISTO_HMS_REQUEST_LATENCY.update(elapseMs);
             }
         }
     }
@@ -508,6 +519,10 @@ public class HiveMetaClient {
             RecyclableClient client = null;
             StarRocksConnectorException connectionException = null;
             try {
+                long startTime = System.currentTimeMillis();
+                if (MetricRepo.hasInit) {
+                    MetricRepo.COUNTER_HMS_QUERY_ALL.increase(1L);
+                }
                 client = getClient();
 
                 List<FieldSchema> list = new LinkedList<>();
@@ -517,8 +532,20 @@ public class HiveMetaClient {
                 request.setApplyDistinct(true);
 
                 // get partition values
-                return client.hiveClient.listPartitionValues(request);
+                PartitionValuesResponse response =  client.hiveClient.listPartitionValues(request);
+                if (MetricRepo.hasInit) {
+                    long endTime = System.currentTimeMillis();
+                    MetricRepo.COUNTER_HMS_QUERY_SUCCESS.increase(1L);
+                    MetricRepo.HISTO_HMS_REQUEST_LATENCY.update(endTime - startTime);
+                    if (endTime - startTime > Config.hive_meta_store_slow_log_ms) {
+                        MetricRepo.COUNTER_HMS_SLOW_QUERY.increase(1L);
+                    }
+                }
+                return response;
             } catch (Exception e) {
+                if (MetricRepo.hasInit) {
+                    MetricRepo.COUNTER_HMS_QUERY_ERR.increase(1L);
+                }
                 LOG.error("Failed to listPartitionValues on {}.{}.{}", dbName, tblName, partitionColumn, e);
                 connectionException =
                         new StarRocksConnectorException("Failed to listPartitionValues on [%s.%s.%s] to meta store: %s",

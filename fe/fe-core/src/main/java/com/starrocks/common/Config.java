@@ -3535,4 +3535,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean check_udf_usage_privilege = true;
+
+    @ConfField(mutable = true)
+    public static long hive_meta_store_slow_log_ms = 10000;
 }
