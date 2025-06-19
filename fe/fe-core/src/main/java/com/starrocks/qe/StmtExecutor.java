@@ -504,6 +504,8 @@ public class StmtExecutor {
         if (shouldMarkIdleCheck(parsedStmt)) {
             WarehouseIdleChecker.increaseRunningSQL(context.getCurrentWarehouseId());
         }
+        boolean enableProfile = context.getSessionVariable().isEnableProfile();
+        boolean isSystemSelect = false;
         try {
             context.getState().setIsQuery(parsedStmt instanceof QueryStatement);
             if (parsedStmt.isExistQueryScopeHint()) {
@@ -630,8 +632,7 @@ public class StmtExecutor {
             }
 
             if (parsedStmt instanceof QueryStatement) {
-                boolean isSystemSelect = isSystemSelect();
-                boolean enableProfile = context.getSessionVariable().isEnableProfile();
+                isSystemSelect = isSystemSelect();
                 if (isSystemSelect) {
                     context.getState().setIsQuery(false);
                     // disable profile for system sql
@@ -733,10 +734,6 @@ public class StmtExecutor {
                         }
                     }
                 }
-                if (isSystemSelect) {
-                    // recover enableProfile
-                    context.getSessionVariable().setEnableProfile(enableProfile);
-                }
             } else if (parsedStmt instanceof SetStmt) {
                 context.getState().setRequestType(QueryState.RequestType.SET);
                 handleSetStmt();
@@ -836,6 +833,10 @@ public class StmtExecutor {
             context.getState().setError(e.getMessage());
             context.getState().setErrType(QueryState.ErrType.INTERNAL_ERR);
         } finally {
+            if (isSystemSelect) {
+                // recover enableProfile
+                context.getSessionVariable().setEnableProfile(enableProfile);
+            }
             GlobalStateMgr.getCurrentState().getMetadataMgr().removeQueryMetadata();
             if (context.getState().isError() && coord != null) {
                 coord.cancel(PPlanFragmentCancelReason.INTERNAL_ERROR, context.getState().getErrorMessage());
