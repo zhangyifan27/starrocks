@@ -54,6 +54,7 @@ import com.starrocks.qe.QeProcessorImpl;
 import com.starrocks.qe.scheduler.Coordinator;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.AstToSQLBuilder;
+import com.starrocks.sql.analyzer.ExpressionAnalyzer;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
 import com.starrocks.sql.ast.ImportColumnDesc;
 import com.starrocks.system.SystemInfoService;
@@ -237,7 +238,8 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob implements GsonPreProc
                                     new StreamLoadScanNode(loadId, new PlanNodeId(0), tupleDesc, destTable,
                                             streamLoadInfo) {
                                         @Override
-                                        protected Expr analyzeAndCastFold(Expr whereExpr) {
+                                        protected Expr analyzeAndCastFold(Expr whereExpr) throws UserException {
+                                            ExpressionAnalyzer.analyzeExpressionIgnoreSlot(whereExpr, ConnectContext.get());
                                             return whereExpr;
                                         }
 
@@ -911,6 +913,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob implements GsonPreProc
     @Override
     public void modifyDataSourceProperties(RoutineLoadDataSourceProperties dataSourceProperties) throws DdlException {
         this.customProperties.putAll(dataSourceProperties.getCustomIcebergProperties());
+        icebergWhereExpr =  IcebergCreateRoutineLoadStmtConfig.getIcebergWhereExprFromCustomIcebergProperties(customProperties);
         LOG.info("modify the data source properties of iceberg routine load job: {}, datasource properties: {}",
                 this.id, dataSourceProperties);
     }

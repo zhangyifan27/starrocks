@@ -150,13 +150,13 @@ public class IcebergCreateRoutineLoadStmtConfig {
 
         // check positions
         String consumePosition = dataSourceProperties.get(ICEBERG_CONSUME_POSITION);
-        if (consumePosition != null) {
+        if (!Strings.isNullOrEmpty(consumePosition)) {
             icebergConsumePosition = getIcebergConsumePosition(consumePosition);
         } else {
             icebergConsumePosition = ICEBERG_FROM_LATEST;
         }
         String whereString = Strings.emptyToNull(dataSourceProperties.get(ICEBERG_WHERE_EXPR));
-        if (whereString != null) {
+        if (!Strings.isNullOrEmpty(whereString)) {
             icebergWhereExpr = SqlParser.parseSqlToExpr(whereString, SqlModeHelper.MODE_DEFAULT);
             customIcebergProperties.put(ICEBERG_WHERE_EXPR, whereString);
         }
@@ -165,7 +165,7 @@ public class IcebergCreateRoutineLoadStmtConfig {
 
     public static Expr getIcebergWhereExprFromCustomIcebergProperties(Map<String, String> customIcebergProperties) {
         String whereString = customIcebergProperties.get(ICEBERG_WHERE_EXPR);
-        return whereString != null ? SqlParser.parseSqlToExpr(whereString, SqlModeHelper.MODE_DEFAULT) : null;
+        return !Strings.isNullOrEmpty(whereString) ? SqlParser.parseSqlToExpr(whereString, SqlModeHelper.MODE_DEFAULT) : null;
     }
 
     private String getDataSourceProperty(String key) throws AnalysisException {

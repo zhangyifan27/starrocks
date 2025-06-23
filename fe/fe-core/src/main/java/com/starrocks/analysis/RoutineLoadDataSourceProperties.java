@@ -66,6 +66,7 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
             .build();
 
     private static final ImmutableSet<String> CONFIGURABLE_ICEBERG_PROPERTIES_SET = new ImmutableSet.Builder<String>()
+            .add(IcebergCreateRoutineLoadStmtConfig.ICEBERG_WHERE_EXPR)
             .build();
 
     @SerializedName(value = "type")

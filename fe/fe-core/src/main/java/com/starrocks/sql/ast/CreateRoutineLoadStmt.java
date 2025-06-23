@@ -893,6 +893,8 @@ public class CreateRoutineLoadStmt extends DdlStmt {
                     throw new AnalysisException("property value could not be a empty string");
                 }
                 customProperties.put(propertyKey.substring(propertyKey.indexOf(".") + 1), propertyValue);
+            } else if (dataSourceProperty.getKey().equalsIgnoreCase(IcebergCreateRoutineLoadStmtConfig.ICEBERG_WHERE_EXPR)) {
+                customProperties.put(dataSourceProperty.getKey(), dataSourceProperty.getValue());
             }
             // can be extended in the future which other prefix
         }
