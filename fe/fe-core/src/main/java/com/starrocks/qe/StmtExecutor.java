@@ -731,6 +731,11 @@ public class StmtExecutor {
                             coord.resetProgressMaxTotalTime();
                             QeProcessorImpl.INSTANCE.addQueryProgress(context.getExecutionId(),
                                     coord.getQueryProgressInfo());
+                            if (context.getSessionVariable().isEnableProfile() && coord.getQueryProfile() != null) {
+                                double memoryCost = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
+                                        .recordQueryMemory(coord, context);
+                                context.getAuditEventBuilder().setFeedbackMemCostBytes(memoryCost);
+                            }
                         }
                     }
                 }
@@ -1388,6 +1393,7 @@ public class StmtExecutor {
             } else {
                 context.getState().setOk(statisticsForAuditLog.returnedRows, 0, "");
             }
+
             if (null == statisticsForAuditLog || null == statisticsForAuditLog.statsItems ||
                     statisticsForAuditLog.statsItems.isEmpty()) {
                 return;
@@ -2199,7 +2205,13 @@ public class StmtExecutor {
             if (coord != null) {
                 QeProcessorImpl.INSTANCE.addQueryProgress(context.getExecutionId(),
                         coord.getQueryProgressInfo());
+                if (context.getSessionVariable().isEnableProfile() && coord.getQueryProfile() != null) {
+                    double memoryCost = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
+                            .recordQueryMemory(coord, context);
+                    context.getAuditEventBuilder().setFeedbackMemCostBytes(memoryCost);
+                }
             }
+
         }
     }
 
@@ -2715,6 +2727,8 @@ public class StmtExecutor {
 
         // filterRows may be overflow when to convert it into int, use `saturatedCast` to avoid overflow
         context.getState().setOk(loadedRows, Ints.saturatedCast(filteredRows), sb.toString());
+
+
     }
 
     public String getOriginStmtInString() {

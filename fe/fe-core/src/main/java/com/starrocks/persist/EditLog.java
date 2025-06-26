@@ -85,6 +85,7 @@ import com.starrocks.plugin.PluginInfo;
 import com.starrocks.privilege.RolePrivilegeCollectionV2;
 import com.starrocks.privilege.UserPrivilegeCollectionV2;
 import com.starrocks.proto.EncryptionKeyPB;
+import com.starrocks.qe.MemoryRecordInfo;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.replication.ReplicationJob;
 import com.starrocks.scheduler.Task;
@@ -1234,6 +1235,12 @@ public class EditLog {
                     GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor().removeBeRecord(Long.parseLong(beId.toString()));
                     break;
                 }
+                case OperationType.OP_RECORD_QUERY_MEMORY: {
+                    MemoryRecordInfo memoryRecordInfo = (MemoryRecordInfo) journal.getData();
+                    GlobalStateMgr.getCurrentState().getQueryMemoryRecorder().put(memoryRecordInfo.getId(),
+                            memoryRecordInfo.getValue(), memoryRecordInfo.getTime());
+                    break;
+                }
                 default: {
                     if (Config.metadata_ignore_unknown_operation_type) {
                         LOG.warn("UNKNOWN Operation Type {}", opCode);
@@ -2112,5 +2119,9 @@ public class EditLog {
 
     public void logRemoveBeDataCacheRecord(long beId) {
         logEdit(OperationType.OP_REMOVE_BE_DATA_CACHE_RECORD, new Text(Long.toString(beId)));
+    }
+
+    public void logRecordQueryMemory(MemoryRecordInfo info) {
+        logEdit(OperationType.OP_RECORD_QUERY_MEMORY, info);
     }
 }

@@ -41,23 +41,24 @@ import java.util.regex.Pattern;
 
 public class SQLUtils {
     private static final String SUPERSQL_TRACE_ID = "supersql_trace_id";
+    private static final String FLOW_ID = "flow_id";
 
     public static String[] splitComment(String comment) {
         return comment.split("\\s+");
     }
 
-    public static String getSupersqlTraceId(String comment) {
+    public static String getIdFromComment(String comment, String keyOfId, String delimiter) {
         String[] splitComments = splitComment(comment);
         for (String entry : splitComments) {
-            String[] parts = entry.split("=");
-            if (parts.length == 2 && parts[0].trim().equalsIgnoreCase(SUPERSQL_TRACE_ID)) {
+            String[] parts = entry.split(delimiter);
+            if (parts.length == 2 && parts[0].trim().equalsIgnoreCase(keyOfId)) {
                 return parts[1].trim();
             }
         }
         return null;
     }
 
-    public static String extractSupersqlTraceId(String sql) {
+    public static String extractIdFromComment(String sql, String keyOfId, String delimiter) {
         if (!sql.contains("/*")) {
             return null;
         }
@@ -68,12 +69,20 @@ public class SQLUtils {
 
         while (matcher.find()) {
             String comment = matcher.group(1);
-            String supersqlTraceId = getSupersqlTraceId(comment);
-            if (!Strings.isNullOrEmpty(supersqlTraceId)) {
-                return supersqlTraceId;
+            String id = getIdFromComment(comment, keyOfId, delimiter);
+            if (!Strings.isNullOrEmpty(id)) {
+                return id;
             }
         }
         return null;
+    }
+
+    public static String extractSupersqlTraceId(String sql) {
+        return extractIdFromComment(sql, SUPERSQL_TRACE_ID, "=");
+    }
+
+    public static String extractFlowId(String sql) {
+        return extractIdFromComment(sql, FLOW_ID, ":");
     }
 
     public static String extractSupersqlTraceId(String sqlStatements, int index, int length) {
@@ -82,5 +91,13 @@ public class SQLUtils {
             return null;
         }
         return extractSupersqlTraceId(sqls[index]);
+    }
+
+    public static String extractFlowId(String sqlStatements, int index, int length) {
+        String[] sqls = sqlStatements.split(";");
+        if (sqls.length != length || index >= length || index < 0) {
+            return null;
+        }
+        return extractFlowId(sqls[index]);
     }
 }

@@ -137,6 +137,7 @@ import com.starrocks.persist.TruncateTableInfo;
 import com.starrocks.persist.UserPrivilegeCollectionInfo;
 import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.plugin.PluginInfo;
+import com.starrocks.qe.MemoryRecordInfo;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.scheduler.Task;
 import com.starrocks.scheduler.mv.MVEpoch;
@@ -218,6 +219,10 @@ public class JournalEntity implements Writable {
             case OperationType.OP_REMOVE_BE_DATA_CACHE_RECORD: {
                 data = new Text();
                 ((Text) data).readFields(in);
+                break;
+            }
+            case OperationType.OP_RECORD_QUERY_MEMORY: {
+                data = GsonUtils.GSON.fromJson(Text.readString(in), MemoryRecordInfo.class);
                 break;
             }
             case OperationType.OP_SAVE_TRANSACTION_ID_V2: {

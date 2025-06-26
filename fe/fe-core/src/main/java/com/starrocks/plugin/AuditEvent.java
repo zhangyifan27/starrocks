@@ -109,6 +109,8 @@ public class AuditEvent {
     public long cpuCostNs = -1;
     @AuditField(value = "MemCostBytes", ignore_zero = true)
     public long memCostBytes = -1;
+    @AuditField(value = "FeedbackMemCostBytes", ignore_zero = true)
+    public double feedbackMemCostBytes = -1;
     @AuditField(value = "StmtId")
     public long stmtId = -1;
     @AuditField(value = "QueryId")
@@ -260,6 +262,12 @@ public class AuditEvent {
             auditEvent.memCostBytes = memCostBytes;
             return this;
         }
+
+        public AuditEventBuilder setFeedbackMemCostBytes(double feedbackMemCostBytes) {
+            auditEvent.feedbackMemCostBytes = feedbackMemCostBytes;
+            return this;
+        }
+
 
         public AuditEventBuilder setSpilledBytes(long spilledBytes) {
             auditEvent.spilledBytes = spilledBytes;

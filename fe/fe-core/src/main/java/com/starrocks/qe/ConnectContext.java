@@ -240,6 +240,8 @@ public class ConnectContext {
 
     protected String supersqlTraceId;
 
+    protected String digestWithFlowId;
+
     private ConnectContext parent;
 
     private boolean relationAliasCaseInsensitive = false;
@@ -1107,6 +1109,14 @@ public class ConnectContext {
 
     public String getSupersqlTraceId() {
         return supersqlTraceId;
+    }
+
+    public String getDigestWithFlowId() {
+        return digestWithFlowId;
+    }
+
+    public void setDigestWithFlowId(String digestWithFlowId) {
+        this.digestWithFlowId = digestWithFlowId;
     }
 
     public void setIsHiveView(boolean isHiveView) {

@@ -3538,4 +3538,13 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static long hive_meta_store_slow_log_ms = 10000;
+
+    @ConfField(mutable = true)
+    public static double max_cost_by_feedback = 100d * 64 * 1024 * 1024 * 1024; // 100 * 64G
+
+    @ConfField(mutable = true)
+    public static double cost_weight = 2.5;
+
+    @ConfField(mutable = true)
+    public static double cost_buffer_weight = 1.6;
 }

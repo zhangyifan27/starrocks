@@ -389,6 +389,11 @@ public class DefaultCoordinator extends Coordinator {
     }
 
     @Override
+    public long getQueryPeakMemoryUsage() {
+        return queryProfile.getQueryPeakMemoryUsage();
+    }
+
+    @Override
     public List<String> getDeltaUrls() {
         return queryProfile.getDeltaUrls();
     }

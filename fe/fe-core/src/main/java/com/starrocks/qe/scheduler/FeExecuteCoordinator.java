@@ -201,6 +201,11 @@ public class FeExecuteCoordinator extends Coordinator {
     }
 
     @Override
+    public long getQueryPeakMemoryUsage() {
+        return 0;
+    }
+
+    @Override
     public List<String> getDeltaUrls() {
         return null;
     }

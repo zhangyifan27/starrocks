@@ -99,6 +99,8 @@ public class SRMetaBlockID {
 
     public static final SRMetaBlockID DATA_CACHE_MGR = new SRMetaBlockID(33);
 
+    public static final SRMetaBlockID QUERY_MEM_MGR = new SRMetaBlockID(34);
+
     /**
      * NOTICE: SRMetaBlockID cannot use a value exceeding 20000, please follow the above sequence number
      */

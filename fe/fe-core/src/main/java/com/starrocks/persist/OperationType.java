@@ -943,6 +943,9 @@ public class OperationType {
     public static final short OP_ADD_DATA_CACHE_RECORD = 14000;
     public static final short OP_REMOVE_BE_DATA_CACHE_RECORD = 14001;
 
+    // query memory 14100 ~ 14120
+    public static final short OP_RECORD_QUERY_MEMORY = 14100;
+
     /**
      * NOTICE: OperationType cannot use a value exceeding 20000, please follow the above sequence number
      */

@@ -188,6 +188,7 @@ import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.DDLStmtExecutor;
 import com.starrocks.qe.JournalObservable;
 import com.starrocks.qe.ProfileEventProcessor;
+import com.starrocks.qe.QueryMemoryRecorder;
 import com.starrocks.qe.QueryStatisticsInfo;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.qe.ShowExecutor;
@@ -519,6 +520,7 @@ public class GlobalStateMgr {
     private final WarehouseIdleChecker warehouseIdleChecker;
 
     private final DataCacheSelectExecutor dataCacheSelectExecutor;
+    private final QueryMemoryRecorder queryMemoryRecorder;
 
     public NodeMgr getNodeMgr() {
         return nodeMgr;
@@ -825,6 +827,7 @@ public class GlobalStateMgr {
         this.temporaryTableCleaner = new TemporaryTableCleaner();
         this.warehouseIdleChecker = new WarehouseIdleChecker();
         this.dataCacheSelectExecutor = new DataCacheSelectExecutor();
+        this.queryMemoryRecorder = new QueryMemoryRecorder();
     }
 
     public static void destroyCheckpoint() {
@@ -1567,6 +1570,7 @@ public class GlobalStateMgr {
                     .put(SRMetaBlockID.PIPE_MGR, pipeManager.getRepo()::load)
                     .put(SRMetaBlockID.WAREHOUSE_MGR, warehouseMgr::load)
                     .put(SRMetaBlockID.DATA_CACHE_MGR, dataCacheSelectExecutor::load)
+                    .put(SRMetaBlockID.QUERY_MEM_MGR, queryMemoryRecorder::load)
                     .build();
 
         Set<SRMetaBlockID> metaMgrMustExists = new HashSet<>(loadImages.keySet());
@@ -1769,6 +1773,7 @@ public class GlobalStateMgr {
                 pipeManager.getRepo().save(imageWriter);
                 warehouseMgr.save(imageWriter);
                 dataCacheSelectExecutor.save(imageWriter);
+                queryMemoryRecorder.save(imageWriter);
             } catch (SRMetaBlockException e) {
                 LOG.error("Save meta block failed ", e);
                 throw new IOException("Save meta block failed ", e);
@@ -2698,5 +2703,9 @@ public class GlobalStateMgr {
 
     public DataCacheSelectExecutor getDataCacheSelectExecutor() {
         return dataCacheSelectExecutor;
+    }
+
+    public QueryMemoryRecorder getQueryMemoryRecorder() {
+        return queryMemoryRecorder;
     }
 }

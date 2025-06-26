@@ -302,6 +302,9 @@ public class ConnectProcessor {
 
         try {
             String digest = SqlDigestBuilder.build(queryStmt);
+            if (digest == null) {
+                return "";
+            }
             MessageDigest md = MessageDigest.getInstance("MD5");
             md.reset();
             md.update(digest.getBytes());
@@ -367,12 +370,6 @@ public class ConnectProcessor {
                     parsedStmt = new PrepareStmt("", parsedStmt, new ArrayList<>());
                 }
 
-                if (stmts.size() == 1) {
-                    ctx.setSupersqlTraceId(SQLUtils.extractSupersqlTraceId(originStmt));
-                } else {
-                    ctx.setSupersqlTraceId(SQLUtils.extractSupersqlTraceId(originStmt, i, stmts.size()));
-                }
-
                 // only for JDBC, COM_STMT_PREPARE bundled with jdbc
                 if (ctx.getCommand() == MysqlCommand.COM_STMT_PREPARE && (parsedStmt instanceof PrepareStmt)) {
                     ((PrepareStmt) parsedStmt).setName(String.valueOf(ctx.getStmtId()));
@@ -399,6 +396,25 @@ public class ConnectProcessor {
                         return null;
                     }
                 }.visit(parsedStmt);
+
+                String digest = computeStatementDigest(parsedStmt);
+                if (stmts.size() == 1) {
+                    ctx.setSupersqlTraceId(SQLUtils.extractSupersqlTraceId(originStmt));
+                    String flowId = SQLUtils.extractFlowId(originStmt);
+                    if (!digest.isEmpty() && !Strings.isNullOrEmpty(flowId)) {
+                        ctx.setDigestWithFlowId(digest + ":" + flowId);
+                    } else {
+                        ctx.setDigestWithFlowId("");
+                    }
+                } else {
+                    ctx.setSupersqlTraceId(SQLUtils.extractSupersqlTraceId(originStmt, i, stmts.size()));
+                    String flowId = SQLUtils.extractFlowId(originStmt, i, stmts.size());
+                    if (!digest.isEmpty() && !Strings.isNullOrEmpty(flowId)) {
+                        ctx.setDigestWithFlowId(digest + ":" + flowId);
+                    } else {
+                        ctx.setDigestWithFlowId("");
+                    }
+                }
 
                 // Only add the last running stmt for multi statement,
                 // because the audit log will only show the last stmt.

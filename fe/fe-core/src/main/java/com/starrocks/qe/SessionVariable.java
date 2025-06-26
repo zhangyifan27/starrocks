@@ -573,6 +573,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String ENABLE_PHASED_SCHEDULER = "enable_phased_scheduler";
     public static final String PHASED_SCHEDULER_MAX_CONCURRENCY = "phased_scheduler_max_concurrency";
 
+    public static final String ENABLE_COST_BY_FEEDBACK = "enable_cost_by_feedback";
+
     public static final String CUSTOM_QUERY_ID = "custom_query_id";
 
     // Access ORC columns by name. By default, columns in ORC files are accessed by
@@ -2331,6 +2333,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VarAttr(name = ENABLE_PLAN_SERIALIZE_CONCURRENTLY)
     private boolean enablePlanSerializeConcurrently = true;
+
+    @VarAttr(name = ENABLE_COST_BY_FEEDBACK)
+    private boolean enableCostByFeedback = false;
 
     @VarAttr(name = ORC_USE_COLUMN_NAMES)
     private boolean orcUseColumnNames = false;
@@ -4284,6 +4289,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean getEnablePlanSerializeConcurrently() {
         return enablePlanSerializeConcurrently;
+    }
+
+    public boolean isEnableCostByFeedback() {
+        return enableCostByFeedback;
+    }
+
+    public void setEnableCostByFeedback(boolean enableCostByFeedback) {
+        this.enableCostByFeedback = enableCostByFeedback;
     }
 
     public long getCrossJoinCostPenalty() {
