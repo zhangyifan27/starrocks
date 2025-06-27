@@ -37,7 +37,8 @@ public class ShowDataCacheStmt extends ShowStmt {
     public ShowResultSetMetaData getMetaData() {
         ShowResultSetMetaData.Builder builder = ShowResultSetMetaData.builder();
         builder.addColumn(new Column("Partition", ScalarType.createVarchar(20)))
-                .addColumn(new Column("Data Cache Size", ScalarType.createVarchar(20)));
+                .addColumn(new Column("Data Cache Size", ScalarType.createVarchar(20)))
+                .addColumn(new Column("Ttl Time", ScalarType.createVarchar(20)));
         return builder.build();
     }
 

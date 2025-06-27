@@ -44,6 +44,7 @@ import com.starrocks.sql.ast.SelectRelation;
 import com.starrocks.sql.ast.StatementBase;
 import com.starrocks.sql.ast.TableRelation;
 import com.starrocks.sql.common.DmlException;
+import com.starrocks.thrift.TCacheSelectMode;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
@@ -157,7 +158,19 @@ public class DataCacheStmtAnalyzer {
 
             String partition = properties.get("partition");
 
-            if (!statement.isCreateByJob()) {
+            if (statement.mode() == TCacheSelectMode.DELETE) {
+                if (partition == null) {
+                    if (selectRelation.getPredicate() != null) {
+                        throw new SemanticException("cache delete is only support full table delete or partition delete," +
+                                "not supported predicate by where without partition property");
+                    }
+                    statement.setPartition(tableName.getTbl());
+                } else {
+                    statement.setPartition(partition);
+                }
+            }
+
+            if (!statement.isCreateByJob() && statement.mode() == TCacheSelectMode.DEFAULT) {
                 if (partition == null) {
                     if (Config.disable_datacache_without_partition && selectRelation.getPredicate() != null) {
                         throw new SemanticException("cache select is not supported without partition, " +

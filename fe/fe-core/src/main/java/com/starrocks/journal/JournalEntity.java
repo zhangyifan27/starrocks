@@ -91,6 +91,7 @@ import com.starrocks.persist.CreateTableInfo;
 import com.starrocks.persist.CreateUserInfo;
 import com.starrocks.persist.DatabaseInfo;
 import com.starrocks.persist.DecommissionDiskInfo;
+import com.starrocks.persist.DeleteDataCacheInfo;
 import com.starrocks.persist.DictionaryMgrInfo;
 import com.starrocks.persist.DisableDiskInfo;
 import com.starrocks.persist.DisablePartitionRecoveryInfo;
@@ -976,6 +977,10 @@ public class JournalEntity implements Writable {
             }
             case OperationType.OP_ADD_DATA_CACHE_RECORD: {
                 data = GsonUtils.GSON.fromJson(Text.readString(in), AddDataCacheInfo.class);
+                break;
+            }
+            case OperationType.OP_DELETE_DATA_CACHE_RECORD: {
+                data = GsonUtils.GSON.fromJson(Text.readString(in), DeleteDataCacheInfo.class);
                 break;
             }
             default: {

@@ -15,12 +15,16 @@
 package com.starrocks.datacache;
 
 import com.google.common.base.Preconditions;
+import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.analysis.TableName;
 import com.starrocks.common.UserException;
+import com.starrocks.common.util.DateUtils;
+import com.starrocks.common.util.TimeUtils;
 import com.starrocks.monitor.unit.ByteSizeValue;
 import com.starrocks.persist.AddDataCacheInfo;
+import com.starrocks.persist.DeleteDataCacheInfo;
 import com.starrocks.persist.ImageWriter;
 import com.starrocks.persist.metablock.SRMetaBlockEOFException;
 import com.starrocks.persist.metablock.SRMetaBlockException;
@@ -37,14 +41,17 @@ import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.system.ComputeNode;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.thrift.TCacheSelectMode;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -115,6 +122,18 @@ public class DataCacheSelectExecutor {
         coordinator.join(connectContext.getSessionVariable().getQueryTimeoutS());
         if (coordinator.isDone()) {
             metrics = stmtExecutor.getCoordinator().getDataCacheSelectMetrics();
+            if (statement.isDelete()) {
+                String partitions;
+                if (StringUtils.isEmpty(statement.getPartition())) {
+                    partitions = statement.getTableName().getTbl();
+                } else {
+                    partitions = statement.getPartition();
+                }
+                removePartitionRecord(statement.getTableName(), partitions);
+
+                DeleteDataCacheInfo deleteDataCacheInfo = new DeleteDataCacheInfo(statement.getTableName(), partitions);
+                GlobalStateMgr.getCurrentState().getEditLog().logDataCacheRecordDelete(deleteDataCacheInfo);
+            }
         }
         // set original session variable
         connectContext.setSessionVariable(sessionVariableBackup);
@@ -180,9 +199,28 @@ public class DataCacheSelectExecutor {
         }
     }
 
+    public void removePartitionRecord(TableName tableName, String partitions) {
+        if (tableName.getTbl().equals(partitions)) {
+            dataCacheRecords.values().forEach(innerMap -> innerMap.remove(tableName));
+        } else {
+            Set<String> partitionNames = new HashSet<>(Splitter.on(',').trimResults().omitEmptyStrings().splitToList(partitions));
+            for (Map.Entry<Long, Map<TableName, List<DataCacheRecord>>> outerEntry : dataCacheRecords.entrySet()) {
+                Map<TableName, List<DataCacheRecord>> innerMap = outerEntry.getValue();
+                if (innerMap.containsKey(tableName)) {
+                    List<DataCacheRecord> records = innerMap.get(tableName);
+                    records.removeIf(record -> partitionNames.contains(record.getPartition()));
+                    if (records.isEmpty()) {
+                        innerMap.remove(tableName);
+                    }
+                }
+            }
+        }
+    }
+
     public List<List<String>> getPartitionsDataCacheSize(TableName tableName) {
         List<List<String>> rows = new ArrayList<>();
         Map<String, AtomicLong> partitionCounter = new HashMap<>();
+        Map<String, String> partitionTtlTime = new HashMap<>();
         dataCacheRecords.forEach((beId, map) -> {
             List<DataCacheRecord> dataCacheRecords = map.get(tableName);
             if (dataCacheRecords != null) {
@@ -191,12 +229,16 @@ public class DataCacheSelectExecutor {
                     AtomicLong cacheSize = partitionCounter.getOrDefault(partition, new AtomicLong(0L));
                     cacheSize.addAndGet(dataCacheRecord.getCacheDataSize());
                     partitionCounter.put(partition, cacheSize);
+                    if (!partitionTtlTime.containsKey(partition)) {
+                        partitionTtlTime.put(partition, DateUtils.formatTimeStampInMill(
+                                dataCacheRecord.getTtlTime(), TimeUtils.getSystemTimeZone().toZoneId()));
+                    }
                 }
             }
         });
         for (Map.Entry<String, AtomicLong> entry : partitionCounter.entrySet()) {
             ByteSizeValue value = new ByteSizeValue(entry.getValue().get());
-            rows.add(Lists.newArrayList(entry.getKey(), value.toString()));
+            rows.add(Lists.newArrayList(entry.getKey(), value.toString(), partitionTtlTime.get(entry.getKey())));
         }
         return rows;
     }

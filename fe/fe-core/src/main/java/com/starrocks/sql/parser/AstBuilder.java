@@ -3438,7 +3438,6 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                 null,
                 createPos(ctx));
 
-
         // create queryStatement based on queryRelation
         QueryStatement queryStatement = new QueryStatement(queryRelation);
 

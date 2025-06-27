@@ -1230,6 +1230,12 @@ public class EditLog {
                             addDataCacheInfo.getTableName(), addDataCacheInfo.getDataCacheRecord());
                     break;
                 }
+                case OperationType.OP_DELETE_DATA_CACHE_RECORD: {
+                    DeleteDataCacheInfo addDataCacheInfo = (DeleteDataCacheInfo) journal.getData();
+                    GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor()
+                            .removePartitionRecord(addDataCacheInfo.getTableName(), addDataCacheInfo.getPartitions());
+                    break;
+                }
                 case OperationType.OP_REMOVE_BE_DATA_CACHE_RECORD: {
                     Text beId = (Text) journal.getData();
                     GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor().removeBeRecord(Long.parseLong(beId.toString()));
@@ -2123,5 +2129,9 @@ public class EditLog {
 
     public void logRecordQueryMemory(MemoryRecordInfo info) {
         logEdit(OperationType.OP_RECORD_QUERY_MEMORY, info);
+    }
+
+    public void logDataCacheRecordDelete(DeleteDataCacheInfo info) {
+        logJsonObject(OperationType.OP_DELETE_DATA_CACHE_RECORD, info);
     }
 }
