@@ -453,6 +453,9 @@ public class OptExternalPartitionPruner {
                             scanOperatorPredicates.getPartitionConjuncts(), null, null,
                             Optional.of(PartitionType.HIVE));
             Collection<Long> selectedPartitionIds = partitionPruner.prune();
+            if (partitionPruner.getNoEvalConjuncts().size() > 0) {
+                scanOperatorPredicates.setPruningPredicateCanBeEvaluated(false);
+            }
             if (selectedPartitionIds == null) {
                 selectedPartitionIds = scanOperatorPredicates.getIdToPartitionKey().keySet();
             }

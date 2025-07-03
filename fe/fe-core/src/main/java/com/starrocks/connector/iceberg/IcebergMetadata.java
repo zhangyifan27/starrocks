@@ -809,6 +809,10 @@ public class IcebergMetadata implements ConnectorMetadata {
 
         if (icebergPredicate.op() != Expression.Operation.TRUE) {
             scan = scan.filter(icebergPredicate);
+        } else {
+            if (predicate != null && predicate instanceof ScalarOperator) {
+                ((ScalarOperator) predicate).setPruningPredicateCanBeEvaluated(false);
+            }
         }
 
         CloseableIterable<FileScanTask> fileScanTaskIterable = TableScanUtil.splitFiles(

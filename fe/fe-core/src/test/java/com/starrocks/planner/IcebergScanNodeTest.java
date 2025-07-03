@@ -22,9 +22,11 @@ import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.common.UserException;
+import com.starrocks.connector.TableVersionRange;
 import com.starrocks.connector.iceberg.TableTestBase;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.server.MetadataMgr;
 import com.starrocks.sql.analyzer.AnalyzeTestUtil;
 import com.starrocks.thrift.TScanRangeLocations;
 import com.starrocks.thrift.THdfsScanRange;
@@ -33,6 +35,8 @@ import com.starrocks.thrift.TIcebergFileContent;
 import com.starrocks.thrift.TScanRange;
 import com.starrocks.utframe.StarRocksAssert;
 import com.starrocks.utframe.UtFrameUtils;
+import mockit.Mock;
+import mockit.MockUp;
 
 import org.junit.After;
 import org.junit.Assert;
@@ -68,6 +72,14 @@ public class IcebergScanNodeTest extends TableTestBase {
 
     @Test
     public void testGetScanRangeLocations() throws Exception {
+        new MockUp<MetadataMgr>() {
+            @Mock
+            public List<String> listPartitionNames(String catalogName, String dbName, String tableName,
+                    TableVersionRange versionRange) {
+                return Lists.newArrayList();
+            }
+        };
+
         List<Column> columns = Lists.newArrayList(new Column("k1", INT), new Column("k2", INT));
         IcebergTable icebergTable = new IcebergTable(1, "srTableName", "iceberg_catalog", "resource_name", "iceberg_db",
                 "iceberg_table", "", columns, mockedNativeTableC, Maps.newHashMap());
@@ -97,6 +109,14 @@ public class IcebergScanNodeTest extends TableTestBase {
 
     @Test
     public void testEqualityDelete() throws UserException {
+        new MockUp<MetadataMgr>() {
+            @Mock
+            public List<String> listPartitionNames(String catalogName, String dbName, String tableName,
+                    TableVersionRange versionRange) {
+                return Lists.newArrayList();
+            }
+        };
+
         List<Column> columns = Lists.newArrayList(new Column("id", INT), new Column("data", STRING));
         IcebergTable icebergTable = new IcebergTable(1, "srTableName", "iceberg_catalog", "resource_name", "iceberg_db",
                 "iceberg_table", "", columns, mockedNativeTableA, Maps.newHashMap());

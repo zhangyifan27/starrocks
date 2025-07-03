@@ -49,6 +49,8 @@ public abstract class ScalarOperator implements Cloneable {
 
     private boolean isIndexOnlyFilter = false;
 
+    private boolean isPruningPredicateCanBeEvaluated = true;
+
     public ScalarOperator(OperatorType opType, Type type) {
         this.opType = requireNonNull(opType, "opType is null");
         this.type = requireNonNull(type, "type is null");
@@ -127,6 +129,14 @@ public abstract class ScalarOperator implements Cloneable {
 
     public void setIndexOnlyFilter(boolean indexOnlyFilter) {
         isIndexOnlyFilter = indexOnlyFilter;
+    }
+
+    public boolean isPruningPredicateCanBeEvaluated() {
+        return isPruningPredicateCanBeEvaluated;
+    }
+
+    public void setPruningPredicateCanBeEvaluated(boolean pruningPredicateCanBeEvaluated) {
+        this.isPruningPredicateCanBeEvaluated = pruningPredicateCanBeEvaluated;
     }
 
     public abstract List<ScalarOperator> getChildren();

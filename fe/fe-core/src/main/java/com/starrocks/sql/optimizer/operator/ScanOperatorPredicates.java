@@ -48,6 +48,8 @@ public class ScanOperatorPredicates {
     private Map<ColumnRefOperator, Column> minMaxColumnRefMap = Maps.newHashMap();
     // flag to indicate whether if has pruned partition
     private boolean hasPrunedPartition = false;
+    // flag to indicate whether if pruning predicate can be evaluated
+    private boolean pruningPredicateCanBeEvaluated = true;
 
     public Map<Long, PartitionKey> getIdToPartitionKey() {
         return idToPartitionKey;
@@ -103,6 +105,14 @@ public class ScanOperatorPredicates {
         return hasPrunedPartition;
     }
 
+    public void setPruningPredicateCanBeEvaluated(boolean pruningPredicateCanBeEvaluated) {
+        this.pruningPredicateCanBeEvaluated = pruningPredicateCanBeEvaluated;
+    }
+
+    public boolean isPruningPredicateCanBeEvaluated() {
+        return pruningPredicateCanBeEvaluated;
+    }
+
     public void clear() {
         idToPartitionKey.clear();
         selectedPartitionIds.clear();
@@ -124,6 +134,7 @@ public class ScanOperatorPredicates {
         other.minMaxConjuncts.addAll(this.minMaxConjuncts);
         other.minMaxColumnRefMap.putAll(this.minMaxColumnRefMap);
         other.hasPrunedPartition = this.hasPrunedPartition;
+        other.pruningPredicateCanBeEvaluated = this.pruningPredicateCanBeEvaluated;
 
         return other;
     }

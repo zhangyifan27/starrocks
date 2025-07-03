@@ -647,6 +647,8 @@ public class StmtExecutor {
                 // Record planner costs in audit log
                 Preconditions.checkNotNull(execPlan, "query must has a plan");
 
+                addPartitionPruningInfoToAuditLog(execPlan);
+
                 int retryTime = Config.max_query_retry_time;
                 ExecuteExceptionHandler.RetryContext retryContext =
                         new ExecuteExceptionHandler.RetryContext(0, execPlan, context, parsedStmt);
@@ -2972,5 +2974,41 @@ public class StmtExecutor {
         String explainString = buildExplainString(execPlan, ResourceGroupClassifier.QueryType.SELECT,
                 parsedStmt.getExplainLevel());
         Tracers.record(Tracers.Module.EXTERNAL, "Sql Explain", "\n" + explainString);
+    }
+
+    private void addPartitionPruningInfoToAuditLog(ExecPlan execPlan) {
+        boolean hasScanAllPartitions = false;
+        boolean hasPartitionPruningFail = false;
+        boolean needUpdate = false;
+        for (ScanNode scanNode : execPlan.getScanNodes()) {
+            if (scanNode instanceof HdfsScanNode) {
+                needUpdate = true;
+                HdfsScanNode hdfsScanNode = (HdfsScanNode) scanNode;
+                int selectedPartitionNum = hdfsScanNode.getScanNodePredicates().getSelectedPartitionIds().size();
+                int totalPartitionNum = hdfsScanNode.getScanNodePredicates().getIdToPartitionKey().size();
+                if (selectedPartitionNum >= totalPartitionNum - 1) {
+                    hasScanAllPartitions = true;
+                    if (!hdfsScanNode.getScanNodePredicates().isPruningPredicateCanBeEvaluated()) {
+                        hasPartitionPruningFail = true;
+                    }
+                }
+            } else if (scanNode instanceof IcebergScanNode) {
+                needUpdate = true;
+                IcebergScanNode icebergScanNode = (IcebergScanNode) scanNode;
+                int selectedPartitionNum = icebergScanNode.getScanNodePredicates().getSelectedPartitionIds().size();
+                int totalPartitionNum = icebergScanNode.getScanNodePredicates().getTotalPartitionNum();
+                if (selectedPartitionNum >= totalPartitionNum) {
+                    hasScanAllPartitions = true;
+                    if (icebergScanNode.getPredicate() != null &&
+                            !icebergScanNode.getPredicate().isPruningPredicateCanBeEvaluated()) {
+                        hasPartitionPruningFail = true;
+                    }
+                }
+            }
+        }
+        if (needUpdate) {
+            context.getAuditEventBuilder().setIsScanAllPartitions(hasScanAllPartitions);
+            context.getAuditEventBuilder().setIsPartitionPruningSuccess(hasPartitionPruningFail ? false : true);
+        }
     }
 }

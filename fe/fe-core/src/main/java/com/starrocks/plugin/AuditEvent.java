@@ -165,6 +165,12 @@ public class AuditEvent {
     @AuditField(value = "supersqlTraceId")
     public String supersqlTraceId = "";
 
+    @AuditField(value = "isScanAllPartitions")
+    public boolean isScanAllPartitions = true;
+
+    @AuditField(value = "isPartitionPruningSuccess")
+    public boolean isPartitionPruningSuccess = true;
+
     public static class AuditEventBuilder {
         private List<String> tables = new ArrayList<>();
         private Set<String> exceptions = new HashSet<>();
@@ -400,6 +406,16 @@ public class AuditEvent {
 
         public AuditEventBuilder setSupersqlTraceId(String supersqlTraceId) {
             auditEvent.supersqlTraceId = supersqlTraceId;
+            return this;
+        }
+
+        public AuditEventBuilder setIsScanAllPartitions(boolean isScanAllPartitions) {
+            auditEvent.isScanAllPartitions = isScanAllPartitions;
+            return this;
+        }
+
+        public AuditEventBuilder setIsPartitionPruningSuccess(boolean isPartitionPruningSuccess) {
+            auditEvent.isPartitionPruningSuccess = isPartitionPruningSuccess;
             return this;
         }
 

@@ -44,6 +44,7 @@ public class ThiveRangePartitionPruner implements PartitionPruner {
     private Map<Long, Range<PartitionKey>> partitionRangeMap;
     private List<Column> partitionColumns;
     private Map<String, PartitionColumnFilter> partitionColumnFilters;
+    private boolean pruningPredicateCanBeEvaluated = true;
 
     public ThiveRangePartitionPruner(Map<Long, Range<PartitionKey>> rangeMap,
                                 List<Column> columns,
@@ -72,6 +73,7 @@ public class ThiveRangePartitionPruner implements PartitionPruner {
         Column keyColumn = partitionColumns.get(columnIdx);
         PartitionColumnFilter filter = partitionColumnFilters.get(keyColumn.getName());
         if (null == filter) {
+            pruningPredicateCanBeEvaluated = false;
             List<Long> result;
             try {
                 result = Lists.newArrayList(
@@ -187,5 +189,9 @@ public class ThiveRangePartitionPruner implements PartitionPruner {
             rangeMap.put(entry.getValue(), entry.getKey());
         }
         return prune(rangeMap, 0, minKey, maxKey, 1);
+    }
+
+    public boolean isPruningPredicateCanBeEvaluated() {
+        return pruningPredicateCanBeEvaluated;
     }
 }

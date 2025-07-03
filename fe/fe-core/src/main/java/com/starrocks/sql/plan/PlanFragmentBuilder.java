@@ -1118,6 +1118,7 @@ public class PlanFragmentBuilder {
                 HDFSScanNodePredicates scanNodePredicates = hdfsScanNode.getScanNodePredicates();
                 scanNodePredicates.setSelectedPartitionIds(predicates.getSelectedPartitionIds());
                 scanNodePredicates.setIdToPartitionKey(predicates.getIdToPartitionKey());
+                scanNodePredicates.setPruningPredicateCanBeEvaluated(predicates.isPruningPredicateCanBeEvaluated());
 
                 hdfsScanNode.setupScanRangeLocations(context.getDescTbl());
 

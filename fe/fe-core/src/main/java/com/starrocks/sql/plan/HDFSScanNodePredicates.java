@@ -30,6 +30,8 @@ public class HDFSScanNodePredicates {
     // id -> partition key
     private Map<Long, PartitionKey> idToPartitionKey = Maps.newHashMap();
     private Collection<Long> selectedPartitionIds = Lists.newArrayList();
+    private int totalPartitionNum = 0;
+    private boolean pruningPredicateCanBeEvaluated = true;
 
     // partitionConjuncts contains partition filters.
     private final List<Expr> partitionConjuncts = Lists.newArrayList();
@@ -80,5 +82,21 @@ public class HDFSScanNodePredicates {
 
     public List<Expr> getMinMaxConjuncts() {
         return minMaxConjuncts;
+    }
+
+    public int getTotalPartitionNum() {
+        return totalPartitionNum;
+    }
+
+    public void setTotalPartitionNum(int totalPartitionNum) {
+        this.totalPartitionNum = totalPartitionNum;
+    }
+
+    public boolean isPruningPredicateCanBeEvaluated() {
+        return pruningPredicateCanBeEvaluated;
+    }
+
+    public void setPruningPredicateCanBeEvaluated(boolean pruningPredicateCanBeEvaluated) {
+        this.pruningPredicateCanBeEvaluated = pruningPredicateCanBeEvaluated;
     }
 }

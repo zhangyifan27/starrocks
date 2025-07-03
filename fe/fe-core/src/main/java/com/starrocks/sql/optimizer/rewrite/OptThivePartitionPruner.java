@@ -432,6 +432,10 @@ public class OptThivePartitionPruner {
 
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
         Collection<Long> selectedPartitionIds = partitionPruner.prune();
+        if (!((ThiveRangePartitionPruner) partitionPruner).isPruningPredicateCanBeEvaluated() &&
+                hasPartitionConjunctsWithHivePartSuffix(operator, hivePartColumnToPartitionValuesMap)) {
+            scanOperatorPredicates.setPruningPredicateCanBeEvaluated(false);
+        }
         Collection<Long> finalPartitions = processThiveDefaultParititions(selectedPartitionIds, defaultPartitionIds,
                 new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
         scanOperatorPredicates.setSelectedPartitionIds(finalPartitions);
@@ -511,6 +515,31 @@ public class OptThivePartitionPruner {
         }
     }
 
+    public static boolean hasPartitionConjunctsWithHivePartSuffix(LogicalScanOperator operator,
+                                                                  Map<ColumnRefOperator,
+                                                                  ConcurrentNavigableMap<LiteralExpr, Set<Long>>>
+                                                                  columnToPartitionValuesMap)
+            throws AnalysisException {
+        for (ScalarOperator scalarOperator : Utils.extractConjuncts(operator.getPredicate())) {
+            List<ColumnRefOperator> columnRefOperatorList = Utils.extractColumnRef(scalarOperator);
+            if (columnRefOperatorList.size() == 0) {
+                continue;
+            }
+            // columnToPartitionValuesMap.keySet() remove _hive_part suffix
+            List<ColumnRefOperator> tmpColumnRefOperatorList = new ArrayList<>();
+            for (ColumnRefOperator columnRefOperator : columnToPartitionValuesMap.keySet()) {
+                tmpColumnRefOperatorList.add(new ColumnRefOperator(columnRefOperatorList.get(0).getId(),
+                                                                   columnRefOperator.getType(),
+                                                                   columnRefOperator.getName().replace(THiveConstants.SUFFIX, ""),
+                                                                   columnRefOperator.isNullable()));
+            }
+            if (!columnRefOperatorList.retainAll(tmpColumnRefOperatorList)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static void thiveComputePartitionInfo(LogicalScanOperator operator,
                                                   Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr,
                                                           Set<Long>>> columnToPartitionValues,
@@ -521,6 +550,9 @@ public class OptThivePartitionPruner {
                 scanOperatorPredicates.getPartitionConjuncts(), null, null,
                 Optional.of(ListPartitionPruner.PartitionType.HIVE));
         Collection<Long> selectedPartitionIds = partitionPruner.prune();
+        if (partitionPruner.getNoEvalConjuncts().size() > 0) {
+            scanOperatorPredicates.setPruningPredicateCanBeEvaluated(false);
+        }
         Collection<Long> finalPartitions = processThiveDefaultParititions(selectedPartitionIds, defaultPartitionIds,
                 new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
         scanOperatorPredicates.setSelectedPartitionIds(finalPartitions);
@@ -923,6 +955,9 @@ public class OptThivePartitionPruner {
                 partitionColumns, operator.getColumnFilters());
 
         Collection<Long> selectedPartitionIds = partitionPruner.prune();
+        if (!((ThiveRangePartitionPruner) partitionPruner).isPruningPredicateCanBeEvaluated()) {
+            operator.getScanOperatorPredicates().setPruningPredicateCanBeEvaluated(false);
+        }
         LOG.debug("rangePrunePartitions selectedPartitionIds = " + selectedPartitionIds);
         if (selectedPartitionIds == null) {
             return new HashSet<>(partitionNameById.values());

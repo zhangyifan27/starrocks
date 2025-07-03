@@ -175,6 +175,10 @@ public class IcebergScanNode extends ScanNode {
         this.snapshotId = snapshotId;
     }
 
+    public ScalarOperator getPredicate() {
+        return predicate;
+    }
+
     public static BiMap<Integer, PartitionField> getIdentityPartitions(PartitionSpec partitionSpec) {
         // TODO: expose transform information in Iceberg library
         BiMap<Integer, PartitionField> columns = HashBiMap.create();
@@ -225,6 +229,13 @@ public class IcebergScanNode extends ScanNode {
         }
 
         String catalogName = icebergTable.getCatalogName();
+
+        if (!isResourceMappingCatalog(catalogName)) {
+            List<String> partitionNames = GlobalStateMgr.getCurrentState().getMetadataMgr().listPartitionNames(
+                        catalogName, icebergTable.getRemoteDbName(), icebergTable.getRemoteTableName(),
+                        TableVersionRange.withEnd(snapshotId));
+            scanNodePredicates.setTotalPartitionNum(partitionNames.size());
+        }
 
         List<RemoteFileInfo> splits = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(
                 catalogName, icebergTable, null, TableVersionRange.withEnd(snapshotId), predicate, null, -1);
@@ -435,6 +446,9 @@ public class IcebergScanNode extends ScanNode {
             output.append(prefix).append("MIN/MAX PREDICATES: ").append(
                     getExplainString(scanNodePredicates.getMinMaxConjuncts())).append("\n");
         }
+        output.append(prefix).append(String.format("partitions=%s/%s",
+                scanNodePredicates.getSelectedPartitionIds().size(), scanNodePredicates.getTotalPartitionNum()));
+        output.append("\n");
 
         output.append(prefix).append(String.format("cardinality=%s", cardinality));
         output.append("\n");
@@ -452,17 +466,6 @@ public class IcebergScanNode extends ScanNode {
                             .append(String.format("Pruned type: %d <-> [%s]\n", slotDescriptor.getId().asInt(), type));
                 }
             }
-        }
-
-        if (detailLevel == TExplainLevel.VERBOSE && !isResourceMappingCatalog(icebergTable.getCatalogName())) {
-            List<String> partitionNames = GlobalStateMgr.getCurrentState().getMetadataMgr().listPartitionNames(
-                    icebergTable.getCatalogName(), icebergTable.getRemoteDbName(),
-                    icebergTable.getRemoteTableName(), TableVersionRange.withEnd(snapshotId));
-
-            output.append(prefix).append(
-                    String.format("partitions=%s/%s", scanNodePredicates.getSelectedPartitionIds().size(),
-                            partitionNames.size() == 0 ? 1 : partitionNames.size()));
-            output.append("\n");
         }
 
         return output.toString();
