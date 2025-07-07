@@ -30,7 +30,7 @@ namespace starrocks {
 Status JniScanner::_check_jni_exception(JNIEnv* env, const std::string& message) {
     if (jthrowable thr = env->ExceptionOccurred(); thr) {
         std::string jni_error_message = JVMFunctionHelper::getInstance().dumpExceptionString(thr);
-        env->ExceptionDescribe();
+        //env->ExceptionDescribe();
         env->ExceptionClear();
         env->DeleteLocalRef(thr);
         return Status::InternalError(message + " java exception details: " + jni_error_message);

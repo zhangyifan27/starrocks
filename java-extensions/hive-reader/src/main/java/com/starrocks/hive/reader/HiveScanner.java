@@ -296,7 +296,7 @@ public class HiveScanner extends ConnectorScanner {
             Properties properties = makeProperties();
             JobConf jobConf = makeJobConf(properties);
             UserGroupInformation ugi = getUserGroupInformation();
-            LOG.info("ugi={}", ugi);
+            LOG.debug("ugi={}", ugi);
             HadoopExt.getInstance().doAs(ugi, () -> {
                 initReader(jobConf, properties);
                 return null;
