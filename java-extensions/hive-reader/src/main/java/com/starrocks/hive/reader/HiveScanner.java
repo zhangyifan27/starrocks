@@ -91,6 +91,12 @@ public class HiveScanner extends ConnectorScanner {
         }, 1, 1, TimeUnit.MINUTES);
     }
 
+    public static final String ORC_INPUT_FORMAT_CLASS = "org.apache.hadoop.hive.ql.io.orc.OrcInputFormat";
+    public static final String RCFILE_INPUT_FORMAT_CLASS = "org.apache.hadoop.hive.ql.io.RCFileInputFormat";
+    public static final String COLUMNAR_SERDE_CLASS = "org.apache.hadoop.hive.serde2.columnar.ColumnarSerDe";
+    public static final String FORMATFILE_INPUT_FORMAT_CLASS = "StorageEngineClient.FormatStorageInputFormat";
+    public static final String FORMATFILE_SERDE_CLASS = "StorageEngineClient.FormatStorageSerDe";
+
     private static final String SERDE_PROPERTY_PREFIX = "SerDe.";
 
     private final String hiveColumnNames;
@@ -108,8 +114,8 @@ public class HiveScanner extends ConnectorScanner {
 
     private final long blockLength;
 
-    private final String serde;
-    private final String inputFormat;
+    private String serde;
+    private String inputFormat;
 
     private RecordReader<Writable, Writable> reader;
     private StructObjectInspector rowInspector;
@@ -144,6 +150,24 @@ public class HiveScanner extends ConnectorScanner {
         this.blockLength = Long.parseLong(params.get("block_length"));
         this.serde = params.get("serde");
         this.inputFormat = params.get("input_format");
+        String fileFormat = params.get("file_format");
+        if (!Strings.isNullOrEmpty(fileFormat)) {
+            // THdfsFileFormat RC_BINARY = 2, but inputFormat is not RCFileInputFormat
+            if (fileFormat.equalsIgnoreCase("2") && !inputFormat.equalsIgnoreCase(RCFILE_INPUT_FORMAT_CLASS)) {
+                LOG.info("Set inputFormat = {} to RCFileInputFormat, file_format = {}, dataFilePath = {}", inputFormat,
+                        fileFormat, dataFilePath);
+                // The table is in ORC format, but the partitions are in RCFile format
+                this.inputFormat = RCFILE_INPUT_FORMAT_CLASS;
+                this.serde = COLUMNAR_SERDE_CLASS;
+            }
+            // THdfsFileFormat FORMAT_FILE = 99, but inputFormat is not FormatStorageInputFormat
+            if (fileFormat.equalsIgnoreCase("99") && !inputFormat.equalsIgnoreCase(FORMATFILE_INPUT_FORMAT_CLASS)) {
+                LOG.info("Set inputFormat = {} to FormatStorageInputFormat, file_format = {}, dataFilePath = {}",
+                        inputFormat, fileFormat, dataFilePath);
+                this.inputFormat = FORMATFILE_INPUT_FORMAT_CLASS;
+                this.serde = FORMATFILE_SERDE_CLASS;
+            }
+        }
         this.fieldInspectors = new ObjectInspector[requiredFields.length];
         this.structFields = new StructField[requiredFields.length];
         this.classLoader = this.getClass().getClassLoader();

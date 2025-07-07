@@ -538,6 +538,7 @@ std::unique_ptr<JniScanner> create_hive_jni_scanner(const JniScanner::CreateOpti
     jni_scanner_params["data_file_path"] = data_file_path;
     jni_scanner_params["block_offset"] = std::to_string(scan_range.offset);
     jni_scanner_params["block_length"] = std::to_string(scan_range.length);
+    jni_scanner_params["file_format"] = std::to_string(scan_range.file_format);
     jni_scanner_params["serde"] = serde;
     jni_scanner_params["input_format"] = input_format;
     jni_scanner_params["time_zone"] = time_zone;

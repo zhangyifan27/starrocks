@@ -275,6 +275,7 @@ TEST_F(JniScannerTest, test_create_hive_jni_scanner) {
                 {"required_fields", "c0,c1"},
                 {"serde", "org.apache.hadoop.hive.serde2.columnar.LazyBinaryColumnarSerDe"},
                 {"time_zone", "Asia/Shanghai"},
+                {"file_format", "2"},
         };
         check_jni_scanner_params(scanner->_jni_scanner_params, expected);
     }
@@ -312,6 +313,7 @@ TEST_F(JniScannerTest, test_create_hive_jni_scanner) {
                 {"required_fields", "c0,c1"},
                 {"serde", "org.apache.hadoop.hive.serde2.columnar.LazyBinaryColumnarSerDe"},
                 {"time_zone", "Asia/Shanghai"},
+                {"file_format", "2"},
         };
         check_jni_scanner_params(scanner->_jni_scanner_params, expected);
     }
@@ -357,6 +359,7 @@ TEST_F(JniScannerTest, test_create_hive_jni_scanner2) {
                 {"required_fields", "c0,c1"},
                 {"serde", ""},
                 {"time_zone", ""},
+                {"file_format", "2"},
         };
         check_jni_scanner_params(scanner->_jni_scanner_params, expected);
     }
