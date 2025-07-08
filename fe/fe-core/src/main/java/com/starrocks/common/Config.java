@@ -1344,6 +1344,8 @@ public class Config extends ConfigBase {
     public static boolean enable_udf = false;
     @ConfField
     public static String thive_udf_wrapper_url = "";
+    @ConfField(mutable = true)
+    public static boolean thive_udf_isolated = false;
 
     /**
      * A list of thive function names that should override the builtin functions.
