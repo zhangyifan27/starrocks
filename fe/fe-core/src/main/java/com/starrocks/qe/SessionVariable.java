@@ -731,6 +731,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String HDFS_BACKEND_SELECTOR_HASH_ALGORITHM = "hdfs_backend_selector_hash_algorithm";
 
+    public static final String ENABLE_ADAPTIVE_BACKEND_SELECTOR_HASH_ALGORITHM =
+            "enable_adaptive_backend_selector_hash_algorithm";
+
     public static final String HDFS_BACKEND_SELECTOR_FORCE_REBALANCE = "hdfs_backend_selector_force_rebalance";
 
     public static final String CONSISTENT_HASH_VIRTUAL_NUMBER = "consistent_hash_virtual_number";
@@ -1617,8 +1620,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     @VariableMgr.VarAttr(name = PARTIAL_UPDATE_MODE)
     private String partialUpdateMode = "auto";
 
+    public class BackendSelectorHashAlgorithm {
+        public static final String CONSISTENT = "consistent";
+        public static final String RENDEZVOUS = "rendezvous";
+        public static final String ROUNDROBIN = "roundrobin";
+        public static final String PLAIN = "plain";
+    }
     @VariableMgr.VarAttr(name = HDFS_BACKEND_SELECTOR_HASH_ALGORITHM, flag = VariableMgr.INVISIBLE)
-    private String hdfsBackendSelectorHashAlgorithm = "consistent";
+    private String hdfsBackendSelectorHashAlgorithm = BackendSelectorHashAlgorithm.CONSISTENT;
+
+    @VariableMgr.VarAttr(name = ENABLE_ADAPTIVE_BACKEND_SELECTOR_HASH_ALGORITHM, flag = VariableMgr.INVISIBLE)
+    private boolean enableAdaptiveBackendSelectorHashAlgorithm = true;
 
     @VariableMgr.VarAttr(name = HDFS_BACKEND_SELECTOR_FORCE_REBALANCE, flag = VariableMgr.INVISIBLE)
     private boolean hdfsBackendSelectorForceRebalance = false;
@@ -2850,6 +2862,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.hdfsBackendSelectorHashAlgorithm = hdfsBackendSelectorHashAlgorithm;
     }
 
+    public boolean getEnableAdaptiveBackendSelectorHashAlgorithm() {
+        return enableAdaptiveBackendSelectorHashAlgorithm;
+    }
+
+    public void setEnableAdaptiveBackendSelectorHashAlgorithm(boolean enableAdaptiveBackendSelectorHashAlgorithm) {
+        this.enableAdaptiveBackendSelectorHashAlgorithm = enableAdaptiveBackendSelectorHashAlgorithm;
+    }
+
     public boolean getHdfsBackendSelectorForceRebalance() {
         return hdfsBackendSelectorForceRebalance;
     }
@@ -4070,6 +4090,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean getHDFSBackendSelectorScanRangeShuffle() {
         return hdfsBackendSelectorScanRangeShuffle;
+    }
+
+    public void setHdfsBackendSelectorScanRangeShuffle(boolean hdfsBackendSelectorScanRangeShuffle) {
+        this.hdfsBackendSelectorScanRangeShuffle = hdfsBackendSelectorScanRangeShuffle;
     }
 
     public boolean isEnableStrictType() {

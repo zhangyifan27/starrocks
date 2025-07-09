@@ -35,6 +35,7 @@ import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TResourceGroupUsage;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.jetbrains.annotations.NotNull;
 
 import java.io.DataInput;
 import java.io.DataOutput;
@@ -52,7 +53,7 @@ import java.util.stream.Collectors;
  * This class extends the primary identifier of a compute node with computing capabilities
  * and no storage capacity。
  */
-public class ComputeNode implements IComputable, Writable {
+public class ComputeNode implements IComputable, Writable, Comparable<ComputeNode> {
     private static final Logger LOG = LogManager.getLogger(ComputeNode.class);
 
     @SerializedName("id")
@@ -129,6 +130,11 @@ public class ComputeNode implements IComputable, Writable {
     private volatile int cpuUsedPermille = 0;
     private volatile long lastUpdateResourceUsageMs = 0;
     private final AtomicReference<Map<Long, ResourceGroupUsage>> groupIdToUsage = new AtomicReference<>(new HashMap<>());
+
+    @Override
+    public int compareTo(@NotNull ComputeNode o) {
+        return Long.compare(this.id, o.id);
+    }
 
     public ComputeNode() {
         this.host = "";

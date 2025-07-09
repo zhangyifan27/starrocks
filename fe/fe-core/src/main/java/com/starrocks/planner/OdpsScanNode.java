@@ -139,7 +139,7 @@ public class OdpsScanNode extends ScanNode {
     }
 
     @Override
-    public List<TScanRangeLocations> getScanRangeLocations(long maxScanRangeLength) {
+    public List<TScanRangeLocations> getConnectorScanRangeLocations(long maxScanRangeLength) {
         //TODO (zhangdingxin.zdx) support max scan range length ?
         return scanRangeLocationsList;
     }

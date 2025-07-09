@@ -66,9 +66,7 @@ public class BackendSelectorFactory {
                 scanNode instanceof HudiScanNode || scanNode instanceof DeltaLakeScanNode ||
                 scanNode instanceof FileTableScanNode || scanNode instanceof PaimonScanNode
                 || scanNode instanceof OdpsScanNode || scanNode instanceof IcebergMetadataScanNode) {
-            return new HDFSBackendSelector(scanNode, locations, assignment, workerProvider,
-                    sessionVariable.getForceScheduleLocal(),
-                    sessionVariable.getHDFSBackendSelectorScanRangeShuffle());
+            return new HDFSBackendSelector(scanNode, locations, assignment, workerProvider, connectContext);
         } else {
             boolean hasColocate = execFragment.isColocated();
             boolean hasBucket = execFragment.isLocalBucketShuffleJoin();

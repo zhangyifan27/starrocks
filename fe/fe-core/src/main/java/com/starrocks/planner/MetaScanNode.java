@@ -144,7 +144,7 @@ public class MetaScanNode extends ScanNode {
     }
 
     @Override
-    public List<TScanRangeLocations> getScanRangeLocations(long maxScanRangeLength) {
+    public List<TScanRangeLocations> getConnectorScanRangeLocations(long maxScanRangeLength) {
         return result;
     }
 

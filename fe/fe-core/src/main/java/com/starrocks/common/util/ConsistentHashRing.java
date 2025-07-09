@@ -18,6 +18,7 @@ package com.starrocks.common.util;
 import com.google.common.hash.Funnel;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
+import com.starrocks.qe.SessionVariable;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -68,7 +69,7 @@ public class ConsistentHashRing<K, N> implements HashRing<K, N> {
 
     @Override
     public String policy() {
-        return "ConsistentHash";
+        return SessionVariable.BackendSelectorHashAlgorithm.CONSISTENT;
     }
 
     public ConsistentHashRing(HashFunction hashFunction, Funnel<K> keyFunnel, Funnel<N> nodeFunnel,

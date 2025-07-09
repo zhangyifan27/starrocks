@@ -63,6 +63,8 @@ public abstract class ScanNode extends PlanNode {
     protected DataCacheOptions dataCacheOptions = null;
     protected long warehouseId = WarehouseManager.DEFAULT_WAREHOUSE_ID;
     protected ScanOptimzeOption scanOptimzeOption;
+    private long scanRangeDelta = 0L;
+    private long deployedScanRangeOffset = 0L;
 
     public ScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName) {
         super(id, desc.getId().asList(), planNodeName);
@@ -133,7 +135,23 @@ public abstract class ScanNode extends PlanNode {
      *                           only applicable to HDFS; less than or equal to zero means no
      *                           maximum.
      */
-    public abstract List<TScanRangeLocations> getScanRangeLocations(long maxScanRangeLength);
+    public List<TScanRangeLocations> getScanRangeLocations(long maxScanRangeLength) {
+        return updateScanRangeOffset(getConnectorScanRangeLocations(maxScanRangeLength));
+    }
+
+    public abstract List<TScanRangeLocations> getConnectorScanRangeLocations(long maxScanRangeLength);
+
+    public long getDeployedScanRangeOffset() {
+        return deployedScanRangeOffset;
+    }
+
+    protected List<TScanRangeLocations> updateScanRangeOffset(List<TScanRangeLocations> locations) {
+        if (locations != null) {
+            this.deployedScanRangeOffset += this.scanRangeDelta;
+            this.scanRangeDelta = locations.size();
+        }
+        return locations;
+    }
 
     @Override
     public String toString() {

@@ -18,6 +18,7 @@ package com.starrocks.common.util;
 import com.google.common.hash.Funnel;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hasher;
+import com.starrocks.qe.SessionVariable;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -43,7 +44,7 @@ public class RendezvousHashRing<K, N> implements HashRing<K, N> {
 
     @Override
     public String policy() {
-        return "RendezvousHash";
+        return SessionVariable.BackendSelectorHashAlgorithm.RENDEZVOUS;
     }
 
     public RendezvousHashRing(HashFunction hashFunction, Funnel<K> keyFunnel, Funnel<N> nodeFunnel,
