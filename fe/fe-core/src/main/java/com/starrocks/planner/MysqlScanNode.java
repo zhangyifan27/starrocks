@@ -171,7 +171,7 @@ public class MysqlScanNode extends ScanNode {
      * extra result info will pass to backend ScanNode
      */
     @Override
-    public List<TScanRangeLocations> getConnectorScanRangeLocations(long maxScanRangeLength) {
+    public List<TScanRangeLocations> getScanRangeLocations(long maxScanRangeLength) {
         return null;
     }
 

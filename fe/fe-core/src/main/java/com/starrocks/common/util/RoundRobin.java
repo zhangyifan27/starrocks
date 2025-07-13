@@ -24,12 +24,12 @@ public class RoundRobin<K, N> implements HashRing<K, N> {
     private List<N> nodes = new ArrayList<>();
     private int index = 0;
 
-    public RoundRobin(Collection<N> nodes, long deployedScanRangeOffset) {
+    public RoundRobin(Collection<N> nodes, long startRandomScanRangeOffset, long deployedScanRangeOffset) {
         for (N node : nodes) {
             addNode(node);
         }
         if (!nodes.isEmpty()) {
-            this.index = (int) (deployedScanRangeOffset % nodes.size());
+            this.index = (int) ((startRandomScanRangeOffset + deployedScanRangeOffset) % nodes.size());
         }
     }
 

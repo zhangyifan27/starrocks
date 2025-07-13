@@ -74,7 +74,8 @@ import java.util.Set;
 public class HDFSBackendSelector implements BackendSelector {
     public static final Logger LOG = LogManager.getLogger(HDFSBackendSelector.class);
     // be -> assigned scans
-    Map<ComputeNode, Long> assignedScansPerComputeNode = Maps.newTreeMap();
+    Map<ComputeNode, Long> assignedScansPerComputeNode = Maps.newHashMap();
+    Map<ComputeNode, Long> assignedScanNumPerComputeNode = Maps.newTreeMap();
     // be -> re-balance bytes
     Map<ComputeNode, Long> reBalanceBytesPerComputeNode = Maps.newHashMap();
     // be host -> bes
@@ -222,7 +223,7 @@ public class HDFSBackendSelector implements BackendSelector {
             hashRing = new RendezvousHashRing(Hashing.murmur3_128(), new TScanRangeLocationsFunnel(),
                     new ComputeNodeFunnel(), nodes);
         } else if (hashAlgorithm.equalsIgnoreCase(SessionVariable.BackendSelectorHashAlgorithm.ROUNDROBIN)) {
-            hashRing = new RoundRobin(nodes, scanNode.getDeployedScanRangeOffset());
+            hashRing = new RoundRobin(nodes, scanNode.getStartRandomScanRangeOffset(), scanNode.getDeployedScanRangeOffset());
         } else if (hashAlgorithm.equalsIgnoreCase(SessionVariable.BackendSelectorHashAlgorithm.PLAIN)) {
             hashRing = new PlainHashRing(Hashing.murmur3_128(), new TScanRangeLocationsFunnel(), nodes);
         } else {
@@ -268,6 +269,7 @@ public class HDFSBackendSelector implements BackendSelector {
 
         for (ComputeNode computeNode : workerProvider.getAllWorkers()) {
             assignedScansPerComputeNode.put(computeNode, 0L);
+            assignedScanNumPerComputeNode.put(computeNode, 0L);
             reBalanceBytesPerComputeNode.put(computeNode, 0L);
             hostToBackends.put(computeNode.getHost(), computeNode);
         }
@@ -319,7 +321,7 @@ public class HDFSBackendSelector implements BackendSelector {
             }
             recordScanRangeAssignment(node, backends, scanRangeLocations);
         }
-
+        scanNode.updateScanRangeOffset(remoteScanRangeLocations.size());
         recordScanRangeStatistic(hashRing.policy());
     }
 
@@ -331,6 +333,7 @@ public class HDFSBackendSelector implements BackendSelector {
         // update statistic
         long addedScans = scanRangeLocations.scan_range.hdfs_scan_range.length;
         assignedScansPerComputeNode.put(worker, assignedScansPerComputeNode.get(worker) + addedScans);
+        assignedScanNumPerComputeNode.put(worker, assignedScanNumPerComputeNode.get(worker) + 1L);
         // the fist item in backends will be assigned if there is no re-balance, we compute re-balance bytes
         // if the worker is not the first item in backends.
         if (worker != backends.get(0)) {
@@ -349,8 +352,11 @@ public class HDFSBackendSelector implements BackendSelector {
         for (Map.Entry<ComputeNode, Long> entry : assignedScansPerComputeNode.entrySet()) {
             String host = entry.getKey().getAddress().hostname.replace('.', '_');
             long value = entry.getValue();
-            String key = String.format("Placement.%s.assign[%s].%s", scanNode.getTableName(), selectPolicy, host);
-            Tracers.count(Tracers.Module.EXTERNAL, key, (int) value);
+            String key =
+                    String.format("Placement.%s.assign[%s].%s(scanRangeNum: %s)", scanNode.getTableName(), selectPolicy, host,
+                            assignedScanNumPerComputeNode.get(entry.getKey()));
+            Tracers.count(Tracers.Module.EXTERNAL, key, value);
+            sb.append(entry.getKey().getAddress().hostname).append(":").append(value).append(",");
         }
         Tracers.record(Tracers.Module.EXTERNAL, scanNode.getTableName() + " scan_range_bytes", sb.toString());
         // record re-balance bytes for each backend

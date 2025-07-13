@@ -436,7 +436,7 @@ public class StreamLoadScanNode extends LoadScanNode {
     }
 
     @Override
-    public List<TScanRangeLocations> getConnectorScanRangeLocations(long maxScanRangeLength) {
+    public List<TScanRangeLocations> getScanRangeLocations(long maxScanRangeLength) {
         return locationsList;
     }
 
