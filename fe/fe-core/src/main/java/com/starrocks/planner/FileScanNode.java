@@ -547,6 +547,11 @@ public class FileScanNode extends LoadScanNode {
                     nodes.add(be);
                 }
             }
+            for (ComputeNode cn : GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getIdComputeNode().values()) {
+                if (cn.isAvailable()) {
+                    nodes.add(cn);
+                }
+            }
         }
 
         if (nodes.isEmpty()) {

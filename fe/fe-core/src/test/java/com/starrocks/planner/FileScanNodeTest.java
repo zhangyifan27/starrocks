@@ -37,6 +37,7 @@ import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.WarehouseManager;
 import com.starrocks.sql.ast.DataDescription;
 import com.starrocks.system.Backend;
+import com.starrocks.system.ComputeNode;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.thrift.TBrokerFileStatus;
 import com.starrocks.thrift.TBrokerRangeDesc;
@@ -54,6 +55,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class FileScanNodeTest {
     private long jobId;
@@ -66,6 +68,8 @@ public class FileScanNodeTest {
 
     // backends
     private ImmutableMap<Long, Backend> idToBackend;
+
+    private ImmutableMap<Long, ComputeNode> idToComputeNode;
 
     @Mocked
     Partition partition;
@@ -91,6 +95,7 @@ public class FileScanNodeTest {
         b3.setAlive(true);
         idToBackendTmp.put(2L, b3);
         idToBackend = ImmutableMap.copyOf(idToBackendTmp);
+        idToComputeNode = ImmutableMap.copyOf(Maps.newHashMap());
     }
 
     @Test
@@ -112,6 +117,8 @@ public class FileScanNodeTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getBaseSchema();
                 result = columns;
                 table.getFullSchema();
@@ -514,6 +521,8 @@ public class FileScanNodeTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getPartitions();
                 minTimes = 0;
                 result = Arrays.asList(partition);
@@ -559,6 +568,8 @@ public class FileScanNodeTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getPartitions();
                 minTimes = 0;
                 result = Arrays.asList(partition);

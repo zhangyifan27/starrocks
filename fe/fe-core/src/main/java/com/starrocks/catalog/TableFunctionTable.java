@@ -422,9 +422,7 @@ public class TableFunctionTable extends Table {
         }
         TNetworkAddress address;
         List<Long> nodeIds = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendIds(true);
-        if (RunMode.isSharedDataMode()) {
-            nodeIds.addAll(GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getComputeNodeIds(true));
-        }
+        nodeIds.addAll(GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getComputeNodeIds(true));
         if (nodeIds.isEmpty()) {
             if (RunMode.isSharedNothingMode()) {
                 throw new DdlException("Failed to send proxy request. No alive backends");

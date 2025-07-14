@@ -48,6 +48,7 @@ import com.starrocks.sql.ast.LoadStmt;
 import com.starrocks.sql.parser.AstBuilder;
 import com.starrocks.sql.parser.SqlParser;
 import com.starrocks.system.Backend;
+import com.starrocks.system.ComputeNode;
 import com.starrocks.system.SystemInfoService;
 import com.starrocks.thrift.TBrokerFileStatus;
 import com.starrocks.thrift.TBrokerScanRangeParams;
@@ -87,6 +88,7 @@ public class LoadPlannerTest {
 
     // backends
     private ImmutableMap<Long, Backend> idToBackend;
+    private ImmutableMap<Long, ComputeNode> idToComputeNode;
 
     private static ConnectContext ctx;
     private boolean strictMode = false;
@@ -122,6 +124,7 @@ public class LoadPlannerTest {
         b2.setAlive(true);
         idToBackendTmp.put(1L, b2);
         idToBackend = ImmutableMap.copyOf(idToBackendTmp);
+        idToComputeNode = ImmutableMap.copyOf(Maps.newHashMap());
         ctx = UtFrameUtils.createDefaultCtx();
     }
 
@@ -148,6 +151,8 @@ public class LoadPlannerTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getBaseSchema();
                 result = columns;
                 table.getFullSchema();
@@ -243,6 +248,8 @@ public class LoadPlannerTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getBaseSchema();
                 result = columns;
                 table.getFullSchema();
@@ -378,6 +385,8 @@ public class LoadPlannerTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getKeysType();
                 minTimes = 0;
                 result = KeysType.PRIMARY_KEYS;
@@ -533,6 +542,8 @@ public class LoadPlannerTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getKeysType();
                 result = KeysType.PRIMARY_KEYS;
                 table.getBaseSchema();
@@ -623,6 +634,8 @@ public class LoadPlannerTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getKeysType();
                 result = KeysType.PRIMARY_KEYS;
                 table.getBaseSchema();
@@ -722,6 +735,8 @@ public class LoadPlannerTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getKeysType();
                 result = KeysType.PRIMARY_KEYS;
                 table.getBaseSchema();
@@ -828,6 +843,8 @@ public class LoadPlannerTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getKeysType();
                 result = KeysType.PRIMARY_KEYS;
                 table.getBaseSchema();
@@ -924,6 +941,8 @@ public class LoadPlannerTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getKeysType();
                 result = KeysType.UNIQUE_KEYS;
                 table.getDefaultReplicationNum();
@@ -1041,6 +1060,8 @@ public class LoadPlannerTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getKeysType();
                 result = KeysType.AGG_KEYS;
                 table.getDefaultReplicationNum();
@@ -1175,6 +1196,8 @@ public class LoadPlannerTest {
                 result = systemInfoService;
                 systemInfoService.getIdToBackend();
                 result = idToBackend;
+                systemInfoService.getIdComputeNode();
+                result = idToComputeNode;
                 table.getBaseSchema();
                 result = columns;
                 table.getFullSchema();
