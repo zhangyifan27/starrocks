@@ -78,7 +78,7 @@ public class ConnectorTableMetadataKeyInfoProcessor extends FrontendDaemon {
                 } catch (Throwable e) {
                 }
             }
-            LOG.info("refresh connector metadata key info {} finished", catalogName);
+            LOG.info("refresh connector metadata key info {} finished, table num: {}", catalogName, futures.size());
         }
     }
 
@@ -112,7 +112,7 @@ public class ConnectorTableMetadataKeyInfoProcessor extends FrontendDaemon {
                 return;
             }
             try {
-                updateProcessor.refreshTableKeyInfoBackground(table);
+                updateProcessor.refreshTableKeyInfoBackground(dbName, table);
             } catch (Throwable e) {
                 if (Config.invalidate_cache_when_refresh_fail) {
                     updateProcessor.invalidateTable(dbName, tableName);

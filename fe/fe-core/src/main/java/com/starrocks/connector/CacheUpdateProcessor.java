@@ -34,6 +34,6 @@ public interface CacheUpdateProcessor {
         return Sets.newHashSet();
     }
 
-    default void refreshTableKeyInfoBackground(Table table) {
+    default void refreshTableKeyInfoBackground(String dbName, Table table) {
     }
 }

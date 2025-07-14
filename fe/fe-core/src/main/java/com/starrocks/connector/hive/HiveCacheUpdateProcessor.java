@@ -130,6 +130,9 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
     }
 
     public void refreshTableBackground(Table table, boolean onlyCachedPartitions, ExecutorService executor) {
+        if (!(table instanceof HiveMetaStoreTable)) {
+            return;
+        }
         HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
         List<HivePartitionName> refreshPartitionNames = metastore.refreshTableBackground(
                 hmsTbl.getDbName(), hmsTbl.getTableName(), onlyCachedPartitions);
@@ -168,9 +171,17 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
     }
 
     @Override
-    public void refreshTableKeyInfoBackground(Table table) {
-        HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
-        metastore.refreshTableKeyInfoBackground(hmsTbl.getDbName(), hmsTbl.getTableName());
+    public void refreshTableKeyInfoBackground(String dbName, Table table) {
+        if (table instanceof HiveMetaStoreTable) {
+            HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
+            metastore.refreshTableKeyInfoBackground(hmsTbl.getDbName(), hmsTbl.getTableName());
+        } else if (table instanceof HiveView) {
+            HiveView view = (HiveView) table;
+            metastore.refreshView(dbName, view.getName());
+        } else {
+            LOG.info("invalidateTable [{}.{}] with table type: {}", dbName, table.getName(), table.getType());
+            metastore.invalidateTable(dbName, table.getName());
+        }
     }
 
     @Override
