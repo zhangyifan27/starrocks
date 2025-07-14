@@ -815,7 +815,8 @@ public class ExpressionAnalyzer {
             Function fn = null;
 
             if (session.getSessionVariable().isEnableThiveFunction() &&
-                    session.getSessionVariable().isPreferThiveFunctions()) {
+                    session.getSessionVariable().isPreferThiveFunctions() &&
+                    node.getFnName() != null) {
                 String fnName = node.getFnName().getFunction();
                 // Prefer to find the corresponding thive udf
                 Set<String> preferThiveFunctionNames = getPreferThiveFunctionNames();
@@ -864,7 +865,7 @@ public class ExpressionAnalyzer {
             fn = Expr.getBuiltinFunction(funcOpName.toLowerCase(), argumentTypes,
                     Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
 
-            if (fn == null && session.getSessionVariable().isEnableThiveFunction()) {
+            if (fn == null && session.getSessionVariable().isEnableThiveFunction() && (node.getFnName() != null)) {
                 fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
             }
 
