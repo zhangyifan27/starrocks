@@ -89,6 +89,7 @@ public class MockedHiveMetadata implements ConnectorMetadata {
     public static final String MOCKED_PARTITIONED_DB_NAME2 = "partitioned_db2";
     public static final String MOCKED_SUBFIELD_DB = "subfield_db";
     private static final String MOCKED_DATACACHE_DB = "datacache_db";
+    private static final String MOCKED_PLAN_TEST = "plan_test";
 
     private static ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
@@ -202,6 +203,7 @@ public class MockedHiveMetadata implements ConnectorMetadata {
                 }
                 builder.addColumnStatistic(columnRefOperator, columnStatistic);
             }
+            builder.setTableRowCountMayInaccurate(info.tableRowCountMayInaccurate);
             return builder.build();
         } finally {
             readUnlock();
@@ -708,6 +710,7 @@ public class MockedHiveMetadata implements ConnectorMetadata {
         mockTablesWithSinglePartitionColumn();
         mockOrders();
         mockWithMultiDuplicatePartitionColumns();
+        mockUnknownStats();
     }
 
     public static void mockOrders() {
@@ -1115,6 +1118,10 @@ public class MockedHiveMetadata implements ConnectorMetadata {
 
 
     public static void mockSimpleTable(String dbName, String tableName) {
+        mockSimpleTable(dbName, tableName, false);
+    }
+
+    public static void mockSimpleTable(String dbName, String tableName, boolean unknownStats) {
         MOCK_TABLE_MAP.putIfAbsent(dbName, new CaseInsensitiveMap<>());
         Map<String, HiveTableInfo> mockTables = MOCK_TABLE_MAP.get(dbName);
 
@@ -1157,9 +1164,13 @@ public class MockedHiveMetadata implements ConnectorMetadata {
         partitionNames.forEach(
                 k -> remoteFileInfos.add(new RemoteFileInfo(RemoteFileInputFormat.ORC, ImmutableList.of(), null)));
 
-        mockTables.put(mockTable.getTableName(),
-                       new HiveTableInfo(HiveMetastoreApiConverter.toHiveTable(mockTable, MOCKED_HIVE_CATALOG_NAME),
-                                         partitionNames, (long) rowCount, columnStatisticMap, remoteFileInfos));
+        HiveTableInfo hiveTableInfo =
+                new HiveTableInfo(HiveMetastoreApiConverter.toHiveTable(mockTable, MOCKED_HIVE_CATALOG_NAME),
+                partitionNames, (long) rowCount, columnStatisticMap, remoteFileInfos);
+        if (unknownStats) {
+            hiveTableInfo.tableRowCountMayInaccurate = true;
+        }
+        mockTables.put(mockTable.getTableName(), hiveTableInfo);
     }
 
 
@@ -1355,6 +1366,10 @@ public class MockedHiveMetadata implements ConnectorMetadata {
 
     public static void mockT3() {
         mockSimpleTable(MOCKED_PARTITIONED_DB_NAME, "t3");
+    }
+
+    public static void mockUnknownStats() {
+        mockSimpleTable(MOCKED_PLAN_TEST, "unknown", true);
     }
 
     public static void mockT1WithMultiPartitionColumns() {
@@ -1738,6 +1753,7 @@ public class MockedHiveMetadata implements ConnectorMetadata {
         public Map<String, ColumnStatistic> columnStatsMap;
         private List<RemoteFileInfo> remoteFileInfos;
         private Map<String, PartitionInfo> partitionInfoMap = Maps.newHashMap();
+        private boolean tableRowCountMayInaccurate = false;
 
         public HiveTableInfo(HiveTable table, List<String> partitionNames, long rowCount,
                              Map<String, ColumnStatistic> columnStatsMap, List<RemoteFileInfo> remoteFileInfos) {

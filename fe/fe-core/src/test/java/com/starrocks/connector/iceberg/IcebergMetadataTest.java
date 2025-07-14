@@ -822,6 +822,12 @@ public class IcebergMetadataTest extends TableTestBase {
         Assert.assertEquals(2, statistics.getColumnStatistics().size());
         Assert.assertTrue(statistics.getColumnStatistic(columnRefOperator1).isUnknown());
         Assert.assertTrue(statistics.getColumnStatistic(columnRefOperator2).isUnknown());
+
+        new ConnectContext().setThreadLocalInfo();
+        OptimizerContext context1 = new OptimizerContext(new Memo(), new ColumnRefFactory(), ConnectContext.get());
+        statistics = metadata.getTableStatistics(
+                context1, icebergTable, colRefToColumnMetaMap, null, null, -1, versionRange);
+        Assert.assertTrue(statistics.isTableRowCountMayInaccurate());
     }
 
     @Test

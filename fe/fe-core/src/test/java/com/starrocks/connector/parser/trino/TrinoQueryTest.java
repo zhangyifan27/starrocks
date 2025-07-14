@@ -25,6 +25,7 @@ public class TrinoQueryTest extends TrinoTestBase {
     @BeforeClass
     public static void beforeClass() throws Exception {
         TrinoTestBase.beforeClass();
+        starRocksAssert.getCtx().getSessionVariable().setBroadcastStrictChecks(false);
     }
 
     @Test

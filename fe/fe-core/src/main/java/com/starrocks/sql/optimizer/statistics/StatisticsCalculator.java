@@ -584,6 +584,7 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
         }
         // cause we don't know the real schema in file，just use the default Row Count now
         builder.setOutputRowCount(1);
+        builder.setTableRowCountMayInaccurate(true);
         context.setStatistics(builder.build());
 
         return visitOperator(node, context);

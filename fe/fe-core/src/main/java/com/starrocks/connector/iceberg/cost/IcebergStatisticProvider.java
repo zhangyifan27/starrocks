@@ -21,6 +21,7 @@ import com.starrocks.catalog.IcebergTable;
 import com.starrocks.connector.PredicateSearchKey;
 import com.starrocks.connector.TableVersionRange;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
@@ -91,6 +92,11 @@ public class IcebergStatisticProvider {
             cardinality += dataFile.recordCount();
         }
 
+        boolean untrustedStats = ConnectContext.get() != null
+                && ConnectContext.get().getSessionVariable().isBroadcastStrictChecks();
+        if (untrustedStats) {
+            statisticsBuilder.setTableRowCountMayInaccurate(true);
+        }
         statisticsBuilder.setOutputRowCount(cardinality);
         statisticsBuilder.addColumnStatistics(buildUnknownColumnStatistics(colRefToColumnMetaMap.keySet()));
         return statisticsBuilder.build();

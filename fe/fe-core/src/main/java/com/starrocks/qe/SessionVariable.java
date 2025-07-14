@@ -332,6 +332,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String BROADCAST_ROW_LIMIT = "broadcast_row_limit";
     public static final String BROADCAST_RIGHT_TABLE_SCALE_FACTOR =
             "broadcast_right_table_scale_factor";
+    public static final String BROADCAST_STRICT_CHECKS = "broadcast_strict_checks";
+    public static final String SHUFFLE_LEFT_TABLE_SCALE_FACTOR = "shuffle_left_table_scale_factor";
     public static final String NEW_PLANNER_OPTIMIZER_TIMEOUT = "new_planner_optimize_timeout";
     public static final String ENABLE_GROUPBY_USE_OUTPUT_ALIAS = "enable_groupby_use_output_alias";
     public static final String ENABLE_QUERY_DUMP = "enable_query_dump";
@@ -1364,6 +1366,12 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = BROADCAST_RIGHT_TABLE_SCALE_FACTOR, flag = VariableMgr.INVISIBLE)
     private double broadcastRightTableScaleFactor = 10.0;
+
+    @VariableMgr.VarAttr(name = BROADCAST_STRICT_CHECKS)
+    private boolean broadcastStrictChecks = true;
+
+    @VariableMgr.VarAttr(name = SHUFFLE_LEFT_TABLE_SCALE_FACTOR)
+    private double shuffleLeftTableScaleFactor = broadcastRightTableScaleFactor * broadcastRowCountLimit;
 
     @VariableMgr.VarAttr(name = NEW_PLANNER_OPTIMIZER_TIMEOUT)
     private long optimizerExecuteTimeout = 3000;
@@ -3192,6 +3200,22 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public double getBroadcastRightTableScaleFactor() {
         return broadcastRightTableScaleFactor;
+    }
+
+    public boolean isBroadcastStrictChecks() {
+        return broadcastStrictChecks;
+    }
+
+    public void setBroadcastStrictChecks(boolean broadcastStrictChecks) {
+        this.broadcastStrictChecks = broadcastStrictChecks;
+    }
+
+    public double getShuffleLeftTableScaleFactor() {
+        return shuffleLeftTableScaleFactor;
+    }
+
+    public void setShuffleLeftTableScaleFactor(double shuffleLeftTableScaleFactor) {
+        this.shuffleLeftTableScaleFactor = shuffleLeftTableScaleFactor;
     }
 
     public long getOptimizerExecuteTimeout() {

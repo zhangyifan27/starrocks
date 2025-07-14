@@ -30,6 +30,7 @@ import com.starrocks.catalog.Type;
 import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.RemoteFileOperations;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
@@ -99,7 +100,7 @@ public class HiveStatisticsProvider {
         avgRowNumPerPartition = getPerPartitionRowAvgNums(partitionStatistics.values());
 
         if (avgRowNumPerPartition <= 0) {
-            builder.setOutputRowCount(getEstimatedRowCount(table, partitionKeys));
+            builder.setOutputRowCount(getEstimatedRowCount(table, partitionKeys, builder));
             return builder.build();
         }
 
@@ -127,7 +128,7 @@ public class HiveStatisticsProvider {
             Table table) {
         long rowNum = tableStats.getCommonStats().getRowNums();
         if (rowNum == -1) {
-            builder.setOutputRowCount(getEstimatedRowCount(table, Lists.newArrayList(new PartitionKey())));
+            builder.setOutputRowCount(getEstimatedRowCount(table, Lists.newArrayList(new PartitionKey()), builder));
             return builder.build();
         } else {
             builder.setOutputRowCount(rowNum);
@@ -143,6 +144,15 @@ public class HiveStatisticsProvider {
     }
 
     public long getEstimatedRowCount(Table table, List<PartitionKey> partitionKeys) {
+        return getEstimatedRowCount(table, partitionKeys, null);
+    }
+
+    public long getEstimatedRowCount(Table table, List<PartitionKey> partitionKeys, Statistics.Builder builder) {
+        boolean untrustedStats = ConnectContext.get() != null
+                && ConnectContext.get().getSessionVariable().isBroadcastStrictChecks();
+        if (untrustedStats && builder != null) {
+            builder.setTableRowCountMayInaccurate(true);
+        }
         HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
         List<Partition> partitions = hmsTbl.isUnPartitioned() ?
                 Lists.newArrayList(hmsOps.getPartition(hmsTbl.getDbName(), hmsTbl.getTableName(), Lists.newArrayList())) :
@@ -163,6 +173,9 @@ public class HiveStatisticsProvider {
                 .collect(Collectors.toList());
 
         if (totalBytes <= 0) {
+            if (builder != null && !builder.getTableRowCountMayInaccurate()) {
+                builder.setTableRowCountMayInaccurate(true);
+            }
             return 1;
         }
 
@@ -171,19 +184,30 @@ public class HiveStatisticsProvider {
         return presentRowNums / presentPartitionSize * partitionKeys.size();
     }
 
+    public Statistics createUnknownStatistics(Table table,
+                                              List<ColumnRefOperator> columns,
+                                              List<PartitionKey> partitionKeys,
+                                              double presentRowNums) {
+        return createUnknownStatistics(table, columns, partitionKeys, presentRowNums, false);
+    }
+
     public Statistics createUnknownStatistics(
             Table table,
             List<ColumnRefOperator> columns,
             List<PartitionKey> partitionKeys,
-            double presentRowNums) {
+            double presentRowNums,
+            boolean tableRowCountMayInaccurate) {
         Statistics.Builder builder = Statistics.builder();
+        if (tableRowCountMayInaccurate) {
+            builder.setTableRowCountMayInaccurate(true);
+        }
         for (ColumnRefOperator columnRefOperator : columns) {
             builder.addColumnStatistic(columnRefOperator, ColumnStatistic.unknown());
         }
 
         double totalRowNums = 0;
         try {
-            totalRowNums = presentRowNums >= 0 ? presentRowNums : getEstimatedRowCount(table, partitionKeys);
+            totalRowNums = presentRowNums >= 0 ? presentRowNums : getEstimatedRowCount(table, partitionKeys, builder);
         } catch (Exception e) {
             LOG.warn("Failed to estimate row count on table [{}]", table);
         } finally {

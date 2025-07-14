@@ -296,18 +296,19 @@ public class HiveMetadata implements ConnectorMetadata {
             if (session.getSessionVariable().enableHiveColumnStats()) {
                 statistics = statisticsProvider.getTableStatistics(session, table, columnRefOperators, partitionKeys);
             } else {
-                statistics = Statistics.builder().build();
+                statistics = Statistics.builder().setTableRowCountMayInaccurate(true).build();
                 LOG.warn("Session variable {} is false when getting table statistics on table {}",
                         SessionVariable.ENABLE_HIVE_COLUMN_STATS, table);
             }
         } catch (Exception e) {
             LOG.warn("Failed to get table column statistics on [{}]. error : {}", table, e);
         } finally {
-            statistics = statistics == null ? Statistics.builder().build() : statistics;
+            statistics = statistics == null ? Statistics.builder().setTableRowCountMayInaccurate(true).build() : statistics;
             Map<ColumnRefOperator, ColumnStatistic> columnStatistics = statistics.getColumnStatistics();
             if (columnStatistics.isEmpty()) {
                 double outputRowNums = statistics.getOutputRowCount();
-                statistics = statisticsProvider.createUnknownStatistics(table, columnRefOperators, partitionKeys, outputRowNums);
+                statistics = statisticsProvider.createUnknownStatistics(table, columnRefOperators, partitionKeys,
+                        outputRowNums, statistics.isTableRowCountMayInaccurate());
             }
         }
 

@@ -15,6 +15,7 @@
 package com.starrocks.sql.optimizer.cost;
 
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import com.starrocks.server.RunMode;
 import com.starrocks.sql.optimizer.ExpressionContext;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
@@ -134,9 +135,10 @@ public class HashJoinCostModel {
         double keySize = calculateKeySize();
 
         double cachePenaltyFactor;
+        SessionVariable sv = ConnectContext.get().getSessionVariable();
         int parallelFactor = Math.max(ConnectContext.get().getAliveBackendNumber() +
                 ConnectContext.get().getGlobalStateMgr().getNodeMgr().getClusterInfo().getAliveComputeNodeNumber(),
-                ConnectContext.get().getSessionVariable().getDegreeOfParallelism()) * 2;
+                sv.getDegreeOfParallelism()) * 2;
         double mapSize = Math.min(1, keySize) * rightStatistics.getOutputRowCount();
 
         if (JoinExecMode.BROADCAST == execMode) {
@@ -148,6 +150,12 @@ public class HashJoinCostModel {
                     Math.log(parallelFactor) / Math.log(2)));
             // normalize ration when it hits the limit
             cachePenaltyFactor = Math.min(SHUFFLE_MAX_RATIO, cachePenaltyFactor);
+
+            // Prefers broadcast join, thus increasing the cost of shuffle join
+            if (JoinExecMode.SHUFFLE == execMode && sv.isBroadcastStrictChecks() && preferBroadcast(sv)) {
+                cachePenaltyFactor =
+                        cachePenaltyFactor * sv.getShuffleLeftTableScaleFactor();
+            }
         }
         LOG.debug("execMode: {}, cachePenaltyFactor: {}", execMode, cachePenaltyFactor);
         return cachePenaltyFactor;
@@ -161,6 +169,15 @@ public class HashJoinCostModel {
         } else {
             return JoinExecMode.SHUFFLE;
         }
+    }
+
+    private boolean preferBroadcast(SessionVariable sv) {
+        return (leftStatistics.isTableRowCountMayInaccurate()
+                && !rightStatistics.isTableRowCountMayInaccurate()
+                && rightStatistics.getOutputRowCount() < sv.getBroadcastRowCountLimit())
+                || (rightStatistics.isTableRowCountMayInaccurate()
+                && !leftStatistics.isTableRowCountMayInaccurate()
+                && leftStatistics.getOutputRowCount() < sv.getBroadcastRowCountLimit());
     }
 
     private double calculateKeySize() {

@@ -316,10 +316,18 @@ public class EnforceAndCostTask extends OptimizerTask implements Cloneable {
         double rightOutputSize = rightChildStats.getOutputSize(groupExpression.getChildOutputColumns(curChildIndex));
 
         if (leftOutputSize < rightOutputSize * beNum * sv.getBroadcastRightTableScaleFactor()
-                && rightChildStats.getOutputRowCount() > sv.getBroadcastRowCountLimit()) {
+                && rightChildStats.getOutputRowCount() > sv.getBroadcastRowCountLimit()
+                || avoidBroadcast(sv, leftChildStats, rightChildStats)) {
             return false;
         }
         return true;
+    }
+
+    private boolean avoidBroadcast(SessionVariable sv, Statistics leftChildStats, Statistics rightChildStats) {
+        if (sv.isBroadcastStrictChecks() && rightChildStats.isTableRowCountMayInaccurate()) {
+            return true;
+        }
+        return false;
     }
 
     private void setSatisfiedPropertyWithCost(PhysicalPropertySet outputProperty,

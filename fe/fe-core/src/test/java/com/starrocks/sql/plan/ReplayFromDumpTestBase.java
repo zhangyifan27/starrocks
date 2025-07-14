@@ -65,6 +65,7 @@ public class ReplayFromDumpTestBase {
         connectContext.getSessionVariable().setOptimizerExecuteTimeout(30000);
         connectContext.getSessionVariable().setJoinImplementationMode("auto");
         connectContext.getSessionVariable().setCboPushDownAggregateMode(-1);
+        connectContext.getSessionVariable().setBroadcastStrictChecks(false);
         starRocksAssert = new StarRocksAssert(connectContext);
         FeConstants.runningUnitTest = true;
         FeConstants.showScanNodeLocalShuffleColumnsInExplain = false;
@@ -178,6 +179,7 @@ public class ReplayFromDumpTestBase {
         }
         queryDumpInfo.getSessionVariable().setOptimizerExecuteTimeout(30000000);
         queryDumpInfo.getSessionVariable().setCboPushDownAggregateMode(-1);
+        queryDumpInfo.getSessionVariable().setBroadcastStrictChecks(false);
         return new Pair<>(queryDumpInfo,
                 UtFrameUtils.getNewPlanAndFragmentFromDump(connectContext, queryDumpInfo).second.
                         getExplainString(level));

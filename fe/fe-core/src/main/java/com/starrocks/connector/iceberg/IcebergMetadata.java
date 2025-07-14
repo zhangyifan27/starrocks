@@ -983,6 +983,7 @@ public class IcebergMetadata implements ConnectorMetadata {
         } else {
             Statistics.Builder statisticsBuilder = Statistics.builder();
             statisticsBuilder.setOutputRowCount(1);
+            statisticsBuilder.setTableRowCountMayInaccurate(true);
             statisticsBuilder.addColumnStatistics(statisticProvider.buildUnknownColumnStatistics(columns.keySet()));
             return statisticsBuilder.build();
         }

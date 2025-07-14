@@ -47,6 +47,7 @@ import com.starrocks.sql.optimizer.operator.physical.PhysicalRepeatOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalSchemaScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalTableFunctionOperator;
+import com.starrocks.sql.optimizer.operator.physical.PhysicalTableFunctionTableScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalTopNOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalValuesOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalWindowOperator;
@@ -620,6 +621,18 @@ public class LogicalPlanPrinter {
             }
 
             return new OperatorStr(s, step, children);
+        }
+
+        @Override
+        public OperatorStr visitPhysicalTableFunctionTableScan(OptExpression optExpr, Integer step) {
+            PhysicalTableFunctionTableScanOperator scan = (PhysicalTableFunctionTableScanOperator) optExpr.getOp();
+            StringBuilder sb = new StringBuilder("- TableFunctionScan[")
+                    .append(scan.getTable().toString())
+                    .append("]")
+                    .append(scan.getOutputColumns())
+                    .append("\n");
+
+            return new OperatorStr(sb.toString(), step, Collections.emptyList());
         }
 
         @Override

@@ -661,7 +661,7 @@ public class StatisticsCollectJobTest extends PlanTestNoneDBBase {
                         Maps.newHashMap(),
                         StatsConstants.ScheduleStatus.PENDING,
                         LocalDateTime.MIN));
-        Assert.assertEquals(32, jobs.size());
+        Assert.assertEquals(33, jobs.size());
     }
 
     @Test

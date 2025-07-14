@@ -746,7 +746,8 @@ public class MetadataMgr {
                     });
 
                     return Statistics.builder().addColumnStatistics(combinedColumnStatsMap).
-                            setOutputRowCount(connectorBasicStats.getOutputRowCount()).build();
+                            setOutputRowCount(connectorBasicStats.getOutputRowCount())
+                            .setTableRowCountMayInaccurate(connectorBasicStats.isTableRowCountMayInaccurate()).build();
                 } else {
                     return connectorBasicStats;
                 }

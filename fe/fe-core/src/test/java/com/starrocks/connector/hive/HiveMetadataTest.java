@@ -270,6 +270,7 @@ public class HiveMetadataTest {
         Assert.assertEquals(2, statistics.getColumnStatistics().size());
         Assert.assertTrue(statistics.getColumnStatistics().get(partColumnRefOperator).isUnknown());
         Assert.assertTrue(statistics.getColumnStatistics().get(dataColumnRefOperator).isUnknown());
+        Assert.assertTrue(statistics.isTableRowCountMayInaccurate());
     }
 
     @Test
@@ -302,10 +303,12 @@ public class HiveMetadataTest {
                 null, -1, TableVersionRange.empty());
         Assert.assertEquals(10.0, statistics.getOutputRowCount(), 0.001);
         Assert.assertEquals(2, statistics.getColumnStatistics().size());
+        Assert.assertTrue(statistics.isTableRowCountMayInaccurate());
 
         cachingHiveMetastore.getPartitionStatistics(hiveTable, Lists.newArrayList("col1=1", "col1=2"));
         statistics = hiveMetadata.getTableStatistics(optimizerContext, hiveTable, columns,
                 Lists.newArrayList(hivePartitionKey1, hivePartitionKey2), null, -1, TableVersionRange.empty());
+        Assert.assertFalse(statistics.isTableRowCountMayInaccurate());
 
         Assert.assertEquals(100, statistics.getOutputRowCount(), 0.001);
         Map<ColumnRefOperator, ColumnStatistic> columnStatistics = statistics.getColumnStatistics();

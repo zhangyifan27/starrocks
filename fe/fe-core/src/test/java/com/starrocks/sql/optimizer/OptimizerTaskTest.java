@@ -2024,6 +2024,7 @@ public class OptimizerTaskTest {
                 OptExpression.create(scan1),
                 OptExpression.create(scan2));
 
+        ctx.getSessionVariable().setBroadcastStrictChecks(false);
         Optimizer optimizer = new Optimizer();
         OptExpression physicalTree = optimizer.optimize(ctx, expression, new PhysicalPropertySet(),
                 new ColumnRefSet(outputColumns), columnRefFactory);
@@ -2145,6 +2146,7 @@ public class OptimizerTaskTest {
                 OptExpression.create(scan1),
                 OptExpression.create(scan2));
 
+        ctx.getSessionVariable().setBroadcastStrictChecks(false);
         Optimizer optimizer = new Optimizer();
         OptExpression physicalTree = optimizer.optimize(ctx, expression, new PhysicalPropertySet(),
                 new ColumnRefSet(outputColumns), columnRefFactory);
@@ -2270,6 +2272,7 @@ public class OptimizerTaskTest {
                 OptExpression.create(scan1),
                 OptExpression.create(scan2));
 
+        ctx.getSessionVariable().setBroadcastStrictChecks(false);
         Optimizer optimizer = new Optimizer();
         OptExpression physicalTree = optimizer.optimize(ctx, expression, new PhysicalPropertySet(),
                 new ColumnRefSet(outputColumns), columnRefFactory);
