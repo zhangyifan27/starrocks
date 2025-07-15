@@ -4897,4 +4897,102 @@ StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_date(FunctionContext* con
     }
     return result.build(ColumnHelper::is_all_const(columns));
 }
+
+void getDateResult(TimestampValue* ts_plus, ColumnBuilder<TYPE_VARCHAR>* result, bool hasLine) {
+    if (ts_plus->is_valid_non_strict()) {
+        int year, month, day, hour, minute, second, usec;
+        ts_plus->to_timestamp(&year, &month, &day, &hour, &minute, &second, &usec);
+        if (hasLine) {
+            result->append(format_datetime_yyyy_MM_dd(year, month, day));
+        } else {
+            result->append(format_datetime_yyyyMMdd(year, month, day));
+        }
+    } else {
+        result->append_null();
+    }
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_str(FunctionContext* context, const Columns& columns) {
+    DCHECK_EQ(columns.size(), 3);
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+    ColumnViewer<TYPE_VARCHAR> type_column(columns[0]);
+    ColumnViewer<TYPE_BIGINT> plus_column(columns[1]);
+    ColumnViewer<TYPE_VARCHAR> ts_column(columns[2]);
+    auto size = columns[0]->size();
+    ColumnBuilder<TYPE_VARCHAR> result(size);
+    for (int row = 0; row < size; ++row) {
+        if (type_column.is_null(row) || plus_column.is_null(row) || ts_column.is_null(row)) {
+            result.append_null();
+            continue;
+        }
+        long plus = plus_column.value(row);
+        auto date = ts_column.value(row);
+        auto type_str = type_column.value(row).to_string();
+
+        if (date.empty()) {
+            result.append_null();
+            continue;
+        }
+        DateTimeValue tv;
+        if (!tv.from_tdw_date_str(date.data, date.size)) {
+            result.append_null();
+            continue;
+        }
+        int64_t timestamp;
+        if (!tv.unix_timestamp(&timestamp, context->state()->timezone_obj())) {
+            result.append_null();
+            continue;
+        }
+        if (timestamp < 0 || timestamp > MAX_UNIX_TIMESTAMP) {
+            result.append_null();
+            continue;
+        }
+        TimestampValue ts;
+        ts.from_timestamp(tv.year(), tv.month(), tv.day(), tv.hour(), tv.minute(), tv.second(), tv.microsecond());
+
+        bool hasLine = false;
+        const char* ptr = date.data;
+        const char* end = date.data + date.size;
+        while (ptr < end) {
+            if (*ptr == '-') {
+                hasLine = true;
+            }
+            ptr++;
+        }
+
+        transform(type_str.begin(), type_str.end(), type_str.begin(), ::tolower);
+        if (type_str == "millisecond") {
+            auto ts_plus = timestamp_add<TimeUnit::MILLISECOND>(ts, plus);
+            getDateResult(&ts_plus, &result, hasLine);
+        } else if (type_str == "second") {
+            auto ts_plus = timestamp_add<TimeUnit::SECOND>(ts, plus);
+            getDateResult(&ts_plus, &result, hasLine);
+        } else if (type_str == "minute") {
+            auto ts_plus = timestamp_add<TimeUnit::MINUTE>(ts, plus);
+            getDateResult(&ts_plus, &result, hasLine);
+        } else if (type_str == "hour") {
+            auto ts_plus = timestamp_add<TimeUnit::HOUR>(ts, plus);
+            getDateResult(&ts_plus, &result, hasLine);
+        } else if (type_str == "day") {
+            auto ts_plus = timestamp_add<TimeUnit::DAY>(ts, plus);
+            getDateResult(&ts_plus, &result, hasLine);
+        } else if (type_str == "week") {
+            auto ts_plus = timestamp_add<TimeUnit::WEEK>(ts, plus);
+            getDateResult(&ts_plus, &result, hasLine);
+        } else if (type_str == "month") {
+            auto ts_plus = timestamp_add<TimeUnit::MONTH>(ts, plus);
+            getDateResult(&ts_plus, &result, hasLine);
+        } else if (type_str == "quarter") {
+            auto ts_plus = timestamp_add<TimeUnit::QUARTER>(ts, plus);
+            getDateResult(&ts_plus, &result, hasLine);
+        } else if (type_str == "year") {
+            auto ts_plus = timestamp_add<TimeUnit::YEAR>(ts, plus);
+            getDateResult(&ts_plus, &result, hasLine);
+        } else {
+            result.append_null();
+        }
+    }
+    return result.build(ColumnHelper::is_all_const(columns));
+}
+
 } // namespace starrocks

@@ -6467,9 +6467,15 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                 Expr e1 = (Expr) visit(context.expression(0));
                 Expr e2 = (Expr) visit(context.expression(1));
                 Expr e3 = (Expr) visit(context.expression(2));
-                IntervalLiteral intervalLiteral = new IntervalLiteral(e2, new UnitIdentifier(((SlotRef) e1).getColumnName()));
-                return new TimestampArithmeticExpr(fnName, e3, intervalLiteral.getValue(),
-                        intervalLiteral.getUnitIdentifier().getDescription());
+                if (e1 instanceof StringLiteral) {
+                    // select date_add('day', 1, '2025-06-27');
+                    IntervalLiteral intervalLiteral =
+                            new IntervalLiteral(e2, new UnitIdentifier(((StringLiteral) e1).getValue()));
+                    return new TimestampArithmeticExpr(fnName, e3, intervalLiteral.getValue(),
+                            intervalLiteral.getUnitIdentifier().getDescription());
+                } else {
+                    throw new ParsingException(PARSER_ERROR_MSG.wrongTypeOfArgs(functionName), e1.getPos());
+                }
             } else {
                 throw new ParsingException(PARSER_ERROR_MSG.wrongNumOfArgs(functionName), pos);
             }

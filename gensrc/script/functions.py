@@ -578,6 +578,7 @@ vectorized_functions = [
     [50818, 'SYSTIMESTAMP', True, False, 'VARCHAR', [], 'TimeFunctions::systimestamp'],
     [50819, 'tdw_date_add', True, False, 'DATETIME', ['VARCHAR', 'BIGINT', 'DATETIME'], 'TimeFunctions::trino_date_add_with_datetime'],
     [50820, 'tdw_date_add', True, False, 'DATE', ['VARCHAR', 'BIGINT', 'DATE'], 'TimeFunctions::trino_date_add_with_date'],
+    [50821, 'tdw_date_add', True, False, 'VARCHAR', ['VARCHAR', 'BIGINT', 'VARCHAR'], 'TimeFunctions::trino_date_add_with_str'],
 
     # 60xxx: like predicate
     # important ref: LikePredicate.java, must keep name equals LikePredicate.Operator

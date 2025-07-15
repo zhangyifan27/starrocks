@@ -1603,9 +1603,77 @@ public class ScalarOperatorFunctionsTest {
     }
 
     @Test
-    public void tdwDaysAdd() {
+    public void tdwDaysAdd() throws AnalysisException {
         assertEquals("2015-04-02",
                 ScalarOperatorFunctions.tdwDaysAdd(O_DT_20150323_092355, O_INT_10).toString());
+
+        ConstantOperator day = ConstantOperator.createVarchar("day");
+        assertEquals("2015-03-26 09:23:55",
+                ScalarOperatorFunctions.tdwDaysAdd(day, O_BI_3, O_DT_20150323_092355).toString());
+
+        ConstantOperator dateConstant = ConstantOperator.createDate(LocalDateTime.of(2024, 2, 5, 13, 4, 5));
+        assertEquals("2024-02-08",
+                ScalarOperatorFunctions.tdwDaysAdd(day, O_BI_3, dateConstant).toString());
+
+        ConstantOperator varchar = ConstantOperator.createVarchar("2025-03-23 09:23:55");
+        assertEquals("2025-03-26",
+                ScalarOperatorFunctions.tdwDaysAdd(day, O_BI_3, varchar).toString());
+
+        varchar = ConstantOperator.createVarchar("2025-03-23");
+        assertEquals("2025-03-26",
+                ScalarOperatorFunctions.tdwDaysAdd(day, O_BI_3, varchar).toString());
+
+        varchar = ConstantOperator.createVarchar("20250323");
+        assertEquals("20250326",
+                ScalarOperatorFunctions.tdwDaysAdd(day, O_BI_3, varchar).toString());
+
+        ConstantOperator plus = ConstantOperator.createBigint(1000 * 60 * 60 * 24);
+        ConstantOperator millisecond = ConstantOperator.createVarchar("millisecond");
+        varchar = ConstantOperator.createVarchar("2025-03-23");
+        assertEquals("2025-03-24",
+                ScalarOperatorFunctions.tdwDaysAdd(millisecond, plus, varchar).toString());
+
+        plus = ConstantOperator.createBigint(60 * 60 * 24);
+        ConstantOperator second = ConstantOperator.createVarchar("second");
+        varchar = ConstantOperator.createVarchar("2025-03-23");
+        assertEquals("2025-03-24",
+                ScalarOperatorFunctions.tdwDaysAdd(second, plus, varchar).toString());
+
+        plus = ConstantOperator.createBigint(60 * 24);
+        ConstantOperator minute = ConstantOperator.createVarchar("minute");
+        varchar = ConstantOperator.createVarchar("2025-03-23");
+        assertEquals("2025-03-24",
+                ScalarOperatorFunctions.tdwDaysAdd(minute, plus, varchar).toString());
+
+        plus = ConstantOperator.createBigint(24);
+        ConstantOperator hour = ConstantOperator.createVarchar("hour");
+        varchar = ConstantOperator.createVarchar("2025-03-23");
+        assertEquals("2025-03-24",
+                ScalarOperatorFunctions.tdwDaysAdd(hour, plus, varchar).toString());
+
+        plus = ConstantOperator.createBigint(1);
+        ConstantOperator week = ConstantOperator.createVarchar("week");
+        varchar = ConstantOperator.createVarchar("2025-03-23");
+        assertEquals("2025-03-30",
+                ScalarOperatorFunctions.tdwDaysAdd(week, plus, varchar).toString());
+
+        plus = ConstantOperator.createBigint(1);
+        ConstantOperator month = ConstantOperator.createVarchar("month");
+        varchar = ConstantOperator.createVarchar("2025-03-23");
+        assertEquals("2025-04-23",
+                ScalarOperatorFunctions.tdwDaysAdd(month, plus, varchar).toString());
+
+        plus = ConstantOperator.createBigint(1);
+        ConstantOperator quarter = ConstantOperator.createVarchar("quarter");
+        varchar = ConstantOperator.createVarchar("2025-03-23");
+        assertEquals("2025-06-23",
+                ScalarOperatorFunctions.tdwDaysAdd(quarter, plus, varchar).toString());
+
+        plus = ConstantOperator.createBigint(1);
+        ConstantOperator year = ConstantOperator.createVarchar("year");
+        varchar = ConstantOperator.createVarchar("2025-03-23");
+        assertEquals("2026-03-23",
+                ScalarOperatorFunctions.tdwDaysAdd(year, plus, varchar).toString());
     }
 
     @Test

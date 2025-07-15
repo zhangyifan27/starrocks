@@ -845,6 +845,7 @@ public:
 
     DEFINE_VECTORIZED_FN(trino_date_add_with_datetime);
     DEFINE_VECTORIZED_FN(trino_date_add_with_date);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_str);
 
     /** Flags for calc_week() function.  */
     constexpr static const unsigned int WEEK_MONDAY_FIRST = 1;
