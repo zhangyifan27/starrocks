@@ -360,6 +360,16 @@ RuntimeProfile* RuntimeProfile::get_child(const std::string& name) {
     return it->second;
 }
 
+RuntimeProfile* RuntimeProfile::get_child_unlock(const std::string& name) {
+    auto it = _child_map.find(name);
+
+    if (it == _child_map.end()) {
+        return nullptr;
+    }
+
+    return it->second;
+}
+
 RuntimeProfile* RuntimeProfile::get_child(const size_t index) {
     std::lock_guard<std::mutex> l(_children_lock);
     if (index >= _children.size()) {
@@ -504,7 +514,7 @@ void RuntimeProfile::copy_all_info_strings_from(RuntimeProfile* src_profile) {
                 deserialize_top_n_info_string(*exist_ptr, values);
                 deserialize_top_n_info_string(value, values);
                 keep_top_n_unique_values(values, n);
-                _info_strings[key] = serialize_top_n_info_string(values);
+                add_info_string(key, serialize_top_n_info_string(values));
                 continue;
             }
 
@@ -938,6 +948,13 @@ RuntimeProfile::EventSequence* RuntimeProfile::add_event_sequence(const std::str
     _event_sequence_map[name] = timer;
     return timer;
 }
+template <class Visitor>
+void RuntimeProfile::foreach_children(Visitor&& callback) {
+    std::lock_guard guard(_children_lock);
+    for (auto& child : _children) {
+        callback(child.first, child.second);
+    }
+}
 
 RuntimeProfile* RuntimeProfile::merge_isomorphic_profiles(ObjectPool* obj_pool, std::vector<RuntimeProfile*>& profiles,
                                                           bool require_identical) {
@@ -1108,19 +1125,28 @@ RuntimeProfile* RuntimeProfile::merge_isomorphic_profiles(ObjectPool* obj_pool, 
         size_t max_child_size = 0;
         RuntimeProfile* profile_with_full_child = nullptr;
         for (auto* profile : profiles) {
-            if (profile->_children.size() > max_child_size) {
+            if (profile->num_children() > max_child_size) {
                 max_child_size = profile->_children.size();
                 profile_with_full_child = profile;
             }
         }
         if (profile_with_full_child != nullptr) {
             bool identical = true;
-            for (size_t i = 0; i < max_child_size; i++) {
-                auto& prototype_kv = profile_with_full_child->_children[i];
-                const std::string& child_name = prototype_kv.first->name();
+
+            profile_with_full_child->foreach_children([&obj_pool, &profiles, &identical, require_identical,
+                                                       merged_profile,
+                                                       profile_with_full_child](RuntimeProfile* child, bool indent) {
+                const std::string& child_name = child->name();
                 std::vector<RuntimeProfile*> sub_profiles;
                 for (auto* profile : profiles) {
-                    auto* child = profile->get_child(child_name);
+                    RuntimeProfile* child = nullptr;
+                    // We've already acquired the profile's lock, don't acquire again
+                    if (profile == profile_with_full_child) {
+                        child = profile->get_child_unlock(child_name);
+                    } else {
+                        child = profile->get_child(child_name);
+                    }
+
                     if (child == nullptr) {
                         identical = false;
                         if (require_identical) {
@@ -1132,8 +1158,9 @@ RuntimeProfile* RuntimeProfile::merge_isomorphic_profiles(ObjectPool* obj_pool, 
                     sub_profiles.push_back(child);
                 }
                 auto* merged_child = merge_isomorphic_profiles(obj_pool, sub_profiles, require_identical);
-                merged_profile->add_child(merged_child, prototype_kv.second, nullptr);
-            }
+                merged_profile->add_child(merged_child, indent, nullptr);
+            });
+
             if (require_identical && !identical) {
                 merged_profile->add_info_string("NotIdentical");
             }
