@@ -87,6 +87,7 @@ Status ScanOperator::prepare(RuntimeState* state) {
 
     _prepare_chunk_source_timer = ADD_TIMER(_unique_metrics, "PrepareChunkSourceTime");
     _submit_io_task_timer = ADD_TIMER(_unique_metrics, "SubmitTaskTime");
+    _submit_io_task_failure_counter = ADD_COUNTER(_unique_metrics, "SubmitTaskFailureCount", TUnit::UNIT);
 
     RETURN_IF_ERROR(do_prepare(state));
     return Status::OK();
@@ -472,6 +473,8 @@ Status ScanOperator::_trigger_next_scan(RuntimeState* state, int chunk_source_in
         _chunk_sources[chunk_source_index]->unpin_chunk_token();
         _num_running_io_tasks--;
         _is_io_task_running[chunk_source_index] = false;
+        _submit_io_task_failure_counter += 1;
+        StarRocksMetrics::instance()->pipe_submit_io_task_failure_count.increment(1);
         // TODO(hcf) set a proper retry times
         LOG(WARNING) << "ScanOperator failed to offer io task due to thread pool overload, retryCnt="
                      << _io_task_retry_cnt;

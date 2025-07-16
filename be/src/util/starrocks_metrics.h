@@ -104,6 +104,7 @@ public:
     METRIC_DEFINE_INT_COUNTER(query_scan_bytes, MetricUnit::BYTES);
     METRIC_DEFINE_INT_COUNTER(query_scan_rows, MetricUnit::ROWS);
     METRIC_DEFINE_INT_GAUGE(pipe_drivers, MetricUnit::NOUNIT);
+    METRIC_DEFINE_INT_COUNTER(pipe_submit_io_task_failure_count, MetricUnit::NOUNIT);
 
     // counters
     METRIC_DEFINE_INT_COUNTER(fragment_requests_total, MetricUnit::REQUESTS);
@@ -418,6 +419,12 @@ public:
     METRIC_DEFINE_UINT_COUNTER(fs_hdfs_fs_create_files_latency, MetricUnit::MICROSECONDS);
     METRIC_DEFINE_UINT_COUNTER(fs_hdfs_read_io_latency, MetricUnit::MICROSECONDS);
     METRIC_DEFINE_UINT_COUNTER(fs_hdfs_write_io_latency, MetricUnit::MICROSECONDS);
+
+
+    METRIC_DEFINE_UINT_COUNTER(jvm_oom_count, MetricUnit::NOUNIT);
+    METRIC_DEFINE_UINT_COUNTER(finished_scan_tasks, MetricUnit::NOUNIT);
+    METRIC_DEFINE_UINT_GAUGE(running_scan_tasks, MetricUnit::NOUNIT);
+    METRIC_DEFINE_UINT_GAUGE(pending_scan_tasks, MetricUnit::NOUNIT);
 
     static StarRocksMetrics* instance() {
         static StarRocksMetrics instance;

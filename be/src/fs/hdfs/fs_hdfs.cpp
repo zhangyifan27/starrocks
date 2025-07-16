@@ -167,6 +167,9 @@ public:
                 return r;
             }
         }
+        if (errno == ENOMEM) {
+            StarRocksMetrics::instance()->jvm_oom_count.increment(1);
+        }
         return Status::IOError(fmt::format("fail to hdfsPread {}: {}", _path, get_hdfs_err_msg()));
     }
 
@@ -193,6 +196,9 @@ public:
                 StarRocksMetrics::instance()->fs_hdfs_read_count.increment(1);
                 if (r != -1) break;
                 if (i == retry) {
+                    if (errno == ENOMEM) {
+                        StarRocksMetrics::instance()->jvm_oom_count.increment(1);
+                    }
                     return Status::IOError(fmt::format("fail to hdfsRead {}: {}", _path, get_hdfs_err_msg()));
                 } else {
                     (void)close();

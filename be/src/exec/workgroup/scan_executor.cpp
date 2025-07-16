@@ -57,6 +57,7 @@ void ScanExecutor::worker_thread() {
             current_thread->set_idle(true);
         }
         auto maybe_task = _task_queue->take();
+        StarRocksMetrics::instance()->pending_scan_tasks.increment(-1);
         if (current_thread != nullptr) {
             current_thread->set_idle(false);
         }
@@ -64,6 +65,7 @@ void ScanExecutor::worker_thread() {
             return;
         }
         auto& task = maybe_task.value();
+        StarRocksMetrics::instance()->running_scan_tasks.increment(1);
 
         int64_t time_spent_ns = 0;
         {
@@ -74,6 +76,8 @@ void ScanExecutor::worker_thread() {
             current_thread->inc_finished_tasks();
         }
         _task_queue->update_statistics(task, time_spent_ns);
+        StarRocksMetrics::instance()->running_scan_tasks.increment(-1);
+        StarRocksMetrics::instance()->finished_scan_tasks.increment(1);
 
         // task
         if (!task.is_finished()) {
@@ -83,11 +87,14 @@ void ScanExecutor::worker_thread() {
 }
 
 bool ScanExecutor::submit(ScanTask task) {
-    return _task_queue->try_offer(std::move(task));
+    bool ret = _task_queue->try_offer(std::move(task));
+    StarRocksMetrics::instance()->pending_scan_tasks.increment(ret);
+    return ret;
 }
 
 void ScanExecutor::force_submit(ScanTask task) {
     _task_queue->force_put(std::move(task));
+    StarRocksMetrics::instance()->pending_scan_tasks.increment(1);
 }
 
 void ScanExecutor::bind_cpus(const CpuUtil::CpuIds& cpuids, const std::vector<CpuUtil::CpuIds>& borrowed_cpuids) {

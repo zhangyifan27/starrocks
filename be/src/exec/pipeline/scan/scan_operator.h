@@ -203,6 +203,7 @@ private:
 
     RuntimeProfile::Counter* _prepare_chunk_source_timer = nullptr;
     RuntimeProfile::Counter* _submit_io_task_timer = nullptr;
+    RuntimeProfile::Counter* _submit_io_task_failure_counter = nullptr;
 };
 
 class ScanOperatorFactory : public SourceOperatorFactory {

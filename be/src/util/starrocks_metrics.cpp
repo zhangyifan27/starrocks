@@ -59,6 +59,7 @@ StarRocksMetrics::StarRocksMetrics() : _metrics(_s_registry_name) {
     REGISTER_STARROCKS_METRIC(pipe_driver_execution_time);
     REGISTER_STARROCKS_METRIC(pipe_driver_queue_len);
     REGISTER_STARROCKS_METRIC(pipe_poller_block_queue_len);
+    REGISTER_STARROCKS_METRIC(pipe_submit_io_task_failure_count);
 
     REGISTER_STARROCKS_METRIC(load_channel_add_chunks_total);
     REGISTER_STARROCKS_METRIC(load_channel_add_chunks_duration_us);
@@ -280,6 +281,11 @@ StarRocksMetrics::StarRocksMetrics() : _metrics(_s_registry_name) {
     REGISTER_STARROCKS_METRIC(fs_hdfs_fs_create_files_latency);
     REGISTER_STARROCKS_METRIC(fs_hdfs_read_io_latency);
     REGISTER_STARROCKS_METRIC(fs_hdfs_write_io_latency);
+
+    REGISTER_STARROCKS_METRIC(jvm_oom_count);
+    REGISTER_STARROCKS_METRIC(finished_scan_tasks);
+    REGISTER_STARROCKS_METRIC(running_scan_tasks);
+    REGISTER_STARROCKS_METRIC(pending_scan_tasks);
 }
 
 void StarRocksMetrics::initialize(const std::vector<std::string>& paths, bool init_system_metrics,
