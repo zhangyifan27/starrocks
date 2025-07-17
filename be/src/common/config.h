@@ -938,6 +938,8 @@ CONF_Int32(connector_io_tasks_adjust_smooth, "4");
 CONF_Int32(connector_io_tasks_slow_io_latency_ms, "50");
 CONF_mDouble(scan_use_query_mem_ratio, "0.25");
 CONF_Double(connector_scan_use_query_mem_ratio, "0.3");
+CONF_mBool(hdfs_read_max_size_enable, "true");
+CONF_mInt32(hdfs_read_max_size, "1048576");
 
 // hdfs hedged read
 CONF_Bool(hdfs_client_enable_hedged_read, "false");

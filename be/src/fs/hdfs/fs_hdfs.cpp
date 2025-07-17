@@ -146,31 +146,71 @@ public:
     StatusOr<int64_t> pread(uint8_t* data, int64_t size, int retry = 0) {
         RETURN_IF_ERROR(ensureOpened());
         hdfsFS fs = getFS();
-        for (int i = 0; i < (retry + 1); i++) {
-            MonotonicStopWatch watch;
-            watch.start();
+        if (!_hdfs_read_max_size_enable) {
+            for (int i = 0; i < (retry + 1); i++) {
+                MonotonicStopWatch watch;
+                watch.start();
 
-            tSize r = hdfsPread(fs, _file, _offset, data, static_cast<tSize>(size));
+                tSize r = hdfsPread(fs, _file, _offset, data, static_cast<tSize>(size));
 
-            uint64_t elapsed_time_ns = watch.elapsed_time();
-            _total_read_time_ns += elapsed_time_ns;
-            StarRocksMetrics::instance()->fs_hdfs_read_io_latency.increment(elapsed_time_ns / 1000);
-            StarRocksMetrics::instance()->fs_hdfs_read_count.increment(1);
-            if (r == -1) {
-                (void)close();
-                RETURN_IF_ERROR(ensureOpened());
-            } else {
-                _offset += r;
-                StarRocksMetrics::instance()->fs_hdfs_read_io_size.increment(r);
-                HDFSTableReadIOSizeCounter::instance()->add(_table_name, r);
+                uint64_t elapsed_time_ns = watch.elapsed_time();
+                _total_read_time_ns += elapsed_time_ns;
+                StarRocksMetrics::instance()->fs_hdfs_read_io_latency.increment(elapsed_time_ns / 1000);
+                StarRocksMetrics::instance()->fs_hdfs_read_count.increment(1);
+                if (r == -1) {
+                    (void)close();
+                    RETURN_IF_ERROR(ensureOpened());
+                } else {
+                    _offset += r;
+                    StarRocksMetrics::instance()->fs_hdfs_read_io_size.increment(r);
+                    HDFSTableReadIOSizeCounter::instance()->add(_table_name, r);
 
-                return r;
+                    return r;
+                }
             }
+            if (errno == ENOMEM) {
+                StarRocksMetrics::instance()->jvm_oom_count.increment(1);
+            }
+            return Status::IOError(fmt::format("fail to hdfsPread {}: {}", _path, get_hdfs_err_msg()));
+        } else {
+            int64_t now = 0;
+            uint8_t* buf = data;
+
+            uint64_t elapsed_time_ns = 0;
+            while (now < size) {
+                tSize r = 0;
+                for (int i = 0; i < (retry + 1); i++) {
+                    MonotonicStopWatch watch;
+                    watch.start();
+
+                    int64_t read_size = std::min(size - now, _hdfs_read_max_size);
+                    r = hdfsPread(fs, _file, _offset, buf + now, static_cast<tSize>(read_size));
+
+                    elapsed_time_ns = watch.elapsed_time();
+                    _total_read_time_ns += elapsed_time_ns;
+                    StarRocksMetrics::instance()->fs_hdfs_read_io_latency.increment(elapsed_time_ns / 1000);
+                    StarRocksMetrics::instance()->fs_hdfs_read_count.increment(1);
+                    if (r == -1) {
+                        (void)close();
+                        RETURN_IF_ERROR(ensureOpened());
+                    } else {
+                        now += r;
+                        _offset += r;
+                        StarRocksMetrics::instance()->fs_hdfs_read_io_size.increment(r);
+                        HDFSTableReadIOSizeCounter::instance()->add(_table_name, r);
+                        break;
+                    }
+                }
+                if (r == 0) break;
+                if (r == -1) {
+                    if (errno == ENOMEM) {
+                        StarRocksMetrics::instance()->jvm_oom_count.increment(1);
+                    }
+                    return Status::IOError(fmt::format("fail to hdfsPread {}: {}", _path, get_hdfs_err_msg()));
+                }
+            }
+            return now;
         }
-        if (errno == ENOMEM) {
-            StarRocksMetrics::instance()->jvm_oom_count.increment(1);
-        }
-        return Status::IOError(fmt::format("fail to hdfsPread {}: {}", _path, get_hdfs_err_msg()));
     }
 
     StatusOr<int64_t> read(uint8_t* data, int64_t size, int retry = 0) {
@@ -188,7 +228,12 @@ public:
                 MonotonicStopWatch watch;
                 watch.start();
 
-                r = hdfsRead(fs, _file, buf + now, size - now);
+                if (!_hdfs_read_max_size_enable) {
+                    r = hdfsRead(fs, _file, buf + now, size - now);
+                } else {
+                    int64_t read_size = std::min(size - now, _hdfs_read_max_size);
+                    r = hdfsRead(fs, _file, buf + now, read_size);
+                }
 
                 elapsed_time_ns = watch.elapsed_time();
                 _total_read_time_ns += elapsed_time_ns;
@@ -238,6 +283,8 @@ private:
     int64_t _total_open_file_time_ns = 0;
     int64_t _total_read_time_ns = 0;
     int64_t _offset = 0;
+    bool _hdfs_read_max_size_enable = config::hdfs_read_max_size_enable;
+    int64_t _hdfs_read_max_size = config::hdfs_read_max_size;
 };
 
 // ==================================  HdfsInputStream  ==========================================
