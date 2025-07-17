@@ -207,6 +207,7 @@ Status PipelineDriver::prepare(RuntimeState* runtime_state) {
         op->set_prepare_time(time_spent);
 
         _operator_stages[op->get_id()] = OperatorStage::PREPARED;
+        op->common_metrics()->add_info_string("Status", operator_stage_to_string(OperatorStage::PREPARED));
     }
 
     // Driver has no dependencies always sets _all_dependencies_ready to true;
@@ -515,6 +516,7 @@ void PipelineDriver::runtime_report_action() {
 void PipelineDriver::mark_precondition_not_ready() {
     for (auto& op : _operators) {
         _operator_stages[op->get_id()] = OperatorStage::PRECONDITION_NOT_READY;
+        op->common_metrics()->add_info_string("Status", operator_stage_to_string(OperatorStage::PRECONDITION_NOT_READY));
     }
 }
 
@@ -547,6 +549,7 @@ void PipelineDriver::stop_timers() {
 void PipelineDriver::submit_operators() {
     for (auto& op : _operators) {
         _operator_stages[op->get_id()] = OperatorStage::PROCESSING;
+        op->common_metrics()->add_info_string("Status", operator_stage_to_string(OperatorStage::PROCESSING));
     }
 }
 
@@ -774,7 +777,7 @@ bool PipelineDriver::_check_fragment_is_canceled(RuntimeState* runtime_state) {
     return false;
 }
 
-Status PipelineDriver::_mark_operator_finishing(OperatorPtr& op, RuntimeState* state) {
+Status PipelineDriver::_mark_operator_finishing(OperatorPtr& op, RuntimeState* state, bool is_normal_finishing) {
     auto& op_state = _operator_stages[op->get_id()];
     if (op_state >= OperatorStage::FINISHING) {
         return Status::OK();
@@ -785,13 +788,16 @@ Status PipelineDriver::_mark_operator_finishing(OperatorPtr& op, RuntimeState* s
     {
         SCOPED_TIMER(op->_finishing_timer);
         op_state = OperatorStage::FINISHING;
+        if (is_normal_finishing) {
+            op->common_metrics()->add_info_string("Status", operator_stage_to_string(OperatorStage::FINISHING));
+        }
         QUERY_TRACE_SCOPED(op->get_name(), "set_finishing");
         return op->set_finishing(state);
     }
 }
 
-Status PipelineDriver::_mark_operator_finished(OperatorPtr& op, RuntimeState* state) {
-    RETURN_IF_ERROR(_mark_operator_finishing(op, state));
+Status PipelineDriver::_mark_operator_finished(OperatorPtr& op, RuntimeState* state, bool is_normal_finish) {
+    RETURN_IF_ERROR(_mark_operator_finishing(op, state, is_normal_finish));
     auto& op_state = _operator_stages[op->get_id()];
     if (op_state >= OperatorStage::FINISHED) {
         return Status::OK();
@@ -802,13 +808,16 @@ Status PipelineDriver::_mark_operator_finished(OperatorPtr& op, RuntimeState* st
     {
         SCOPED_TIMER(op->_finished_timer);
         op_state = OperatorStage::FINISHED;
+        if (is_normal_finish) {
+            op->common_metrics()->add_info_string("Status", operator_stage_to_string(OperatorStage::FINISHED));
+        }
         QUERY_TRACE_SCOPED(op->get_name(), "set_finished");
         return op->set_finished(state);
     }
 }
 
 Status PipelineDriver::_mark_operator_cancelled(OperatorPtr& op, RuntimeState* state) {
-    Status res = _mark_operator_finished(op, state);
+    Status res = _mark_operator_finished(op, state, false);
     if (!res.ok() && !res.is_cancelled()) {
         LOG(WARNING) << fmt::format(
                 "[Driver] failed to finish operator called by cancelling operator [fragment_id={}] [driver={}] "
@@ -834,7 +843,7 @@ Status PipelineDriver::_mark_operator_closed(OperatorPtr& op, RuntimeState* stat
     if (_fragment_ctx->is_canceled()) {
         WARN_IF_ERROR(_mark_operator_cancelled(op, state), msg + " is failed to cancel");
     } else {
-        WARN_IF_ERROR(_mark_operator_finished(op, state), msg + " is failed to finish");
+        WARN_IF_ERROR(_mark_operator_finished(op, state, false), msg + " is failed to finish");
     }
 
     auto& op_state = _operator_stages[op->get_id()];

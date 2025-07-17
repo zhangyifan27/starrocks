@@ -191,6 +191,32 @@ enum OperatorStage {
     CLOSED = 9,
 };
 
+static inline std::string operator_stage_to_string(OperatorStage stage) {
+    switch (stage) {
+    case OperatorStage::INIT:
+        return "INIT";
+    case OperatorStage::PREPARED:
+        return "PREPARED";
+    case OperatorStage::PRECONDITION_NOT_READY:
+        return "PRECONDITION_NOT_READY";
+    case OperatorStage::PROCESSING:
+        return "PROCESSING";
+    case OperatorStage::EPOCH_FINISHING:
+        return "EPOCH_FINISHING";
+    case OperatorStage::EPOCH_FINISHED:
+        return "EPOCH_FINISHED";
+    case OperatorStage::FINISHING:
+        return "FINISHING";
+    case OperatorStage::FINISHED:
+        return "FINISHED";
+    case OperatorStage::CANCELLED:
+        return "CANCELLED";
+    case OperatorStage::CLOSED:
+        return "CLOSED";
+    }
+    return "UNKNOWN_STAGE";
+}
+
 class PipelineDriver {
     friend class PipelineDriverPoller;
 
@@ -206,6 +232,7 @@ public:
         _runtime_profile = std::make_shared<RuntimeProfile>(strings::Substitute("PipelineDriver (id=$0)", _driver_id));
         for (auto& op : _operators) {
             _operator_stages[op->get_id()] = OperatorStage::INIT;
+            op->common_metrics()->add_info_string("Status", operator_stage_to_string(OperatorStage::INIT));
         }
         _driver_name = fmt::sprintf("driver_%d_%d", _source_node_id, _driver_id);
     }
@@ -474,8 +501,8 @@ protected:
 
     // check whether fragment is cancelled. It is used before pull_chunk and push_chunk.
     bool _check_fragment_is_canceled(RuntimeState* runtime_state);
-    [[nodiscard]] Status _mark_operator_finishing(OperatorPtr& op, RuntimeState* runtime_state);
-    [[nodiscard]] Status _mark_operator_finished(OperatorPtr& op, RuntimeState* runtime_state);
+    [[nodiscard]] Status _mark_operator_finishing(OperatorPtr& op, RuntimeState* runtime_state, bool is_normal_finishing = true);
+    [[nodiscard]] Status _mark_operator_finished(OperatorPtr& op, RuntimeState* runtime_state, bool is_normal_finish = true);
     [[nodiscard]] Status _mark_operator_cancelled(OperatorPtr& op, RuntimeState* runtime_state);
     [[nodiscard]] Status _mark_operator_closed(OperatorPtr& op, RuntimeState* runtime_state);
     void _close_operators(RuntimeState* runtime_state);

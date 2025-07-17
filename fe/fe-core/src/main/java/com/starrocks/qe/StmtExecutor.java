@@ -647,6 +647,7 @@ public class StmtExecutor {
                 // Record planner costs in audit log
                 Preconditions.checkNotNull(execPlan, "query must has a plan");
 
+                setPartitionPruningInfo(execPlan);
                 addPartitionPruningInfoToAuditLog(execPlan);
 
                 int retryTime = Config.max_query_retry_time;
@@ -2969,6 +2970,9 @@ public class StmtExecutor {
             scanDetailMap.put("ScanBytes", statistics.scanBytes);
         }
 
+        scanDetailMap.put("IsScanAllPartitions", execPlan.getIsScanAllPartitions());
+        scanDetailMap.put("IsPartitionPruningSuccess", execPlan.getIsPartitionPruningSuccess());
+
         Tracers.record(Tracers.Module.EXTERNAL, "ScanDetail", GsonUtils.GSON.toJson(scanDetailMap));
 
         String explainString = buildExplainString(execPlan, ResourceGroupClassifier.QueryType.SELECT,
@@ -2977,6 +2981,11 @@ public class StmtExecutor {
     }
 
     private void addPartitionPruningInfoToAuditLog(ExecPlan execPlan) {
+        context.getAuditEventBuilder().setIsScanAllPartitions(execPlan.getIsScanAllPartitions());
+        context.getAuditEventBuilder().setIsPartitionPruningSuccess(execPlan.getIsPartitionPruningSuccess());
+    }
+
+    private void setPartitionPruningInfo(ExecPlan execPlan) {
         boolean hasScanAllPartitions = false;
         boolean hasPartitionPruningFail = false;
         boolean needUpdate = false;
@@ -3007,8 +3016,8 @@ public class StmtExecutor {
             }
         }
         if (needUpdate) {
-            context.getAuditEventBuilder().setIsScanAllPartitions(hasScanAllPartitions);
-            context.getAuditEventBuilder().setIsPartitionPruningSuccess(hasPartitionPruningFail ? false : true);
+            execPlan.setIsScanAllPartitions(hasScanAllPartitions);
+            execPlan.setIsPartitionPruningSuccess(hasPartitionPruningFail ? false : true);
         }
     }
 }

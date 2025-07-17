@@ -294,6 +294,7 @@ Status StreamPipelineDriver::_mark_operator_epoch_finishing(OperatorPtr& op, Run
     {
         SCOPED_TIMER(op->_finishing_timer);
         op_state = OperatorStage::EPOCH_FINISHING;
+        op->common_metrics()->add_info_string("Status", operator_stage_to_string(OperatorStage::EPOCH_FINISHING));
         QUERY_TRACE_SCOPED(op->get_name(), "set_epoch_finishing");
         return op->set_epoch_finishing(state);
     }
@@ -310,6 +311,7 @@ Status StreamPipelineDriver::_mark_operator_epoch_finished(OperatorPtr& op, Runt
     {
         SCOPED_TIMER(op->_finishing_timer);
         op_state = OperatorStage::EPOCH_FINISHED;
+        op->common_metrics()->add_info_string("Status", operator_stage_to_string(OperatorStage::EPOCH_FINISHED));
         QUERY_TRACE_SCOPED(op->get_name(), "set_epoch_finished");
         return op->set_epoch_finished(state);
     }
@@ -320,6 +322,7 @@ Status StreamPipelineDriver::reset_epoch(RuntimeState* runtime_state) {
     for (auto& op : _operators) {
         RETURN_IF_ERROR(op->reset_epoch(runtime_state));
         _operator_stages[op->get_id()] = OperatorStage::PREPARED;
+        op->common_metrics()->add_info_string("Status", operator_stage_to_string(OperatorStage::PREPARED));
     }
     return Status::OK();
 }

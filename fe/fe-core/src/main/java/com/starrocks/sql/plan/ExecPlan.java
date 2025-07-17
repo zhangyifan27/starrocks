@@ -56,6 +56,8 @@ public class ExecPlan {
     private final ArrayList<PlanFragment> fragments = new ArrayList<>();
     private final Map<Integer, PlanFragment> cteProduceFragments = Maps.newHashMap();
     private int planCount = 0;
+    private boolean isScanAllPartitions = true;
+    private boolean isPartitionPruningSuccess = true;
 
     private final OptExpression physicalPlan;
     private final List<ColumnRefOperator> outputColumns;
@@ -143,6 +145,22 @@ public class ExecPlan {
 
     public int getPlanCount() {
         return planCount;
+    }
+
+    public void setIsScanAllPartitions(boolean isScanAllPartitions) {
+        this.isScanAllPartitions = isScanAllPartitions;
+    }
+
+    public boolean getIsScanAllPartitions() {
+        return isScanAllPartitions;
+    }
+
+    public void setIsPartitionPruningSuccess(boolean isPartitionPruningSuccess) {
+        this.isPartitionPruningSuccess = isPartitionPruningSuccess;
+    }
+
+    public boolean getIsPartitionPruningSuccess() {
+        return isPartitionPruningSuccess;
     }
 
     public Map<Integer, PlanFragment> getCteProduceFragments() {
