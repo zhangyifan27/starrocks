@@ -648,6 +648,12 @@ void RuntimeProfile::copy_all_counters_from(RuntimeProfile* src_profile, const s
             }
             auto* new_counter = add_counter_unlock(name, src_counter->type(), src_counter->strategy(), parent_name);
             new_counter->set(src_counter->value());
+            if (src_counter->_min_value.has_value()) {
+                new_counter->_min_value.emplace(src_counter->_min_value.value());
+            }
+            if (src_counter->_max_value.has_value()) {
+                new_counter->_max_value.emplace(src_counter->_max_value.value());
+            }
         }
 
         auto names_it = src_profile->_child_counter_map.find(name);

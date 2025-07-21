@@ -235,6 +235,12 @@ public class RuntimeProfile {
                 Counter srcCounter = srcProfile.counterMap.get(name).first;
                 Counter newCounter = addCounter(name, srcCounter.getType(), srcCounter.getStrategy(), parentName);
                 newCounter.setValue(srcCounter.getValue());
+                if (srcCounter.getMinValue().isPresent()) {
+                    newCounter.setMinValue(srcCounter.getMinValue().get());
+                }
+                if (srcCounter.getMaxValue().isPresent()) {
+                    newCounter.setMaxValue(srcCounter.getMaxValue().get());
+                }
             }
 
             Set<String> childNames = srcProfile.childCounterMap.get(name);
@@ -305,6 +311,12 @@ public class RuntimeProfile {
                                 addCounter(topName, tcounter.type, tcounter.strategy, parentName);
                         counter.setValue(tcounter.value);
                         counter.setStrategy(tcounter.strategy);
+                        if (tcounter.isSetMin_value()) {
+                            counter.setMinValue(tcounter.getMin_value());
+                        }
+                        if (tcounter.isSetMax_value()) {
+                            counter.setMaxValue(tcounter.getMax_value());
+                        }
                         tCounterMap.remove(topName);
                     } else if (pair != null && tcounter != null) {
                         if (pair.first.getType() != tcounter.type) {
@@ -312,6 +324,12 @@ public class RuntimeProfile {
                                     + " type=" + tcounter.type);
                         } else {
                             pair.first.setValue(tcounter.value);
+                            if (tcounter.isSetMin_value()) {
+                                pair.first.setMinValue(tcounter.getMin_value());
+                            }
+                            if (tcounter.isSetMax_value()) {
+                                pair.first.setMaxValue(tcounter.getMax_value());
+                            }
                         }
                         tCounterMap.remove(topName);
                     }
@@ -345,6 +363,12 @@ public class RuntimeProfile {
                                 + " type=" + tcounter.type);
                     } else {
                         pair.first.setValue(tcounter.value);
+                        if (tcounter.isSetMin_value()) {
+                            pair.first.setMinValue(tcounter.getMin_value());
+                        }
+                        if (tcounter.isSetMax_value()) {
+                            pair.first.setMaxValue(tcounter.getMax_value());
+                        }
                     }
                 }
             }
@@ -723,6 +747,12 @@ public class RuntimeProfile {
             TCounter tCounter = new TCounter();
             tCounter.setName(entry.getKey());
             tCounter.setValue(counter.getValue());
+            if (counter.getMinValue().isPresent()) {
+                tCounter.setMin_value(counter.getMinValue().get());
+            }
+            if (counter.getMaxValue().isPresent()) {
+                tCounter.setMax_value(counter.getMaxValue().get());
+            }
             tCounter.setType(counter.getType());
             tCounter.setStrategy(counter.getStrategy());
             node.addToCounters(tCounter);
@@ -873,7 +903,7 @@ public class RuntimeProfile {
                     }
                     if (counter.getMaxValue().isPresent()) {
                         alreadyMerged = true;
-                        maxValue = Math.max(counter.getMinValue().get(), maxValue);
+                        maxValue = Math.max(counter.getMaxValue().get(), maxValue);
                     } else {
                         // TODO: keep compatible with older version backend, can be removed in next version
                         Counter maxCounter = profile.getCounter(MERGED_INFO_PREFIX_MAX + name);
