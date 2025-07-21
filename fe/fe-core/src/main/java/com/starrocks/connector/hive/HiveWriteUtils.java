@@ -153,7 +153,7 @@ public class HiveWriteUtils {
 
     public static boolean deleteIfExists(Path path, boolean recursive, Configuration conf) {
         try {
-            FileSystem fileSystem = FileSystem.get(path.toUri(), conf);
+            FileSystem fileSystem = getTAuthFileSystem(path, conf);
             if (fileSystem.delete(path, recursive)) {
                 return true;
             }
@@ -163,6 +163,10 @@ public class HiveWriteUtils {
             return true;
         } catch (IOException ignored) {
             LOG.error("Failed to delete remote path {}", path);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        } catch (SecureException e) {
+            throw new RuntimeException(e);
         }
 
         return false;
