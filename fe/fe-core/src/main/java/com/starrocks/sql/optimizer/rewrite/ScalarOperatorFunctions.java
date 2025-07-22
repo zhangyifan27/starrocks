@@ -53,6 +53,8 @@ import com.starrocks.privilege.AuthorizationMgr;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.optimizer.operator.scalar.ConstantOperator;
+import com.tencent.tdw_udf_cloud.hive.udf.UDFSysTimestamp;
+import com.tencent.tdw_udf_cloud.hive.udf.UDFSysdate;
 import org.apache.commons.lang.StringUtils;
 import org.apache.http.NameValuePair;
 import org.apache.http.client.utils.URLEncodedUtils;
@@ -1555,6 +1557,18 @@ public class ScalarOperatorFunctions {
         } else {
             throw new AnalysisException("tdw_date_add unsupported date type " + date.getType().toString());
         }
+    }
+
+    @ConstantFunction(name = "sysdate", argTypes = {}, returnType = VARCHAR)
+    public static ConstantOperator sysdate() {
+        UDFSysdate udfSysdate = new UDFSysdate();
+        return ConstantOperator.createVarchar(udfSysdate.evaluate());
+    }
+
+    @ConstantFunction(name = "systimestamp", argTypes = {}, returnType = VARCHAR)
+    public static ConstantOperator systimestamp() {
+        UDFSysTimestamp udfSysTimestamp = new UDFSysTimestamp();
+        return ConstantOperator.createVarchar(udfSysTimestamp.evaluate());
     }
 }
 

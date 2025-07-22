@@ -120,4 +120,18 @@ public class TypeConvert {
         return ScalarType.createType(primitiveType);
     }
 
+    public static Object fromObjectInspector(ObjectInspector inspector, Object object) {
+        ObjectInspector.Category category = inspector.getCategory();
+        switch (inspector.getCategory()) {
+            case PRIMITIVE:
+                checkArgument(inspector instanceof PrimitiveObjectInspector);
+                PrimitiveObjectInspector primitiveObjectInspector = (PrimitiveObjectInspector) inspector;
+                return primitiveObjectInspector.getPrimitiveJavaObject(object);
+            case LIST:
+            case MAP:
+            case STRUCT:
+                throw new RuntimeException("return type [" + category + "] is not supported for now");
+        }
+        throw new RuntimeException("return type [" + category + "] is not supported for now");
+    }
 }

@@ -26,6 +26,9 @@ import com.starrocks.catalog.FunctionSet;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.ScalarType;
 import com.starrocks.catalog.Type;
+import com.starrocks.connector.thive.ThiveFunctionRegistry;
+import com.starrocks.connector.thive.ThiveUdfUtils;
+import com.starrocks.connector.thive.TypeConvert;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.common.ErrorType;
@@ -37,6 +40,9 @@ import com.starrocks.sql.optimizer.operator.scalar.ConstantOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import org.apache.commons.collections4.ListUtils;
 import org.apache.commons.lang.exception.ExceptionUtils;
+import org.apache.hadoop.hive.ql.exec.FunctionInfo;
+import org.apache.hadoop.hive.ql.udf.generic.GenericUDF;
+import org.apache.hadoop.hive.serde2.objectinspector.ObjectInspector;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -183,6 +189,14 @@ public enum ScalarOperatorEvaluator {
         FunctionInvoker invoker = functions.get(signature);
 
         if (invoker == null) {
+            boolean enableThiveFunction =
+                    ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableThiveFunction();
+            if (fn.getFunctionName().isThiveFunction() || enableThiveFunction) {
+                ScalarOperator thiveUdfResult = evaluationThiveUdf(fn, root);
+                if (thiveUdfResult != null) {
+                    return thiveUdfResult;
+                }
+            }
             return root;
         }
 
@@ -207,6 +221,34 @@ public enum ScalarOperatorEvaluator {
             }
         }
         return root;
+    }
+
+    public ScalarOperator evaluationThiveUdf(Function fn, CallOperator root) {
+        try {
+            FunctionInfo functionInfo = ThiveFunctionRegistry.getFunctionInfo(fn.functionName());
+            if (functionInfo == null) {
+                return null;
+            }
+            ObjectInspector[] objectInspectors = new ObjectInspector[fn.getArgs().length];
+            GenericUDF.DeferredObject[] objects = new GenericUDF.DeferredObject[fn.getArgs().length];
+            for (int i = 0; i < fn.getArgs().length; i++) {
+                objectInspectors[i] = TypeConvert.fromStarRocksToHiveType(fn.getArgs()[i]);
+                ConstantOperator child = (ConstantOperator) root.getChildren().get(i);
+                objects[i] = new GenericUDF.DeferredJavaObject(child.getValue());
+            }
+            GenericUDF udf = ThiveUdfUtils.createGenericUDF(functionInfo.getDisplayName(), functionInfo.getFunctionClass());
+            ObjectInspector objectInspector = udf.initialize(objectInspectors);
+
+            Object hiveResult = udf.evaluate(objects);
+            if (hiveResult == null) {
+                return ConstantOperator.createNull(fn.getReturnType());
+            }
+            Object object = TypeConvert.fromObjectInspector(objectInspector, hiveResult);
+            return new ConstantOperator(object, fn.getReturnType());
+        } catch (Throwable e) {
+            LOG.warn("failed to invoke thive function", e);
+            return null;
+        }
     }
 
     public boolean isMonotonicFunction(CallOperator call) {
