@@ -185,6 +185,8 @@ public class FragmentInstanceExecState {
             if (serializedRequest != null && serializedRequest.length != 0) {
                 deployFuture = BackendServiceClient.getInstance().execPlanFragmentAsync(brpcAddress, serializedRequest,
                         jobSpec.getPlanProtocol());
+                // Not in use, free it up
+                serializedRequest = null;
             } else {
                 deployFuture = BackendServiceClient.getInstance().execPlanFragmentAsync(brpcAddress, requestToDeploy,
                         jobSpec.getPlanProtocol());

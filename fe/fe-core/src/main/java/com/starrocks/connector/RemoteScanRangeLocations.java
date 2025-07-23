@@ -279,7 +279,9 @@ public class RemoteScanRangeLocations {
             }
         } else {
             TScanRangeLocation scanRangeLocation = new TScanRangeLocation(new TNetworkAddress("-1", -1));
-            scanRangeLocations.addToLocations(scanRangeLocation);
+            ArrayList<TScanRangeLocation> locations = new ArrayList<>(1);
+            locations.add(scanRangeLocation);
+            scanRangeLocations.setLocations(locations);
         }
 
         result.add(scanRangeLocations);
