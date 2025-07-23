@@ -16,10 +16,10 @@ package com.starrocks.planner;
 
 import com.google.common.base.MoreObjects;
 import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Maps;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
+import com.google.common.collect.ImmutableSet;
+import com.google.common.collect.Maps;
 import com.starrocks.analysis.DescriptorTable;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.SlotDescriptor;
@@ -32,7 +32,6 @@ import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.UserException;
-import com.starrocks.common.profile.Tracers;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.PartitionUtil;
@@ -70,12 +69,11 @@ import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.PartitionField;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
-import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.StructLike;
-import org.apache.iceberg.types.Types;
 import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.expressions.Binder;
 import org.apache.iceberg.expressions.Expression;
+import org.apache.iceberg.types.Types;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -253,6 +251,8 @@ public class IcebergScanNode extends ScanNode {
             return;
         }
 
+        // this partition list filtered out based on logical partition secondary pruner
+        List<PartitionKey> selectedPartitionKeys = new ArrayList<>(scanNodePredicates.getIdToPartitionKey().values());
         Map<StructLike, Long> partitionKeyToId = Maps.newHashMap();
         Map<Long, List<Integer>> idToPartitionSlots = Maps.newHashMap();
         Map<String, Long> scanFileSizes = Maps.newHashMap();
@@ -268,7 +268,6 @@ public class IcebergScanNode extends ScanNode {
             long partitionId = 0;
             if (!partitionKeyToId.containsKey(partition)) {
                 partitionId = icebergTable.nextPartitionId();
-                partitionKeyToId.put(partition, partitionId);
                 BiMap<Integer, PartitionField> indexToField = getIdentityPartitions(task.spec());
                 if (!indexToField.isEmpty()) {
                     List<Integer> partitionSlotIds = task.spec().fields().stream()
@@ -282,12 +281,18 @@ public class IcebergScanNode extends ScanNode {
                             .map(x -> indexToField.inverse().get(x))
                             .collect(Collectors.toList());
                     PartitionKey partitionKey = getPartitionKey(partition, task.spec(), indexes, indexToField);
-
+                    boolean isSelected = partitionKey.isEmpty() || selectedPartitionKeys.contains(partitionKey);
+                    if (!isSelected) {
+                        continue;
+                    }
+                    partitionKeyToId.put(partition, partitionId);
                     DescriptorTable.ReferencedPartitionInfo partitionInfo =
                             new DescriptorTable.ReferencedPartitionInfo(partitionId, partitionKey);
 
                     descTbl.addReferencedPartitions(icebergTable, partitionInfo);
                     idToPartitionSlots.put(partitionId, partitionSlotIds);
+                } else {
+                    partitionKeyToId.put(partition, partitionId);
                 }
             }
 

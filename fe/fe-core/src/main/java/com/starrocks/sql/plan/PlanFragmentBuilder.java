@@ -1413,9 +1413,13 @@ public class PlanFragmentBuilder {
 
                 icebergScanNode.preProcessIcebergPredicate(node.getPredicate());
                 icebergScanNode.setSnapshotId(node.getTableVersionRange().end());
-                icebergScanNode.setupScanRangeLocations(context.getDescTbl());
 
                 HDFSScanNodePredicates scanNodePredicates = icebergScanNode.getScanNodePredicates();
+                ScanOperatorPredicates scanPredicates = node.getScanOperatorPredicates();
+                scanNodePredicates.setIdToPartitionKey(scanPredicates.getIdToPartitionKey());
+                scanNodePredicates.setPruningPredicateCanBeEvaluated(scanPredicates.isPruningPredicateCanBeEvaluated());
+                icebergScanNode.setupScanRangeLocations(context.getDescTbl());
+
                 prepareMinMaxExpr(scanNodePredicates, node.getScanOperatorPredicates(), context, referenceTable);
             } catch (UserException e) {
                 LOG.warn("Iceberg scan node get scan range locations failed : ", e);

@@ -415,14 +415,14 @@ public class OptExternalPartitionPruner {
                 long partitionId = entry.second;
                 operator.getScanOperatorPredicates().getIdToPartitionKey().put(partitionId, key);
             }
-        } else if (table instanceof DeltaLakeTable) {
+        } else if (table instanceof DeltaLakeTable || table instanceof IcebergTable) {
             // Init columnToPartitionValuesMap for delta lake, it will be used in classifyConjuncts function
             // to classify partition conjuncts
-            DeltaLakeTable deltaLakeTable = (DeltaLakeTable) table;
-            List<Column> partitionColumns = deltaLakeTable.getPartitionColumns();
+            List<Column> partitionColumns = table.getPartitionColumns();
             for (Column column : partitionColumns) {
                 ColumnRefOperator partitionColumnRefOperator = operator.getColumnReference(column);
                 columnToPartitionValuesMap.put(partitionColumnRefOperator, new ConcurrentSkipListMap<>());
+                columnToNullPartitions.put(partitionColumnRefOperator, Sets.newConcurrentHashSet());
             }
         }
         LOG.debug("Table: {}, partition values map: {}, null partition map: {}", table.getName(),
@@ -492,6 +492,8 @@ public class OptExternalPartitionPruner {
                 }
             }
 
+            partitionKeyMap = partitionSecondaryPruner(operator,
+                    columnToPartitionValuesMap, columnToNullPartitions, partitionKeyMap);
             scanOperatorPredicates.getIdToPartitionKey().putAll(partitionKeyMap);
             scanOperatorPredicates.setSelectedPartitionIds(partitionKeyMap.keySet());
         } else if (table instanceof PaimonTable) {
@@ -517,6 +519,81 @@ public class OptExternalPartitionPruner {
             long rowCount = getRowCount(splits);
             if (rowCount > 0) {
                 scanOperatorPredicates.getSelectedPartitionIds().add(1L);
+            }
+        }
+    }
+
+    /**
+     * Performs secondary partition pruning based on partition column values and predicates.
+     */
+    private static Map<Long, PartitionKey> partitionSecondaryPruner(
+            LogicalScanOperator operator,
+            Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
+            Map<ColumnRefOperator, Set<Long>> columnToNullPartitions,
+            Map<Long, PartitionKey> partitionKeyMap) {
+        try {
+            ScanOperatorPredicates predicates = operator.getScanOperatorPredicates();
+            if (partitionKeyMap.isEmpty() || predicates.getPartitionConjuncts().isEmpty()) {
+                return partitionKeyMap;
+            }
+            updatePartitionMaps(operator, columnToPartitionValuesMap, columnToNullPartitions, partitionKeyMap);
+            // Reuse Hive's partition pruning method, which will be integrated later
+            Optional<PartitionType> partitionType = Optional.of(PartitionType.HIVE);
+            ListPartitionPruner partitionPruner = new ListPartitionPruner(columnToPartitionValuesMap, columnToNullPartitions,
+                    predicates.getPartitionConjuncts(), null, null, partitionType);
+            Collection<Long> selectedPartitionIds = partitionPruner.prune();
+            // prune has no effect
+            if (selectedPartitionIds == null) {
+                return partitionKeyMap;
+            }
+            Map<Long, PartitionKey> prunePartKeys = Maps.newHashMap();
+            for (Long partitionId : partitionKeyMap.keySet()) {
+                if (selectedPartitionIds.contains(partitionId)) {
+                    prunePartKeys.put(partitionId, partitionKeyMap.get(partitionId));
+                }
+            }
+            // update partition not eval conjuncts
+            if (!partitionPruner.getNoEvalConjuncts().isEmpty()) {
+                predicates.setPruningPredicateCanBeEvaluated(false);
+                predicates.getNoEvalPartitionConjuncts().addAll(partitionPruner.getNoEvalConjuncts());
+            }
+            return prunePartKeys;
+        } catch (Throwable e) {
+            LOG.warn("Failed to execute secondary partition prune", e);
+            return partitionKeyMap;
+        }
+    }
+
+    /**
+     * Updates the partition maps based on the provided partition key information.
+     * This method populates two maps: {@code columnToPartitionValuesMap}, {@code columnToNullPartitions}
+     */
+    private static void updatePartitionMaps(
+            LogicalScanOperator operator,
+            Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
+            Map<ColumnRefOperator, Set<Long>> columnToNullPartitions,
+            Map<Long, PartitionKey> partitionKeyMap) {
+        if (partitionKeyMap.isEmpty()) {
+            return;
+        }
+        // get partition columns in order
+        List<ColumnRefOperator> partitionColumnRefOperators = operator.getTable().getPartitionColumns().stream()
+                .map(operator::getColumnReference)
+                .collect(Collectors.toList());
+        // iterate all partition keys to populate the partition value maps
+        for (Map.Entry<Long, PartitionKey> entry : partitionKeyMap.entrySet()) {
+            Long partitionId = entry.getKey();
+            List<LiteralExpr> literals = entry.getValue().getKeys();
+            for (int i = 0; i < literals.size(); i++) {
+                ColumnRefOperator columnRefOperator = partitionColumnRefOperators.get(i);
+                LiteralExpr literal = literals.get(i);
+                if (Expr.IS_NULL_LITERAL.apply(literal)) {
+                    columnToNullPartitions.get(columnRefOperator).add(partitionId);
+                    continue;
+                }
+                Set<Long> partitions = columnToPartitionValuesMap.get(columnRefOperator)
+                        .computeIfAbsent(literal, k -> Sets.newConcurrentHashSet());
+                partitions.add(partitionId);
             }
         }
     }

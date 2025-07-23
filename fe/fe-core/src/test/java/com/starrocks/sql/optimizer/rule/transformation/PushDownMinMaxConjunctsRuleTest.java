@@ -106,19 +106,20 @@ public class PushDownMinMaxConjunctsRuleTest extends TableTestBase {
 
         mockedNativeTableA.newAppend().appendFile(FILE_A).commit();
         mockedNativeTableA.refresh();
-        List<Column> columns = Lists.newArrayList(new Column("id", INT), new Column("data", STRING));
+        Column id = new Column("id", INT, true);
+        Column data = new Column("data", STRING, true);
+
+        List<Column> columns = Lists.newArrayList(id, data);
         IcebergTable icebergTable = new IcebergTable(1, "srTableName", "iceberg_catalog", "resource_name", "iceberg_db",
                 "iceberg_table", "", columns, mockedNativeTableA, Maps.newHashMap());
 
         ColumnRefOperator colRef1 = new ColumnRefOperator(1, Type.INT, "id", true);
-        Column col1 = new Column("id", Type.INT, true);
         ColumnRefOperator colRef2 = new ColumnRefOperator(2, Type.STRING, "data", true);
-        Column col2 = new Column("data", Type.STRING, true);
 
         Map<ColumnRefOperator, Column> colRefToColumnMetaMap = new HashMap<>();
         Map<Column, ColumnRefOperator> columnMetaToColRefMap = new HashMap<>();
-        colRefToColumnMetaMap.put(colRef1, col1);
-        columnMetaToColRefMap.put(col2, colRef2);
+        colRefToColumnMetaMap.put(colRef1, id);
+        columnMetaToColRefMap.put(data, colRef2);
         TableVersionRange version = TableVersionRange.withEnd(Optional.of(
                 mockedNativeTableA.currentSnapshot().snapshotId()));
         OptExpression scan =

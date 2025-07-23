@@ -216,6 +216,10 @@ public class PartitionKey implements Comparable<PartitionKey>, Writable {
         return true;
     }
 
+    public boolean isEmpty() {
+        return keys.isEmpty() && types.isEmpty();
+    }
+
     public static int compareLiteralExpr(LiteralExpr key1, LiteralExpr key2) {
         int ret = 0;
         if (key1 instanceof MaxLiteral || key2 instanceof MaxLiteral) {
