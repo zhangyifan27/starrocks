@@ -433,4 +433,10 @@ public class HiveMetadata implements ConnectorMetadata {
         tblName = convertToLowerCaseIfNeed(tblName);
         return hmsOps.showCreateTable(dbName, tblName);
     }
+
+    @Override
+    public void refreshTableSchema(String srDbName, Table table) {
+        final String processedSrDbName = convertToLowerCaseIfNeed(srDbName);
+        cacheUpdateProcessor.ifPresent(processor -> processor.refreshTableKeyInfo(processedSrDbName, table));
+    }
 }

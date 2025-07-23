@@ -283,4 +283,10 @@ public class UnifiedMetadata implements ConnectorMetadata {
         Table.TableType type = getTableType(dbName, tblName);
         return metadataMap.get(type).showCreateTable(dbName, tblName);
     }
+
+    @Override
+    public void refreshTableSchema(String dbName, Table table) {
+        Table.TableType type = getTableType(dbName, table.getName());
+        metadataMap.get(type).refreshTableSchema(dbName, table);
+    }
 }

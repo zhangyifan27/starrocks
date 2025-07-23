@@ -266,8 +266,8 @@ public class InsertPlanner {
         // convert partition keys to generated-columns
         if (targetTable.isHiveTable() && ((HiveTable) targetTable).isThiveTable()) {
             HiveTable hiveTable = (HiveTable) targetTable;
-            GlobalStateMgr.getCurrentState().getMetadataMgr().refreshTable(
-                    hiveTable.getCatalogName(), hiveTable.getDbName(), hiveTable, new ArrayList<>(), false);
+            GlobalStateMgr.getCurrentState().getMetadataMgr()
+                    .refreshTableSchema(hiveTable.getCatalogName(), hiveTable.getDbName(), hiveTable);
 
             int idx = 0;
             for (Column partitionColumn : hiveTable.getPartitionColumns()) {

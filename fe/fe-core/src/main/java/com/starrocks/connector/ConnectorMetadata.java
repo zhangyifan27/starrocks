@@ -349,5 +349,8 @@ public interface ConnectorMetadata {
     default String showCreateTable(String dbName, String tblName) {
         return "";
     }
+
+    default void refreshTableSchema(String srDbName, Table table) {
+    }
 }
 

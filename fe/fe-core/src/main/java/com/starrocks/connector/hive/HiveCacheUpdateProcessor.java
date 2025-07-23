@@ -141,9 +141,9 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
             Map<BasePartitionInfo, Partition> updatedPartitions = getUpdatedPartitions(hmsTbl, refreshPartitionNames);
             if (!updatedPartitions.isEmpty()) {
                 // update partition remote files cache
-                List<String> updatedPaths = updatedPartitions.values().stream().map(Partition::getFullPath)
+                Set<String> updatedPaths = updatedPartitions.values().stream().map(Partition::getFullPath)
                         .map(path -> path.endsWith("/") ? path : path + "/")
-                        .collect(Collectors.toList());
+                        .collect(Collectors.toSet());
                 refreshRemoteFilesBackground(hmsTbl.getTableLocation(), updatedPaths, onlyCachedPartitions, executor);
 
                 LOG.info("{}.{}.{} partitions has updated, updated partition size is {}, " +
@@ -171,10 +171,10 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
     }
 
     @Override
-    public void refreshTableKeyInfoBackground(String dbName, Table table) {
+    public void refreshTableKeyInfo(String dbName, Table table) {
         if (table instanceof HiveMetaStoreTable) {
             HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
-            metastore.refreshTableKeyInfoBackground(hmsTbl.getDbName(), hmsTbl.getTableName());
+            metastore.refreshTableKeyInfo(hmsTbl.getDbName(), hmsTbl.getTableName());
         } else if (table instanceof HiveView) {
             HiveView view = (HiveView) table;
             metastore.refreshView(dbName, view.getName());
@@ -228,14 +228,14 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
         return updatedPartitions;
     }
 
-    private List<String> getExistPaths(HiveMetaStoreTable table) {
-        List<String> existPaths;
+    private Set<String> getExistPaths(HiveMetaStoreTable table) {
+        Set<String> existPaths;
         String dbName = table.getDbName();
         String tblName = table.getTableName();
 
         if (table.isUnPartitioned()) {
             String path = metastore.getPartition(dbName, tblName, Lists.newArrayList()).getFullPath();
-            existPaths = Lists.newArrayList(path.endsWith("/") ? path : path + "/");
+            existPaths = Sets.newHashSet(path.endsWith("/") ? path : path + "/");
         } else {
             List<String> partitionNames = metastore.getPartitionKeysByValue(dbName, tblName,
                     HivePartitionValue.ALL_PARTITION_VALUES);
@@ -243,7 +243,7 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
                     .values().stream()
                     .map(Partition::getFullPath)
                     .map(path -> path.endsWith("/") ? path : path + "/")
-                    .collect(Collectors.toList());
+                    .collect(Collectors.toSet());
         }
         return existPaths;
     }
@@ -288,7 +288,7 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
         }
     }
 
-    private void refreshRemoteFilesBackground(String tableLocation, List<String> updatePaths,
+    private void refreshRemoteFilesBackground(String tableLocation, Set<String> updatePaths,
                                               boolean onlyCachedPartitions, ExecutorService refreshExecutor) {
         if (remoteFileIO.isPresent()) {
             List<RemotePathKey> presentPathKey = updatePaths.stream().map(path -> RemotePathKey.of(path, isRecursive))
@@ -306,7 +306,7 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
         }
     }
 
-    private void refreshRemoteFiles(String tableLocation, Operator operator, List<String> existPaths,
+    private void refreshRemoteFiles(String tableLocation, Operator operator, Set<String> existPaths,
                                     boolean onlyCachedPartitions) {
         if (remoteFileIO.isPresent()) {
             List<RemotePathKey> presentPathKey;
@@ -410,7 +410,7 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
         metastore.invalidateTable(dbName, tableName);
 
         if (remoteFileIO.isPresent()) {
-            refreshRemoteFiles(tableLocation, Operator.DROP, Lists.newArrayList(), true);
+            refreshRemoteFiles(tableLocation, Operator.DROP, Sets.newHashSet(), true);
         }
     }
 

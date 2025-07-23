@@ -112,7 +112,7 @@ public class ConnectorTableMetadataKeyInfoProcessor extends FrontendDaemon {
                 return;
             }
             try {
-                updateProcessor.refreshTableKeyInfoBackground(dbName, table);
+                updateProcessor.refreshTableKeyInfo(dbName, table);
             } catch (Throwable e) {
                 if (Config.invalidate_cache_when_refresh_fail) {
                     updateProcessor.invalidateTable(dbName, tableName);

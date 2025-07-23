@@ -2513,6 +2513,35 @@ public class GlobalStateMgr {
         metadataMgr.refreshTable(catalogName, dbName, table, partitions, true);
     }
 
+    public void refreshExternalTableSchema(TableName tableName) {
+        String catalogName = tableName.getCatalog();
+        String dbName = tableName.getDb();
+        String tblName = tableName.getTbl();
+        Database db = metadataMgr.getDb(catalogName, tableName.getDb());
+        if (db == null) {
+            throw new StarRocksConnectorException("db: " + tableName.getDb() + " not exists");
+        }
+
+        Table table;
+        table = metadataMgr.getTable(catalogName, dbName, tblName);
+        if (table == null) {
+            throw new StarRocksConnectorException("table %s.%s.%s not exists", catalogName, dbName,
+                    tblName);
+        }
+        if (!supportRefreshTableType(table)) {
+            throw new StarRocksConnectorException("can not refresh external table %s.%s.%s, " +
+                    "do not support refresh external table which type is %s", catalogName, dbName,
+                    tblName, table.getType());
+        }
+
+        if (CatalogMgr.isInternalCatalog(catalogName)) {
+            Preconditions.checkState(table instanceof HiveMetaStoreTable);
+            catalogName = ((HiveMetaStoreTable) table).getCatalogName();
+        }
+
+        metadataMgr.refreshTableSchema(catalogName, dbName, table);
+    }
+
     public void initDefaultWarehouse() {
         warehouseMgr.initDefaultWarehouse();
         isDefaultWarehouseCreated = true;

@@ -358,4 +358,9 @@ public class CatalogConnectorMetadata implements ConnectorMetadata {
     public String showCreateTable(String dbName, String tblName) {
         return normal.showCreateTable(dbName, tblName);
     }
+
+    @Override
+    public void refreshTableSchema(String dbName, Table table) {
+        normal.refreshTableSchema(dbName, table);
+    }
 }

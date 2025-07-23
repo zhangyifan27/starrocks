@@ -21,6 +21,7 @@ import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Sets;
 import com.google.common.collect.Streams;
 import com.google.common.util.concurrent.UncheckedExecutionException;
 import com.starrocks.catalog.Database;
@@ -616,9 +617,11 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                                                           LoadingCache<HivePartitionName, T> cache) {
         List<HivePartitionName> needToRefresh = Lists.newArrayList();
         List<HivePartitionName> needToInvalidate = Lists.newArrayList();
+        Set<String> partitionNamesInHMSSet = Sets.newHashSet();
+        partitionNamesInHMSSet.addAll(partitionNamesInHMS);
         for (HivePartitionName name : presentInCache) {
             Optional<String> optPartitionNames = name.getPartitionNames();
-            if (optPartitionNames.isPresent() && partitionNamesInHMS.contains(optPartitionNames.get())) {
+            if (optPartitionNames.isPresent() && partitionNamesInHMSSet.contains(optPartitionNames.get())) {
                 needToRefresh.add(name);
             } else {
                 needToInvalidate.add(name);
@@ -660,7 +663,7 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
     }
 
     @Override
-    public void refreshTableKeyInfoBackground(String hiveDbName, String hiveTblName) {
+    public void refreshTableKeyInfo(String hiveDbName, String hiveTblName) {
         DatabaseTableName databaseTableName = DatabaseTableName.of(hiveDbName, hiveTblName);
         try {
             Table updatedTable = loadTable(databaseTableName);

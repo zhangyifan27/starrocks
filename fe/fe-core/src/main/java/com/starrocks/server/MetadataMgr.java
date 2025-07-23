@@ -836,6 +836,11 @@ public class MetadataMgr {
         connectorMetadata.ifPresent(metadata -> metadata.refreshTable(srDbName, table, partitionNames, onlyCachedPartitions));
     }
 
+    public void refreshTableSchema(String catalogName, String srDbName, Table table) {
+        Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
+        connectorMetadata.ifPresent(metadata -> metadata.refreshTableSchema(srDbName, table));
+    }
+
     public void finishSink(String catalogName, String dbName, String tableName, List<TSinkCommitInfo> sinkCommitInfos) {
         Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
         connectorMetadata.ifPresent(metadata -> {
