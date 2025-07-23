@@ -14,6 +14,7 @@
 
 package com.starrocks.privilege;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.Column;
@@ -21,7 +22,9 @@ import com.starrocks.catalog.InternalCatalog;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.View;
 import com.starrocks.catalog.system.SystemTable;
+import com.starrocks.common.Config;
 import com.starrocks.connector.metadata.MetadataTable;
+import com.starrocks.privilege.ranger.RangerTDWAccessController;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.StatementPlanner;
 import com.starrocks.sql.analyzer.Authorizer;
@@ -126,15 +129,30 @@ public class ColumnPrivilege {
 
             if (tableUsedExternalAccessController.contains(tableName)) {
                 Set<String> columns = scanColumns.getOrDefault(tableName, new HashSet<>());
-                for (String column : columns) {
-                    try {
-                        Authorizer.checkColumnAction(context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
-                                tableName, column, PrivilegeType.SELECT);
-                    } catch (AccessDeniedException e) {
-                        AccessDeniedException.reportAccessDenied(
-                                tableName.getCatalog(),
-                                context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
-                                PrivilegeType.SELECT.name(), ObjectType.COLUMN.name(), column);
+                if (Authorizer.getInstance().getAccessControlOrDefault(tableName.getCatalog())
+                        instanceof RangerTDWAccessController) {
+                    if (Config.enable_oms_column_level_access_control) {
+                        try {
+                            Authorizer.checkColumnsAction(context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
+                                    tableName, Lists.newArrayList(columns), PrivilegeType.SELECT);
+                        } catch (AccessDeniedException e) {
+                            AccessDeniedException.reportAccessDenied(
+                                    tableName.getCatalog(),
+                                    context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
+                                    PrivilegeType.SELECT.name(), ObjectType.COLUMN.name(), columns.toString());
+                        }
+                    }
+                } else {
+                    for (String column : columns) {
+                        try {
+                            Authorizer.checkColumnAction(context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
+                                    tableName, column, PrivilegeType.SELECT);
+                        } catch (AccessDeniedException e) {
+                            AccessDeniedException.reportAccessDenied(
+                                    tableName.getCatalog(),
+                                    context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
+                                    PrivilegeType.SELECT.name(), ObjectType.COLUMN.name(), column);
+                        }
                     }
                 }
             } else {

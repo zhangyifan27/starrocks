@@ -3549,4 +3549,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static double cost_buffer_weight = 1.6;
+
+    @ConfField(mutable = true)
+    public static boolean enable_oms_column_level_access_control = false;
 }

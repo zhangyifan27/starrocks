@@ -21,8 +21,8 @@ import com.starrocks.common.Config;
 import com.starrocks.common.util.Util;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.mysql.security.TdwAuthenticate;
-import com.starrocks.privilege.AccessController;
 import com.starrocks.privilege.AccessDeniedException;
+import com.starrocks.privilege.ExternalAccessController;
 import com.starrocks.privilege.PrivilegeType;
 import com.starrocks.privilege.ranger.hive.HiveAccessType;
 import com.starrocks.sql.ast.TDWUserIdentity;
@@ -37,10 +37,11 @@ import org.apache.ranger.authorization.hadoop.config.RangerConfiguration;
 
 import java.lang.reflect.UndeclaredThrowableException;
 import java.security.PrivilegedExceptionAction;
+import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-public class RangerTDWAccessController implements AccessController, AccessTypeConverter {
+public class RangerTDWAccessController extends ExternalAccessController implements AccessTypeConverter {
     private static final Logger LOG = LogManager.getLogger(RangerTDWAccessController.class);
 
     private static RangerDorisAuthorizer authorizer;
@@ -69,13 +70,19 @@ public class RangerTDWAccessController implements AccessController, AccessTypeCo
     @Override
     public void checkTableAction(UserIdentity currentUser, Set<Long> roleIds, TableName tableName, PrivilegeType privilegeType)
             throws AccessDeniedException {
-        hasPermission(currentUser, tableName, privilegeType);
+        hasPermission(currentUser, tableName, null, privilegeType);
     }
 
     @Override
     public void checkAnyActionOnTable(UserIdentity currentUser, Set<Long> roleIds, TableName tableName)
             throws AccessDeniedException {
-        hasPermission(currentUser, tableName, PrivilegeType.SELECT);
+        hasPermission(currentUser, tableName, null, PrivilegeType.SELECT);
+    }
+
+    @Override
+    public void checkColumnsAction(UserIdentity currentUser, Set<Long> roleIds, TableName tableName,
+                                  List<String> columns, PrivilegeType privilegeType) throws AccessDeniedException {
+        hasPermission(currentUser, tableName, columns, privilegeType);
     }
 
     @Override
@@ -90,7 +97,8 @@ public class RangerTDWAccessController implements AccessController, AccessTypeCo
         return hiveAccessType.name().toLowerCase(Locale.ENGLISH);
     }
 
-    public void hasPermission(UserIdentity currentUser, TableName tableName, PrivilegeType privilegeType) {
+    public void hasPermission(UserIdentity currentUser, TableName tableName, List<String> columns,
+                              PrivilegeType privilegeType) {
         if (currentUser == null || (Config.tdw_authentication_skip_root
                 && currentUser.getUser().equals(AuthenticationMgr.ROOT_USER))) {
             return;
@@ -99,8 +107,15 @@ public class RangerTDWAccessController implements AccessController, AccessTypeCo
         if (privilegeTypeName.equals("insert")) {
             privilegeTypeName = "update";
         }
-        DorisPrivilege privilege = new DorisPrivilege(tableName.getDb(), tableName.getTbl(),
-                Lists.newArrayList(privilegeTypeName));
+
+        DorisPrivilege privilege;
+        if (columns == null || columns.isEmpty()) {
+            privilege = new DorisPrivilege(tableName.getDb(), tableName.getTbl(), Lists.newArrayList(privilegeTypeName));
+        } else {
+            privilege = new DorisPrivilege(tableName.getDb(), tableName.getTbl(), columns,
+                    Lists.newArrayList(privilegeTypeName));
+        }
+
         UserGroupInformation ugi = UserGroupInformation.createUserForTesting(currentUser.getUser(),
                 currentUser instanceof TDWUserIdentity ?
                         ((TDWUserIdentity) currentUser).getUserGroup().toArray(new String[0]) : new String[0]);
