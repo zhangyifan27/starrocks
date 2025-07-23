@@ -59,6 +59,7 @@ python run.py [-d dirname/file] [-r] [-l] [-c ${concurrency}] [-t ${time}] [-a $
               --config             Config path, default conf/sr.conf
               --keep_alive         Check cluster status before each case, only works with sequential mode(-c=1)
               --run_info           Extra info
+              --arrow              Only run the arrow protocol
               --skip_files         Comma-separated list of files to skip
         """
     )
@@ -67,6 +68,7 @@ python run.py [-d dirname/file] [-r] [-l] [-c ${concurrency}] [-t ${time}] [-a $
 if __name__ == "__main__":
     """main"""
 
+    arrow_mode = False
     record = False
     dirname = None
     concurrency = 8
@@ -100,6 +102,7 @@ if __name__ == "__main__":
         "keep_alive",
         "run_info=",
         "log_filtered",
+        "arrow",
         "skip_files="
     ]
 
@@ -178,6 +181,9 @@ if __name__ == "__main__":
         if opt == "--log_filtered":
             log_filtered = True
 
+        if opt == "--arrow":
+            arrow_mode = True
+
     # merge cluster info to attr
     cluster_attr = "!cloud" if cluster == "native" else "!native"
     attr = f"{attr},{cluster_attr}".strip(",")
@@ -200,6 +206,7 @@ if __name__ == "__main__":
     os.environ["keep_alive"] = str(keep_alive)
     os.environ['run_info'] = run_info
     os.environ['log_filtered'] = str(log_filtered)
+    os.environ["arrow_mode"] = str(arrow_mode)
     os.environ['skip_files'] = skip_files
 
     argv = [

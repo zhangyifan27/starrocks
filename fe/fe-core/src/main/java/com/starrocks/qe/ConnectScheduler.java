@@ -72,7 +72,9 @@ public class ConnectScheduler {
     private final AtomicInteger nextConnectionId;
     private final AtomicInteger numberArrowFlightConnection;
 
+    // mysql connectContext/ http connectContext stored in connectionMap
     private final Map<Long, ConnectContext> connectionMap = Maps.newConcurrentMap();
+    // arrowFlight connectContext all stored in arrowFlightSqlConnectContextMap
     private final Map<String, ArrowFlightSqlConnectContext> arrowFlightSqlConnectContextMap = Maps.newConcurrentMap();
 
     private final Map<String, AtomicInteger> connCountByUser = Maps.newConcurrentMap();
@@ -165,8 +167,7 @@ public class ConnectScheduler {
             connCountByUser.computeIfAbsent(ctx.getQualifiedUser(), k -> new AtomicInteger(0));
             AtomicInteger currentConnAtomic = connCountByUser.get(ctx.getQualifiedUser());
             int currentConn = currentConnAtomic.get();
-            long currentUserMaxConn =
-                    ctx.getGlobalStateMgr().getAuthenticationMgr().getMaxConn(ctx.getCurrentUserIdentity());
+            long currentUserMaxConn = ctx.getGlobalStateMgr().getAuthenticationMgr().getMaxConn(ctx.getCurrentUserIdentity());
             if (currentConn >= currentUserMaxConn) {
                 String userErrMsg = "Reach user-level(qualifiedUser: " + ctx.getQualifiedUser() +
                         ", currUserIdentity: " + ctx.getCurrentUserIdentity() + ") connection limit, " +
@@ -184,7 +185,7 @@ public class ConnectScheduler {
 
             if (ctx instanceof ArrowFlightSqlConnectContext) {
                 ArrowFlightSqlConnectContext context = (ArrowFlightSqlConnectContext) ctx;
-                arrowFlightSqlConnectContextMap.put(context.getToken(), context);
+                arrowFlightSqlConnectContextMap.put(context.getArrowFlightSqlToken(), context);
             }
 
             return new Pair<>(true, null);
@@ -211,7 +212,7 @@ public class ConnectScheduler {
 
             if (ctx instanceof ArrowFlightSqlConnectContext) {
                 ArrowFlightSqlConnectContext context = (ArrowFlightSqlConnectContext) ctx;
-                arrowFlightSqlConnectContextMap.remove(context.getToken());
+                arrowFlightSqlConnectContextMap.remove(context.getArrowFlightSqlToken());
             }
         } finally {
             connStatsLock.unlock();
@@ -232,8 +233,8 @@ public class ConnectScheduler {
                         ctx.getGlobalStateMgr().getNodeMgr().getSelfNode());
             }
             numberArrowFlightConnection.incrementAndGet();
-            arrowFlightSqlConnectContextMap.put(ctx.getToken(), ctx);
-            LOG.info("ArrowFlightConnection registered. token={}, currConn={}", ctx.getToken(),
+            arrowFlightSqlConnectContextMap.put(ctx.getArrowFlightSqlToken(), ctx);
+            LOG.info("ArrowFlightConnection registered. token={}, currConn={}", ctx.getArrowFlightSqlToken(),
                     numberArrowFlightConnection.get());
             return new Pair<>(true, null);
         } finally {
@@ -245,10 +246,10 @@ public class ConnectScheduler {
         boolean removed;
         try {
             connStatsLock.lock();
-            removed = arrowFlightSqlConnectContextMap.remove(ctx.getToken()) != null;
+            removed = arrowFlightSqlConnectContextMap.remove(ctx.getArrowFlightSqlToken()) != null;
             if (removed) {
                 numberArrowFlightConnection.decrementAndGet();
-                LOG.info("ArrowFlightConnection unregistered. token={}, currConn={}", ctx.getToken(),
+                LOG.info("ArrowFlightConnection unregistered. token={}, currConn={}", ctx.getArrowFlightSqlToken(),
                         numberArrowFlightConnection.get());
             }
         } finally {
@@ -262,10 +263,6 @@ public class ConnectScheduler {
 
     public ConnectContext getContext(long connectionId) {
         return connectionMap.get(connectionId);
-    }
-
-    public ConnectContext getContext(String token) {
-        return connectionMap.get(token);
     }
 
     public ArrowFlightSqlConnectContext getArrowFlightSqlConnectContext(String token) {

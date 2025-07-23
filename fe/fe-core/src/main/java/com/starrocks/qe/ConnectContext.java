@@ -728,7 +728,9 @@ public class ConnectContext {
             return;
         }
         closed = true;
-        mysqlChannel.close();
+        if (mysqlChannel != null) {
+            mysqlChannel.close();
+        }
         threadLocalInfo.remove();
         returnRows = 0;
     }

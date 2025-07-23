@@ -138,7 +138,9 @@ public class MysqlChannel {
             return;
         }
         try {
-            channel.close();
+            if (channel != null) {
+                channel.close();
+            }
         } catch (IOException e) {
             LOG.warn("Close channel exception, ignore.");
         } finally {
