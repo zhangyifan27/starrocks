@@ -1253,7 +1253,14 @@ public class ShowExecutor {
                         .sorted(fProvider.getOrderComparator())
                         .skip(fProvider.getSkipCount())
                         .limit(fProvider.getLimitCount())
-                        .map(RoutineLoadJob::getShowInfo)
+                        .map(job -> {
+                            try {
+                                context.setThreadLocalInfo();
+                                return job.getShowInfo();
+                            } finally {
+                                ConnectContext.remove();
+                            }
+                        })
                         .collect(Collectors.toList());
             }
 

@@ -763,9 +763,9 @@ public class KafkaRoutineLoadJob extends RoutineLoadJob {
         Map<String, String> maskedProperties = Maps.newHashMap();
         for (Map.Entry<String, String> entry : customProperties.entrySet()) {
             if (entry.getKey().contains("password") || entry.getKey().contains("secret")) {
-                if (ConnectContext.get() != null && ConnectContext.get().getCurrentRoleIds() != null
-                        && ConnectContext.get().getCurrentRoleIds().contains(
-                        PrivilegeBuiltinConstants.CLUSTER_ADMIN_ROLE_ID)) {
+                ConnectContext context = ConnectContext.get();
+                if (context != null && context.getCurrentRoleIds() != null
+                        && context.getCurrentRoleIds().contains(PrivilegeBuiltinConstants.CLUSTER_ADMIN_ROLE_ID)) {
                     maskedProperties.put(entry.getKey(), entry.getValue());
                 } else {
                     maskedProperties.put(entry.getKey(), "******");
