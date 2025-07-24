@@ -25,6 +25,7 @@ import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AlreadyExistsException;
 import com.starrocks.common.AnalysisException;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ExceptionChecker;
 import com.starrocks.common.FeConstants;
@@ -103,6 +104,7 @@ public class HiveMetadataTest {
     @Before
     public void setUp() throws Exception {
         FeConstants.runningUnitTest = true;
+        Config.report_table_statistics = false;
         executorForHmsRefresh = Executors.newFixedThreadPool(5);
         executorForRemoteFileRefresh = Executors.newFixedThreadPool(5);
         executorForPullFiles = Executors.newFixedThreadPool(5);

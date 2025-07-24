@@ -20,6 +20,7 @@ import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
+import com.starrocks.common.Config;
 import com.starrocks.common.FeConstants;
 import com.starrocks.connector.CachingRemoteFileIO;
 import com.starrocks.connector.MetastoreType;
@@ -97,6 +98,7 @@ public class HiveStatisticsProviderTest {
         connectContext = UtFrameUtils.createDefaultCtx();
         columnRefFactory = new ColumnRefFactory();
         optimizerContext = new OptimizerContext(new Memo(), columnRefFactory, connectContext);
+        Config.report_table_statistics = false;
     }
 
     @After

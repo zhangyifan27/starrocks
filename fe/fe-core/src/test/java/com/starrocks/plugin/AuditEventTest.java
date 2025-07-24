@@ -14,8 +14,13 @@
 
 package com.starrocks.plugin;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
 import org.junit.Assert;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public class AuditEventTest {
     @Test
@@ -48,5 +53,24 @@ public class AuditEventTest {
         Assert.assertEquals("errorCode", event.errorCode);
         Assert.assertEquals(true, event.isQuery);
         Assert.assertEquals("wh", event.warehouse);
+    }
+
+    @Test
+    public void testTableStatistics() {
+        Gson gson = new GsonBuilder().disableHtmlEscaping().create();
+        AuditEvent.TableStatisticsInfo statistics = new AuditEvent.TableStatisticsInfo();
+        statistics.tableStatistics = new ArrayList<>(1);
+        AuditEvent.TableStatistics tableStatistics = new AuditEvent.TableStatistics("b_teg_ngcp_tdw", "for_sql_num");
+        List<String> columns = new ArrayList<>();
+        columns.add("dt");
+        columns.add("task_id");
+        columns.add("sql_num");
+        tableStatistics.addColumns(columns);
+        List<String> partitionNames = new ArrayList<>();
+        partitionNames.add("dt_hive_part=dp_2025070908");
+        partitionNames.add("dt_hive_part=dp_2025070910");
+        tableStatistics.addPartitions(partitionNames);
+        statistics.tableStatistics.add(tableStatistics);
+        System.out.println(gson.toJson(statistics));
     }
 }

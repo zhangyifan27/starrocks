@@ -27,6 +27,7 @@ import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
+import com.starrocks.common.Config;
 import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.RemoteFileOperations;
@@ -100,12 +101,14 @@ public class HiveStatisticsProvider {
         avgRowNumPerPartition = getPerPartitionRowAvgNums(partitionStatistics.values());
 
         if (avgRowNumPerPartition <= 0) {
+            addTableStatisticsInfo(hmsTbl, columns, partitionNames);
             builder.setOutputRowCount(getEstimatedRowCount(table, partitionKeys, builder));
             return builder.build();
         }
 
         totalRowNums = avgRowNumPerPartition * partitionKeys.size();
         builder.setOutputRowCount(totalRowNums);
+        addTableUseOmsStatistics(hmsTbl);
 
         for (ColumnRefOperator columnRefOperator : columns) {
             Column column = table.getColumn(columnRefOperator.getName());
@@ -121,17 +124,39 @@ public class HiveStatisticsProvider {
         return builder.build();
     }
 
+    private void addTableStatisticsInfo(HiveMetaStoreTable table,
+                                        List<ColumnRefOperator> columns,
+                                        List<String> partitionNames) {
+        ConnectContext ctx = ConnectContext.get();
+        if (ctx != null && Config.report_table_statistics) {
+            List<String> columnsList = columns.stream().map(ColumnRefOperator::getName).collect(Collectors.toList());
+            ctx.getAuditEventBuilder()
+                    .addTableStatisticInfo(table.getDbName(), table.getTableName(),
+                            columnsList, partitionNames);
+        }
+    }
+
+    private void addTableUseOmsStatistics(HiveMetaStoreTable table) {
+        ConnectContext ctx = ConnectContext.get();
+        if (ctx != null && Config.report_table_statistics) {
+            ctx.getAuditEventBuilder().addTableUseOmsStatistics(table.getTableName());
+        }
+    }
+
     public Statistics createUnpartitionedStats(
             HivePartitionStats tableStats,
             List<ColumnRefOperator> columns,
             Statistics.Builder builder,
             Table table) {
         long rowNum = tableStats.getCommonStats().getRowNums();
+        HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
         if (rowNum == -1) {
+            addTableStatisticsInfo(hmsTbl, columns, new ArrayList<>());
             builder.setOutputRowCount(getEstimatedRowCount(table, Lists.newArrayList(new PartitionKey()), builder));
             return builder.build();
         } else {
             builder.setOutputRowCount(rowNum);
+            addTableUseOmsStatistics(hmsTbl);
         }
 
         for (ColumnRefOperator columnRefOperator : columns) {

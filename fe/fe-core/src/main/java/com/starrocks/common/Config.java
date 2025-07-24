@@ -3558,4 +3558,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean enable_oms_column_level_access_control = false;
+
+    @ConfField(mutable = true)
+    public static boolean report_table_statistics = true;
 }

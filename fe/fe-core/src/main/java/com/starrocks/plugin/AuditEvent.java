@@ -35,15 +35,20 @@
 package com.starrocks.plugin;
 
 import com.google.common.base.Joiner;
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+import com.google.gson.annotations.SerializedName;
 import com.starrocks.qe.QueryState;
 import com.starrocks.server.WarehouseManager;
 
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /*
  * AuditEvent contains all information about audit log info.
@@ -56,6 +61,8 @@ import java.util.Set;
  *          .build();
  */
 public class AuditEvent {
+    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
+
     public enum EventType {
         CONNECTION,
         DISCONNECTION,
@@ -164,6 +171,50 @@ public class AuditEvent {
 
     @AuditField(value = "supersqlTraceId")
     public String supersqlTraceId = "";
+    @AuditField(value = "Statistics")
+    public String statistics = "";
+    @AuditField(value = "TableUseOmsStatistics")
+    public String tableUseOmsStatistics = "";
+
+    public static class TableStatisticsInfo {
+        public String engine = "starrocks";
+        public String type = "statistics";
+        public List<TableStatistics> tableStatistics;
+    }
+
+    public static class TableStatistics {
+        @SerializedName(value = "db")
+        public String db;
+        @SerializedName(value = "table")
+        public String table;
+        @SerializedName(value = "column_list")
+        public Set<String> columnList = new HashSet<>();
+        @SerializedName(value = "partition")
+        public Set<String> partition = new HashSet<>();
+
+        public TableStatistics(String db, String table) {
+            this.db = db;
+            this.table = table;
+        }
+
+        public void addColumns(List<String> columns) {
+            if (columns != null && columns.size() > 0) {
+                this.columnList.addAll(columns);
+            }
+        }
+
+        public void addPartitions(List<String> partitionNames) {
+            if (partitionNames == null || partitionNames.isEmpty()) {
+                return;
+            }
+            this.partition.addAll(partitionNames);
+            if (this.partition.size() > 5) {
+                List<String> top5 =
+                        partition.stream().sorted(Comparator.reverseOrder()).limit(5).collect(Collectors.toList());
+                this.partition = new HashSet<>(top5);
+            }
+        }
+    }
 
     @AuditField(value = "isScanAllPartitions")
     public boolean isScanAllPartitions = true;
@@ -174,6 +225,8 @@ public class AuditEvent {
     public static class AuditEventBuilder {
         private List<String> tables = new ArrayList<>();
         private Set<String> exceptions = new HashSet<>();
+        private TableStatisticsInfo statistics = null;
+        private Set<String> tableUseOmsStatistics = new HashSet<>();
 
         private AuditEvent auditEvent = new AuditEvent();
 
@@ -184,6 +237,8 @@ public class AuditEvent {
             auditEvent = new AuditEvent();
             tables = new ArrayList<>();
             exceptions = new HashSet<>();
+            tableUseOmsStatistics = new HashSet<>();
+            statistics = null;
         }
 
         public AuditEventBuilder setEventType(EventType eventType) {
@@ -419,12 +474,47 @@ public class AuditEvent {
             return this;
         }
 
+        public AuditEventBuilder addTableUseOmsStatistics(String table) {
+            tableUseOmsStatistics.add(table);
+            return this;
+        }
+
+        public AuditEventBuilder addTableStatisticInfo(String db, String tableName,
+                                                       List<String> columnNames, List<String> partitionNames) {
+            if (statistics == null) {
+                statistics = new TableStatisticsInfo();
+            }
+            if (statistics.tableStatistics == null) {
+                statistics.tableStatistics = new ArrayList<>(1);
+            }
+            for (TableStatistics tableStatistics : statistics.tableStatistics) {
+                if (tableStatistics.db.equals(db) && tableStatistics.table.equals(tableName)) {
+                    tableStatistics.addColumns(columnNames);
+                    tableStatistics.addPartitions(partitionNames);
+                    return this;
+                }
+            }
+            TableStatistics newTable = new TableStatistics(db, tableName);
+            newTable.addColumns(columnNames);
+            newTable.addPartitions(partitionNames);
+            statistics.tableStatistics.add(newTable);
+            return this;
+        }
+
         public AuditEvent build() {
             if (!tables.isEmpty()) {
                 auditEvent.table = String.join(",", tables);
             }
             if (!exceptions.isEmpty()) {
                 auditEvent.exception = String.join(",", exceptions);
+            }
+            if (statistics == null || statistics.tableStatistics == null || statistics.tableStatistics.isEmpty()) {
+                auditEvent.statistics = "";
+            } else {
+                auditEvent.statistics = GSON.toJson(statistics);
+            }
+            if (!tableUseOmsStatistics.isEmpty()) {
+                auditEvent.tableUseOmsStatistics = String.join(",", tableUseOmsStatistics);
             }
             return this.auditEvent;
         }
