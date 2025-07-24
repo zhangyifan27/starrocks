@@ -6618,6 +6618,15 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             if (functionName.equals(FunctionSet.NVL)) {
                 fnName = FunctionName.createFnName(FunctionSet.IFNULL);
             }
+            if (functionName.equals(FunctionSet.TDW_DATE_ADD)) {
+                if (context.expression().size() == 3) {
+                    Expr e0 = (Expr) visit(context.expression(0));
+                    Expr e1 = (Expr) visit(context.expression(1));
+                    Expr e2 = (Expr) visit(context.expression(2));
+                    Expr e1CastToBigInt = new CastExpr(Type.BIGINT, e1);
+                    return new FunctionCallExpr(functionName, ImmutableList.of(e0, e1CastToBigInt, e2), pos);
+                }
+            }
         }
 
         FunctionCallExpr functionCallExpr = new FunctionCallExpr(fnName,
