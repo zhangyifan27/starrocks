@@ -531,7 +531,19 @@ void RuntimeProfile::copy_all_info_strings_from(RuntimeProfile* src_profile) {
                 const std::string indexed_key = strings::Substitute("$0__DUP($1)", original_key, offset);
                 if (get_info_string(indexed_key) == nullptr) {
                     if (step == 1) {
-                        add_info_string(indexed_key, value);
+                        // also need to check if the value is already in the info strings
+                        bool is_dup = false;
+                        for (int i = 0; i < offset; i++) {
+                            const std::string indexed_key = strings::Substitute("$0__DUP($1)", original_key, i);
+                            auto* exist_ptr = get_info_string(indexed_key);
+                            if (exist_ptr != nullptr && *exist_ptr == value) {
+                                is_dup = true;
+                                break;
+                            }
+                        }
+                        if (!is_dup) {
+                            add_info_string(indexed_key, value);
+                        }
                         break;
                     }
                     // Forward too much, try to forward half of the former size

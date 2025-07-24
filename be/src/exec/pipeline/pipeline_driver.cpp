@@ -317,7 +317,8 @@ StatusOr<DriverState> PipelineDriver::process(RuntimeState* runtime_state, int w
                 }
                 return_status = maybe_chunk.status();
                 if (!return_status.ok() && !return_status.is_end_of_file()) {
-                    curr_op->common_metrics()->add_info_string("ErrorMsg", std::string(return_status.message()));
+                    std::string error_msg = std::string(return_status.message());
+                    curr_op->common_metrics()->add_info_string("ErrorMsg", replace_newline_to_tab(error_msg));
                     LOG(WARNING) << "pull_chunk returns not ok status " << return_status.to_string();
                     return return_status;
                 }
@@ -358,8 +359,8 @@ StatusOr<DriverState> PipelineDriver::process(RuntimeState* runtime_state, int w
                         }
 
                         if (!return_status.ok() && !return_status.is_end_of_file()) {
-                            next_op->common_metrics()->add_info_string("ErrorMsg",
-                                                                       std::string(return_status.message()));
+                            std::string error_msg = std::string(return_status.message());
+                            next_op->common_metrics()->add_info_string("ErrorMsg", replace_newline_to_tab(error_msg));
                             LOG(WARNING) << "push_chunk returns not ok status " << return_status.to_string();
                             return return_status;
                         }
