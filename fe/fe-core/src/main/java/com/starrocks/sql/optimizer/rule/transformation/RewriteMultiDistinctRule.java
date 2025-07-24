@@ -75,6 +75,12 @@ public class RewriteMultiDistinctRule extends TransformationRule {
         if (isComplexConstantCountDistinct(input)) {
             return rewriteComplexConstantDistinct(input);
         }
+        // Prefer to rewrite using GROUPING SETS mode.
+        MultiDistinctByGroupingSetsRewriter groupingSetsRewriter = new MultiDistinctByGroupingSetsRewriter();
+        List<OptExpression> optExpressions = groupingSetsRewriter.transformImpl(input, context);
+        if (!optExpressions.isEmpty()) {
+            return optExpressions;
+        }
         if (useCteToRewrite(input, context)) {
             MultiDistinctByCTERewriter rewriter = new MultiDistinctByCTERewriter();
             return rewriter.transformImpl(input, context);

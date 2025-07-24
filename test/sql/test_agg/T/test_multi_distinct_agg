@@ -1,0 +1,153 @@
+-- name: test_multi_distinct_agg
+set enable_multi_distinct_to_grouping_sets_olap = true;
+
+CREATE TABLE IF NOT EXISTS emps (
+  emp_id INT,
+  deptno INT,
+  sal DECIMAL(10, 2),
+  gender STRING,
+  age INT
+) ENGINE=OLAP
+PROPERTIES (
+"replication_num" = "1"
+);
+
+INSERT INTO emps VALUES
+(1, 10, 5000.00, 'Male', 30),
+(2, 10, 6000.00, 'Female', 28),
+(3, 10, 5000.00, 'Male', 32),
+(4, 10, 7000.00, 'Female', 40),
+(5, 20, 5500.00, 'Male', 35),
+(6, 20, 5500.00, 'Female', 33),
+(7, 20, 8000.00, 'Male', 45),
+(8, 30, 4000.00, NULL, 25),
+(9, 30, 4000.00, NULL, 27);
+
+--test1
+set enable_multi_distinct_to_grouping_sets = true;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender)
+FROM emps
+group by deptno;
+set enable_multi_distinct_to_grouping_sets = false;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender)
+FROM emps
+group by deptno;
+
+--test2
+set enable_multi_distinct_to_grouping_sets = true;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender)
+FROM emps
+group by deptno, emp_id;
+set enable_multi_distinct_to_grouping_sets = false;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender)
+FROM emps
+group by deptno, emp_id;
+
+--test3
+set enable_multi_distinct_to_grouping_sets = true;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender)
+FROM emps;
+set enable_multi_distinct_to_grouping_sets = false;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender)
+FROM emps;
+
+--test4
+set enable_multi_distinct_to_grouping_sets = true;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender), sum(DISTINCT sal), deptno, max(age)
+FROM emps
+group by deptno
+order by deptno desc;
+set enable_multi_distinct_to_grouping_sets = false;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender), sum(DISTINCT sal), deptno, max(age)
+FROM emps
+group by deptno
+order by deptno desc;
+
+--test5
+set enable_multi_distinct_to_grouping_sets = true;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender), max(deptno)
+FROM emps;
+set enable_multi_distinct_to_grouping_sets = false;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender), max(deptno)
+FROM emps;
+
+--test6
+set enable_multi_distinct_to_grouping_sets = true;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender), sum(DISTINCT gender)
+FROM emps
+group by deptno;
+set enable_multi_distinct_to_grouping_sets = false;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender), sum(DISTINCT gender)
+FROM emps
+group by deptno;
+
+--test7, not support
+set enable_multi_distinct_to_grouping_sets = true;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender), count(DISTINCT sal, gender)
+FROM emps
+group by deptno;
+
+--test8
+set enable_multi_distinct_to_grouping_sets = true;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender), avg(DISTINCT sal)
+FROM emps
+group by deptno;
+set enable_multi_distinct_to_grouping_sets = false;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender), avg(DISTINCT sal)
+FROM emps
+group by deptno;
+
+--test9
+set enable_multi_distinct_to_grouping_sets = true;
+select floor(t2.deptno),
+count(distinct case when t4.age > 0 THEN t2.age + 1 ELSE NULL END),
+count(distinct case when t2.age > 10 THEN t4.age + 10 ELSE NULL END),
+sum(t4.sal) from (
+  select deptno, sal, gender, age
+  from (select * from emps where emp_id < 100) `t1`
+  group by deptno, sal, gender, age
+) `t2`
+LEFT JOIN (
+  select deptno, sal, age
+  from (select * from emps where emp_id < 200) `t3`
+  group by deptno, sal, age
+) `t4`
+on t2.deptno = t4.deptno
+GROUP BY floor(t2.deptno);
+
+set enable_multi_distinct_to_grouping_sets = false;
+select floor(t2.deptno),
+count(distinct case when t4.age > 0 THEN t2.age + 1 ELSE NULL END),
+count(distinct case when t2.age > 10 THEN t4.age + 10 ELSE NULL END),
+sum(t4.sal) from (
+  select deptno, sal, gender, age
+  from (select * from emps where emp_id < 100) `t1`
+  group by deptno, sal, gender, age
+) `t2`
+LEFT JOIN (
+  select deptno, sal, age
+  from (select * from emps where emp_id < 200) `t3`
+  group by deptno, sal, age
+) `t4`
+on t2.deptno = t4.deptno
+GROUP BY floor(t2.deptno);
+
+--test10
+set enable_multi_distinct_to_grouping_sets = true;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender)
+FROM emps
+GROUP BY ROLLUP(sal, gender);
+set enable_multi_distinct_to_grouping_sets = false;
+SELECT COUNT(DISTINCT sal), COUNT(DISTINCT gender)
+FROM emps
+GROUP BY ROLLUP(sal, gender);
+
+--test11
+set enable_multi_distinct_to_grouping_sets = true;
+SELECT floor(emp_id) AS date_gap, COUNT(DISTINCT sal) AS base_feed_num, COUNT(DISTINCT gender) AS base_feed_num
+FROM emps
+GROUP BY floor(emp_id);
+set enable_multi_distinct_to_grouping_sets = false;
+SELECT floor(emp_id) AS date_gap, COUNT(DISTINCT sal) AS base_feed_num, COUNT(DISTINCT gender) AS base_feed_num
+FROM emps
+GROUP BY floor(emp_id);

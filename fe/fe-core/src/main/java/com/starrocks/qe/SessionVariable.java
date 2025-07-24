@@ -867,6 +867,11 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_DISTINCT_WITH_GROUPBY = "enable_distinct_with_groupby";
 
+    public static final String ENABLE_MULTI_DISTINCT_TO_GROUPING_SETS = "enable_multi_distinct_to_grouping_sets";
+
+    public static final String ENABLE_MULTI_DISTINCT_TO_GROUPING_SETS_OLAP = "enable_multi_distinct_to_grouping_sets_olap";
+
+
     // --------  tq session variables start --------
 
     public static final String TQ_TAUTH_PLATFORM_TOKEN = "tq_tauth_platform_token";
@@ -2427,6 +2432,12 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VarAttr(name = ENABLE_REWRITE_UNNEST_BITMAP_TO_ARRAY)
     private boolean enableRewriteUnnestBitmapToArray = true;
+
+    @VarAttr(name = ENABLE_MULTI_DISTINCT_TO_GROUPING_SETS)
+    private boolean enableMultiDistinctToGroupingSets = true;
+
+    @VarAttr(name = ENABLE_MULTI_DISTINCT_TO_GROUPING_SETS_OLAP)
+    private boolean enableMultiDistinctToGroupingSetsOlap = false;
 
     public int getExprChildrenLimit() {
         return exprChildrenLimit;
@@ -4567,6 +4578,23 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public void setPrunePartitionSimpleQueryAvgRowSize(long prunePartitionSimpleQueryAvgRowSize) {
         this.prunePartitionSimpleQueryAvgRowSize = prunePartitionSimpleQueryAvgRowSize;
     }
+
+    public boolean isEnableGroupingSets() {
+        return enableMultiDistinctToGroupingSets;
+    }
+
+    public void setEnableGroupingSets(boolean value) {
+        this.enableMultiDistinctToGroupingSets = value;
+    }
+
+    public boolean isEnableGroupingSetsOlap() {
+        return enableMultiDistinctToGroupingSetsOlap;
+    }
+
+    public void setEnableGroupingSetsOlap(boolean value) {
+        this.enableMultiDistinctToGroupingSetsOlap = value;
+    }
+
 
     // Serialize to thrift object
     // used for rest api
