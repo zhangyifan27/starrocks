@@ -492,7 +492,7 @@ public class OptExternalPartitionPruner {
                 }
             }
 
-            partitionKeyMap = partitionSecondaryPruner(operator,
+            partitionKeyMap = partitionSecondaryPruner(operator, context,
                     columnToPartitionValuesMap, columnToNullPartitions, partitionKeyMap);
             scanOperatorPredicates.getIdToPartitionKey().putAll(partitionKeyMap);
             scanOperatorPredicates.setSelectedPartitionIds(partitionKeyMap.keySet());
@@ -528,10 +528,15 @@ public class OptExternalPartitionPruner {
      */
     private static Map<Long, PartitionKey> partitionSecondaryPruner(
             LogicalScanOperator operator,
+            OptimizerContext context,
             Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap,
             Map<ColumnRefOperator, Set<Long>> columnToNullPartitions,
             Map<Long, PartitionKey> partitionKeyMap) {
         try {
+            boolean enableSecondaryPrunner = context.getSessionVariable().isEnablePartitionSecondaryPrunner();
+            if (!enableSecondaryPrunner) {
+                return partitionKeyMap;
+            }
             ScanOperatorPredicates predicates = operator.getScanOperatorPredicates();
             if (partitionKeyMap.isEmpty() || predicates.getPartitionConjuncts().isEmpty()) {
                 return partitionKeyMap;

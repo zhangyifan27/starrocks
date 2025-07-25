@@ -252,6 +252,8 @@ public class IcebergScanNode extends ScanNode {
         }
 
         // this partition list filtered out based on logical partition secondary pruner
+        boolean enableSecondaryPrunner =
+                ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnablePartitionSecondaryPrunner();
         List<PartitionKey> selectedPartitionKeys = new ArrayList<>(scanNodePredicates.getIdToPartitionKey().values());
         Map<StructLike, Long> partitionKeyToId = Maps.newHashMap();
         Map<Long, List<Integer>> idToPartitionSlots = Maps.newHashMap();
@@ -282,7 +284,7 @@ public class IcebergScanNode extends ScanNode {
                             .collect(Collectors.toList());
                     PartitionKey partitionKey = getPartitionKey(partition, task.spec(), indexes, indexToField);
                     boolean isSelected = partitionKey.isEmpty() || selectedPartitionKeys.contains(partitionKey);
-                    if (!isSelected) {
+                    if (enableSecondaryPrunner && !isSelected) {
                         continue;
                     }
                     partitionKeyToId.put(partition, partitionId);

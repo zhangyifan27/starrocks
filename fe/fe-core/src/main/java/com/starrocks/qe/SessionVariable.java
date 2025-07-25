@@ -871,6 +871,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_MULTI_DISTINCT_TO_GROUPING_SETS_OLAP = "enable_multi_distinct_to_grouping_sets_olap";
 
+    public static final String ENABLE_PARTITION_SECONDARY_PRUNNER = "enable_partition_secondary_prunner";
 
     // --------  tq session variables start --------
 
@@ -1639,6 +1640,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         public static final String ROUNDROBIN = "roundrobin";
         public static final String PLAIN = "plain";
     }
+
     @VariableMgr.VarAttr(name = HDFS_BACKEND_SELECTOR_HASH_ALGORITHM, flag = VariableMgr.INVISIBLE)
     private String hdfsBackendSelectorHashAlgorithm = BackendSelectorHashAlgorithm.CONSISTENT;
 
@@ -2438,6 +2440,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VarAttr(name = ENABLE_MULTI_DISTINCT_TO_GROUPING_SETS_OLAP)
     private boolean enableMultiDistinctToGroupingSetsOlap = false;
+
+    @VarAttr(name = ENABLE_PARTITION_SECONDARY_PRUNNER)
+    private boolean enablePartitionSecondaryPrunner = true;
 
     public int getExprChildrenLimit() {
         return exprChildrenLimit;
@@ -4595,6 +4600,13 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.enableMultiDistinctToGroupingSetsOlap = value;
     }
 
+    public boolean isEnablePartitionSecondaryPrunner() {
+        return enablePartitionSecondaryPrunner;
+    }
+
+    public void setEnablePartitionSecondaryPrunner(boolean value) {
+        this.enablePartitionSecondaryPrunner = value;
+    }
 
     // Serialize to thrift object
     // used for rest api
