@@ -146,7 +146,7 @@ public class QueryRuntimeProfile {
         this.connectContext = connectContext;
         this.jobSpec = jobSpec;
         this.isShortCircuit = isShortCircuit;
-
+        this.fragmentProfiles = new ArrayList<>();
         this.queryProfile = new RuntimeProfile("Execution");
 
         if (jobSpec.hasOlapTableSink()) {
