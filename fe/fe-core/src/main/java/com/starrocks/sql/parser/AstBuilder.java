@@ -538,7 +538,12 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             "collect_set", FunctionSet.ARRAY_AGG_DISTINCT,
             "wm_concat", FunctionSet.GROUP_CONCAT,
             "string_to_map", FunctionSet.STR_TO_MAP,
-            "sort_array", FunctionSet.ARRAY_SORT
+            "sort_array", FunctionSet.ARRAY_SORT,
+            "date_parse", FunctionSet.STR_TO_DATE,
+            "nvl", FunctionSet.IFNULL,
+            "approx_percentile", FunctionSet.PERCENTILE_APPROX,
+            "parse_datetime", FunctionSet.STR_TO_JODATIME,
+            "regexp_like", FunctionSet.REGEXP
     );
 
 
@@ -6470,7 +6475,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                 if (e1 instanceof StringLiteral) {
                     // select date_add('day', 1, '2025-06-27');
                     IntervalLiteral intervalLiteral =
-                            new IntervalLiteral(e2, new UnitIdentifier(((StringLiteral) e1).getValue()));
+                                new IntervalLiteral(e2, new UnitIdentifier(((StringLiteral) e1).getValue()));
                     return new TimestampArithmeticExpr(fnName, e3, intervalLiteral.getValue(),
                             intervalLiteral.getUnitIdentifier().getDescription());
                 } else {

@@ -1380,7 +1380,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private double shuffleLeftTableScaleFactor = broadcastRightTableScaleFactor * broadcastRowCountLimit;
 
     @VariableMgr.VarAttr(name = NEW_PLANNER_OPTIMIZER_TIMEOUT)
-    private long optimizerExecuteTimeout = 3000;
+    private long optimizerExecuteTimeout = 180000;
 
     @VariableMgr.VarAttr(name = QUERY_DEBUG_OPTIONS, flag = VariableMgr.INVISIBLE)
     private String queryDebugOptions = "";

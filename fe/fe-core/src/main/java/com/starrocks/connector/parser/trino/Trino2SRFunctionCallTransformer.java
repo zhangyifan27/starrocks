@@ -147,6 +147,8 @@ public class Trino2SRFunctionCallTransformer {
         // to_unixtime -> unix_timestamp
         registerFunctionTransformer("to_unixtime", 1, "unix_timestamp",
                 List.of(Expr.class));
+        registerFunctionTransformer("to_unixtime", 2, "unix_timestamp",
+                List.of(Expr.class, Expr.class));
 
         // from_unixtime(unixtime) -> from_unixtime
         registerFunctionTransformer("from_unixtime", 1, "from_unixtime",

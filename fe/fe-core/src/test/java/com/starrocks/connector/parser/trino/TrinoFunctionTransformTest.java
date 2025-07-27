@@ -119,6 +119,9 @@ public class TrinoFunctionTransformTest extends TrinoTestBase {
         String sql = "select to_unixtime(TIMESTAMP '2023-04-22 00:00:00');";
         assertPlanContains(sql, "1682092800");
 
+        sql = "select to_unixtime('2024-08-19 14:36:41', '%Y-%m-%d %H:%i:%s');";
+        assertPlanContains(sql, "1724049401");
+
         sql = "select from_unixtime(1724049401);";
         assertPlanContains(sql, "2024-08-19 14:36:41");
 

@@ -621,6 +621,15 @@ public class ScalarOperatorFunctionsTest {
                 ScalarOperatorFunctions.unixTimestamp(codt).getBigint());
         assertEquals(1427073835L,
                 ScalarOperatorFunctions.unixTimestamp(O_DT_20150323_092355).getBigint());
+        assertEquals(1427040000L,
+                ScalarOperatorFunctions.unixTimestamp(
+                        ConstantOperator.createVarchar("2015-03-23"),
+                        ConstantOperator.createVarchar("%Y-%m-%d")).getBigint());
+        assertEquals(1724049401L,
+                ScalarOperatorFunctions.unixTimestamp(
+                        ConstantOperator.createVarchar("2024-08-19 14:36:41"),
+                        ConstantOperator.createVarchar("%Y-%m-%d %H:%i:%s")).getBigint());
+
     }
 
     @Test

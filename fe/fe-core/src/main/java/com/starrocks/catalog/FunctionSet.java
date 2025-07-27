@@ -213,6 +213,7 @@ public class FunctionSet {
     public static final String TRIM = "trim";
     public static final String UPPER = "upper";
     public static final String SUBSTRING_INDEX = "substring_index";
+    public static final String STR_TO_JODATIME = "str_to_jodatime";
 
     // Json functions:
     public static final String JSON_ARRAY = "json_array";
