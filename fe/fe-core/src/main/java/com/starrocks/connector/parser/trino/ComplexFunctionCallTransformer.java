@@ -44,11 +44,6 @@ public class ComplexFunctionCallTransformer {
             String fullFunctionName = functionName;
             if (fullFunctionName.equalsIgnoreCase(FunctionSet.DATE_ADD)) {
                 fullFunctionName = FunctionSet.TDW_DATE_ADD;
-                if (children.size() == 3) {
-                    Expr e1CastToBigInt = new CastExpr(Type.BIGINT, children.get(1));
-                    return new FunctionCallExpr(fullFunctionName,
-                            ImmutableList.of(children.get(0), e1CastToBigInt, children.get(2)));
-                }
                 return new FunctionCallExpr(fullFunctionName, children);
             } else if (fullFunctionName.equalsIgnoreCase(FunctionSet.DATE_SUB)) {
                 fullFunctionName = FunctionSet.TDW_DATE_SUB;

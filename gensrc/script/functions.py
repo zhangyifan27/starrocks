@@ -576,9 +576,18 @@ vectorized_functions = [
 
     [50817, 'sysdate', True, False, 'VARCHAR', [], 'TimeFunctions::sysdate'],
     [50818, 'SYSTIMESTAMP', True, False, 'VARCHAR', [], 'TimeFunctions::systimestamp'],
-    [50819, 'tdw_date_add', True, False, 'DATETIME', ['VARCHAR', 'BIGINT', 'DATETIME'], 'TimeFunctions::trino_date_add_with_datetime'],
-    [50820, 'tdw_date_add', True, False, 'DATE', ['VARCHAR', 'BIGINT', 'DATE'], 'TimeFunctions::trino_date_add_with_date'],
-    [50821, 'tdw_date_add', True, False, 'VARCHAR', ['VARCHAR', 'BIGINT', 'VARCHAR'], 'TimeFunctions::trino_date_add_with_str'],
+    [50819, 'tdw_date_add', True, False, 'DATETIME', ['VARCHAR', 'BIGINT', 'DATETIME'], 'TimeFunctions::trino_date_add_with_bigint_datetime'],
+    [50820, 'tdw_date_add', True, False, 'DATE', ['VARCHAR', 'BIGINT', 'DATE'], 'TimeFunctions::trino_date_add_with_bigint_date'],
+    [50821, 'tdw_date_add', True, False, 'VARCHAR', ['VARCHAR', 'BIGINT', 'VARCHAR'], 'TimeFunctions::trino_date_add_with_bigint_str'],
+    [50822, 'tdw_date_add', True, False, 'DATETIME', ['VARCHAR', 'TINYINT', 'DATETIME'], 'TimeFunctions::trino_date_add_with_tinyint_datetime'],
+    [50823, 'tdw_date_add', True, False, 'DATETIME', ['VARCHAR', 'SMALLINT', 'DATETIME'], 'TimeFunctions::trino_date_add_with_smallint_datetime'],
+    [50824, 'tdw_date_add', True, False, 'DATETIME', ['VARCHAR', 'INT', 'DATETIME'], 'TimeFunctions::trino_date_add_with_int_datetime'],
+    [50825, 'tdw_date_add', True, False, 'DATE', ['VARCHAR', 'TINYINT', 'DATE'], 'TimeFunctions::trino_date_add_with_tinyint_date'],
+    [50826, 'tdw_date_add', True, False, 'DATE', ['VARCHAR', 'SMALLINT', 'DATE'], 'TimeFunctions::trino_date_add_with_smallint_date'],
+    [50827, 'tdw_date_add', True, False, 'DATE', ['VARCHAR', 'INT', 'DATE'], 'TimeFunctions::trino_date_add_with_int_date'],
+    [50828, 'tdw_date_add', True, False, 'VARCHAR', ['VARCHAR', 'TINYINT', 'VARCHAR'], 'TimeFunctions::trino_date_add_with_tinyint_str'],
+    [50829, 'tdw_date_add', True, False, 'VARCHAR', ['VARCHAR', 'SMALLINT', 'VARCHAR'], 'TimeFunctions::trino_date_add_with_smallint_str'],
+    [50830, 'tdw_date_add', True, False, 'VARCHAR', ['VARCHAR', 'INT', 'VARCHAR'], 'TimeFunctions::trino_date_add_with_int_str'],
 
     # 60xxx: like predicate
     # important ref: LikePredicate.java, must keep name equals LikePredicate.Operator

@@ -843,9 +843,18 @@ public:
     DEFINE_VECTORIZED_FN(sysdate);
     DEFINE_VECTORIZED_FN(systimestamp);
 
-    DEFINE_VECTORIZED_FN(trino_date_add_with_datetime);
-    DEFINE_VECTORIZED_FN(trino_date_add_with_date);
-    DEFINE_VECTORIZED_FN(trino_date_add_with_str);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_tinyint_datetime);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_smallint_datetime);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_int_datetime);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_bigint_datetime);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_tinyint_date);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_smallint_date);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_int_date);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_bigint_date);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_tinyint_str);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_smallint_str);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_int_str);
+    DEFINE_VECTORIZED_FN(trino_date_add_with_bigint_str);
 
     /** Flags for calc_week() function.  */
     constexpr static const unsigned int WEEK_MONDAY_FIRST = 1;
@@ -896,6 +905,10 @@ private:
     static StatusOr<ColumnPtr> _tdw_to_char_with_str(FunctionContext* context, const starrocks::Columns& columns);
     static StatusOr<ColumnPtr> _tdw_to_char_with_date(FunctionContext* context, const starrocks::Columns& columns);
     static StatusOr<ColumnPtr> _tdw_to_char_with_datetime(FunctionContext* context, const starrocks::Columns& columns);
+
+    DEFINE_VECTORIZED_FN_TEMPLATE(trino_date_add_with_date);
+    DEFINE_VECTORIZED_FN_TEMPLATE(trino_date_add_with_datetime);
+    DEFINE_VECTORIZED_FN_TEMPLATE(trino_date_add_with_str);
 
     template <LogicalType TIMESTAMP_TYPE>
     static StatusOr<ColumnPtr> _t_from_unix_with_format_const(std::string& format_content, FunctionContext* context,

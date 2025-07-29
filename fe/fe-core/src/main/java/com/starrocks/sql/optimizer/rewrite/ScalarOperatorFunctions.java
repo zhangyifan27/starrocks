@@ -1537,25 +1537,57 @@ public class ScalarOperatorFunctions {
     @ConstantFunction.List(list = {
             @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, BIGINT, VARCHAR}, returnType = VARCHAR,
                     isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, TINYINT, VARCHAR}, returnType = VARCHAR,
+                    isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, SMALLINT, VARCHAR}, returnType = VARCHAR,
+                    isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, INT, VARCHAR}, returnType = VARCHAR,
+                    isMonotonic = true),
             @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, BIGINT, DATETIME}, returnType = DATETIME,
                     isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, TINYINT, DATETIME}, returnType = DATETIME,
+                    isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, SMALLINT, DATETIME}, returnType = DATETIME,
+                    isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, INT, DATETIME}, returnType = DATETIME,
+                    isMonotonic = true),
             @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, BIGINT, DATE}, returnType = DATE,
+                    isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, TINYINT, DATE}, returnType = DATE,
+                    isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, SMALLINT, DATE}, returnType = DATE,
+                    isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, INT, DATE}, returnType = DATE,
                     isMonotonic = true),
     })
     public static ConstantOperator tdwDaysAdd(ConstantOperator type, ConstantOperator plus, ConstantOperator date)
             throws AnalysisException {
         if (date.getType().isStringType()) {
             LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
-            dateTime = UDFDateAdd.plus(type.getVarchar(), plus.getBigint(), dateTime);
+            dateTime = UDFDateAdd.plus(type.getVarchar(), getPlus(plus), dateTime);
             return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
         } else if (date.getType().isDate()) {
-            LocalDateTime dateTime = UDFDateAdd.plus(type.getVarchar(), plus.getBigint(), date.getDatetime());
+            LocalDateTime dateTime = UDFDateAdd.plus(type.getVarchar(), getPlus(plus), date.getDatetime());
             return ConstantOperator.createDate(dateTime);
         } else if (date.getType().isDatetime()) {
-            LocalDateTime dateTime = UDFDateAdd.plus(type.getVarchar(), plus.getBigint(), date.getDatetime());
+            LocalDateTime dateTime = UDFDateAdd.plus(type.getVarchar(), getPlus(plus), date.getDatetime());
             return ConstantOperator.createDatetime(dateTime);
         } else {
             throw new AnalysisException("tdw_date_add unsupported date type " + date.getType().toString());
+        }
+    }
+
+    public static long getPlus(ConstantOperator plus) {
+        if (plus.getType().isTinyint()) {
+            return plus.getTinyInt();
+        } else if (plus.getType().isSmallint()) {
+            return plus.getSmallint();
+        } else if (plus.getType().isInt()) {
+            return plus.getInt();
+        } else if (plus.getType().isBigint()) {
+            return plus.getBigint();
+        } else {
+            return plus.getBigint();
         }
     }
 

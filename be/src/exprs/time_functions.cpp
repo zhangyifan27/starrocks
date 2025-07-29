@@ -4748,11 +4748,12 @@ StatusOr<ColumnPtr> TimeFunctions::systimestamp(FunctionContext* context, const 
     }
 }
 
+template <LogicalType TYPE>
 StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_datetime(FunctionContext* context, const Columns& columns) {
     DCHECK_EQ(columns.size(), 3);
     RETURN_IF_COLUMNS_ONLY_NULL(columns);
     ColumnViewer<TYPE_VARCHAR> type_column(columns[0]);
-    ColumnViewer<TYPE_BIGINT> plus_column(columns[1]);
+    ColumnViewer<TYPE> plus_column(columns[1]);
     ColumnViewer<TYPE_DATETIME> ts_column(columns[2]);
     auto size = columns[0]->size();
     ColumnBuilder<TYPE_DATETIME> result(size);
@@ -4761,7 +4762,7 @@ StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_datetime(FunctionContext*
             result.append_null();
             continue;
         }
-        long plus = plus_column.value(row);
+        auto plus = plus_column.value(row);
         TimestampValue ts = ts_column.value(row);
         auto type_str = type_column.value(row).to_string();
         transform(type_str.begin(), type_str.end(), type_str.begin(), ::tolower);
@@ -4833,6 +4834,22 @@ StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_datetime(FunctionContext*
         }
     }
     return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_tinyint_datetime(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_datetime<TYPE_TINYINT>(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_smallint_datetime(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_datetime<TYPE_SMALLINT>(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_int_datetime(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_datetime<TYPE_INT>(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_bigint_datetime(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_datetime<TYPE_BIGINT>(context, columns);
 }
 
 void getDateResult(TimestampValue* ts_plus, ColumnBuilder<TYPE_DATE>* result) {
@@ -4847,11 +4864,12 @@ void getDateResult(TimestampValue* ts_plus, ColumnBuilder<TYPE_DATE>* result) {
     }
 }
 
+template <LogicalType TYPE>
 StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_date(FunctionContext* context, const Columns& columns) {
     DCHECK_EQ(columns.size(), 3);
     RETURN_IF_COLUMNS_ONLY_NULL(columns);
     ColumnViewer<TYPE_VARCHAR> type_column(columns[0]);
-    ColumnViewer<TYPE_BIGINT> plus_column(columns[1]);
+    ColumnViewer<TYPE> plus_column(columns[1]);
     ColumnViewer<TYPE_DATE> ts_column(columns[2]);
     auto size = columns[0]->size();
     ColumnBuilder<TYPE_DATE> result(size);
@@ -4860,7 +4878,7 @@ StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_date(FunctionContext* con
             result.append_null();
             continue;
         }
-        long plus = plus_column.value(row);
+        auto plus = plus_column.value(row);
         TimestampValue ts = ts_column.value(row);
         auto type_str = type_column.value(row).to_string();
         transform(type_str.begin(), type_str.end(), type_str.begin(), ::tolower);
@@ -4896,6 +4914,22 @@ StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_date(FunctionContext* con
         }
     }
     return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_tinyint_date(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_date<TYPE_TINYINT>(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_smallint_date(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_date<TYPE_SMALLINT>(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_int_date(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_date<TYPE_INT>(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_bigint_date(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_date<TYPE_BIGINT>(context, columns);
 }
 
 void getDateResult(TimestampValue* ts_plus, ColumnBuilder<TYPE_VARCHAR>* result, bool hasLine) {
@@ -4912,11 +4946,12 @@ void getDateResult(TimestampValue* ts_plus, ColumnBuilder<TYPE_VARCHAR>* result,
     }
 }
 
+template <LogicalType TYPE>
 StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_str(FunctionContext* context, const Columns& columns) {
     DCHECK_EQ(columns.size(), 3);
     RETURN_IF_COLUMNS_ONLY_NULL(columns);
     ColumnViewer<TYPE_VARCHAR> type_column(columns[0]);
-    ColumnViewer<TYPE_BIGINT> plus_column(columns[1]);
+    ColumnViewer<TYPE> plus_column(columns[1]);
     ColumnViewer<TYPE_VARCHAR> ts_column(columns[2]);
     auto size = columns[0]->size();
     ColumnBuilder<TYPE_VARCHAR> result(size);
@@ -4925,7 +4960,7 @@ StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_str(FunctionContext* cont
             result.append_null();
             continue;
         }
-        long plus = plus_column.value(row);
+        auto plus = plus_column.value(row);
         auto date = ts_column.value(row);
         auto type_str = type_column.value(row).to_string();
 
@@ -4993,6 +5028,22 @@ StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_str(FunctionContext* cont
         }
     }
     return result.build(ColumnHelper::is_all_const(columns));
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_tinyint_str(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_str<TYPE_TINYINT>(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_smallint_str(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_str<TYPE_SMALLINT>(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_int_str(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_str<TYPE_INT>(context, columns);
+}
+
+StatusOr<ColumnPtr> TimeFunctions::trino_date_add_with_bigint_str(FunctionContext* context, const Columns& columns) {
+    return trino_date_add_with_str<TYPE_BIGINT>(context, columns);
 }
 
 } // namespace starrocks
