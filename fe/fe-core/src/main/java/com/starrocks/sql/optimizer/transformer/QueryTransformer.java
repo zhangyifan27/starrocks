@@ -182,6 +182,7 @@ public class QueryTransformer {
         Scope scope = queryBlock.getOrderScope();
         ExpressionMapping outputTranslations = new ExpressionMapping(scope);
         Map<ColumnRefOperator, ScalarOperator> projections = Maps.newHashMap();
+        Map<ScalarOperator, ColumnRefOperator> reverseProjections = Maps.newHashMap();
 
         int outputExprIdx = 0;
         for (Expr expression : outputExpression) {
@@ -193,8 +194,9 @@ public class QueryTransformer {
                     SubqueryUtils.rewriteScalarOperator(scalarOperator, subOpt, subqueryPlaceholders);
             scalarOperator = pair.first;
             subOpt = pair.second;
-            ColumnRefOperator columnRefOperator = getOrCreateColumnRefOperator(expression, scalarOperator, projections);
+            ColumnRefOperator columnRefOperator = getOrCreateColumnRefOperator(expression, scalarOperator, reverseProjections);
             projections.put(columnRefOperator, scalarOperator);
+            reverseProjections.put(scalarOperator, columnRefOperator);
 
             if (outputExprInOrderByScope.contains(outputExprIdx)) {
                 outputTranslations.put(expression, columnRefOperator);
@@ -264,6 +266,7 @@ public class QueryTransformer {
                 subOpt.getColumnRefToConstOperators());
 
         Map<ColumnRefOperator, ScalarOperator> projections = Maps.newHashMap();
+        Map<ScalarOperator, ColumnRefOperator> reverseProjections = Maps.newHashMap();
         for (Expr expression : expressions) {
             Map<ScalarOperator, SubqueryOperator> subqueryPlaceholders = Maps.newHashMap();
             ScalarOperator scalarOperator = SqlToScalarOperatorTranslator.translate(expression,
@@ -273,8 +276,9 @@ public class QueryTransformer {
                     SubqueryUtils.rewriteScalarOperator(scalarOperator, subOpt, subqueryPlaceholders);
             scalarOperator = pair.first;
             subOpt = pair.second;
-            ColumnRefOperator columnRefOperator = getOrCreateColumnRefOperator(expression, scalarOperator, projections);
+            ColumnRefOperator columnRefOperator = getOrCreateColumnRefOperator(expression, scalarOperator, reverseProjections);
             projections.put(columnRefOperator, scalarOperator);
+            reverseProjections.put(scalarOperator, columnRefOperator);
             outputTranslations.put(expression, columnRefOperator);
             if (scalarOperator.isConstant()) {
                 outputTranslations.putConstOperator(columnRefOperator, scalarOperator);
@@ -663,16 +667,12 @@ public class QueryTransformer {
     }
 
     private ColumnRefOperator getOrCreateColumnRefOperator(Expr expression, ScalarOperator scalarOperator,
-                                                           Map<ColumnRefOperator, ScalarOperator> projections) {
+                                                           Map<ScalarOperator, ColumnRefOperator> reverseProjections) {
         ColumnRefOperator columnRefOperator;
         if (scalarOperator.isColumnRef()) {
             columnRefOperator = (ColumnRefOperator) scalarOperator;
-        } else if (scalarOperator.isVariable() && projections.containsValue(scalarOperator)) {
-            columnRefOperator = projections.entrySet().stream()
-                    .filter(e -> scalarOperator.equals(e.getValue()))
-                    .findAny()
-                    .map(Map.Entry::getKey)
-                    .orElse(null);
+        } else if (scalarOperator.isVariable() &&
+                ((columnRefOperator = reverseProjections.get(scalarOperator)) != null)) {
             Preconditions.checkNotNull(columnRefOperator);
         } else {
             columnRefOperator = columnRefFactory.create(expression, expression.getType(), scalarOperator.isNullable());
