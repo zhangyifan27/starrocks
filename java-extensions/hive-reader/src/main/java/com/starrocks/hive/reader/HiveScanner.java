@@ -68,8 +68,8 @@ public class HiveScanner extends ConnectorScanner {
 
     private static final Logger LOG = LogManager.getLogger(HiveScanner.class);
     private static Cache<String, UserGroupInformation> CACHE_UGI = CacheBuilder.newBuilder()
-            .maximumSize(512)
-            .expireAfterAccess(3600, TimeUnit.SECONDS)
+            .maximumSize(1024)
+            .expireAfterAccess(24 * 60 * 60, TimeUnit.SECONDS)
             .removalListener((RemovalNotification<String, UserGroupInformation> notification) -> {
                 UserGroupInformation ugi = notification.getValue();
                 if (ugi != null) {
@@ -302,9 +302,9 @@ public class HiveScanner extends ConnectorScanner {
                 return null;
             });
         } catch (Exception e) {
-            close();
             LOG.error("Failed to open the hive reader, " + dataFilePath
                     + ", offset = " + blockOffset + ", length = " + blockLength, e);
+            close();
             throw new IOException("Failed to open the hive reader.", e);
         }
     }
@@ -343,9 +343,9 @@ public class HiveScanner extends ConnectorScanner {
             }
             return numRows;
         } catch (Exception e) {
-            close();
             LOG.error("Failed to get the next off-heap table chunk of hive, " + dataFilePath
                     + ", offset = " + blockOffset + ", length = " + blockLength, e);
+            close();
             throw new IOException("Failed to get the next off-heap table chunk of hive.", e);
         }
     }
