@@ -57,6 +57,7 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.ExternalOlapTable;
 import com.starrocks.catalog.InternalCatalog;
+import com.starrocks.catalog.KeysType;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.ResourceGroup;
 import com.starrocks.catalog.ResourceGroupClassifier;
@@ -2308,6 +2309,7 @@ public class StmtExecutor {
         long transactionId = stmt.getTxnId();
         TransactionState txnState = null;
         String label = DebugUtil.printId(context.getExecutionId());
+        int loadDop = 1;
         if (targetTable instanceof ExternalOlapTable) {
             Preconditions.checkState(stmt instanceof InsertStmt,
                     "External OLAP table only supports insert statement");
@@ -2319,7 +2321,13 @@ public class StmtExecutor {
                 throw new DdlException("txn does not exist: " + transactionId);
             }
             label = txnState.getLabel();
+
+            if (!targetTable.isCloudNativeTableOrMaterializedView() &&
+                    ((OlapTable) targetTable).getKeysType() == KeysType.DUP_KEYS) {
+                loadDop = Config.load_rpc_worker_dop;
+            }
         }
+        loadDop = loadDop <= 0 ? 1 : loadDop;
         // Every time set no send flag and clean all data in buffer
         if (context.getMysqlChannel() != null) {
             context.getMysqlChannel().reset();
@@ -2339,7 +2347,7 @@ public class StmtExecutor {
         String trackingSql = "";
         try {
             coord = getCoordinatorFactory().createInsertScheduler(
-                    context, execPlan.getFragments(), execPlan.getScanNodes(), execPlan.getDescTbl().toThrift(true));
+                    context, execPlan.getFragments(), execPlan.getScanNodes(), execPlan.getDescTbl().toThrift(true), loadDop);
 
             List<ScanNode> scanNodes = execPlan.getScanNodes();
 

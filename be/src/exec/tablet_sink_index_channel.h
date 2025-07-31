@@ -81,6 +81,7 @@ struct TabletSinkProfile {
     RuntimeProfile::Counter* input_rows_counter = nullptr;
     RuntimeProfile::Counter* output_rows_counter = nullptr;
     RuntimeProfile::Counter* filtered_rows_counter = nullptr;
+    RuntimeProfile::Counter* load_rpc_dop_counter = nullptr;
     RuntimeProfile::Counter* prepare_data_timer = nullptr;
     RuntimeProfile::Counter* send_data_timer = nullptr;
     RuntimeProfile::Counter* convert_chunk_timer = nullptr;
@@ -235,7 +236,7 @@ private:
     AddBatchCounter _add_batch_counter;
     int64_t _serialize_batch_ns = 0;
 
-    size_t _max_parallel_request_size = 1;
+    int64_t _max_parallel_request_size = 1;
     std::vector<ReusableClosure<PTabletWriterAddBatchResult>*> _add_batch_closures;
     std::unique_ptr<Chunk> _cur_chunk;
     int64_t _cur_chunk_mem_usage = 0;

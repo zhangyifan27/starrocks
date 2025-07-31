@@ -621,7 +621,7 @@ public class UtFrameUtils {
             if (statementBase instanceof InsertStmt) {
                 scheduler = new DefaultCoordinator.Factory().createInsertScheduler(context,
                         execPlan.getFragments(), execPlan.getScanNodes(),
-                        execPlan.getDescTbl().toThrift());
+                        execPlan.getDescTbl().toThrift(), 0);
             } else {
                 throw new RuntimeException("can only handle insert DML");
             }

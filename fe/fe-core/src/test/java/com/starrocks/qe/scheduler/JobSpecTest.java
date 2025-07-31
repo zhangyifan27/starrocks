@@ -139,7 +139,7 @@ public class JobSpecTest extends SchedulerTestBase {
         Assert.assertEquals(QUERY_RESOURCE_GROUP, jobSpec.getResourceGroup());
 
         coordinator = COORDINATOR_FACTORY.createInsertScheduler(
-                connectContext, fragments, scanNodes, descTable.toThrift());
+                connectContext, fragments, scanNodes, descTable.toThrift(), 1);
         jobSpec = coordinator.getJobSpec();
         Assert.assertEquals(LOAD_RESOURCE_GROUP, jobSpec.getResourceGroup());
     }

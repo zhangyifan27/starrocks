@@ -181,6 +181,7 @@ void OlapTableSink::_prepare_profile(RuntimeState* state) {
     _ts_profile->input_rows_counter = ADD_COUNTER(_profile, "RowsRead", TUnit::UNIT);
     _ts_profile->output_rows_counter = ADD_COUNTER(_profile, "RowsReturned", TUnit::UNIT);
     _ts_profile->filtered_rows_counter = ADD_COUNTER(_profile, "RowsFiltered", TUnit::UNIT);
+    _ts_profile->load_rpc_dop_counter = ADD_COUNTER(_profile, "RpcWorkerDop", TUnit::UNIT);
     _ts_profile->open_timer = ADD_TIMER(_profile, "OpenTime");
     _ts_profile->close_timer = ADD_TIMER(_profile, "CloseWaitTime");
     _ts_profile->prepare_data_timer = ADD_TIMER(_profile, "PrepareDataTime");

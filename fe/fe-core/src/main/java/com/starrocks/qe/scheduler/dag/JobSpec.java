@@ -101,9 +101,14 @@ public class JobSpec {
                                             List<PlanFragment> fragments,
                                             List<ScanNode> scanNodes,
                                             TDescriptorTable descTable,
-                                            TQueryType queryType) {
+                                            TQueryType queryType,
+                                            int loadDop) {
             TQueryOptions queryOptions = context.getSessionVariable().toThrift();
             queryOptions.setQuery_type(queryType);
+
+            if (loadDop > 1) {
+                queryOptions.setLoad_dop(loadDop);
+            }
 
             TQueryGlobals queryGlobals = genQueryGlobals(context.getStartTimeInstant(),
                     context.getSessionVariable().getTimeZone());

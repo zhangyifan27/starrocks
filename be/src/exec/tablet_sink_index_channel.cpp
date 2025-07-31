@@ -116,6 +116,7 @@ Status NodeChannel::init(RuntimeState* state) {
             return _err_st;
         }
     }
+    COUNTER_SET(_ts_profile->load_rpc_dop_counter, _max_parallel_request_size);
 
     // init add_chunk request closure
     for (size_t i = 0; i < _max_parallel_request_size; i++) {

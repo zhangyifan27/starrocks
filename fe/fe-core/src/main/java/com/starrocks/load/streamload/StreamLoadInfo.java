@@ -83,7 +83,7 @@ public class StreamLoadInfo {
     private long loadMemLimit = 0;
     private boolean partialUpdate = false;
     private TCompressionType compressionType = TCompressionType.NO_COMPRESSION;
-    private int loadParallelRequestNum = 0;
+    private int loadParallelRequestNum = Config.load_rpc_worker_dop;
     private boolean enableReplicatedStorage = false;
     private String confluentSchemaRegistryUrl;
     private long logRejectedRecordNum = 0;

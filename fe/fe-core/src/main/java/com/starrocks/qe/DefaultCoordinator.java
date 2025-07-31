@@ -199,15 +199,16 @@ public class DefaultCoordinator extends Coordinator {
                                                        List<ScanNode> scanNodes,
                                                        TDescriptorTable descTable) {
             JobSpec jobSpec =
-                    JobSpec.Factory.fromQuerySpec(context, fragments, scanNodes, descTable, TQueryType.SELECT);
+                    JobSpec.Factory.fromQuerySpec(context, fragments, scanNodes, descTable, TQueryType.SELECT, 0);
             return new DefaultCoordinator(context, jobSpec);
         }
 
         @Override
         public DefaultCoordinator createInsertScheduler(ConnectContext context, List<PlanFragment> fragments,
                                                         List<ScanNode> scanNodes,
-                                                        TDescriptorTable descTable) {
-            JobSpec jobSpec = JobSpec.Factory.fromQuerySpec(context, fragments, scanNodes, descTable, TQueryType.LOAD);
+                                                        TDescriptorTable descTable,
+                                                        int loadDop) {
+            JobSpec jobSpec = JobSpec.Factory.fromQuerySpec(context, fragments, scanNodes, descTable, TQueryType.LOAD, loadDop);
             return new DefaultCoordinator(context, jobSpec);
         }
 

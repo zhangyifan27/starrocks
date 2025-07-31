@@ -2792,6 +2792,14 @@ public class Config extends ConfigBase {
     public static boolean enable_dict_optimize_stream_load = true;
 
     /**
+     * Increase the RPC worker concurrency of the sinkNode in load tasks, allowing concurrent load execution
+     * to the executor BE. This only takes effect for duplicate tables. When the value is less than or equal
+     * to 0, the default is 1.
+     */
+    @ConfField(mutable = true)
+    public static int load_rpc_worker_dop = 0;
+
+    /**
      * If set to true, the following rules will apply to see if the password is secure upon the creation of a user.
      * 1. The length of the password should be no less than 8.
      * 2. The password should contain at least one digit, one lowercase letter, one uppercase letter

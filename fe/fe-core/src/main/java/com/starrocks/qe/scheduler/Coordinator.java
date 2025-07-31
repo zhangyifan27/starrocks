@@ -64,7 +64,8 @@ public abstract class Coordinator {
         Coordinator createInsertScheduler(ConnectContext context,
                                           List<PlanFragment> fragments,
                                           List<ScanNode> scanNodes,
-                                          TDescriptorTable descTable);
+                                          TDescriptorTable descTable,
+                                          int loadDop);
 
         Coordinator createBrokerLoadScheduler(LoadPlanner loadPlanner);
 
