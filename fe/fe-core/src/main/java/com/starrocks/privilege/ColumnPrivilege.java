@@ -91,7 +91,8 @@ public class ColumnPrivilege {
         for (TableName tableName : tableNameTableObj.keySet()) {
             String catalog = tableName.getCatalog() == null ?
                     InternalCatalog.DEFAULT_INTERNAL_CATALOG_NAME : tableName.getCatalog();
-            if (Authorizer.getInstance().getAccessControlOrDefault(catalog) instanceof ExternalAccessController) {
+            if (Authorizer.getInstance().getAccessControlOrDefault(catalog) instanceof ExternalAccessController &&
+                    Config.enable_oms_column_level_access_control) {
                 tableUsedExternalAccessController.add(tableName);
             }
         }
@@ -131,16 +132,14 @@ public class ColumnPrivilege {
                 Set<String> columns = scanColumns.getOrDefault(tableName, new HashSet<>());
                 if (Authorizer.getInstance().getAccessControlOrDefault(tableName.getCatalog())
                         instanceof RangerTDWAccessController) {
-                    if (Config.enable_oms_column_level_access_control) {
-                        try {
-                            Authorizer.checkColumnsAction(context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
-                                    tableName, Lists.newArrayList(columns), PrivilegeType.SELECT);
-                        } catch (AccessDeniedException e) {
-                            AccessDeniedException.reportAccessDenied(
-                                    tableName.getCatalog(),
-                                    context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
-                                    PrivilegeType.SELECT.name(), ObjectType.COLUMN.name(), columns.toString());
-                        }
+                    try {
+                        Authorizer.checkColumnsAction(context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
+                                tableName, Lists.newArrayList(columns), PrivilegeType.SELECT);
+                    } catch (AccessDeniedException e) {
+                        AccessDeniedException.reportAccessDenied(
+                                tableName.getCatalog(),
+                                context.getCurrentUserIdentity(), context.getCurrentRoleIds(),
+                                PrivilegeType.SELECT.name(), ObjectType.COLUMN.name(), columns.toString());
                     }
                 } else {
                     for (String column : columns) {
