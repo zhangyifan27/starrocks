@@ -34,7 +34,6 @@
 
 package com.starrocks.qe;
 
-import com.google.common.base.Strings;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.persist.ImageWriter;
 import com.starrocks.persist.metablock.SRMetaBlockEOFException;
@@ -42,17 +41,14 @@ import com.starrocks.persist.metablock.SRMetaBlockException;
 import com.starrocks.persist.metablock.SRMetaBlockID;
 import com.starrocks.persist.metablock.SRMetaBlockReader;
 import com.starrocks.persist.metablock.SRMetaBlockWriter;
-import com.starrocks.qe.scheduler.Coordinator;
 import com.starrocks.server.GlobalStateMgr;
-import com.starrocks.thrift.TNetworkAddress;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
 import java.util.Date;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Executors;
@@ -67,30 +63,30 @@ public class QueryMemoryRecorder {
 
     @SerializedName(value = "memoryRecordMap")
     private final Map<String, MemoryRecord> memoryRecordMap;
+    private final Map<UUID, QueryInfo> idMap;
     private final ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor();
 
     public QueryMemoryRecorder() {
         memoryRecordMap = new ConcurrentHashMap<>();
+        idMap = new ConcurrentHashMap<>();
         // clear expire record every day
         cleaner.scheduleAtFixedRate(this::cleanExpiredKeys, 1, 1, TimeUnit.DAYS);
     }
 
-    public double recordQueryMemory(Coordinator coord, ConnectContext context) {
-        long queryPeakMemoryUsagePerNode = coord.getQueryPeakMemoryUsage();
+    public void recordDigestWithFlowIdByQueryId(UUID queryId, QueryInfo queryInfo) {
+        idMap.put(queryId, queryInfo);
+    }
+
+    public double recordQueryMemory(UUID queryId, double queryPeakMemoryUsagePerNode) {
+        QueryInfo queryInfo = idMap.get(queryId);
         double queryMemory = 0;
-        if (queryPeakMemoryUsagePerNode > 0 && !Strings.isNullOrEmpty(context.getDigestWithFlowId())) {
-            Set<TNetworkAddress> workers = new HashSet<>();
-            int instanceNum = 0;
-            for (QueryStatisticsItem.FragmentInstanceInfo fragmentInstanceInfo : coord.getFragmentInstanceInfos()) {
-                workers.add(fragmentInstanceInfo.getAddress());
-                instanceNum++;
-            }
-            String id = context.getDigestWithFlowId();
-            queryMemory = queryPeakMemoryUsagePerNode * workers.size() + (instanceNum * MEM_CHUNK_SIZE);
+        if (queryInfo != null) {
+            queryMemory = queryPeakMemoryUsagePerNode * queryInfo.getWorkerNum() + (queryInfo.getInstanceNum() * MEM_CHUNK_SIZE);
             long time = System.currentTimeMillis();
-            put(id, queryMemory, time);
-            MemoryRecordInfo memoryRecordInfo = new MemoryRecordInfo(id, queryMemory, time);
+            put(queryInfo.getDigestWithFlowId(), queryMemory, time);
+            MemoryRecordInfo memoryRecordInfo = new MemoryRecordInfo(queryInfo.getDigestWithFlowId(), queryMemory, time);
             GlobalStateMgr.getCurrentState().getEditLog().logRecordQueryMemory(memoryRecordInfo);
+            idMap.remove(queryId);
         }
         return queryMemory;
     }

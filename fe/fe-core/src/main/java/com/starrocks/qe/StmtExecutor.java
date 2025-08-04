@@ -213,6 +213,7 @@ import com.starrocks.task.LoadEtlTask;
 import com.starrocks.thrift.TDescriptorTable;
 import com.starrocks.thrift.TExplainLevel;
 import com.starrocks.thrift.TLoadJobType;
+import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TResultBatch;
 import com.starrocks.thrift.TSinkCommitInfo;
 import com.starrocks.thrift.TUniqueId;
@@ -240,6 +241,7 @@ import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -734,10 +736,21 @@ public class StmtExecutor {
                             coord.resetProgressMaxTotalTime();
                             QeProcessorImpl.INSTANCE.addQueryProgress(context.getExecutionId(),
                                     coord.getQueryProgressInfo());
-                            if (context.getSessionVariable().isEnableProfile() && coord.getQueryProfile() != null) {
-                                double memoryCost = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
-                                        .recordQueryMemory(coord, context);
-                                context.getAuditEventBuilder().setFeedbackMemCostBytes(memoryCost);
+
+                            if (context.getQueryId() != null &&
+                                    !Strings.isNullOrEmpty(context.getDigestWithFlowId())) {
+                                UUID queryId = context.getQueryId();
+                                String digestWithFlowId = context.getDigestWithFlowId();
+                                Set<TNetworkAddress> workers = new HashSet<>();
+                                int instanceNum = 0;
+                                for (QueryStatisticsItem.FragmentInstanceInfo fragmentInstanceInfo :
+                                        coord.getFragmentInstanceInfos()) {
+                                    workers.add(fragmentInstanceInfo.getAddress());
+                                    instanceNum++;
+                                }
+                                QueryInfo queryInfo = new QueryInfo(queryId, digestWithFlowId, workers.size(), instanceNum);
+                                GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
+                                        .recordDigestWithFlowIdByQueryId(context.getQueryId(), queryInfo);
                             }
                         }
                     }
@@ -2217,10 +2230,19 @@ public class StmtExecutor {
             if (coord != null) {
                 QeProcessorImpl.INSTANCE.addQueryProgress(context.getExecutionId(),
                         coord.getQueryProgressInfo());
-                if (context.getSessionVariable().isEnableProfile() && coord.getQueryProfile() != null) {
-                    double memoryCost = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
-                            .recordQueryMemory(coord, context);
-                    context.getAuditEventBuilder().setFeedbackMemCostBytes(memoryCost);
+                if (context.getQueryId() != null &&
+                        !Strings.isNullOrEmpty(context.getDigestWithFlowId())) {
+                    UUID queryId = context.getQueryId();
+                    String digestWithFlowId = context.getDigestWithFlowId();
+                    Set<TNetworkAddress> workers = new HashSet<>();
+                    int instanceNum = 0;
+                    for (QueryStatisticsItem.FragmentInstanceInfo fragmentInstanceInfo : coord.getFragmentInstanceInfos()) {
+                        workers.add(fragmentInstanceInfo.getAddress());
+                        instanceNum++;
+                    }
+                    QueryInfo queryInfo = new QueryInfo(queryId, digestWithFlowId, workers.size(), instanceNum);
+                    GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
+                            .recordDigestWithFlowIdByQueryId(context.getQueryId(), queryInfo);
                 }
             }
 

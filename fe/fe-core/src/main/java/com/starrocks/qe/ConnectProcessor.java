@@ -214,6 +214,12 @@ public class ConnectProcessor {
             ctx.getAuditEventBuilder().setMemCostBytes(statistics.memCostBytes == null ? -1 : statistics.memCostBytes);
             ctx.getAuditEventBuilder().setSpilledBytes(statistics.spillBytes == null ? -1 : statistics.spillBytes);
             ctx.getAuditEventBuilder().setReturnRows(statistics.returnedRows == null ? 0 : statistics.returnedRows);
+
+            if (ctx.getQueryId() != null && statistics.memCostBytes != null) {
+                double feedbackMemCostBytes = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
+                        .recordQueryMemory(ctx.getQueryId(), statistics.memCostBytes);
+                ctx.getAuditEventBuilder().setFeedbackMemCostBytes(feedbackMemCostBytes);
+            }
         }
 
         if (ctx.getState().isQuery()) {
@@ -291,6 +297,7 @@ public class ConnectProcessor {
         } else {
             ctx.getAuditEventBuilder().setStmt(LogUtil.removeLineSeparator(origStmt));
         }
+
 
         GlobalStateMgr.getCurrentState().getAuditEventProcessor().handleAuditEvent(ctx.getAuditEventBuilder().build());
     }
