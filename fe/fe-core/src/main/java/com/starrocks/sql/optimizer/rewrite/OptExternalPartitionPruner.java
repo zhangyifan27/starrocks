@@ -420,6 +420,9 @@ public class OptExternalPartitionPruner {
             // to classify partition conjuncts
             List<Column> partitionColumns = table.getPartitionColumns();
             for (Column column : partitionColumns) {
+                if (column == null) {
+                    continue;
+                }
                 ColumnRefOperator partitionColumnRefOperator = operator.getColumnReference(column);
                 columnToPartitionValuesMap.put(partitionColumnRefOperator, new ConcurrentSkipListMap<>());
                 columnToNullPartitions.put(partitionColumnRefOperator, Sets.newConcurrentHashSet());
