@@ -76,7 +76,8 @@ public:
      * @return true if any row group is selected
      */
     bool pickRowGroups(uint64_t rowsInStripe, const std::unordered_map<uint64_t, proto::RowIndex>& rowIndexes,
-                       const std::map<uint32_t, BloomFilterIndex>& bloomFilters);
+                       const std::map<uint32_t, BloomFilterIndex>& bloomFilters,
+                       uint64_t* totalRowGroupNumber = nullptr, uint64_t* selectedRowGroupNumber = nullptr);
 
     /**
      * Return a vector of the next skipped row for each RowGroup. Each value is the row id

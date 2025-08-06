@@ -255,6 +255,11 @@ RowReaderImpl::RowReaderImpl(const std::shared_ptr<FileContents>& _contents, con
     lazyLoadLastUsedRowInStripe = 0;
     rowsInCurrentStripe = 0;
     numRowGroupsInStripeRange = 0;
+    skipFileNumber = 0;
+    selectedStripeNumber = 0;
+    selectedStripeSize = 0;
+    totalRowGroupNumber = 0;
+    selectedRowGroupNumber = 0;
     uint64_t rowTotal = 0;
 
     firstRowOfStripe.resize(numberOfStripes);
@@ -507,6 +512,27 @@ bool RowReaderImpl::getUseWriterTimezone() const {
 DataBuffer<char>* RowReaderImpl::getSharedBuffer() const {
     return &sharedBuffer;
 }
+
+uint64_t RowReaderImpl::getSkipFileNumber() const {
+    return skipFileNumber;
+}
+
+uint64_t RowReaderImpl::getSelectedStripeNumber() const {
+    return selectedStripeNumber;
+}
+
+uint64_t RowReaderImpl::getSelectedStripeSize() const {
+    return selectedStripeSize;
+}
+
+uint64_t RowReaderImpl::getTotalRowGroupNumber() const {
+    return totalRowGroupNumber;
+}
+
+uint64_t RowReaderImpl::getSelectedRowGroupNumber() const {
+    return selectedRowGroupNumber;
+}
+
 proto::StripeFooter getStripeFooter(const proto::StripeInformation& info, const FileContents& contents) {
     uint64_t stripeFooterStart = info.offset() + info.indexlength() + info.datalength();
     uint64_t stripeFooterLength = info.footerlength();
@@ -1042,6 +1068,7 @@ void RowReaderImpl::startNextStripe() {
     // evaluate file statistics if it exists
     if (sargsApplier && !sargsApplier->evaluateFileStatistics(*footer, numRowGroupsInStripeRange)) {
         // skip the entire file
+        skipFileNumber++;
         markEndOfFile();
         return;
     }
@@ -1113,7 +1140,8 @@ void RowReaderImpl::startNextStripe() {
             }
 
             // select row groups to read in the current stripe
-            sargsApplier->pickRowGroups(rowsInCurrentStripe, rowIndexes, bloomFilterIndex);
+            sargsApplier->pickRowGroups(rowsInCurrentStripe, rowIndexes, bloomFilterIndex, &totalRowGroupNumber,
+                                        &selectedRowGroupNumber);
             if (!sargsApplier->hasSelectedFrom(currentRowInStripe)) {
                 skipStripe = true;
                 goto end;
@@ -1165,6 +1193,9 @@ void RowReaderImpl::startNextStripe() {
                 contents->stream->get_lazy_column_coalesce_counter()->fetch_sub(1, std::memory_order_relaxed);
             }
         } else {
+            selectedStripeNumber++;
+            selectedStripeSize +=
+                    currentStripeInfo.datalength() + currentStripeInfo.indexlength() + currentStripeInfo.footerlength();
             break;
         }
     }

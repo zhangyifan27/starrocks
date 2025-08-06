@@ -80,7 +80,8 @@ SargsApplier::SargsApplier(const Type& type, const SearchArgument* searchArgumen
 }
 
 bool SargsApplier::pickRowGroups(uint64_t rowsInStripe, const std::unordered_map<uint64_t, proto::RowIndex>& rowIndexes,
-                                 const std::map<uint32_t, BloomFilterIndex>& bloomFilters) {
+                                 const std::map<uint32_t, BloomFilterIndex>& bloomFilters,
+                                 uint64_t* totalRowGroupNumber, uint64_t* selectedRowGroupNumber) {
     // init state of each row group
     uint64_t groupsInStripe = (rowsInStripe + mRowIndexStride - 1) / mRowIndexStride;
     mNextSkippedRows.resize(groupsInStripe);
@@ -158,6 +159,13 @@ bool SargsApplier::pickRowGroups(uint64_t rowsInStripe, const std::unordered_map
     if (mMetrics != nullptr) {
         mMetrics->SelectedRowGroupCount.fetch_add(selectedRGs);
         mMetrics->EvaluatedRowGroupCount.fetch_add(groupsInStripe);
+    }
+
+    if (totalRowGroupNumber != nullptr) {
+        *totalRowGroupNumber += groupsInStripe;
+    }
+    if (selectedRowGroupNumber != nullptr) {
+        *selectedRowGroupNumber += selectedRGs;
     }
 
     return mHasSelected;

@@ -134,6 +134,13 @@ public:
 
     std::string get_search_argument_string() const;
 
+    // profile
+    int64_t get_skip_file_number() const { return _row_reader->getSkipFileNumber(); }
+    int64_t get_selected_stripe_number() const { return _row_reader->getSelectedStripeNumber(); }
+    int64_t get_selected_stripe_size() const { return _row_reader->getSelectedStripeSize(); }
+    int64_t get_total_row_group_number() const { return _row_reader->getTotalRowGroupNumber(); }
+    int64_t get_selected_row_group_number() const { return _row_reader->getSelectedRowGroupNumber(); }
+
 private:
     ChunkPtr _create_chunk(const std::vector<SlotDescriptor*>& slots, const std::vector<int>* indices);
     Status _fill_chunk(ChunkPtr* chunk, const std::vector<SlotDescriptor*>& slots, const std::vector<int>* indices);

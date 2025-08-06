@@ -91,6 +91,8 @@ struct HdfsScanStats {
     // orc stripe information
     std::vector<int64_t> orc_stripe_sizes{};
     int64_t orc_total_tiny_stripe_size = 0;
+    int64_t orc_max_stripe_size = 0;
+    int64_t orc_min_stripe_size = std::numeric_limits<int64_t>::max();
 
     // io coalesce
     int64_t orc_stripe_active_lazy_coalesce_together = 0;

@@ -182,6 +182,13 @@ private:
 
     mutable DataBuffer<char> sharedBuffer;
 
+    // profile
+    uint64_t skipFileNumber;
+    uint64_t selectedStripeNumber;
+    uint64_t selectedStripeSize;
+    uint64_t totalRowGroupNumber;
+    uint64_t selectedRowGroupNumber;
+
     // load stripe index if not done so
     void loadStripeIndex();
 
@@ -248,6 +255,11 @@ public:
     int32_t getForcedScaleOnHive11Decimal() const;
     bool getUseWriterTimezone() const;
     DataBuffer<char>* getSharedBuffer() const;
+    uint64_t getSkipFileNumber() const override;
+    uint64_t getSelectedStripeNumber() const override;
+    uint64_t getSelectedStripeSize() const override;
+    uint64_t getTotalRowGroupNumber() const override;
+    uint64_t getSelectedRowGroupNumber() const override;
 };
 
 class ReaderImpl : public Reader {

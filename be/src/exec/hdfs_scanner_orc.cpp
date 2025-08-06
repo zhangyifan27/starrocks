@@ -741,24 +741,73 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
 
     do_update_iceberg_v2_counter(root_profile, orcProfileSectionPrefix);
 
+    RuntimeProfile::Counter* skip_file_number_counter = root_profile->add_child_counter(
+            "SkipFileNumber", TUnit::UNIT, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
+            orcProfileSectionPrefix);
+
     RuntimeProfile::Counter* total_stripe_size_counter = root_profile->add_child_counter(
             "TotalStripeSize", TUnit::BYTES, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
             orcProfileSectionPrefix);
     RuntimeProfile::Counter* total_stripe_number_counter = root_profile->add_child_counter(
             "TotalStripeNumber", TUnit::UNIT, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
             orcProfileSectionPrefix);
+    RuntimeProfile::Counter* max_stripe_size_counter = root_profile->add_child_counter(
+            "MaxStripeSize", TUnit::BYTES, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::AVG),
+            orcProfileSectionPrefix);
+    RuntimeProfile::Counter* min_stripe_size_counter = root_profile->add_child_counter(
+            "MinStripeSize", TUnit::BYTES, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::AVG),
+            orcProfileSectionPrefix);
+
+    RuntimeProfile::Counter* selected_stripe_size_counter = root_profile->add_child_counter(
+            "SelectedStripeSize", TUnit::BYTES, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
+            orcProfileSectionPrefix);
+    RuntimeProfile::Counter* selected_stripe_number_counter = root_profile->add_child_counter(
+            "SelectedStripeNumber", TUnit::UNIT, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
+            orcProfileSectionPrefix);
+    RuntimeProfile::Counter* skip_stripe_size_counter = root_profile->add_child_counter(
+            "SkipStripeSize", TUnit::BYTES, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
+            orcProfileSectionPrefix);
+    RuntimeProfile::Counter* skip_stripe_number_counter = root_profile->add_child_counter(
+            "SkipStripeNumber", TUnit::UNIT, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
+            orcProfileSectionPrefix);
     RuntimeProfile::Counter* total_tiny_stripe_size_counter = root_profile->add_child_counter(
             "TotalTinyStripeSize", TUnit::BYTES, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
+            orcProfileSectionPrefix);
+
+    RuntimeProfile::Counter* total_row_group_number_counter = root_profile->add_child_counter(
+            "TotalRowGroupNumber", TUnit::UNIT, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
+            orcProfileSectionPrefix);
+    RuntimeProfile::Counter* selected_row_group_number_counter = root_profile->add_child_counter(
+            "SelectedRowGroupNumber", TUnit::UNIT, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
+            orcProfileSectionPrefix);
+    RuntimeProfile::Counter* skip_row_group_number_counter = root_profile->add_child_counter(
+            "SkipRowGroupNumber", TUnit::UNIT, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
             orcProfileSectionPrefix);
 
     size_t total_stripe_size = 0;
     for (const auto& v : _app_stats.orc_stripe_sizes) {
         total_stripe_size += v;
+        _app_stats.orc_max_stripe_size = std::max(_app_stats.orc_max_stripe_size, v);
+        _app_stats.orc_min_stripe_size = std::min(_app_stats.orc_min_stripe_size, v);
     }
+
+    COUNTER_UPDATE(skip_file_number_counter, _orc_reader->get_skip_file_number());
     COUNTER_UPDATE(total_stripe_size_counter, total_stripe_size);
     COUNTER_UPDATE(total_stripe_number_counter, _app_stats.orc_stripe_sizes.size());
+    COUNTER_UPDATE(selected_stripe_size_counter, _orc_reader->get_selected_stripe_size());
+    COUNTER_UPDATE(selected_stripe_number_counter, _orc_reader->get_selected_stripe_number());
+    COUNTER_UPDATE(skip_stripe_size_counter, total_stripe_size - _orc_reader->get_selected_stripe_size());
+    COUNTER_UPDATE(skip_stripe_number_counter,
+                   _app_stats.orc_stripe_sizes.size() - _orc_reader->get_selected_stripe_number());
 
     COUNTER_UPDATE(total_tiny_stripe_size_counter, _app_stats.orc_total_tiny_stripe_size);
+    COUNTER_SET(max_stripe_size_counter, _app_stats.orc_max_stripe_size);
+    COUNTER_SET(min_stripe_size_counter, _app_stats.orc_min_stripe_size);
+
+    COUNTER_UPDATE(total_row_group_number_counter, _orc_reader->get_total_row_group_number());
+    COUNTER_UPDATE(selected_row_group_number_counter, _orc_reader->get_selected_row_group_number());
+    COUNTER_UPDATE(skip_row_group_number_counter,
+                   _orc_reader->get_total_row_group_number() - _orc_reader->get_selected_row_group_number());
 
     RuntimeProfile::Counter* stripe_active_lazy_coalesce_together_counter = root_profile->add_child_counter(
             "StripeActiveLazyColumnIOCoalesceTogether", TUnit::UNIT,

@@ -641,5 +641,30 @@ public:
      * @param rowNumber the next row the reader should return
      */
     virtual void seekToRow(uint64_t rowNumber) = 0;
+
+    /**
+     *   Get the number of skipped files.
+     */
+    virtual uint64_t getSkipFileNumber() const = 0;
+
+    /**
+     * Get the sum of stripe number that was selected for reading.
+     */
+    virtual uint64_t getSelectedStripeNumber() const = 0;
+
+    /**
+     * Get the sum of stripe size that was selected for reading.
+     */
+    virtual uint64_t getSelectedStripeSize() const = 0;
+
+    /**
+     * Get the sum of row group size in selected stripes.
+     */
+    virtual uint64_t getTotalRowGroupNumber() const = 0;
+
+    /**
+     * Get the number of selected row groups in the total row groups.
+     */
+    virtual uint64_t getSelectedRowGroupNumber() const = 0;
 };
 } // namespace orc
