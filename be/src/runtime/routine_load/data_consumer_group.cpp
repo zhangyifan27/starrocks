@@ -181,8 +181,9 @@ Status KafkaDataConsumerGroup::start_all(StreamLoadContext* ctx) {
                         return Status::OK();
                     }
                 }
-                kafka_pipe->cancel(Status::Cancelled("Cancelled"));
-                return Status::Cancelled("Cancelled");
+                std::string msg = "Kafka consumer does not consume any data. You can try increasing FE config routine_load_task_consume_second.";
+                kafka_pipe->cancel(Status::Cancelled(msg));
+                return Status::Cancelled(msg);
             } else {
                 DCHECK(left_bytes < ctx->max_batch_size);
                 RETURN_IF_ERROR(kafka_pipe->finish());
@@ -393,8 +394,9 @@ Status PulsarDataConsumerGroup::start_all(StreamLoadContext* ctx) {
             if (left_bytes == ctx->max_batch_size) {
                 // nothing to be consumed, we have to cancel it, because
                 // we do not allow finishing stream load pipe without data
-                pulsar_pipe->cancel(Status::Cancelled("Cancelled"));
-                return Status::Cancelled("Cancelled");
+                std::string msg = "Pulsar consumer does not consume any data. You can try increasing FE config routine_load_task_consume_second.";
+                pulsar_pipe->cancel(Status::Cancelled(msg));
+                return Status::Cancelled(msg);
             } else {
                 DCHECK(left_bytes < ctx->max_batch_size);
                 RETURN_IF_ERROR(pulsar_pipe->finish());
