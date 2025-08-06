@@ -1767,6 +1767,7 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
         }
 
         builder.setOutputRowCount(produceStatistics.getOutputRowCount());
+        builder.setTableRowCountMayInaccurate(produceStatistics.isTableRowCountMayInaccurate());
         context.setStatistics(builder.build());
         return visitOperator(node, context);
     }

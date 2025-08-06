@@ -46,6 +46,9 @@ import com.starrocks.sql.optimizer.operator.AggType;
 import com.starrocks.sql.optimizer.operator.Operator;
 import com.starrocks.sql.optimizer.operator.Projection;
 import com.starrocks.sql.optimizer.operator.logical.LogicalAggregationOperator;
+import com.starrocks.sql.optimizer.operator.logical.LogicalCTEAnchorOperator;
+import com.starrocks.sql.optimizer.operator.logical.LogicalCTEConsumeOperator;
+import com.starrocks.sql.optimizer.operator.logical.LogicalCTEProduceOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalHiveScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalJoinOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalOlapScanOperator;
@@ -534,5 +537,123 @@ public class JoinExecModeWithoutStatsTest {
                 "        SCAN (columns[1: plin_purchase_id] predicate[null])\n" +
                 "    EXCHANGE SHUFFLE[14]\n" +
                 "        - TableFunctionScan[TABLE('path'='fake://some_bucket/some_path/*/', 'format'='csv')][14: purc_purchase_id]");
+    }
+
+    @Test
+    public void testCTEWithInaccurateStats(@Mocked OlapTable olapTable) {
+        OptExpression root;
+        ColumnRefFactory columnRefFactory = new ColumnRefFactory();
+        Map<ColumnRefOperator, Column> colRefToColumnMetaMap = new LinkedHashMap<>();
+        for (Column column : getColumns1()) {
+            ColumnRefOperator columnRefOperator = columnRefFactory.create(column.getName(), column.getType(), true);
+            colRefToColumnMetaMap.put(columnRefOperator, column);
+        }
+        Map<ColumnId, Column> idToColumn = Maps.newTreeMap(ColumnId.CASE_INSENSITIVE_ORDER);
+        getColumns1().forEach(c -> idToColumn.put(c.getColumnId(), c));
+        HashDistributionInfo hashDistributionInfo1 = new HashDistributionInfo(3, ImmutableList.of(getColumns1().get(0)));
+        MaterializedIndex m1 = new MaterializedIndex();
+        m1.setRowCount(500000000000L);
+        Partition p1 = new Partition(0, "p1", m1, hashDistributionInfo1);
+        new Expectations() {
+            {
+                olapTable.getId();
+                result = 0;
+                minTimes = 0;
+
+                olapTable.getType();
+                result = Table.TableType.OLAP;
+                minTimes = 0;
+
+                olapTable.getPartitions();
+                result = Lists.newArrayList(p1);
+                minTimes = 0;
+
+                olapTable.getPartition(0);
+                result = p1;
+                minTimes = 0;
+
+                olapTable.getVisiblePartitions();
+                result = Lists.newArrayList(p1);
+                minTimes = 0;
+
+                olapTable.getDefaultDistributionInfo();
+                result = hashDistributionInfo1;
+                minTimes = 0;
+
+                olapTable.getPartitionInfo();
+                result = new ListPartitionInfo(PartitionType.LIST, ImmutableList.of(getColumns1().get(0)));
+                minTimes = 0;
+
+                olapTable.isNativeTableOrMaterializedView();
+                result = true;
+                minTimes = 0;
+
+                olapTable.getBaseSchema();
+                result = new ArrayList<>(colRefToColumnMetaMap.values());
+                minTimes = 0;
+
+                olapTable.getIdToColumn();
+                result = idToColumn;
+                minTimes = 0;
+            }
+        };
+
+        // CTE 定义（使用 HiveScanNode）
+        HiveTable hiveTable = (HiveTable) ctx.getGlobalStateMgr().getMetadataMgr().getTable("hive0", "plan_test", "unknown");
+        Map<ColumnRefOperator, Column> hiveColRefToColumnMetaMap = new LinkedHashMap<>();
+        Map<Column, ColumnRefOperator> hiveColumnMetaToColRefMap = new LinkedHashMap<>();
+        Map<ColumnRefOperator, ColumnRefOperator> consumeColumnMap = new HashMap<>();
+        for (Column column : hiveTable.getFullSchema()) {
+            ColumnRefOperator columnRefOperator = columnRefFactory.create(column.getName(), column.getType(), true);
+            hiveColRefToColumnMetaMap.put(columnRefOperator, column);
+            hiveColumnMetaToColRefMap.put(column, columnRefOperator);
+            consumeColumnMap.put(columnRefOperator, columnRefOperator);
+        }
+        LogicalHiveScanOperator hiveScanOperator = new LogicalHiveScanOperator(hiveTable, hiveColRefToColumnMetaMap,
+                hiveColumnMetaToColRefMap, Operator.DEFAULT_LIMIT, null);
+
+        LogicalCTEProduceOperator cteProduceOperator = new LogicalCTEProduceOperator(0);
+        OptExpression cteDefinition = OptExpression.create(cteProduceOperator, OptExpression.create(hiveScanOperator));
+        LogicalCTEConsumeOperator cteConsumeOperator = new LogicalCTEConsumeOperator(0, consumeColumnMap);
+        OptExpression cteConsumeExpression = OptExpression.create(cteConsumeOperator);
+        LogicalOlapScanOperator mainScanOperator = new LogicalOlapScanOperator(olapTable, colRefToColumnMetaMap,
+                Maps.newHashMap(), null, -1, null);
+        LogicalJoinOperator joinOperator = new LogicalJoinOperator(JoinOperator.LEFT_OUTER_JOIN,
+                new BinaryPredicateOperator(BinaryType.EQ,
+                consumeColumnMap.keySet().toArray(new ColumnRefOperator[0])[0],
+                colRefToColumnMetaMap.keySet().toArray(new ColumnRefOperator[0])[0]));
+        OptExpression mainQuery = OptExpression.create(new LogicalJoinOperator(JoinOperator.INNER_JOIN, null),
+                OptExpression.create(joinOperator, OptExpression.create(mainScanOperator), cteConsumeExpression),
+                cteConsumeExpression);
+        root = OptExpression.create(new LogicalCTEAnchorOperator(0), cteDefinition, mainQuery);
+
+        Optimizer optimizer = new Optimizer();
+        ctx.getSessionVariable().setBroadcastStrictChecks(true);
+        ctx.getSessionVariable().setCboCTERuseRatio(0.0);
+        ctx.getSessionVariable().setCboCteReuse(true);
+        OptExpression result = optimizer.optimize(ctx, root, new PhysicalPropertySet(), new ColumnRefSet(), columnRefFactory);
+        assertContains(printPhysicalPlan(result), "CTEAnchor(cteid=0)\n" +
+                "    CTEProducer(cteid=0)\n" +
+                "        HIVE SCAN (columns{14,17} predicate[null])\n" +
+                "    INNER JOIN (join-predicate [null] post-join-predicate [null])\n" +
+                "        LEFT OUTER JOIN (join-predicate [17: par_col = 1: plin_purchase_id] post-join-predicate [null])\n" +
+                "            EXCHANGE SHUFFLE[1]\n" +
+                "                SCAN (columns[1: plin_purchase_id] predicate[null])\n" +
+                "            EXCHANGE SHUFFLE[17]\n" +
+                "                CTEConsumer(cteid=0)\n" +
+                "        EXCHANGE BROADCAST\n" +
+                "            CTEConsumer(cteid=0)");
+        ctx.getSessionVariable().setBroadcastStrictChecks(false);
+        result = optimizer.optimize(ctx, root, new PhysicalPropertySet(), new ColumnRefSet(), columnRefFactory);
+        assertContains(printPhysicalPlan(result), "CTEAnchor(cteid=0)\n" +
+                "    CTEProducer(cteid=0)\n" +
+                "        HIVE SCAN (columns{14,17} predicate[null])\n" +
+                "    INNER JOIN (join-predicate [null] post-join-predicate [null])\n" +
+                "        LEFT OUTER JOIN (join-predicate [17: par_col = 1: plin_purchase_id] post-join-predicate [null])\n" +
+                "            SCAN (columns[1: plin_purchase_id] predicate[null])\n" +
+                "            EXCHANGE BROADCAST\n" +
+                "                CTEConsumer(cteid=0)\n" +
+                "        EXCHANGE BROADCAST\n" +
+                "            CTEConsumer(cteid=0)");
     }
 }
