@@ -25,6 +25,7 @@ import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.HiveView;
 import com.starrocks.catalog.Table;
+import com.starrocks.common.Pair;
 import com.starrocks.connector.CacheUpdateProcessor;
 import com.starrocks.connector.CachingRemoteFileIO;
 import com.starrocks.connector.DatabaseTableName;
@@ -134,8 +135,9 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
             return;
         }
         HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
-        List<HivePartitionName> refreshPartitionNames = metastore.refreshTableBackground(
+        Pair<List<HivePartitionName>, Boolean> refreshTableResult = metastore.refreshTableBackground(
                 hmsTbl.getDbName(), hmsTbl.getTableName(), onlyCachedPartitions);
+        List<HivePartitionName> refreshPartitionNames = refreshTableResult.getFirst();
 
         if (refreshPartitionNames != null) {
             Map<BasePartitionInfo, Partition> updatedPartitions = getUpdatedPartitions(hmsTbl, refreshPartitionNames);
@@ -158,6 +160,9 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
             partitionUpdatedTimes.keySet().removeIf(basePartitionInfo -> !cachedPartitions.containsKey(
                     HivePartitionName.of(basePartitionInfo.dbName, basePartitionInfo.tableName,
                             basePartitionInfo.partitionName)));
+        }
+        if ((refreshTableResult.second != null) && refreshTableResult.second) {
+            invalidateRemoteFiles(hmsTbl);
         }
     }
 
@@ -358,6 +363,18 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
             } catch (InterruptedException | ExecutionException e) {
                 LOG.error("Failed to update remote files on [{}]", tableLocation, e);
                 throw new StarRocksConnectorException("Failed to update remote files", e);
+            }
+        }
+    }
+
+    private void invalidateRemoteFiles(HiveMetaStoreTable table) {
+        if (remoteFileIO.isPresent()) {
+            List<RemotePathKey> cachedPathKey = remoteFileIO.get().getPresentPathKeyInCache(table.getTableLocation(),
+                    isRecursive);
+            LOG.info("invalidateRemoteFiles {}.{} with {} cachedPathKey.", table.getDbName(), table.getTableName(),
+                    cachedPathKey.size());
+            for (RemotePathKey pathKey : cachedPathKey) {
+                remoteFileIO.get().invalidatePartition(pathKey);
             }
         }
     }

@@ -17,6 +17,7 @@ package com.starrocks.connector.hive;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.starrocks.catalog.Table;
+import com.starrocks.common.Pair;
 import com.starrocks.connector.metastore.IMetastore;
 
 import java.util.Collections;
@@ -79,8 +80,9 @@ public interface IHiveMetastore extends IMetastore {
         return true;
     }
 
-    default List<HivePartitionName> refreshTableBackground(String hiveDbName, String hiveTblName, boolean onlyCachedPartitions) {
-        return Lists.newArrayList();
+    default Pair<List<HivePartitionName>, Boolean> refreshTableBackground(String hiveDbName, String hiveTblName,
+                                                                          boolean onlyCachedPartitions) {
+        return new Pair(Lists.newArrayList(), false);
     }
 
     default void refreshPartition(List<HivePartitionName> partitionNames) {

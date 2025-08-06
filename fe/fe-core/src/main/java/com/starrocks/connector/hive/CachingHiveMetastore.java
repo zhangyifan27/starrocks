@@ -29,6 +29,7 @@ import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.Config;
+import com.starrocks.common.Pair;
 import com.starrocks.connector.DatabaseTableName;
 import com.starrocks.connector.PartitionUtil;
 import com.starrocks.connector.exception.StarRocksConnectorException;
@@ -585,7 +586,8 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
     }
 
     @Override
-    public List<HivePartitionName> refreshTableBackground(String hiveDbName, String hiveTblName, boolean onlyCachedPartitions) {
+    public Pair<List<HivePartitionName>, Boolean> refreshTableBackground(String hiveDbName, String hiveTblName,
+                                                                         boolean onlyCachedPartitions) {
         DatabaseTableName databaseTableName = DatabaseTableName.of(hiveDbName, hiveTblName);
         if (lastAccessTimeMap.containsKey(databaseTableName)) {
             long lastAccessTime = lastAccessTimeMap.get(databaseTableName);
@@ -597,7 +599,7 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                 lastAccessTimeMap.remove(databaseTableName);
                 LOG.info("{}.{} skip refresh because of the last access time is {}", hiveDbName, hiveTblName,
                         LocalDateTime.ofInstant(Instant.ofEpochMilli(lastAccessTime), ZoneId.systemDefault()));
-                return null;
+                return new Pair<>(null, true);
             }
         } else {
             LOG.info("lastAccessTimeMap do not containsKey {}, add it.", databaseTableName);
@@ -608,7 +610,7 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         Set<DatabaseTableName> cachedTableNames = getCachedTableNames();
         lastAccessTimeMap.keySet().removeIf(tableName -> !(cachedTableNames.contains(tableName)));
         LOG.info("Refresh table {}.{} in background", hiveDbName, hiveTblName);
-        return refreshPartitionNames;
+        return new Pair<>(refreshPartitionNames, false);
     }
 
     private <T> List<HivePartitionName> refreshPartitions(List<HivePartitionName> presentInCache,
