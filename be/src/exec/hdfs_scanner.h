@@ -42,6 +42,8 @@ using HdfsSplitContextPtr = std::unique_ptr<HdfsSplitContext>;
 struct HdfsScanStats {
     int64_t raw_rows_read = 0;
     int64_t rows_read = 0;
+    int64_t delete_file_skip_rows = 0;
+    int64_t dict_filter_skip_rows = 0;
     int64_t late_materialize_skip_rows = 0;
 
     int64_t io_ns = 0;
@@ -106,6 +108,8 @@ struct HdfsScanProfile {
     RuntimeProfile* runtime_profile = nullptr;
     RuntimeProfile::Counter* raw_rows_read_counter = nullptr;
     RuntimeProfile::Counter* rows_read_counter = nullptr;
+    RuntimeProfile::Counter* delete_file_skip_rows_counter = nullptr;
+    RuntimeProfile::Counter* dict_filter_skip_rows_counter = nullptr;
     RuntimeProfile::Counter* late_materialize_skip_rows_counter = nullptr;
     RuntimeProfile::Counter* scan_ranges_counter = nullptr;
     RuntimeProfile::Counter* scan_ranges_size = nullptr;

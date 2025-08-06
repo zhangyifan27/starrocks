@@ -392,6 +392,8 @@ void HdfsScanner::update_counter() {
     COUNTER_UPDATE(profile->reader_init_timer, _app_stats.reader_init_ns);
     COUNTER_UPDATE(profile->raw_rows_read_counter, _app_stats.raw_rows_read);
     COUNTER_UPDATE(profile->rows_read_counter, _app_stats.rows_read);
+    COUNTER_UPDATE(profile->delete_file_skip_rows_counter, _app_stats.delete_file_skip_rows);
+    COUNTER_UPDATE(profile->dict_filter_skip_rows_counter, _app_stats.dict_filter_skip_rows);
     COUNTER_UPDATE(profile->late_materialize_skip_rows_counter, _app_stats.late_materialize_skip_rows);
     COUNTER_UPDATE(profile->expr_filter_timer, _app_stats.expr_filter_ns);
     COUNTER_UPDATE(profile->column_read_timer, _app_stats.column_read_ns);

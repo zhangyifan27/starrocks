@@ -133,6 +133,7 @@ Status GroupReader::get_next(ChunkPtr* chunk, size_t* row_count) {
 
                 for (; start_str != end_str; start_str++) {
                     chunk_filter[*start_str - r.begin()] = 0;
+                    _param.stats->delete_file_skip_rows += 1;
                     has_filter = true;
                 }
                 if (SIMD::count_nonzero(chunk_filter.data(), count) == 0) {
@@ -222,9 +223,11 @@ StatusOr<size_t> GroupReader::_read_range_round_by_round(const Range<uint64_t>& 
             SCOPED_RAW_TIMER(&_param.stats->expr_filter_ns);
             SCOPED_RAW_TIMER(&_param.stats->group_dict_filter_ns);
             for (const auto& sub_field_path : _dict_column_sub_field_paths[col_idx]) {
+                size_t rows_dict_filter_before = SIMD::count_nonzero(*filter);
                 RETURN_IF_ERROR(_column_readers[slot_id]->filter_dict_column((*chunk)->get_column_by_slot_id(slot_id),
                                                                              filter, sub_field_path, 0));
                 hit_count = SIMD::count_nonzero(*filter);
+                _param.stats->dict_filter_skip_rows += rows_dict_filter_before - hit_count;
                 if (hit_count == 0) {
                     return hit_count;
                 }

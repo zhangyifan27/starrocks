@@ -812,7 +812,7 @@ public class ExplainAnalyzer {
             if (uniqueMetrics == null) {
                 continue;
             }
-            mergedUniqueMetrics.copyAllInfoStringsFrom(uniqueMetrics, null);
+            mergedUniqueMetrics.copyAllInfoStringsFrom(uniqueMetrics, null, !isRuntimeProfile);
             mergedUniqueMetrics.copyAllCountersFrom(uniqueMetrics);
         }
 

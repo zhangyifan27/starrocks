@@ -403,7 +403,7 @@ public class QueryRuntimeProfile {
 
         RuntimeProfile newQueryProfile = new RuntimeProfile(queryProfile.getName());
         long start = System.nanoTime();
-        newQueryProfile.copyAllInfoStringsFrom(queryProfile, null);
+        newQueryProfile.copyAllInfoStringsFrom(queryProfile, null, isSQLFinished());
         newQueryProfile.copyAllCountersFrom(queryProfile);
 
         Map<String, Long> peakMemoryEachBE = Maps.newHashMap();
@@ -416,7 +416,7 @@ public class QueryRuntimeProfile {
         for (RuntimeProfile fragmentProfile : fragmentProfiles) {
             RuntimeProfile newFragmentProfile = new RuntimeProfile(fragmentProfile.getName());
             newFragmentProfiles.add(newFragmentProfile);
-            newFragmentProfile.copyAllInfoStringsFrom(fragmentProfile, null);
+            newFragmentProfile.copyAllInfoStringsFrom(fragmentProfile, null, isSQLFinished());
             newFragmentProfile.copyAllCountersFrom(fragmentProfile);
 
             if (fragmentProfile.getChildList().isEmpty()) {
@@ -474,10 +474,11 @@ public class QueryRuntimeProfile {
             counter.setValue(instanceProfiles.size());
 
             RuntimeProfile mergedInstanceProfile =
-                    RuntimeProfile.mergeIsomorphicProfiles(instanceProfiles, Sets.newHashSet("Address", "InstanceId"));
+                    RuntimeProfile.mergeIsomorphicProfiles(instanceProfiles, Sets.newHashSet("Address", "InstanceId"),
+                    isSQLFinished());
             Preconditions.checkState(mergedInstanceProfile != null);
 
-            newFragmentProfile.copyAllInfoStringsFrom(mergedInstanceProfile, null);
+            newFragmentProfile.copyAllInfoStringsFrom(mergedInstanceProfile, null, isSQLFinished());
             newFragmentProfile.copyAllCountersFrom(mergedInstanceProfile);
 
             mergedInstanceProfile.getChildList().forEach(pair -> {
@@ -634,7 +635,7 @@ public class QueryRuntimeProfile {
         RuntimeProfile originProfile = loadChannelProfile.get();
         RuntimeProfile mergedProfile = new RuntimeProfile(originProfile.getName());
 
-        mergedProfile.copyAllInfoStringsFrom(originProfile, null);
+        mergedProfile.copyAllInfoStringsFrom(originProfile, null, isSQLFinished());
         mergedProfile.copyAllCountersFrom(originProfile);
 
         List<RuntimeProfile> channelProfiles = originProfile.getChildList().stream()
@@ -652,7 +653,7 @@ public class QueryRuntimeProfile {
         mergedProfile.addInfoString("BackendAddresses", hosts);
 
         RuntimeProfile mergedChannelProfile =
-                RuntimeProfile.mergeIsomorphicProfiles(channelProfiles, Collections.emptySet());
+                RuntimeProfile.mergeIsomorphicProfiles(channelProfiles, Collections.emptySet(), isSQLFinished());
         if (mergedChannelProfile == null) {
             if (LOG.isDebugEnabled()) {
                 StringBuilder builder = new StringBuilder();
@@ -662,7 +663,7 @@ public class QueryRuntimeProfile {
             }
             return Optional.empty();
         }
-        mergedProfile.copyAllInfoStringsFrom(mergedChannelProfile, null);
+        mergedProfile.copyAllInfoStringsFrom(mergedChannelProfile, null, isSQLFinished());
         mergedProfile.copyAllCountersFrom(mergedChannelProfile);
         mergedChannelProfile.getChildList().forEach(pair -> mergedProfile.addChild(pair.first));
 
@@ -732,4 +733,7 @@ public class QueryRuntimeProfile {
         return defaultValue;
     }
 
+    private boolean isSQLFinished() {
+        return !connectContext.getState().isRunning() && !connectContext.getState().isError();
+    }
 }

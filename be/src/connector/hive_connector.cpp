@@ -433,6 +433,8 @@ void HiveDataSource::_init_counter(RuntimeState* state) {
     _profile.runtime_profile = _runtime_profile;
     _profile.raw_rows_read_counter = ADD_COUNTER(_runtime_profile, "RawRowsRead", TUnit::UNIT);
     _profile.rows_read_counter = ADD_COUNTER(_runtime_profile, "RowsRead", TUnit::UNIT);
+    _profile.delete_file_skip_rows_counter = ADD_COUNTER(_runtime_profile, "DeleteFileSkipRows", TUnit::UNIT);
+    _profile.dict_filter_skip_rows_counter = ADD_COUNTER(_runtime_profile, "DictFilterSkipRows", TUnit::UNIT);
     _profile.late_materialize_skip_rows_counter = ADD_COUNTER(_runtime_profile, "LateMaterializeSkipRows", TUnit::UNIT);
     _profile.scan_ranges_counter = ADD_COUNTER(_runtime_profile, "ScanRanges", TUnit::UNIT);
     _profile.scan_ranges_size = ADD_COUNTER(_runtime_profile, "ScanRangesSize", TUnit::BYTES);

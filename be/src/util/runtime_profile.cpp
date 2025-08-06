@@ -504,38 +504,38 @@ void RuntimeProfile::copy_all_info_strings_from(RuntimeProfile* src_profile) {
 
     std::lock_guard<std::mutex> l(src_profile->_info_strings_lock);
     for (const auto& [key, value] : src_profile->_info_strings) {
-        const std::string* exist_ptr = get_info_string(key);
+        std::string key_without_dup = key;
+        if (size_t pos; (pos = key.find("__DUP(")) != std::string::npos) {
+            key_without_dup = key.substr(0, pos);
+        }
+        const std::string* exist_ptr = get_info_string(key_without_dup);
         if (exist_ptr == nullptr) {
-            add_info_string(key, value);
+            add_info_string(key_without_dup, value);
         } else if (value != *exist_ptr) {
-            int n = get_top_n_from_key(key);
+            int n = get_top_n_from_key(key_without_dup);
             if (n > 0) {
                 std::vector<std::string> values;
                 deserialize_top_n_info_string(*exist_ptr, values);
                 deserialize_top_n_info_string(value, values);
                 keep_top_n_unique_values(values, n);
-                add_info_string(key, serialize_top_n_info_string(values));
+                add_info_string(key_without_dup, serialize_top_n_info_string(values));
                 continue;
             }
 
-            std::string original_key = key;
-            if (size_t pos; (pos = key.find("__DUP(")) != std::string::npos) {
-                original_key = key.substr(0, pos);
-            }
             int32_t offset = -1;
             int32_t previous_offset;
             int32_t step = 1;
             while (true) {
                 previous_offset = offset;
                 offset += step;
-                const std::string indexed_key = strings::Substitute("$0__DUP($1)", original_key, offset);
+                const std::string indexed_key = strings::Substitute("$0__DUP($1)", key_without_dup, offset);
                 if (get_info_string(indexed_key) == nullptr) {
                     if (step == 1) {
                         // also need to check if the value is already in the info strings
                         bool is_dup = false;
                         for (int i = 0; i < offset; i++) {
-                            const std::string indexed_key = strings::Substitute("$0__DUP($1)", original_key, i);
-                            auto* exist_ptr = get_info_string(indexed_key);
+                            const std::string inner_indexed_key = strings::Substitute("$0__DUP($1)", key_without_dup, i);
+                            auto* exist_ptr = get_info_string(inner_indexed_key);
                             if (exist_ptr != nullptr && *exist_ptr == value) {
                                 is_dup = true;
                                 break;

@@ -81,6 +81,8 @@ public class RuntimeProfile {
     public static final String MERGED_INFO_PREFIX_MAX = "__MAX_OF_";
 
     private static final String TOPN_PREFIX = "Top_";
+    private static final String STATUS_KEY = "Status";
+    private static final String FINISHED_STATUS = "FINISHED";
 
     private final Counter counterTotalTime;
 
@@ -557,7 +559,7 @@ public class RuntimeProfile {
     }
 
     // Copy all info strings from src profile
-    public void copyAllInfoStringsFrom(RuntimeProfile srcProfile, Set<String> excludedInfoStrings) {
+    public void copyAllInfoStringsFrom(RuntimeProfile srcProfile, Set<String> excludedInfoStrings, boolean isSQLFinished) {
         if (srcProfile == null || this == srcProfile) {
             return;
         }
@@ -566,40 +568,59 @@ public class RuntimeProfile {
             if (CollectionUtils.isNotEmpty(excludedInfoStrings) && excludedInfoStrings.contains(key)) {
                 return;
             }
-            if (!this.infoStrings.containsKey(key)) {
-                if (key.startsWith(TOPN_PREFIX)) {
-                    List<JsonObject> allJsonObjects = convertToJsonObjectList(key, value, true);
+
+            String keyWithoutDup = key;
+            int pos;
+            if ((pos = key.indexOf("__DUP(")) != -1) {
+                keyWithoutDup = key.substring(0, pos);
+            }
+
+            // if state of sql is finished, set status to FINISHED force
+            if (keyWithoutDup.equals(STATUS_KEY) && isSQLFinished) {
+                value = FINISHED_STATUS;
+            }
+
+            if (!this.infoStrings.containsKey(keyWithoutDup)) {
+                if (keyWithoutDup.startsWith(TOPN_PREFIX)) {
+                    List<JsonObject> allJsonObjects = convertToJsonObjectList(keyWithoutDup, value, true);
                     Gson gson = new GsonBuilder().create();
-                    this.infoStrings.put(key, gson.toJson(allJsonObjects));
+                    this.infoStrings.put(keyWithoutDup, gson.toJson(allJsonObjects));
                 } else {
-                    this.infoStrings.put(key, value);
+                    this.infoStrings.put(keyWithoutDup, value);
                 }
-            } else if (!Objects.equals(value, this.infoStrings.get(key))) {
+            } else if (!Objects.equals(value, this.infoStrings.get(keyWithoutDup))) {
                 if (key.startsWith(TOPN_PREFIX)) {
-                    String existValue = this.infoStrings.get(key);
-                    List<JsonObject> allJsonObjects = convertToJsonObjectList(key, existValue, false);
-                    allJsonObjects.addAll(convertToJsonObjectList(key, value, false));
-                    allJsonObjects = sortAndMergeJsonObjectList(key, allJsonObjects);
+                    String existValue = this.infoStrings.get(keyWithoutDup);
+                    List<JsonObject> allJsonObjects = convertToJsonObjectList(keyWithoutDup, existValue, false);
+                    allJsonObjects.addAll(convertToJsonObjectList(keyWithoutDup, value, false));
+                    allJsonObjects = sortAndMergeJsonObjectList(keyWithoutDup, allJsonObjects);
                     Gson gson = new GsonBuilder().create();
-                    this.infoStrings.put(key, gson.toJson(allJsonObjects));
+                    this.infoStrings.put(keyWithoutDup, gson.toJson(allJsonObjects));
                     return;
                 }
 
-                String originalKey = key;
-                int pos;
-                if ((pos = key.indexOf("__DUP(")) != -1) {
-                    originalKey = key.substring(0, pos);
-                }
                 int offset = -1;
                 int previousOffset;
                 int step = 1;
                 while (true) {
                     previousOffset = offset;
                     offset += step;
-                    String indexedKey = String.format("%s__DUP(%d)", originalKey, offset);
+                    String indexedKey = String.format("%s__DUP(%d)", keyWithoutDup, offset);
                     if (!this.infoStrings.containsKey(indexedKey)) {
                         if (step == 1) {
-                            this.infoStrings.put(indexedKey, value);
+                            // also need to check if the value is already in the info strings
+                            boolean isDup = false;
+                            for (int i = 0; i < offset; i++) {
+                                String checkIndexedKey = String.format("%s__DUP(%d)", keyWithoutDup, i);
+                                if (this.infoStrings.containsKey(checkIndexedKey) &&
+                                        this.infoStrings.get(checkIndexedKey).equals(value)) {
+                                    isDup = true;
+                                    break;
+                                }
+                            }
+                            if (!isDup) {
+                                this.infoStrings.put(indexedKey, value);
+                            }
                             break;
                         }
                         // Forward too much, try to forward half of the former size
@@ -775,7 +796,7 @@ public class RuntimeProfile {
     // Merge all the isomorphic sub profiles and the caller must know for sure
     // that all the children are isomorphic, otherwise, the behavior is undefined
     public static RuntimeProfile mergeIsomorphicProfiles(List<RuntimeProfile> profiles,
-                                                         Set<String> excludedInfoStrings) {
+                                                         Set<String> excludedInfoStrings, boolean isSQLFinished) {
         if (CollectionUtils.isEmpty(profiles)) {
             return null;
         }
@@ -783,7 +804,7 @@ public class RuntimeProfile {
         RuntimeProfile mergedProfile = new RuntimeProfile(profiles.get(0).getName());
 
         for (RuntimeProfile runtimeProfile : profiles) {
-            mergedProfile.copyAllInfoStringsFrom(runtimeProfile, excludedInfoStrings);
+            mergedProfile.copyAllInfoStringsFrom(runtimeProfile, excludedInfoStrings, isSQLFinished);
         }
 
         // Find all counters, although these profiles are expected to be isomorphic,
@@ -985,7 +1006,7 @@ public class RuntimeProfile {
                     }
                     subProfiles.add(child);
                 }
-                RuntimeProfile mergedChild = mergeIsomorphicProfiles(subProfiles, excludedInfoStrings);
+                RuntimeProfile mergedChild = mergeIsomorphicProfiles(subProfiles, excludedInfoStrings, isSQLFinished);
                 mergedProfile.addChild(mergedChild);
             }
             if (!identical) {

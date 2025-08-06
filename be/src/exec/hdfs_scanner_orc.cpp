@@ -610,6 +610,10 @@ StatusOr<size_t> HdfsOrcScanner::_do_get_next(ChunkPtr* chunk) {
         {
             SCOPED_RAW_TIMER(&_app_stats.column_read_ns);
             RETURN_IF_ERROR(_orc_reader->read_next(&position));
+
+            // do stats before we filter rows which does not match.
+            _app_stats.raw_rows_read += _orc_reader->get_cvb_size();
+
             {
                 SCOPED_RAW_TIMER(&_app_stats.iceberg_delete_file_build_filter_ns);
                 row_delete_filter = _orc_reader->get_row_delete_filter(_need_skip_rowids);
@@ -619,8 +623,11 @@ StatusOr<size_t> HdfsOrcScanner::_do_get_next(ChunkPtr* chunk) {
             RETURN_IF_ERROR(_orc_reader->apply_dict_filter_eval_cache(_orc_row_reader_filter->_dict_filter_eval_cache,
                                                                       &_dict_filter));
             if (_orc_reader->get_cvb_size() != read_num_values) {
+                _app_stats.dict_filter_skip_rows += read_num_values - _orc_reader->get_cvb_size();
                 has_used_dict_filter = true;
+                size_t rows_delete_filter_before = SIMD::count_nonzero(_dict_filter);
                 row_delete_filter->filter(_dict_filter);
+                _app_stats.delete_file_skip_rows += rows_delete_filter_before - SIMD::count_nonzero(_dict_filter);
             }
         }
 
@@ -644,8 +651,6 @@ StatusOr<size_t> HdfsOrcScanner::_do_get_next(ChunkPtr* chunk) {
             // we need to append none existed column before do eval, just for count(*) optimization
             RETURN_IF_ERROR(_scanner_ctx.append_or_update_not_existed_columns_to_chunk(chunk, rows_read));
 
-            // do stats before we filter rows which does not match.
-            _app_stats.raw_rows_read += rows_read;
             _chunk_filter.assign(rows_read, 1);
             {
                 SCOPED_RAW_TIMER(&_app_stats.expr_filter_ns);
@@ -665,8 +670,10 @@ StatusOr<size_t> HdfsOrcScanner::_do_get_next(ChunkPtr* chunk) {
             }
 
             if (rows_read != 0) {
+                size_t rows_delete_filter_before = SIMD::count_nonzero(_chunk_filter);
                 ColumnHelper::merge_two_filters(row_delete_filter, &_chunk_filter, nullptr);
                 rows_read = SIMD::count_nonzero(_chunk_filter);
+                _app_stats.delete_file_skip_rows += rows_delete_filter_before - rows_read;
                 if (rows_read == 0) {
                     // If rows_read = 0, we need to set chunk size = 0 and bypass filter chunk directly
                     ck->set_num_rows(0);

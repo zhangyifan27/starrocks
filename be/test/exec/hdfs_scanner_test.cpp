@@ -758,7 +758,8 @@ TEST_F(HdfsScannerTest, TestOrcGetNextWithDictFilter) {
     READ_SCANNER_ROWS(scanner, 1000);
     // since we use dict filter eval cache, we can do filter on orc cvb
     // so actually read rows is 1000.
-    EXPECT_EQ(scanner->raw_rows_read(), 1000);
+    // raw_rows_read should be rows_num before dict filter
+    EXPECT_EQ(scanner->raw_rows_read(), 4880);
     scanner->close();
 }
 
@@ -1041,7 +1042,8 @@ TEST_F(HdfsScannerTest, TestOrcGetNextWithPaddingCharDictFilter) {
     READ_SCANNER_ROWS(scanner, 1000);
     // since we use dict filter eval cache, we can do filter on orc cvb
     // so actually read rows is 1000.
-    EXPECT_EQ(scanner->raw_rows_read(), 1000);
+    // raw_rows_read should be rows_num before dict filter
+    EXPECT_EQ(scanner->raw_rows_read(), 2000);
     scanner->close();
 }
 
