@@ -52,6 +52,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.ReadLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock.WriteLock;
@@ -184,8 +185,9 @@ public class ProfileManager implements MemoryTrackable {
                     + "may be forget to insert 'QUERY_ID' column into infoStrings");
         }
         String supersqlTraceId = element.infoStrings.get(ProfileManager.SUPERSQL_TRACE_ID);
-        ProfileEvent profileEvent =
-                new ProfileEvent(ProfileEvent.EventType.QUERY, queryId, supersqlTraceId, profileString);
+        ProfileEvent.EventType eventType = Objects.equals(queryType, "Load") ?
+                ProfileEvent.EventType.LOAD : ProfileEvent.EventType.QUERY;
+        ProfileEvent profileEvent = new ProfileEvent(eventType, queryId, supersqlTraceId, profileString);
         GlobalStateMgr.getCurrentState().getProfileEventProcessor().handleProfileElement(profileEvent);
 
         writeLock.lock();

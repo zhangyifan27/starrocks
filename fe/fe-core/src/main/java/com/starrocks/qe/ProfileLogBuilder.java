@@ -18,6 +18,7 @@
 package com.starrocks.qe;
 
 import com.google.gson.Gson;
+import com.starrocks.common.Config;
 import com.starrocks.common.util.DigitalVersion;
 import com.starrocks.plugin.Plugin;
 import com.starrocks.plugin.PluginInfo;
@@ -45,7 +46,7 @@ public class ProfileLogBuilder extends Plugin implements ProfilePlugin {
 
     @Override
     public boolean eventFilter(ProfileEvent.EventType type) {
-        return true;
+        return Config.enable_profile_log;
     }
 
     @Override

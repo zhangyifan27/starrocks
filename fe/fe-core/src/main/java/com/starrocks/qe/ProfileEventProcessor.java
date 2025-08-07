@@ -18,6 +18,8 @@
 package com.starrocks.qe;
 
 import com.google.common.collect.Queues;
+import com.starrocks.common.Config;
+import com.starrocks.metric.MetricRepo;
 import com.starrocks.plugin.Plugin;
 import com.starrocks.plugin.PluginInfo;
 import com.starrocks.plugin.PluginMgr;
@@ -37,7 +39,7 @@ public class ProfileEventProcessor {
     private PluginMgr pluginMgr;
     private List<Plugin> profilePlugins;
     private long lastUpdateTime = 0;
-    private BlockingQueue<ProfileEvent> eventQueue = Queues.newLinkedBlockingDeque(10000);
+    private BlockingQueue<ProfileEvent> eventQueue = Queues.newLinkedBlockingDeque(Config.max_profile_event_queue_size);
     private Thread workerThread;
 
     private volatile boolean isStopped = false;
@@ -65,10 +67,18 @@ public class ProfileEventProcessor {
 
     public void handleProfileElement(ProfileEvent profileEvent) {
         try {
-            eventQueue.put(profileEvent);
+            boolean ok = eventQueue.offer(profileEvent, 50, TimeUnit.MILLISECONDS);
+            if (!ok) {
+                MetricRepo.COUNTER_PROFILE_EVENT_QUEUE_DROPPED_COUNT.increase(1L);
+                LOG.warn("profile event queue is full, query id: {}", profileEvent.getQueryId());
+            }
         } catch (InterruptedException e) {
             LOG.debug("encounter exception when handle profile event, ignore", e);
         }
+    }
+
+    public int getEventQueueSize() {
+        return eventQueue.size();
     }
 
     public class Worker implements Runnable {

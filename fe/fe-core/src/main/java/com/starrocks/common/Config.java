@@ -288,7 +288,7 @@ public class Config extends ConfigBase {
      * 120s    120 seconds
      */
     @ConfField
-    public static boolean enable_profile_log = true;
+    public static boolean enable_profile_log = false;
     @ConfField
     public static String profile_log_dir = StarRocksFE.STARROCKS_HOME_DIR + "/log";
     @ConfField
@@ -3569,4 +3569,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean report_table_statistics = true;
+
+    @ConfField(mutable = false)
+    public static int max_profile_event_queue_size = 20000;
 }

@@ -202,6 +202,7 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_ROUTINE_LOAD_TASK_PRECHECK_TOO_LONG;
     public static LongCounterMetric COUNTER_ROUTINE_LOAD_TASK_SUBMIT_TOO_LONG;
     public static LongCounterMetric COUNTER_HOT_COLD_QUERY;
+    public static LongCounterMetric COUNTER_PROFILE_EVENT_QUEUE_DROPPED_COUNT;
 
     public static Histogram HISTO_QUERY_LATENCY;
 
@@ -400,6 +401,15 @@ public final class MetricRepo {
             }
         };
         STARROCKS_METRIC_REGISTER.addMetric(metaStoreConections);
+
+        GaugeMetric<Integer> profileEventQueueSize = new GaugeMetric<Integer>(
+                "profile_event_queue_size", MetricUnit.NOUNIT, "profile event queue size") {
+            @Override
+            public Integer getValue() {
+                return GlobalStateMgr.getCurrentState().getProfileEventProcessor().getEventQueueSize();
+            }
+        };
+        STARROCKS_METRIC_REGISTER.addMetric(profileEventQueueSize);
 
         // qps, rps, error rate and query latency
         // these metrics should be set an init value, in case that metric calculator is not running
@@ -707,6 +717,10 @@ public final class MetricRepo {
         COUNTER_ROUTINE_LOAD_FAILED_TO_SUBMIT_TASK_NUM = new LongCounterMetric("failed_to_submit_task_num",
                 MetricUnit.NOUNIT, "failed to submit task number");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_FAILED_TO_SUBMIT_TASK_NUM);
+
+        COUNTER_PROFILE_EVENT_QUEUE_DROPPED_COUNT = new LongCounterMetric("profile_event_queue_dropped_count",
+                MetricUnit.NOUNIT, "profile event queue dropped count");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_PROFILE_EVENT_QUEUE_DROPPED_COUNT);
 
         COUNTER_UNFINISHED_BACKUP_JOB = new LongCounterMetric("unfinished_backup_job", MetricUnit.REQUESTS,
                 "current unfinished backup job");
