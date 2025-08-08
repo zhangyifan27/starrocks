@@ -84,8 +84,10 @@ public class QueryMemoryRecorder {
             queryMemory = queryPeakMemoryUsagePerNode * queryInfo.getWorkerNum() + (queryInfo.getInstanceNum() * MEM_CHUNK_SIZE);
             long time = System.currentTimeMillis();
             put(queryInfo.getDigestWithFlowId(), queryMemory, time);
-            MemoryRecordInfo memoryRecordInfo = new MemoryRecordInfo(queryInfo.getDigestWithFlowId(), queryMemory, time);
-            GlobalStateMgr.getCurrentState().getEditLog().logRecordQueryMemory(memoryRecordInfo);
+            if (GlobalStateMgr.getCurrentState().isLeader()) {
+                MemoryRecordInfo memoryRecordInfo = new MemoryRecordInfo(queryInfo.getDigestWithFlowId(), queryMemory, time);
+                GlobalStateMgr.getCurrentState().getEditLog().logRecordQueryMemory(memoryRecordInfo);
+            }
             idMap.remove(queryId);
         }
         return queryMemory;

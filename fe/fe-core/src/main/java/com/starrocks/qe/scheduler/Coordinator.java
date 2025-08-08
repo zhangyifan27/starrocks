@@ -192,8 +192,6 @@ public abstract class Coordinator {
 
     public abstract RuntimeProfile getQueryProfile();
 
-    public abstract long getQueryPeakMemoryUsage();
-
     public abstract List<String> getDeltaUrls();
 
     public abstract Map<String, String> getLoadCounters();
