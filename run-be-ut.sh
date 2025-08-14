@@ -150,6 +150,19 @@ if [[ -z ${USE_AVX512} ]]; then
 fi
 echo "Build Backend UT"
 
+if [[ ${WITH_STARCACHE} = 'ON' ]]; then
+    starcache_dir=${STARROCKS_THIRDPARTY}/installed/starcache
+    rm -rf ${starcache_dir}
+    starcache_tarball_name="starcache-${STARCACHE_VERSION}.tar.gz"
+    echo "download tarball from ${STARCACHE_REPOSITORY_URL}/${starcache_tarball_name} to ${STARROCKS_THIRDPARTY}/installed/${starcache_tarball_name}"
+    curl -s --request GET -L -o ${STARROCKS_THIRDPARTY}/installed/${starcache_tarball_name} --url "${STARCACHE_REPOSITORY_URL}/${starcache_tarball_name}"
+    echo "decompress starcache tarball ${starcache_tarball_name}"
+    pushd ${STARROCKS_THIRDPARTY}/installed > /dev/null
+    tar xvzf ${starcache_tarball_name}
+    rm ${starcache_tarball_name}
+    popd
+fi
+
 CMAKE_BUILD_DIR=${STARROCKS_HOME}/be/ut_build_${CMAKE_BUILD_TYPE}
 if [ ${CLEAN} -eq 1 ]; then
     rm ${CMAKE_BUILD_DIR} -rf
