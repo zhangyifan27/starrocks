@@ -1698,8 +1698,11 @@ public class ScalarOperatorFunctionsTest {
     }
 
     @Test
-    public void tdwToDate() {
+    public void tdwToDate() throws AnalysisException {
         assertEquals("2015-03-23 09:23:55:000", ScalarOperatorFunctions.tdwToDate(O_DT_20150323_092355).toString());
+
+        ConstantOperator date20250808 = ConstantOperator.createDate(LocalDateTime.of(2025, 8, 8, 0, 0, 0));
+        assertEquals("2025-08-08 00:00:00:000", ScalarOperatorFunctions.tdwToDate(date20250808).toString());
 
         assertEquals("2015-03-23 09:23:55:000",
                 ScalarOperatorFunctions.tdwToDate(ConstantOperator.createVarchar("2015-03-23 09:23:55"),

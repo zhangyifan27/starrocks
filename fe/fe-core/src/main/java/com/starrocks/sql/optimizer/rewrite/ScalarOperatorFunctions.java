@@ -1465,6 +1465,7 @@ public class ScalarOperatorFunctions {
 
     @ConstantFunction.List(list = {
             @ConstantFunction(name = "tdw_date_sub", argTypes = {DATETIME, INT}, returnType = VARCHAR, isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_sub", argTypes = {DATE, INT}, returnType = VARCHAR, isMonotonic = true),
             @ConstantFunction(name = "tdw_date_sub", argTypes = {VARCHAR, INT}, returnType = VARCHAR, isMonotonic = true)
     })
     public static ConstantOperator tdwDaysSub(ConstantOperator date, ConstantOperator day) {
@@ -1480,6 +1481,7 @@ public class ScalarOperatorFunctions {
 
     @ConstantFunction.List(list = {
             @ConstantFunction(name = "tdw_date_add", argTypes = {DATETIME, INT}, returnType = VARCHAR, isMonotonic = true),
+            @ConstantFunction(name = "tdw_date_add", argTypes = {DATE, INT}, returnType = VARCHAR, isMonotonic = true),
             @ConstantFunction(name = "tdw_date_add", argTypes = {VARCHAR, INT}, returnType = VARCHAR, isMonotonic = true)
     })
     public static ConstantOperator tdwDaysAdd(ConstantOperator date, ConstantOperator day) {
@@ -1495,6 +1497,7 @@ public class ScalarOperatorFunctions {
 
     @ConstantFunction.List(list = {
             @ConstantFunction(name = "tdw_add_months", argTypes = {DATETIME, INT}, returnType = VARCHAR, isMonotonic = true),
+            @ConstantFunction(name = "tdw_add_months", argTypes = {DATE, INT}, returnType = VARCHAR, isMonotonic = true),
             @ConstantFunction(name = "tdw_add_months", argTypes = {VARCHAR, INT}, returnType = VARCHAR, isMonotonic = true)
     })
     public static ConstantOperator tdwAddMonths(ConstantOperator date, ConstantOperator day) {
@@ -1509,21 +1512,28 @@ public class ScalarOperatorFunctions {
     }
 
     @ConstantFunction.List(list = {
-            @ConstantFunction(name = "tdw_to_date", argTypes = {DATETIME}, returnType = VARCHAR, isMonotonic = true)
+            @ConstantFunction(name = "tdw_to_date", argTypes = {DATETIME}, returnType = VARCHAR, isMonotonic = true),
+            @ConstantFunction(name = "tdw_to_date", argTypes = {DATE}, returnType = VARCHAR, isMonotonic = true),
+            @ConstantFunction(name = "tdw_to_date", argTypes = {VARCHAR}, returnType = VARCHAR, isMonotonic = true)
     })
-    public static ConstantOperator tdwToDate(ConstantOperator date) {
-        return ConstantOperator.createVarchar(UDFToDate2.evaluate(date.getDatetime()));
+    public static ConstantOperator tdwToDate(ConstantOperator date) throws AnalysisException {
+        if (date.getType().isStringType()) {
+            return ConstantOperator.createVarchar(UDFToDate2.evaluate(date.getVarchar()));
+        } else {
+            return ConstantOperator.createVarchar(UDFToDate2.evaluate(date.getDatetime()));
+        }
     }
 
     @ConstantFunction.List(list = {
             @ConstantFunction(name = "tdw_to_date", argTypes = {VARCHAR, VARCHAR}, returnType = VARCHAR, isMonotonic = true)
     })
-    public static ConstantOperator tdwToDate(ConstantOperator date, ConstantOperator day) {
+    public static ConstantOperator tdwToDate(ConstantOperator date, ConstantOperator day) throws AnalysisException {
         return ConstantOperator.createVarchar(UDFToDate2.evaluate(date.getVarchar(), day.getVarchar()));
     }
 
     @ConstantFunction.List(list = {
             @ConstantFunction(name = "tdw_to_char", argTypes = {DATETIME, VARCHAR}, returnType = VARCHAR, isMonotonic = true),
+            @ConstantFunction(name = "tdw_to_char", argTypes = {DATE, VARCHAR}, returnType = VARCHAR, isMonotonic = true),
             @ConstantFunction(name = "tdw_to_char", argTypes = {VARCHAR, VARCHAR}, returnType = VARCHAR, isMonotonic = true)
     })
     public static ConstantOperator tdwToChar(ConstantOperator date, ConstantOperator day) {

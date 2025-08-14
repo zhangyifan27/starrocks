@@ -18,8 +18,6 @@
 package com.starrocks.common.util;
 
 import java.time.LocalDateTime;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
 * https://git.woa.com/tdw/udf_cloud/blob/master/src/main/java/com/tencent/tdw_udf_cloud/hive/udf/UDFToChar.java
@@ -39,141 +37,9 @@ public class UDFToChar {
     private static String FORMAT11 = "yyyymmddhh24missff3";
 
     public static String evaluate(String date, String format) {
-        if (date == null) {
-            return null;
-        }
-
-        if (format == null || format.length() == 0) {
-            format = FORMAT1;
-        }
-
-        int year;
-        int month;
-        int day;
-        int hour;
-        int min;
-        int second;
-        int ff;
-        if (format.equalsIgnoreCase(FORMAT1)) {
-            Pattern pattern = Pattern.compile("([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9])[\\s\\S]*(\\..*)?$");
-            Matcher matcher = pattern.matcher(date);
-            if (!matcher.matches()) {
-                return null;
-            }
-            year = Integer.valueOf(matcher.group(1));
-            month = Integer.valueOf(matcher.group(2));
-            day = Integer.valueOf(matcher.group(3));
-            return String.format("%04d%02d%02d", year, month, day);
-        } else if (format.equalsIgnoreCase(FORMAT2)) {
-            Pattern pattern = Pattern.compile("([0-9][0-9][0-9][0-9])-([0-9][0-9])[\\s\\S]*(\\..*)?$");
-            Matcher matcher = pattern.matcher(date);
-            if (!matcher.matches()) {
-                return null;
-            }
-            year = Integer.valueOf(matcher.group(1));
-            month = Integer.valueOf(matcher.group(2));
-            return String.format("%04d%02d", year, month);
-        } else if (format.equalsIgnoreCase(FORMAT3)) {
-            Pattern pattern = Pattern.compile("([0-9][0-9][0-9][0-9])[\\s\\S]*(\\..*)?$");
-            Matcher matcher = pattern.matcher(date);
-            if (!matcher.matches()) {
-                return null;
-            }
-            year = Integer.valueOf(matcher.group(1));
-            return String.format("%04d", year);
-        } else if (format.equalsIgnoreCase(FORMAT4)) {
-            Pattern pattern = Pattern.compile("[0-9][0-9][0-9][0-9]-([0-9][0-9])-[0-9][0-9][\\s\\S]*(\\..*)?$");
-            Matcher matcher = pattern.matcher(date);
-            if (!matcher.matches()) {
-                return null;
-            }
-            month = Integer.valueOf(matcher.group(1));
-            return String.format("%02d", month);
-        } else if (format.equalsIgnoreCase(FORMAT5)) {
-            Pattern pattern = Pattern.compile("[0-9][0-9][0-9][0-9]-[0-9][0-9]-([0-9][0-9])[\\s\\S]*(\\..*)?$");
-            Matcher matcher = pattern.matcher(date);
-            if (!matcher.matches()) {
-                return null;
-            }
-            day = Integer.valueOf(matcher.group(1));
-            return String.format("%02d", day);
-        } else if (format.equalsIgnoreCase(FORMAT6)) {
-            Pattern pattern = Pattern.compile("([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9])[\\s\\S]*(\\..*)?$");
-            Matcher matcher = pattern.matcher(date);
-            if (!matcher.matches()) {
-                return null;
-            }
-            year = Integer.valueOf(matcher.group(1));
-            month = Integer.valueOf(matcher.group(2));
-            day = Integer.valueOf(matcher.group(3));
-            return String.format("%04d-%02d-%02d", year, month, day);
-        } else if (format.equalsIgnoreCase(FORMAT7)) {
-            Pattern pattern = Pattern.compile("([0-9][0-9][0-9][0-9])-([0-9][0-9])[\\s\\S]*(\\..*)?$");
-            Matcher matcher = pattern.matcher(date);
-            if (!matcher.matches()) {
-                return null;
-            }
-            year = Integer.valueOf(matcher.group(1));
-            month = Integer.valueOf(matcher.group(2));
-            return String.format("%04d-%02d", year, month);
-        } else if (format.equalsIgnoreCase(FORMAT8)) {
-            Pattern pattern = Pattern.compile(
-                    "([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9]) ([0-9][0-9]):([0-9][0-9]):([0-9][0-9])[\\s\\S]*(\\..*)?$");
-            Matcher matcher = pattern.matcher(date);
-            if (!matcher.matches()) {
-                return null;
-            }
-            year = Integer.valueOf(matcher.group(1));
-            month = Integer.valueOf(matcher.group(2));
-            day = Integer.valueOf(matcher.group(3));
-            hour = Integer.valueOf(matcher.group(4));
-            min = Integer.valueOf(matcher.group(5));
-            second = Integer.valueOf(matcher.group(6));
-            return String.format("%04d%02d%02d%02d%02d%02d", year, month, day, hour, min, second);
-        } else if (format.equalsIgnoreCase(FORMAT9)) {
-            Pattern pattern = Pattern.compile(
-                    "([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9]) ([0-9][0-9]):([0-9][0-9]):([0-9][0-9])[\\s\\S]*(\\..*)?$");
-            Matcher matcher = pattern.matcher(date);
-            if (!matcher.matches()) {
-                return null;
-            }
-            year = Integer.valueOf(matcher.group(1));
-            month = Integer.valueOf(matcher.group(2));
-            day = Integer.valueOf(matcher.group(3));
-            hour = Integer.valueOf(matcher.group(4));
-            min = Integer.valueOf(matcher.group(5));
-            second = Integer.valueOf(matcher.group(6));
-            return String.format("%04d-%02d-%02d %02d:%02d:%02d", year, month, day, hour, min, second);
-        } else if (format.equalsIgnoreCase(FORMAT10)) {
-            Pattern pattern = Pattern.compile(
-                    "[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9] ([0-9][0-9]):([0-9][0-9]):([0-9][0-9])[\\s\\S]*(\\..*)?$");
-            Matcher matcher = pattern.matcher(date);
-            if (!matcher.matches()) {
-                return null;
-            }
-            hour = Integer.valueOf(matcher.group(1));
-            min = Integer.valueOf(matcher.group(2));
-            second = Integer.valueOf(matcher.group(3));
-            return String.format("%02d%02d%02d", hour, min, second);
-        } else if (format.equalsIgnoreCase(FORMAT11)) {
-            Pattern pattern = Pattern.compile(
-                    "([0-9][0-9][0-9][0-9])-([0-9][0-9])-([0-9][0-9]) ([0-9][0-9]):([0-9][0-9]):([0-9][0-9]):([0-9][0-9][0-9])" +
-                            "[\\s\\S]*(\\..*)?$");
-            Matcher matcher = pattern.matcher(date);
-            if (!matcher.matches()) {
-                return null;
-            }
-            year = Integer.valueOf(matcher.group(1));
-            month = Integer.valueOf(matcher.group(2));
-            day = Integer.valueOf(matcher.group(3));
-            hour = Integer.valueOf(matcher.group(4));
-            min = Integer.valueOf(matcher.group(5));
-            second = Integer.valueOf(matcher.group(6));
-            ff = Integer.valueOf(matcher.group(7));
-            return String.format("%04d%02d%02d%02d%02d%02d%03d", year, month, day, hour, min, second, ff);
-        } else {
-            return null;
-        }
+        com.tencent.tdw_udf_cloud.hive.udf.UDFToChar udfToChar =
+                new com.tencent.tdw_udf_cloud.hive.udf.UDFToChar();
+        return udfToChar.evaluate(date, format);
     }
 
     public static String evaluate(LocalDateTime date, String format) {
