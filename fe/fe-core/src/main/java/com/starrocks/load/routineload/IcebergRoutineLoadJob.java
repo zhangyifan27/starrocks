@@ -11,6 +11,7 @@ import com.starrocks.analysis.BrokerDesc;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.RoutineLoadDataSourceProperties;
 import com.starrocks.analysis.SlotDescriptor;
+import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
@@ -80,6 +81,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
@@ -214,8 +216,9 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob implements GsonPreProc
             }
             Map<String, Column> dummyColumns = new HashMap<>();
             for (ImportColumnDesc importColumnDesc : getColumnDescs()) {
-                dummyColumns.put(importColumnDesc.getColumnName(),
-                        new Column(importColumnDesc.getColumnName(), Type.UNKNOWN_TYPE));
+                Column column = table.getColumn(importColumnDesc.getColumnName());
+                dummyColumns.put(importColumnDesc.getColumnName(), Objects.requireNonNullElseGet(column,
+                        () -> new Column(importColumnDesc.getColumnName(), Type.UNKNOWN_TYPE)));
             }
             for (Column column : IcebergApiConverter.toFullSchemas(iceTbl.schema())) {
                 dummyColumns.put(column.getName(), column);
@@ -226,6 +229,16 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob implements GsonPreProc
             for (Partition partition : table.getPartitions()) {
                 icebergPretendToOlapTable.addPartition(partition);
             }
+
+            // For columns referenced by filter predicates, pre-set their column types 
+            for (SlotRef slotRef : whereExpr.collectAllSlotRefs()) {
+                if (slotRef.getType().equals(Type.INVALID) || slotRef.getType().equals(Type.UNKNOWN_TYPE)) {
+                    if (dummyColumns.containsKey(slotRef.getColumnName())) {
+                        slotRef.setType(dummyColumns.get(slotRef.getColumnName()).getType());
+                    }
+                }
+            }
+
             final AtomicReference<List<Expr>> conjuncts = new AtomicReference<>();
             StreamLoadInfo streamLoadInfo = StreamLoadInfo.fromRoutineLoadJob(this);
             streamLoadInfo.setWhereExpr(whereExpr);
@@ -294,7 +307,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob implements GsonPreProc
             icebergWherePredicates =
                     getIcebergPredicates(iceTbl, icebergWhereExpr != null ? icebergWhereExpr : whereExpr);
             String icebergPredicatesSql = icebergWhereExpr != null ? icebergWhereExpr.toSql() : whereExpr.toSql();
-            jobProperties.put("icebergWherePredicates", icebergWherePredicates != null ? icebergPredicatesSql : "");
+            jobProperties.put("icebergWherePredicates", icebergWhereExpr != null ? icebergPredicatesSql : "");
         }
         if (discover == null) {
             boolean isPrimaryTable;
@@ -489,6 +502,27 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob implements GsonPreProc
             }
             StreamLoadInfo streamLoadInfo = StreamLoadInfo.fromRoutineLoadJob(this);
             streamLoadInfo.setTimeout(timeout);
+            Set<Expr> exprSet = new HashSet<>();
+
+            if (icebergWhereExpr != null) {
+                exprSet.add(icebergWhereExpr);
+                for (SlotRef slotRef : icebergWhereExpr.collectAllSlotRefs(true)) {
+                    if (streamLoadInfo.getColumnExprDescs().stream().anyMatch(
+                            importColumnDesc -> importColumnDesc.isColumn() &&
+                                    importColumnDesc.getColumnName().equals(slotRef.getColumnName()))) {
+                        continue;
+                    }
+                    // If the column involved in the filter predicate is not in import_column_desc, add it to the src tupleDescriptor.
+                    streamLoadInfo.getColumnExprDescs().add(new ImportColumnDesc(slotRef.getColumnName(), true));
+                }
+            }
+
+            if (streamLoadInfo.getWhereExpr() != null) {
+                exprSet.add(streamLoadInfo.getWhereExpr());
+            }
+
+            // Combine where_expr and iceberg_where_expr with AND to filter data together
+            streamLoadInfo.setWhereExpr(Expr.compoundAnd(exprSet));
             StreamLoadPlanner planner =
                     new IcebergStreamLoadPlanner(db, (OlapTable) table, streamLoadInfo, brokerDesc, beId, splits);
             TExecPlanFragmentParams planParams = planner.plan(loadId);
@@ -913,7 +947,7 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob implements GsonPreProc
     @Override
     public void modifyDataSourceProperties(RoutineLoadDataSourceProperties dataSourceProperties) throws DdlException {
         this.customProperties.putAll(dataSourceProperties.getCustomIcebergProperties());
-        icebergWhereExpr =  IcebergCreateRoutineLoadStmtConfig.getIcebergWhereExprFromCustomIcebergProperties(customProperties);
+        icebergWhereExpr = IcebergCreateRoutineLoadStmtConfig.getIcebergWhereExprFromCustomIcebergProperties(customProperties);
         LOG.info("modify the data source properties of iceberg routine load job: {}, datasource properties: {}",
                 this.id, dataSourceProperties);
     }
@@ -928,5 +962,12 @@ public class IcebergRoutineLoadJob extends RoutineLoadJob implements GsonPreProc
                     discover.getJobName(),
                     discover.pendingSplitsSize(), discover.getCurrentConcurrentTaskNum() * 50);
         }
+    }
+
+    @Override
+    public void gsonPostProcess() throws IOException {
+        super.gsonPostProcess();
+        icebergWhereExpr =
+                IcebergCreateRoutineLoadStmtConfig.getIcebergWhereExprFromCustomIcebergProperties(customProperties);
     }
 }

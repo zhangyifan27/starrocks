@@ -39,6 +39,7 @@ import com.google.common.collect.Maps;
 import com.starrocks.analysis.Analyzer;
 import com.starrocks.analysis.DescriptorTable;
 import com.starrocks.analysis.SlotDescriptor;
+import com.starrocks.analysis.SlotRef;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.AggregateType;
 import com.starrocks.catalog.Column;
@@ -179,12 +180,27 @@ public class StreamLoadPlanner {
                 dict.ifPresent(columnDict -> globalDicts.add(new Pair<>(slotDesc.getId().asInt(), columnDict)));
             }
         }
+
         if (isPrimaryKey) {
             // add op type column
             SlotDescriptor slotDesc = descTable.addSlotDescriptor(tupleDesc);
             slotDesc.setIsMaterialized(true);
             slotDesc.setColumn(new Column(Load.LOAD_OP_COLUMN, Type.TINYINT));
             slotDesc.setIsNullable(false);
+        }
+
+        // Add columns referenced in filter conditions to dest tupleDescriptor to ensure conjuncts can reference them
+        if (streamLoadInfo.getWhereExpr() != null) {
+            for (SlotRef slotRef : streamLoadInfo.getWhereExpr().collectAllSlotRefs(true)) {
+                if (destColumns.stream().anyMatch(column -> column.getName().equals(slotRef.getColumnName()))) {
+                    continue;
+                }
+                SlotDescriptor slotDesc = descTable.addSlotDescriptor(tupleDesc);
+                slotDesc.setIsMaterialized(true);
+                slotDesc.setIsOutputColumn(false);
+                slotDesc.setColumn(new Column(slotRef.getColumnName(), Type.VARCHAR));
+                slotDesc.setIsNullable(slotRef.isNullable());
+            }
         }
 
         // create scan node

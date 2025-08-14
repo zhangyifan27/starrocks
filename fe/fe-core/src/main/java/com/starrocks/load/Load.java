@@ -478,6 +478,7 @@ public class Load {
                 Database db = entry.getValue();
                 if (db.getTable(tbl.getId()) != null) {
                     dbName = db.getFullName();
+                    break;
                 }
             }
         }
@@ -578,7 +579,7 @@ public class Load {
                         slotDesc.setType(Type.VARCHAR);
                         slotDesc.setColumn(new Column(columnName, Type.VARCHAR));
                         // Will check mapping expr has this slot or not later
-                        slotDesc.setIsMaterialized(false);
+                        slotDesc.setIsMaterialized(importColumnDesc.isMaterialized());
                     }
                     // FileScanNode will set all slot nullable, it check null in OlapTableSink if
                     // dest table column is not null
