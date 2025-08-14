@@ -1664,7 +1664,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private boolean enableAggregationPipelineShareLimit = true;
 
     @VarAttr(name = ENABLE_HYPERSCAN_VEC)
-    private boolean enableHyperscanVec = true;
+    private boolean enableHyperscanVec = false;
 
     @VarAttr(name = DISABLE_GENERATED_COLUMN_REWRITE, flag = VariableMgr.INVISIBLE)
     private boolean disableGeneratedColumnRewrite = false;

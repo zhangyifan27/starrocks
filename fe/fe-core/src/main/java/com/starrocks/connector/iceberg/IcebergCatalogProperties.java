@@ -92,7 +92,7 @@ public class IcebergCatalogProperties {
         this.enableIcebergMetadataCache = PropertyUtil.propertyAsBoolean(properties, ENABLE_ICEBERG_METADATA_CACHE, true);
 
         this.icebergMetaCacheTtlSec = PropertyUtil.propertyAsLong(properties, ICEBERG_META_CACHE_TTL, 48 * 60 * 60);
-        this.icebergTableCacheTtlSec = PropertyUtil.propertyAsLong(properties, ICEBERG_TABLE_CACHE_TTL, 1800L);
+        this.icebergTableCacheTtlSec = PropertyUtil.propertyAsLong(properties, ICEBERG_TABLE_CACHE_TTL, 300L);
         this.icebergManifestCacheMaxNum = PropertyUtil.propertyAsLong(properties, ICEBERG_MANIFEST_CACHE_MAX_NUM, 100000);
         this.icebergManifestCacheWithColumnStatistics = PropertyUtil.propertyAsBoolean(
                 properties, ICEBERG_MANIFEST_CACHE_WITH_COLUMN_STATISTICS, false);
