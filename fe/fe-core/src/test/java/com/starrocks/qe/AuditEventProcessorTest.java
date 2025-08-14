@@ -69,12 +69,14 @@ public class AuditEventProcessorTest {
                 .setReturnRows(1)
                 .setStmtId(1234)
                 .setStmt("select * from tbl1")
+                .setProfileSize(24576)
                 .setCatalog("catalog1").build();
 
         Assert.assertEquals("127.0.0.1", event.clientIp);
         Assert.assertEquals(200000, event.scanRows);
         Assert.assertEquals("catalog1", event.catalog);
         Assert.assertEquals("user2", event.authorizedUser);
+        Assert.assertEquals(24576, event.profileSize);
     }
 
     @Test

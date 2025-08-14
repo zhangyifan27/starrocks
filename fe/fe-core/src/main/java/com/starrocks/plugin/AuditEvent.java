@@ -175,6 +175,8 @@ public class AuditEvent {
     public String statistics = "";
     @AuditField(value = "TableUseOmsStatistics")
     public String tableUseOmsStatistics = "";
+    @AuditField(value = "profileSize")
+    public long profileSize = -1;
 
     public static class TableStatisticsInfo {
         public String engine = "starrocks";
@@ -471,6 +473,11 @@ public class AuditEvent {
 
         public AuditEventBuilder setIsPartitionPruningSuccess(boolean isPartitionPruningSuccess) {
             auditEvent.isPartitionPruningSuccess = isPartitionPruningSuccess;
+            return this;
+        }
+
+        public AuditEventBuilder setProfileSize(long profileSize) {
+            auditEvent.profileSize = profileSize;
             return this;
         }
 

@@ -49,6 +49,7 @@ import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.common.util.AuditStatisticsUtil;
 import com.starrocks.common.util.LogUtil;
+import com.starrocks.common.util.ProfileManager;
 import com.starrocks.common.util.UUIDUtil;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
@@ -287,6 +288,7 @@ public class ConnectProcessor {
 
         ctx.getAuditEventBuilder().setFeIp(FrontendOptions.getLocalHostAddress());
         ctx.getAuditEventBuilder().setSupersqlTraceId(ctx.getSupersqlTraceId());
+        ctx.getAuditEventBuilder().setProfileSize(ProfileManager.getInstance().getProfileSize(ctx.getQueryId().toString()));
 
         if (parsedStmt != null && AuditEncryptionChecker.needEncrypt(parsedStmt)) {
             // Some information like username, password in the stmt should not be printed.

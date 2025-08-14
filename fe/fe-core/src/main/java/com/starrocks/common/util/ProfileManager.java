@@ -47,6 +47,7 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedHashMap;
@@ -285,6 +286,14 @@ public class ProfileManager implements MemoryTrackable {
             return event.getProfile();
         }
         return null;
+    }
+
+    public long getProfileSize(String queryId) {
+        String profile = getProfile(queryId);
+        if (profile != null) {
+            return profile.getBytes(StandardCharsets.UTF_8).length;
+        }
+        return 0L;
     }
 
     public ProfileElement getProfileElement(String queryId) {
