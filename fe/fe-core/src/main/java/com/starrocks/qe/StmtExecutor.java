@@ -323,7 +323,7 @@ public class StmtExecutor {
     private RuntimeProfile buildTopLevelProfile() {
         RuntimeProfile profile = new RuntimeProfile("Query");
         RuntimeProfile summaryProfile = new RuntimeProfile("Summary");
-        summaryProfile.addInfoString(ProfileManager.QUERY_ID, DebugUtil.printId(context.getExecutionId()));
+        summaryProfile.addInfoString(ProfileManager.QUERY_ID, DebugUtil.printId(context.getQueryId()));
         summaryProfile.addInfoString(ProfileManager.START_TIME, TimeUtils.longToTimeString(context.getStartTime()));
         summaryProfile.addInfoString(ProfileManager.SUPERSQL_TRACE_ID, context.getSupersqlTraceId());
 
@@ -696,7 +696,7 @@ public class StmtExecutor {
                         if (needRetry) {
                             // If the runtime profile is enabled, then we need to clean up the profile record related
                             // to this failed execution.
-                            String queryId = DebugUtil.printId(context.getExecutionId());
+                            String queryId = DebugUtil.printId(context.getQueryId());
                             ProfileManager.getInstance().removeProfile(queryId);
                         } else {
                             // Release all resources after the query finish as soon as possible, as query profile is
@@ -1061,7 +1061,7 @@ public class StmtExecutor {
         QueryDetail queryDetail = context.getQueryDetail();
         boolean needMerge = context.needMergeProfile();
 
-        // DO NOT use context int the async task, because the context is shared among consecutive queries.
+        // DO NOT use context in the async task, because the context is shared among consecutive queries.
         // profile of query1 maybe executed when query2 is under execution.
         Consumer<Boolean> task = (Boolean isAsync) -> {
             RuntimeProfile summaryProfile = profile.getChild("Summary");
