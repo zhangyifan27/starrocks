@@ -58,27 +58,32 @@ public class ConnectorTableMetadataKeyInfoProcessor extends FrontendDaemon {
 
     private void refreshCatalogTable() {
         MetadataMgr metadataMgr = GlobalStateMgr.getCurrentState().getMetadataMgr();
-        Map<String, CacheUpdateProcessor> cacheUpdateProcessors = tableMetadataProcessor.getCacheUpdateProcessors();
+        Map<String, List<CacheUpdateProcessor>> cacheUpdateProcessors = tableMetadataProcessor.getCacheUpdateProcessors();
         List<String> catalogNames = Lists.newArrayList(cacheUpdateProcessors.keySet());
         for (String catalogName : catalogNames) {
-            CacheUpdateProcessor updateProcessor = cacheUpdateProcessors.get(catalogName);
-            if (updateProcessor == null) {
+            List<CacheUpdateProcessor> updateProcessors = cacheUpdateProcessors.get(catalogName);
+            if (updateProcessors == null) {
                 LOG.error("Failed to get cacheUpdateProcessor by catalog {}.", catalogName);
                 continue;
             }
-
-            List<Future<?>> futures = Lists.newArrayList();
-            for (DatabaseTableName cachedTableName : updateProcessor.getCachedTableNamesForPartitionKeysAndValues()) {
-                futures.add(refreshHiveTableKeyInfoExecutor.submit(
-                        new RunnableTask(metadataMgr, updateProcessor, catalogName, cachedTableName)));
+            if (updateProcessors.isEmpty()) {
+                LOG.error("No cacheUpdateProcessor by catalog {}.", catalogName);
+                continue;
             }
-            for (Future<?> future : futures) {
-                try {
-                    future.get();
-                } catch (Throwable e) {
+            for (CacheUpdateProcessor updateProcessor : updateProcessors) {
+                List<Future<?>> futures = Lists.newArrayList();
+                for (DatabaseTableName cachedTableName : updateProcessor.getCachedTableNamesForPartitionKeysAndValues()) {
+                    futures.add(refreshHiveTableKeyInfoExecutor.submit(
+                            new RunnableTask(metadataMgr, updateProcessor, catalogName, cachedTableName)));
                 }
+                for (Future<?> future : futures) {
+                    try {
+                        future.get();
+                    } catch (Throwable e) {
+                    }
+                }
+                LOG.info("refresh connector metadata key info {} finished, table num: {}", catalogName, futures.size());
             }
-            LOG.info("refresh connector metadata key info {} finished, table num: {}", catalogName, futures.size());
         }
     }
 

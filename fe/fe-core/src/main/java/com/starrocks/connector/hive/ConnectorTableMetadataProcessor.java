@@ -39,6 +39,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -49,7 +50,7 @@ public class ConnectorTableMetadataProcessor extends FrontendDaemon {
 
     private final Set<BaseTableInfo> registeredTableInfos = Sets.newConcurrentHashSet();
 
-    private final Map<String, CacheUpdateProcessor> cacheUpdateProcessors = new ConcurrentHashMap<>();
+    private final Map<String, List<CacheUpdateProcessor>> cacheUpdateProcessors = new ConcurrentHashMap<>();
 
     private final ExecutorService refreshHiveTableExecutor;
     private final ExecutorService refreshRemoteFileExecutor;
@@ -59,12 +60,17 @@ public class ConnectorTableMetadataProcessor extends FrontendDaemon {
         registeredTableInfos.add(tableInfo);
     }
 
-    public void registerCacheUpdateProcessor(String catalogName, CacheUpdateProcessor cache) {
+    public synchronized void registerCacheUpdateProcessor(String catalogName, CacheUpdateProcessor cache) {
         LOG.info("register to update {} metadata cache in the ConnectorTableMetadataProcessor", catalogName);
-        cacheUpdateProcessors.put(catalogName, cache);
+        List<CacheUpdateProcessor> cacheUpdateProcessorList = cacheUpdateProcessors.get(catalogName);
+        if (cacheUpdateProcessorList == null) {
+            cacheUpdateProcessorList = new CopyOnWriteArrayList<>();
+            cacheUpdateProcessors.put(catalogName, cacheUpdateProcessorList);
+        }
+        cacheUpdateProcessorList.add(cache);
     }
 
-    public void unRegisterCacheUpdateProcessor(String catalogName) {
+    public synchronized void unRegisterCacheUpdateProcessor(String catalogName) {
         LOG.info("unregister to update {} metadata cache in the ConnectorTableMetadataProcessor", catalogName);
         cacheUpdateProcessors.remove(catalogName);
     }
@@ -79,7 +85,7 @@ public class ConnectorTableMetadataProcessor extends FrontendDaemon {
         cachingIcebergCatalogs.remove(catalogName);
     }
 
-    public Map<String, CacheUpdateProcessor> getCacheUpdateProcessors() {
+    public Map<String, List<CacheUpdateProcessor>> getCacheUpdateProcessors() {
         return cacheUpdateProcessors;
     }
 
@@ -109,24 +115,29 @@ public class ConnectorTableMetadataProcessor extends FrontendDaemon {
         MetadataMgr metadataMgr = GlobalStateMgr.getCurrentState().getMetadataMgr();
         List<String> catalogNames = Lists.newArrayList(cacheUpdateProcessors.keySet());
         for (String catalogName : catalogNames) {
-            CacheUpdateProcessor updateProcessor = cacheUpdateProcessors.get(catalogName);
-            if (updateProcessor == null) {
+            List<CacheUpdateProcessor> updateProcessors = cacheUpdateProcessors.get(catalogName);
+            if (updateProcessors == null) {
                 LOG.error("Failed to get cacheUpdateProcessor by catalog {}.", catalogName);
                 continue;
             }
-
-            List<Future<?>> futures = Lists.newArrayList();
-            for (DatabaseTableName cachedTableName : updateProcessor.getCachedTableNames()) {
-                futures.add(refreshHiveTableExecutor.submit(
-                        new RunnableTask(metadataMgr, updateProcessor, catalogName, cachedTableName)));
+            if (updateProcessors.isEmpty()) {
+                LOG.error("No cacheUpdateProcessor by catalog {}.", catalogName);
+                continue;
             }
-            for (Future<?> future : futures) {
-                try {
-                    future.get();
-                } catch (Throwable e) {
+            for (CacheUpdateProcessor updateProcessor : updateProcessors) {
+                List<Future<?>> futures = Lists.newArrayList();
+                for (DatabaseTableName cachedTableName : updateProcessor.getCachedTableNames()) {
+                    futures.add(refreshHiveTableExecutor.submit(
+                            new RunnableTask(metadataMgr, updateProcessor, catalogName, cachedTableName)));
                 }
+                for (Future<?> future : futures) {
+                    try {
+                        future.get();
+                    } catch (Throwable e) {
+                    }
+                }
+                LOG.info("refresh connector metadata {} finished, table num: {}", catalogName, futures.size());
             }
-            LOG.info("refresh connector metadata {} finished", catalogName);
         }
     }
 
