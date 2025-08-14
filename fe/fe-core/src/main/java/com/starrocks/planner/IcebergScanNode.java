@@ -86,6 +86,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
+import static com.starrocks.connector.PartitionUtil.createPartitionKeyWithType;
 import static com.starrocks.server.CatalogMgr.ResourceMappingCatalog.isResourceMappingCatalog;
 
 public class IcebergScanNode extends ScanNode {
@@ -252,7 +253,7 @@ public class IcebergScanNode extends ScanNode {
         }
 
         // this partition list filtered out based on logical partition secondary pruner
-        boolean enableSecondaryPrunner =
+        boolean enableSecondaryPrunner = icebergTable.isAllIdentityTransform() &&
                 ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnablePartitionSecondaryPrunner();
         List<PartitionKey> selectedPartitionKeys = new ArrayList<>(scanNodePredicates.getIdToPartitionKey().values());
         Map<StructLike, Long> partitionKeyToId = Maps.newHashMap();
@@ -283,8 +284,8 @@ public class IcebergScanNode extends ScanNode {
                             .map(x -> indexToField.inverse().get(x))
                             .collect(Collectors.toList());
                     PartitionKey partitionKey = getPartitionKey(partition, task.spec(), indexes, indexToField);
-                    boolean isSelected = partitionKey.isEmpty() || selectedPartitionKeys.contains(partitionKey);
-                    if (enableSecondaryPrunner && !isSelected) {
+                    if (enableSecondaryPrunner &&
+                            !partitionKeyContains(selectedPartitionKeys, partitionKey, partition, task.spec())) {
                         continue;
                     }
                     partitionKeyToId.put(partition, partitionId);
@@ -381,6 +382,24 @@ public class IcebergScanNode extends ScanNode {
         scanPartitionNum = partitionKeyToId.size();
         scanFileSize = scanFileSizes.values().stream().reduce(0L, Long::sum);
         scanFileNum = scanFileSizes.size();
+    }
+
+    private boolean partitionKeyContains(List<PartitionKey> selectedPartitionKeys, PartitionKey partitionKey,
+                                         StructLike partitionData, PartitionSpec spec) {
+        try {
+            if (partitionKey.isEmpty() || selectedPartitionKeys.contains(partitionKey)) {
+                return true;
+            }
+            // get full partition values
+            List<String> values = PartitionUtil.getIcebergPartitionValues(
+                    spec, partitionData, icebergTable.hasPartitionTransformedEvolution());
+            List<Type> types = icebergTable.getPartitionColumns().stream().map(Column::getType).collect(Collectors.toList());
+            PartitionKey fullPartitionKey = createPartitionKeyWithType(values, types, Table.TableType.ICEBERG);
+            return selectedPartitionKeys.contains(fullPartitionKey);
+        } catch (Throwable e) {
+            LOG.error("Failed to check partition key contains, skip partition prunner", e);
+            return true;
+        }
     }
 
     private void prepareRequiredColumnsForDeletes(List<Integer> equalityIds) {

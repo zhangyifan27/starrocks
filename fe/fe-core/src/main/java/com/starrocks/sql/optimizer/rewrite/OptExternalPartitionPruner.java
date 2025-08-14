@@ -415,12 +415,23 @@ public class OptExternalPartitionPruner {
                 long partitionId = entry.second;
                 operator.getScanOperatorPredicates().getIdToPartitionKey().put(partitionId, key);
             }
-        } else if (table instanceof DeltaLakeTable || table instanceof IcebergTable) {
+        } else if (table instanceof DeltaLakeTable) {
             // Init columnToPartitionValuesMap for delta lake, it will be used in classifyConjuncts function
             // to classify partition conjuncts
             List<Column> partitionColumns = table.getPartitionColumns();
             for (Column column : partitionColumns) {
                 if (column == null) {
+                    continue;
+                }
+                ColumnRefOperator partitionColumnRefOperator = operator.getColumnReference(column);
+                columnToPartitionValuesMap.put(partitionColumnRefOperator, new ConcurrentSkipListMap<>());
+                columnToNullPartitions.put(partitionColumnRefOperator, Sets.newConcurrentHashSet());
+            }
+        } else if (table instanceof IcebergTable) {
+            List<Column> partitionColumns = table.getPartitionColumns();
+            for (Column column : partitionColumns) {
+                // only support iceberg identity partition column
+                if (column == null || !((IcebergTable) table).isIdentityTransform(column)) {
                     continue;
                 }
                 ColumnRefOperator partitionColumnRefOperator = operator.getColumnReference(column);
@@ -493,10 +504,10 @@ public class OptExternalPartitionPruner {
                 for (PartitionKey partitionKey : partitionKeys) {
                     partitionKeyMap.put(context.getNextUniquePartitionId(), partitionKey);
                 }
+                partitionKeyMap = partitionSecondaryPruner(operator, context,
+                        columnToPartitionValuesMap, columnToNullPartitions, partitionKeyMap);
             }
 
-            partitionKeyMap = partitionSecondaryPruner(operator, context,
-                    columnToPartitionValuesMap, columnToNullPartitions, partitionKeyMap);
             scanOperatorPredicates.getIdToPartitionKey().putAll(partitionKeyMap);
             scanOperatorPredicates.setSelectedPartitionIds(partitionKeyMap.keySet());
         } else if (table instanceof PaimonTable) {
@@ -541,6 +552,11 @@ public class OptExternalPartitionPruner {
                 return partitionKeyMap;
             }
             ScanOperatorPredicates predicates = operator.getScanOperatorPredicates();
+            // make sure partition columns are identifiable
+            if (operator.getTable().getPartitionColumns().size() != columnToPartitionValuesMap.size()) {
+                predicates.setPruningPredicateCanBeEvaluated(false);
+                return partitionKeyMap;
+            }
             if (partitionKeyMap.isEmpty() || predicates.getPartitionConjuncts().isEmpty()) {
                 return partitionKeyMap;
             }
@@ -565,6 +581,8 @@ public class OptExternalPartitionPruner {
                 predicates.setPruningPredicateCanBeEvaluated(false);
                 predicates.getNoEvalPartitionConjuncts().addAll(partitionPruner.getNoEvalConjuncts());
             }
+            LOG.info("Secondary partition prune result size: {}, original size = {}",
+                    prunePartKeys.size(), partitionKeyMap.size());
             return prunePartKeys;
         } catch (Throwable e) {
             LOG.warn("Failed to execute secondary partition prune", e);

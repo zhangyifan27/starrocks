@@ -18,8 +18,10 @@ package com.starrocks.catalog;
 import com.google.common.base.Joiner;
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.collect.Multimap;
 import com.google.common.collect.Sets;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.analysis.DescriptorTable;
@@ -86,6 +88,7 @@ public class IcebergTable extends Table {
     private org.apache.iceberg.Table nativeTable; // actual iceberg table
     private List<Column> partitionColumns;
     private List<Column> icebergPartitionColumns;
+    private final Multimap<Column, PartitionField> icebergPartitionFields = ArrayListMultimap.create();
 
     private final AtomicLong partitionIdGen = new AtomicLong(0L);
 
@@ -141,8 +144,12 @@ public class IcebergTable extends Table {
         if (partitionColumns == null) {
             List<PartitionField> partitionFields = this.getNativeTable().spec().fields();
             Schema schema = this.getNativeTable().schema();
-            partitionColumns = partitionFields.stream().map(partitionField ->
-                    getColumn(getPartitionSourceName(schema, partitionField))).collect(Collectors.toList());
+            partitionColumns = new ArrayList<>();
+            for (PartitionField partitionField : partitionFields) {
+                Column column = getColumn(getPartitionSourceName(schema, partitionField));
+                partitionColumns.add(column);
+                icebergPartitionFields.put(column, partitionField);
+            }
         }
         return partitionColumns;
     }
@@ -273,6 +280,16 @@ public class IcebergTable extends Table {
      */
     public String getPartitionSourceName(Schema schema, PartitionField partition) {
         return schema.findColumnName(partition.sourceId());
+    }
+
+    public boolean isAllIdentityTransform() {
+        return icebergPartitionFields.values().stream()
+                .allMatch(field -> field != null && field.transform() != null && field.transform().isIdentity());
+    }
+
+    public boolean isIdentityTransform(Column partitionColumn) {
+        return icebergPartitionFields.get(partitionColumn).stream()
+                .allMatch(field -> field != null && field.transform() != null && field.transform().isIdentity());
     }
 
     @Override

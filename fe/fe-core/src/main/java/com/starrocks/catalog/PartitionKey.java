@@ -555,7 +555,6 @@ public class PartitionKey implements Comparable<PartitionKey>, Writable {
             return false;
         }
         PartitionKey that = (PartitionKey) o;
-        assert Objects.equals(types, that.types);
         return Objects.equals(keys, that.keys) && Objects.equals(types, that.types);
     }
 
