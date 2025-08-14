@@ -53,6 +53,18 @@ public class RewriteMultiDistinctPlanTest extends PlanTestBase {
                         "\"replication_num\" = \"1\",\n" +
                         "\"in_memory\" = \"false\"\n" +
                         ");");
+        starRocksAssert.withTable(
+                "CREATE TABLE IF NOT EXISTS clck_em_di (\n" +
+                        "  `imp_date` DATE NOT NULL,\n" +
+                        "  `feed_id` BIGINT NOT NULL,\n" +
+                        "  `uin` STRING NOT NULL,\n" +
+                        "  `brand` STRING NOT NULL,\n" +
+                        "  `country` STRING NOT NULL\n" +
+                        ") ENGINE=OLAP\n" +
+                        "PROPERTIES (\n" +
+                        "\"replication_num\" = \"1\",\n" +
+                        "\"in_memory\" = \"false\"\n" +
+                        ");");
     }
 
     @Test
@@ -549,6 +561,80 @@ public class RewriteMultiDistinctPlanTest extends PlanTestBase {
                         "  |  colocate: false, reason: \n" +
                         "  |  equal join conjunct: 7: deptno = 2: deptno");
 
+    }
+
+    @Test
+    public void testMultiDistinctUserCase3() throws Exception {
+        String sql = "SELECT COUNT(DISTINCT `feed_id`) AS `index_uin_4`\n" +
+                ",COUNT(`feed_id`) AS `index_uin_5`\n" +
+                ",COUNT(`uin`) AS `index_uin_2`\n" +
+                ",COUNT(DISTINCT `uin`) AS `index_uin_3`\n" +
+                "FROM `clck_em_di` WHERE `imp_date` >= 20250806";
+        String plan = getFragmentPlan(sql);
+        assertContains(plan,
+                "3:AGGREGATE (update serialize)\n" +
+                        "  |  STREAMING\n" +
+                        "  |  output: count(11: clone_feed_id), count(12: clone_uin)\n" +
+                        "  |  group by: 2: feed_id, 3: uin, 10: GROUPING_ID\n" +
+                        "  |  \n" +
+                        "  2:REPEAT_NODE\n" +
+                        "  |  repeat: repeat 2 lines [[2], [], [3]]\n" +
+                        "  |  \n" +
+                        "  1:Project\n" +
+                        "  |  <slot 2> : 2: feed_id\n" +
+                        "  |  <slot 3> : 3: uin\n" +
+                        "  |  <slot 11> : clone(2: feed_id)\n" +
+                        "  |  <slot 12> : clone(3: uin)");
+    }
+
+    @Test
+    public void testMultiDistinctUserCase4() throws Exception {
+        String sql = "SELECT COUNT(DISTINCT `feed_id`) AS `index_uin_4`\n" +
+                ",COUNT(`feed_id`) AS `index_uin_5`\n" +
+                ",COUNT(`brand`) AS `index_uin_2`\n" +
+                ",COUNT(DISTINCT `uin`) AS `index_uin_3`\n" +
+                "FROM `clck_em_di` WHERE `imp_date` >= 20250806";
+        String plan = getFragmentPlan(sql);
+        assertContains(plan,
+                "3:AGGREGATE (update serialize)\n" +
+                        "  |  STREAMING\n" +
+                        "  |  output: count(11: clone_feed_id), count(4: brand)\n" +
+                        "  |  group by: 2: feed_id, 3: uin, 10: GROUPING_ID\n" +
+                        "  |  \n" +
+                        "  2:REPEAT_NODE\n" +
+                        "  |  repeat: repeat 2 lines [[2], [], [3]]\n" +
+                        "  |  \n" +
+                        "  1:Project\n" +
+                        "  |  <slot 2> : 2: feed_id\n" +
+                        "  |  <slot 3> : 3: uin\n" +
+                        "  |  <slot 4> : 4: brand\n" +
+                        "  |  <slot 11> : clone(2: feed_id)");
+    }
+
+    @Test
+    public void testMultiDistinctUserCase5() throws Exception {
+        String sql = "SELECT COUNT(DISTINCT `feed_id`) AS `index_uin_4`\n" +
+                ",COUNT(`feed_id`) AS `index_uin_5`\n" +
+                ",COUNT(CASE WHEN `feed_id` = '18' THEN brand ELSE NULL END) AS `index_uin_2`\n" +
+                ",COUNT(CASE WHEN `country` = 'china' THEN uin ELSE NULL END) AS `index_uin_3`\n" +
+                ",COUNT(DISTINCT `uin`) AS `index_uin_3`\n" +
+                "FROM `clck_em_di` WHERE `imp_date` = 20250806";
+        String plan = getFragmentPlan(sql);
+        assertContains(plan,
+                "3:AGGREGATE (update serialize)\n" +
+                        "  |  STREAMING\n" +
+                        "  |  output: count(7: case), count(14: clone_feed_id), count(6: case)\n" +
+                        "  |  group by: 2: feed_id, 3: uin, 13: GROUPING_ID\n" +
+                        "  |  \n" +
+                        "  2:REPEAT_NODE\n" +
+                        "  |  repeat: repeat 2 lines [[2], [], [3]]\n" +
+                        "  |  \n" +
+                        "  1:Project\n" +
+                        "  |  <slot 2> : 2: feed_id\n" +
+                        "  |  <slot 3> : 3: uin\n" +
+                        "  |  <slot 6> : if(2: feed_id = 18, 4: brand, NULL)\n" +
+                        "  |  <slot 7> : if(5: country = 'china', 3: uin, NULL)\n" +
+                        "  |  <slot 14> : clone(2: feed_id)");
     }
 }
 

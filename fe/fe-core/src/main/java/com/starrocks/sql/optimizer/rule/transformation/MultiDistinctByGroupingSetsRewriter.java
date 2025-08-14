@@ -41,7 +41,6 @@ import org.apache.logging.log4j.Logger;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -113,12 +112,16 @@ public class MultiDistinctByGroupingSetsRewriter {
         List<ColumnRefOperator> groupByColumnRefs = new ArrayList<>();
         // used to record the complete grouping_id, which contains all the group by columns and grouping_id value.
         Map<ColumnRefSet, Long> groupingIdMap = new LinkedHashMap<>();
-        OptExpression repeatOpt = buildRepeatOpt(input, groupingIdRef, groupByColumnRefs, groupingIdMap, context);
+        // used to record clone column of non-distinct columns
+        Map<ColumnRefOperator, ColumnRefOperator> cloneColumnMap = new LinkedHashMap<>();
+        OptExpression repeatOpt =
+                buildRepeatOpt(input, groupingIdRef, groupByColumnRefs, groupingIdMap, cloneColumnMap, context);
 
         // step2: build all grouping aggregate operator
         // used to record the column ref with new project ref
         Map<ColumnRefOperator, ColumnRefOperator> columnRefAggrMap = new LinkedHashMap<>();
-        OptExpression groupOpt = buildGroupingAggregateOpt(aggregate, repeatOpt, groupByColumnRefs, columnRefAggrMap, context);
+        OptExpression groupOpt =
+                buildGroupingAggregateOpt(aggregate, repeatOpt, groupByColumnRefs, cloneColumnMap, columnRefAggrMap, context);
 
         // step3: build project with grouping_id filter
         Map<ColumnRefOperator, ColumnRefOperator> columnRefProjectMap = new LinkedHashMap<>();
@@ -134,6 +137,7 @@ public class MultiDistinctByGroupingSetsRewriter {
                                          ColumnRefOperator groupingIdRef,
                                          List<ColumnRefOperator> groupByColumnRefs,
                                          Map<ColumnRefSet, Long> groupingIdMap,
+                                         Map<ColumnRefOperator, ColumnRefOperator> cloneColumnRefMap,
                                          OptimizerContext context) {
         ColumnRefFactory factory = context.getColumnRefFactory();
         LogicalAggregationOperator aggregate = (LogicalAggregationOperator) input.getOp();
@@ -148,7 +152,6 @@ public class MultiDistinctByGroupingSetsRewriter {
         List<ColumnRefOperator> groupingKeys = aggregate.getGroupingKeys();
         ColumnRefSet groupByKeys = new ColumnRefSet();
         for (Map.Entry<ColumnRefOperator, CallOperator> aggrEntry : aggregate.getAggregations().entrySet()) {
-            ColumnRefOperator column = aggrEntry.getKey();
             CallOperator call = aggrEntry.getValue();
 
             // ColumnRefSet can automatically deduplicate
@@ -190,22 +193,74 @@ public class MultiDistinctByGroupingSetsRewriter {
         groupingIds.add(new ArrayList<>(groupingIdMap.values()));
         LogicalRepeatOperator repeatOperator =
                 new LogicalRepeatOperator(repeatOutput, new ArrayList<>(repeatColumnRefMap.values()), groupingIds);
-        return OptExpression.create(repeatOperator, input.getInputs());
+        return OptExpression.create(repeatOperator, buildCloneProject(input, cloneColumnRefMap, context));
+    }
+
+    /**
+     * Get clone columns with same column in distinct aggregate columns and non-distinct aggregate columns.
+     */
+    private List<OptExpression> buildCloneProject(OptExpression input,
+                                                  Map<ColumnRefOperator, ColumnRefOperator> cloneColumnRefMap,
+                                                  OptimizerContext context) {
+        ColumnRefFactory factory = context.getColumnRefFactory();
+        ColumnRefSet distinctColumns = new ColumnRefSet();
+        ColumnRefSet nonDistinctColumns = new ColumnRefSet();
+        LogicalAggregationOperator aggregate = (LogicalAggregationOperator) input.getOp();
+        for (Map.Entry<ColumnRefOperator, CallOperator> aggrEntry : aggregate.getAggregations().entrySet()) {
+            CallOperator call = aggrEntry.getValue();
+            if (call.isDistinct()) {
+                distinctColumns.union(call.getUsedColumns());
+            } else {
+                nonDistinctColumns.union(call.getUsedColumns());
+            }
+        }
+        distinctColumns.intersect(nonDistinctColumns);
+        if (distinctColumns.isEmpty()) {
+            return input.getInputs();
+        }
+        // only support project as aggregate input case
+        assert input.getInputs().size() == 1 && input.getInputs().get(0).getOp() instanceof LogicalProjectOperator;
+
+        OptExpression projectOpt = input.getInputs().get(0);
+        LogicalProjectOperator project = (LogicalProjectOperator) projectOpt.getOp();
+
+        for (int columnId : distinctColumns.getColumnIds()) {
+            ColumnRefOperator columnRef = factory.getColumnRef(columnId);
+            ColumnRefOperator newColumnRef =
+                    factory.create("clone_" + columnRef.getName(), columnRef.getType(), columnRef.isNullable());
+            cloneColumnRefMap.put(newColumnRef, columnRef);
+        }
+        // get project columns with clone columns
+        Map<ColumnRefOperator, ScalarOperator> columnRefAggrMap = new LinkedHashMap<>();
+        columnRefAggrMap.putAll(project.getColumnRefMap());
+        columnRefAggrMap.putAll(cloneColumnRefMap);
+        OptExpression newProjectOpt = OptExpression.create(new LogicalProjectOperator(columnRefAggrMap), projectOpt.getInputs());
+        return Lists.newArrayList(newProjectOpt);
     }
 
     private OptExpression buildGroupingAggregateOpt(LogicalAggregationOperator aggregate,
                                                     OptExpression input,
                                                     List<ColumnRefOperator> groupByColumnRefs,
+                                                    Map<ColumnRefOperator, ColumnRefOperator> cloneColumnRefMap,
                                                     Map<ColumnRefOperator, ColumnRefOperator> columnRefAggrMap,
                                                     OptimizerContext context) {
         ColumnRefFactory columnRefFactory = context.getColumnRefFactory();
         Map<ColumnRefOperator, CallOperator> aggregations = new LinkedHashMap<>();
+        // get clone columns mapping info
+        ColumnRefSet cloneRefSet = new ColumnRefSet();
+        Map<Integer, ColumnRefOperator> cloneNewColumnRefMap = new LinkedHashMap<>();
+        for (Map.Entry<ColumnRefOperator, ColumnRefOperator> entry : cloneColumnRefMap.entrySet()) {
+            cloneRefSet.union(entry.getValue().getUsedColumns());
+            cloneNewColumnRefMap.put(entry.getValue().getId(), entry.getKey());
+        }
+
         for (Map.Entry<ColumnRefOperator, CallOperator> aggrEntry : aggregate.getAggregations().entrySet()) {
             ColumnRefOperator column = aggrEntry.getKey();
             CallOperator call = aggrEntry.getValue();
             if (!call.isDistinct()) {
                 ColumnRefOperator newColumnRef = columnRefFactory.create(column.getName(), column.getType(), column.isNullable());
-                aggregations.put(newColumnRef, call);
+                CallOperator newCall = nonDistinctCallOperator(call, cloneRefSet, cloneNewColumnRefMap);
+                aggregations.put(newColumnRef, newCall);
                 // add non-distinct aggregate project mapping
                 columnRefAggrMap.put(column, newColumnRef);
             }
@@ -213,6 +268,28 @@ public class MultiDistinctByGroupingSetsRewriter {
         LogicalAggregationOperator groupingAggr =
                 new LogicalAggregationOperator(AggType.GLOBAL, groupByColumnRefs, aggregations);
         return OptExpression.create(groupingAggr, Lists.newArrayList(input));
+    }
+
+    private CallOperator nonDistinctCallOperator(CallOperator call, ColumnRefSet cloneRefSet,
+                                                 Map<Integer, ColumnRefOperator> cloneNewColumnRefMap) {
+        if (cloneNewColumnRefMap.isEmpty() || !call.getUsedColumns().isIntersect(cloneRefSet)) {
+            return call;
+        }
+        List<ScalarOperator> newArgs = new ArrayList<>();
+        for (ScalarOperator scalar : call.getArguments()) {
+            if (!scalar.getUsedColumns().isIntersect(cloneRefSet)) {
+                newArgs.add(scalar);
+            } else {
+                // reference new clone column ref
+                if (scalar instanceof ColumnRefOperator) {
+                    newArgs.add(cloneNewColumnRefMap.get(((ColumnRefOperator) scalar).getId()));
+                } else {
+                    throw new RuntimeException("Not support column scalar type: " + scalar.getClass().getSimpleName());
+                }
+            }
+        }
+        return new CallOperator(call.getFnName(), call.getType(), newArgs, call.getFunction(), call.isDistinct(),
+                call.isRemovedDistinct());
     }
 
     private OptExpression buildProjectOpt(LogicalAggregationOperator aggregate,
@@ -265,8 +342,8 @@ public class MultiDistinctByGroupingSetsRewriter {
                                                  Map<ColumnRefOperator, ColumnRefOperator> columnRefProjectMap,
                                                  OptimizerContext context) {
         ColumnRefFactory factory = context.getColumnRefFactory();
-        Map<ColumnRefOperator, CallOperator> aggregations = new HashMap<>();
-        Map<ColumnRefOperator, ScalarOperator> finalColumnRefMap = new HashMap<>();
+        Map<ColumnRefOperator, CallOperator> aggregations = new LinkedHashMap<>();
+        Map<ColumnRefOperator, ScalarOperator> finalColumnRefMap = new LinkedHashMap<>();
         for (Map.Entry<ColumnRefOperator, CallOperator> aggrEntry : aggregate.getAggregations().entrySet()) {
             ColumnRefOperator column = aggrEntry.getKey();
             CallOperator call = aggrEntry.getValue();
