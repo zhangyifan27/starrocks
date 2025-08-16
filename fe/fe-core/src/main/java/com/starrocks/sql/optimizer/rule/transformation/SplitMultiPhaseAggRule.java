@@ -375,8 +375,9 @@ public class SplitMultiPhaseAggRule extends SplitAggregateRule {
             }
         }
 
+        // Avoid data skew: default to 4-stage aggregation when column statistics are unknown.
         if (inputsColumnStatistics.stream().anyMatch(ColumnStatistic::isUnknown)) {
-            return true;
+            return ConnectContext.get().getSessionVariable().getNewPlannerAggStageOfUnknownStats() == THREE_STAGE.ordinal();
         }
 
         LogicalAggregationOperator aggOp = input.getOp().cast();

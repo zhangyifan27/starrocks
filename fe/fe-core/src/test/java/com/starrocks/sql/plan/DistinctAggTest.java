@@ -80,7 +80,8 @@ public class DistinctAggTest extends PlanTestBase {
 
         sql = "select count(distinct v3, 1) from t0 group by v2";
         plan = getFragmentPlan(sql);
-        assertContains(plan, "4:AGGREGATE (update finalize)\n" +
+        assertContains(plan, "4:AGGREGATE (update serialize)\n" +
+                "  |  STREAMING\n" +
                 "  |  output: count(if(3: v3 IS NULL, NULL, 1))");
 
         sql = "select array_agg(distinct 1.33) from t0";
@@ -146,33 +147,38 @@ public class DistinctAggTest extends PlanTestBase {
 
         argumentsList.add(Arguments.of("select array_agg(distinct v1 order by 1, v3), sum(v2) from t0 " +
                         "group by rollup(v3, abs(v1 + v2))",
-                "6:AGGREGATE (update finalize)\n" +
+                "6:AGGREGATE (update serialize)\n" +
+                        "  |  STREAMING\n" +
                         "  |  output: array_agg(1: v1, 1: v1, 5: expr), sum(7: sum)\n" +
                         "  |  group by: 3: v3, 4: abs, 8: GROUPING_ID"));
 
         argumentsList.add(Arguments.of("select array_agg_distinct(v1 order by 1, v3), sum(v2) from t0 " +
                         "group by rollup(v3, abs(v1 + v2))",
-                "6:AGGREGATE (update finalize)\n" +
+                "6:AGGREGATE (update serialize)\n" +
+                        "  |  STREAMING\n" +
                         "  |  output: array_agg(1: v1, 1: v1, 5: expr), sum(7: sum)\n" +
                         "  |  group by: 3: v3, 4: abs, 8: GROUPING_ID"));
 
         argumentsList.add(Arguments.of("select /*+set_var(new_planner_agg_stage = 2) */" +
                         " array_agg(distinct v1 order by 1, v3), sum(v2) from t0 " +
                         "group by rollup(v3, abs(v1 + v2))",
-                "6:AGGREGATE (update finalize)\n" +
+                "6:AGGREGATE (update serialize)\n" +
+                        "  |  STREAMING\n" +
                         "  |  output: array_agg(1: v1, 1: v1, 5: expr), sum(7: sum)\n" +
                         "  |  group by: 3: v3, 4: abs, 8: GROUPING_ID"));
 
         argumentsList.add(Arguments.of("select /*+set_var(new_planner_agg_stage = 2) */" +
                         " array_agg_distinct(v1 order by 1, v3), sum(v2) from t0 " +
                         "group by rollup(v3, abs(v1 + v2))",
-                "6:AGGREGATE (update finalize)\n" +
+                "6:AGGREGATE (update serialize)\n" +
+                        "  |  STREAMING\n" +
                         "  |  output: array_agg(1: v1, 1: v1, 5: expr), sum(7: sum)\n" +
                         "  |  group by: 3: v3, 4: abs, 8: GROUPING_ID"));
 
         argumentsList.add(Arguments.of("select group_concat(distinct v1 order by 1, v3), sum(v2) from t0 " +
                         "group by rollup(v3, abs(v1 + v2))",
-                "6:AGGREGATE (update finalize)\n" +
+                "6:AGGREGATE (update serialize)\n" +
+                        "  |  STREAMING\n" +
                         "  |  output: group_concat(CAST(1: v1 AS VARCHAR), ',', 1: v1, 5: expr), sum(7: sum)\n" +
                         "  |  group by: 3: v3, 4: abs, 8: GROUPING_ID"));
 
@@ -185,7 +191,8 @@ public class DistinctAggTest extends PlanTestBase {
 
         argumentsList.add(Arguments.of("select group_concat(distinct v2), array_agg(distinct v2), " +
                         "count(distinct v2), sum(v3 + v1) from t0 group by rollup(v3, v1);",
-                "6:AGGREGATE (update finalize)\n" +
+                "6:AGGREGATE (update serialize)\n" +
+                        "  |  STREAMING\n" +
                         "  |  output: group_concat(CAST(2: v2 AS VARCHAR), ','), array_agg(2: v2), count(2: v2), sum(8: sum)"));
         argumentsList.add(Arguments.of("select group_concat(distinct 1), array_agg(distinct 2), sum(v3) from t0 " +
                         "group by v2, v3",

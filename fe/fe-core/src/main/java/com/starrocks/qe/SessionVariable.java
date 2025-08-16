@@ -329,6 +329,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     // --------  New planner session variables start --------
     public static final String NEW_PLANER_AGG_STAGE = "new_planner_agg_stage";
+    public static final String NEW_PLANER_AGG_STAGE_OF_UNKNOWN_STATS = "new_planner_agg_stage_unknown_stats";
     public static final String BROADCAST_ROW_LIMIT = "broadcast_row_limit";
     public static final String BROADCAST_RIGHT_TABLE_SCALE_FACTOR =
             "broadcast_right_table_scale_factor";
@@ -1416,6 +1417,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     // single-column distinct scenarios
     @VariableMgr.VarAttr(name = NEW_PLANER_AGG_STAGE)
     private int newPlannerAggStage = SessionVariableConstants.AggregationStage.AUTO.ordinal();
+
+    @VariableMgr.VarAttr(name = NEW_PLANER_AGG_STAGE_OF_UNKNOWN_STATS)
+    private int newPlannerAggStageOfUnknownStats = SessionVariableConstants.AggregationStage.FOUR_STAGE.ordinal();
 
     @VariableMgr.VarAttr(name = TRANSMISSION_COMPRESSION_TYPE)
     private String transmissionCompressionType = "NO_COMPRESSION";
@@ -3200,6 +3204,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setNewPlanerAggStage(int stage) {
         this.newPlannerAggStage = stage;
+    }
+
+    public int getNewPlannerAggStageOfUnknownStats() {
+        return newPlannerAggStageOfUnknownStats;
+    }
+
+    public void setNewPlannerAggStageOfUnknownStats(int newPlannerAggStageOfUnknownStats) {
+        this.newPlannerAggStageOfUnknownStats = newPlannerAggStageOfUnknownStats;
     }
 
     public void setMaxTransformReorderJoins(int maxReorderNodeUseExhaustive) {
