@@ -481,8 +481,17 @@ public class ScalarOperatorFunctions {
     @ConstantFunction(name = "str2date", argTypes = {VARCHAR, VARCHAR}, returnType = DATE)
     public static ConstantOperator str2Date(ConstantOperator date, ConstantOperator fmtLiteral) {
         DateTimeFormatterBuilder builder = DateUtils.unixDatetimeFormatBuilder(fmtLiteral.getVarchar(), false);
-        LocalDate ld = LocalDate.from(builder.toFormatter().withResolverStyle(ResolverStyle.STRICT).parse(
-                StringUtils.strip(date.getVarchar(), "\r\n\t ")));
+        String dateStr = StringUtils.strip(date.getVarchar(), "\r\n\t ");
+        LocalDate ld;
+        try {
+            ld = LocalDate.from(builder.toFormatter().withResolverStyle(ResolverStyle.STRICT).parse(dateStr));
+        } catch (DateTimeParseException e) {
+            // If parsing fails, it can be re-parsed from the position of the successful prefix string.
+            // This way datetime string can use incomplete format
+            // eg. str2date('2021-10-21 00:00:00','%Y-%m-%d');
+            ld = LocalDate.from(builder.toFormatter().withResolverStyle(ResolverStyle.STRICT)
+                    .parse(dateStr.substring(0, e.getErrorIndex())));
+        }
         return ConstantOperator.createDatetime(ld.atTime(0, 0, 0), Type.DATE);
     }
 

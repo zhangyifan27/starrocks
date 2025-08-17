@@ -444,8 +444,6 @@ class FurtherPartitionPruneTest extends PlanTestBase {
         sqlList.add("select * from tbl_int where k1 >= abs(0) and k1 < abs(200)");
         sqlList.add("select * from tbl_int where k1 in (0, 1, 2, 3)");
         sqlList.add("select * from less_than_tbl where k1 < '2020-08-01'");
-        sqlList.add("select * from ptest where d2 >= str_to_date('1000-01-01 12:34:56', '%Y-%m-%d') and " +
-                "d2 < str_to_date('2020-04-01 12:34:56', '%Y-%m-%d')");
         sqlList.add("select * from less_than_tbl where k1 < str_to_date('20200801', '%Y%m%d')");
         sqlList.add("select * from less_than_tbl where k1 < '2020-08-01' and k1 is not null");
         sqlList.add("select * from less_than_tbl where k1 < '2020-08-01' and k1 is null");
@@ -469,6 +467,8 @@ class FurtherPartitionPruneTest extends PlanTestBase {
                 "and cast(d2 as date) < '2020-04-01'");
         sqlList.add("select * from ptest where d2 < cast('20200101' as date)");
         sqlList.add("select * from ptest where d2 < str_to_date('20200401', '%Y%m%d')");
+        sqlList.add("select * from ptest where d2 >= str_to_date('1000-01-01 12:34:56', '%Y-%m-%d') and " +
+                "d2 < str_to_date('2020-04-01 12:34:56', '%Y-%m-%d')");
         return sqlList.stream().map(e -> Arguments.of(e));
     }
 

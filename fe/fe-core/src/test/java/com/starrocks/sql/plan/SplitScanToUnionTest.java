@@ -128,7 +128,7 @@ class SplitScanToUnionTest extends DistributedEnvPlanTestBase {
                 "PREDICATES: 11: O_ORDERKEY <=> NULL, 17: O_CLERK > 16: O_ORDERPRIORITY",
                 "PREDICATES: 22: O_CUSTKEY = CAST(abs(1) AS INT), NOT (21: O_ORDERKEY <=> NULL), " +
                         "27: O_CLERK > 26: O_ORDERPRIORITY",
-                "PREDICATES: 35: O_ORDERDATE = str_to_date('2014-12-21', '%Y-%m'), NOT (31: O_ORDERKEY <=> NULL), " +
+                "PREDICATES: 35: O_ORDERDATE = '2014-12-01', NOT (31: O_ORDERKEY <=> NULL), " +
                         "(32: O_CUSTKEY != CAST(abs(1) AS INT)) OR (32: O_CUSTKEY = CAST(abs(1) AS INT) IS NULL), " +
                         "37: O_CLERK > 36: O_ORDERPRIORITY"));
         list.add(arguments);
