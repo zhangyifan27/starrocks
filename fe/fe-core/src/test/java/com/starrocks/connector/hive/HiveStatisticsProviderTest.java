@@ -154,7 +154,7 @@ public class HiveStatisticsProviderTest {
                 hiveTable, Lists.newArrayList("col1=1"));
         HivePartitionStats dataStats = statisticsMap.get("col1=1");
         Statistics.Builder builder = Statistics.builder();
-        Statistics statistics = statisticsProvider.createUnpartitionedStats(
+        Statistics statistics = statisticsProvider.createUnpartitionedStats(optimizerContext,
                 dataStats, Lists.newArrayList(dataColumnRefOperator), builder, hiveTable);
         Map<ColumnRefOperator, ColumnStatistic> columnStatistics = statistics.getColumnStatistics();
         ColumnStatistic dataColumnStats = columnStatistics.get(dataColumnRefOperator);

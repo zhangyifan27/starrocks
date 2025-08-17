@@ -440,6 +440,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_HIVE_COLUMN_STATS = "enable_hive_column_stats";
 
+    public static final String USE_OMS_STATS = "use_oms_stats";
+
     public static final String ENABLE_WRITE_HIVE_EXTERNAL_TABLE = "enable_write_hive_external_table";
 
     public static final String ENABLE_HIVE_METADATA_CACHE_WITH_INSERT = "enable_hive_metadata_cache_with_insert";
@@ -1510,6 +1512,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_HIVE_COLUMN_STATS)
     private boolean enableHiveColumnStats = true;
+
+    @VariableMgr.VarAttr(name = USE_OMS_STATS)
+    private boolean useOmsStats = true;
 
     @VariableMgr.VarAttr(name = ENABLE_WRITE_HIVE_EXTERNAL_TABLE)
     private boolean enableWriteHiveExternalTable = false;
@@ -2692,6 +2697,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean enableHiveColumnStats() {
         return enableHiveColumnStats;
+    }
+
+    public void setUseOmsStats(boolean useOmsStats) {
+        this.useOmsStats = useOmsStats;
+    }
+
+    public boolean useOmsStats() {
+        return useOmsStats;
     }
 
     public void setEnableHiveColumnStats(boolean enableHiveColumnStats) {

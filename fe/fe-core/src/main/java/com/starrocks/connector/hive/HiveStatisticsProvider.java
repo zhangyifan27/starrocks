@@ -81,7 +81,7 @@ public class HiveStatisticsProvider {
         HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
         if (hmsTbl.isUnPartitioned()) {
             HivePartitionStats tableStats = hmsOps.getTableStatistics(hmsTbl.getDbName(), hmsTbl.getTableName());
-            return createUnpartitionedStats(tableStats, columns, builder, table);
+            return createUnpartitionedStats(session, tableStats, columns, builder, table);
         }
 
         int sampleSize = getSamplePartitionSize(session);
@@ -102,6 +102,10 @@ public class HiveStatisticsProvider {
 
         if (avgRowNumPerPartition <= 0) {
             addTableStatisticsInfo(hmsTbl, columns, partitionNames);
+            builder.setOutputRowCount(getEstimatedRowCount(table, partitionKeys, builder));
+            return builder.build();
+        }
+        if (!session.getSessionVariable().useOmsStats()) {
             builder.setOutputRowCount(getEstimatedRowCount(table, partitionKeys, builder));
             return builder.build();
         }
@@ -144,6 +148,7 @@ public class HiveStatisticsProvider {
     }
 
     public Statistics createUnpartitionedStats(
+            OptimizerContext session,
             HivePartitionStats tableStats,
             List<ColumnRefOperator> columns,
             Statistics.Builder builder,
@@ -155,8 +160,13 @@ public class HiveStatisticsProvider {
             builder.setOutputRowCount(getEstimatedRowCount(table, Lists.newArrayList(new PartitionKey()), builder));
             return builder.build();
         } else {
-            builder.setOutputRowCount(rowNum);
-            addTableUseOmsStatistics(hmsTbl);
+            if (session != null && (!session.getSessionVariable().useOmsStats())) {
+                builder.setOutputRowCount(getEstimatedRowCount(table, Lists.newArrayList(new PartitionKey()), builder));
+                return builder.build();
+            } else {
+                builder.setOutputRowCount(rowNum);
+                addTableUseOmsStatistics(hmsTbl);
+            }
         }
 
         for (ColumnRefOperator columnRefOperator : columns) {
