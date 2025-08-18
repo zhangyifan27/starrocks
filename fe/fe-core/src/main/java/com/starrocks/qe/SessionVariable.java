@@ -886,6 +886,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String REMOTE_FILE_PULL_TIMEOUT = "remote_file_pull_timeout";
 
+    public static final String ENABLE_REPLACE_PARTITION_FIELD_NAME = "enable_replace_partition_field_name";
+
     // --------  tq session variables end --------
 
     @VariableMgr.VarAttr(name = ENABLE_SQL_DIALOG)
@@ -4631,6 +4633,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setEnablePartitionSecondaryPrunner(boolean value) {
         this.enablePartitionSecondaryPrunner = value;
+    }
+
+    @VariableMgr.VarAttr(name = ENABLE_REPLACE_PARTITION_FIELD_NAME)
+    private boolean enableReplacePartitionFieldName = false;
+
+    public boolean isEnableReplacePartitionFieldName() {
+        return enableReplacePartitionFieldName;
+    }
+
+    public void setEnableReplacePartitionFieldName(boolean enableReplacePartitionFieldName) {
+        this.enableReplacePartitionFieldName = enableReplacePartitionFieldName;
     }
 
     // Serialize to thrift object

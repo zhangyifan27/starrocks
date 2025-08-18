@@ -264,6 +264,8 @@ public class ConnectContext {
 
     private long simpleLimit = -1;
 
+    private boolean replacePartitionFieldName = false;
+
     public StmtExecutor getExecutor() {
         return executor;
     }
@@ -1135,6 +1137,14 @@ public class ConnectContext {
 
     public long getSimpleLimit() {
         return simpleLimit;
+    }
+
+    public void setReplacePartitionFieldName(boolean replacePartitionFieldName) {
+        this.replacePartitionFieldName = replacePartitionFieldName;
+    }
+
+    public boolean isReplacePartitionFieldName() {
+        return replacePartitionFieldName;
     }
 
     public boolean enableSSL() throws IOException {

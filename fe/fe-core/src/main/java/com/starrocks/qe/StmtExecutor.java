@@ -133,6 +133,7 @@ import com.starrocks.service.ExecuteEnv;
 import com.starrocks.service.arrow.flight.sql.ArrowFlightSqlConnectContext;
 import com.starrocks.sql.ExplainAnalyzer;
 import com.starrocks.sql.PrepareStmtPlanner;
+import com.starrocks.sql.ReplacePartitionFieldName;
 import com.starrocks.sql.StatementPlanner;
 import com.starrocks.sql.analyzer.AnalyzerUtils;
 import com.starrocks.sql.analyzer.AstToSQLBuilder;
@@ -1849,7 +1850,13 @@ public class StmtExecutor {
         // send field one by one
         for (int i = 0; i < colNames.size(); ++i) {
             serializer.reset();
-            serializer.writeField(colNames.get(i), exprs.get(i).getOriginType());
+            if (context.getSessionVariable().isEnableReplacePartitionFieldName()) {
+                serializer.writeField(
+                        ReplacePartitionFieldName.checkAndReplacePartitionFieldName(context, colNames.get(i)),
+                        exprs.get(i).getOriginType());
+            } else {
+                serializer.writeField(colNames.get(i), exprs.get(i).getOriginType());
+            }
             if (isProxy) {
                 proxyResultBuffer.add(serializer.toByteBuffer());
             } else {

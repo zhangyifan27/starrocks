@@ -290,6 +290,7 @@ public class StatementPlanner {
                                                     long planStartTime) {
         QueryRelation query = queryStmt.getQueryRelation();
         List<String> colNames = query.getColumnOutputNames();
+        ReplacePartitionFieldName.checkReplacePartitionFieldName(session, query, colNames);
 
         // 1. Build Logical plan
         ColumnRefFactory columnRefFactory = new ColumnRefFactory();
