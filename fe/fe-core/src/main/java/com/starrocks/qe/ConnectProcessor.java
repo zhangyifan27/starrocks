@@ -85,6 +85,7 @@ import com.starrocks.sql.parser.ParsingException;
 import com.starrocks.sql.parser.SqlParser;
 import com.starrocks.thrift.TMasterOpRequest;
 import com.starrocks.thrift.TMasterOpResult;
+import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TQueryOptions;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.StringUtils;
@@ -100,6 +101,7 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -216,10 +218,18 @@ public class ConnectProcessor {
             ctx.getAuditEventBuilder().setSpilledBytes(statistics.spillBytes == null ? -1 : statistics.spillBytes);
             ctx.getAuditEventBuilder().setReturnRows(statistics.returnedRows == null ? 0 : statistics.returnedRows);
 
-            if (ctx.getQueryId() != null && statistics.memCostBytes != null) {
-                double feedbackMemCostBytes = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
-                        .recordQueryMemory(ctx.getQueryId(), statistics.memCostBytes);
-                ctx.getAuditEventBuilder().setFeedbackMemCostBytes(feedbackMemCostBytes);
+            if (statistics.feedbackMemCostBytes != null && statistics.feedbackMemCostBytes != 0) {
+                ctx.getAuditEventBuilder().setFeedbackMemCostBytes(statistics.feedbackMemCostBytes);
+            } else {
+                if (ctx.getQueryId() != null && statistics.memCostBytes != null) {
+                    double feedbackMemCostBytes = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
+                            .recordQueryMemory(ctx.getQueryId(), statistics.memCostBytes);
+                    ctx.getAuditEventBuilder().setFeedbackMemCostBytes(feedbackMemCostBytes);
+                }
+            }
+
+            if (statistics.cboMemCostBytes != null && statistics.cboMemCostBytes != 0) {
+                ctx.getAuditEventBuilder().setCboMemCostBytes(statistics.cboMemCostBytes);
             }
         }
 
@@ -879,6 +889,8 @@ public class ConnectProcessor {
         }
 
         StmtExecutor executor = null;
+        String digest = null;
+        String flowId = null;
         try {
             // set session variables first
             if (request.isSetModified_variables_sql()) {
@@ -904,7 +916,8 @@ public class ConnectProcessor {
                 }
             }.visit(statement);
             statement.setOrigStmt(new OriginStatement(request.getSql(), idx));
-
+            digest = computeStatementDigest(statement);
+            flowId = SQLUtils.extractFlowId(statement.getOrigStmt().originStmt);
             executor = new StmtExecutor(ctx, statement);
             ctx.setExecutor(executor);
             executor.setProxy();
@@ -954,6 +967,22 @@ public class ConnectProcessor {
 
             PQueryStatistics audit = executor.getQueryStatisticsForAuditLog();
             if (audit != null) {
+                if (!Strings.isNullOrEmpty(digest) && !Strings.isNullOrEmpty(flowId)) {
+                    String digestWithFlowId = digest + ":" + flowId;
+                    Set<TNetworkAddress> workers = new HashSet<>();
+                    int instanceNum = 0;
+                    for (QueryStatisticsItem.FragmentInstanceInfo fragmentInstanceInfo :
+                            executor.getCoordinator().getFragmentInstanceInfos()) {
+                        workers.add(fragmentInstanceInfo.getAddress());
+                        instanceNum++;
+                    }
+                    double cost = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder().recordQueryMemory(ctx.queryId,
+                            digestWithFlowId, workers.size(), instanceNum, audit.getMemCostBytes());
+                    audit.setFeedbackMemCostBytes(cost);
+                }
+                if (ctx.getAuditEventBuilder() != null) {
+                    audit.setCboMemCostBytes(ctx.getAuditEventBuilder().getCboMemCostBytes());
+                }
                 result.setAudit_statistics(AuditStatisticsUtil.toThrift(audit));
             }
         }

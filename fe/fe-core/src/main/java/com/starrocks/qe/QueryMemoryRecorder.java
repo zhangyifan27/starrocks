@@ -35,6 +35,7 @@
 package com.starrocks.qe;
 
 import com.google.gson.annotations.SerializedName;
+import com.starrocks.common.Config;
 import com.starrocks.persist.ImageWriter;
 import com.starrocks.persist.metablock.SRMetaBlockEOFException;
 import com.starrocks.persist.metablock.SRMetaBlockException;
@@ -60,6 +61,7 @@ public class QueryMemoryRecorder {
 
     private static final long MEM_CHUNK_SIZE = 2 * 1024 * 1024; //2M
     public static final int MEMORY_RECORD_LIMIT_SIZE = 10;
+    private static final double QUERY_POOL_RATIO = 0.75;
 
     @SerializedName(value = "memoryRecordMap")
     private final Map<String, MemoryRecord> memoryRecordMap;
@@ -79,18 +81,26 @@ public class QueryMemoryRecorder {
 
     public double recordQueryMemory(UUID queryId, double queryPeakMemoryUsagePerNode) {
         QueryInfo queryInfo = idMap.get(queryId);
-        double queryMemory = 0;
+        double queryMemory = Config.max_cost_by_feedback * Config.cost_weight * Config.cost_buffer_weight / QUERY_POOL_RATIO;
         if (queryInfo != null) {
-            queryMemory = queryPeakMemoryUsagePerNode * queryInfo.getWorkerNum() + (queryInfo.getInstanceNum() * MEM_CHUNK_SIZE);
-            long time = System.currentTimeMillis();
-            put(queryInfo.getDigestWithFlowId(), queryMemory, time);
-            if (GlobalStateMgr.getCurrentState().isLeader()) {
-                MemoryRecordInfo memoryRecordInfo = new MemoryRecordInfo(queryInfo.getDigestWithFlowId(), queryMemory, time);
-                GlobalStateMgr.getCurrentState().getEditLog().logRecordQueryMemory(memoryRecordInfo);
-            }
-            idMap.remove(queryId);
+            queryMemory = recordQueryMemory(queryId, queryInfo.getDigestWithFlowId(),
+                    queryInfo.getWorkerNum(), queryInfo.getInstanceNum(), queryPeakMemoryUsagePerNode);
         }
         return queryMemory;
+    }
+
+    public double recordQueryMemory(UUID queryId, String digestWithFlowId, int workerNum, int instanceNum,
+                                    double queryPeakMemoryUsagePerNode) {
+        double queryMemory = queryPeakMemoryUsagePerNode * workerNum + (instanceNum * MEM_CHUNK_SIZE);
+        long time = System.currentTimeMillis();
+        put(digestWithFlowId, queryMemory, time);
+        if (GlobalStateMgr.getCurrentState().isLeader()) {
+            MemoryRecordInfo memoryRecordInfo = new MemoryRecordInfo(digestWithFlowId, queryMemory, time);
+            GlobalStateMgr.getCurrentState().getEditLog().logRecordQueryMemory(memoryRecordInfo);
+        }
+        idMap.remove(queryId);
+        // return the cost with buffer weight
+        return getMaxMemoryRecently(digestWithFlowId);
     }
 
     public void put(String id, double value, long time) {
@@ -105,7 +115,7 @@ public class QueryMemoryRecorder {
     public double getMaxMemoryRecently(String key) {
         MemoryRecord memoryRecord = memoryRecordMap.get(key);
         if (memoryRecord == null) {
-            return 0;
+            return Config.max_cost_by_feedback * Config.cost_weight * Config.cost_buffer_weight / QUERY_POOL_RATIO;
         }
         ConcurrentLinkedDeque<Double> records = memoryRecord.getRecords();
         double maxMemory = 0;
@@ -114,6 +124,17 @@ public class QueryMemoryRecorder {
             maxMemory = Math.max(maxMemory, record);
             msg.append(record).append("|");
         }
+        if (maxMemory <= 0) {
+            maxMemory = Config.max_cost_by_feedback;
+        }
+        // cost_weight value of 2.5 is applied to calibrate the cost calculated by CBO in historical version
+
+        // The purpose of setting the cost_buffer_weight parameter to 1.6 is to compensate for omissions in memory
+        // statistics reported by the Backend (BE) and errors caused by data skew through coefficient adjustment,
+        // thereby improving the accuracy of resource cost calculation.
+
+        // the query pool is 80% of the node total memory, so / 0.75 to prevent query pool OOM.
+        double cost = maxMemory * Config.cost_weight * Config.cost_buffer_weight / QUERY_POOL_RATIO;
         LOG.info("feedback memory record : \n" +
                 "id: {}\n" +
                 "recently memory usage : {}\n" +
@@ -121,7 +142,7 @@ public class QueryMemoryRecorder {
                 "historyMaxMemory : {}\n" +
                 "lastUpdateTime : {}",
                 memoryRecord.getId(), msg, maxMemory, memoryRecord.getMaxValue(), new Date(memoryRecord.getTime()));
-        return maxMemory;
+        return cost;
     }
 
     private void cleanExpiredKeys() {

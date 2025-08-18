@@ -608,6 +608,10 @@ public class StmtExecutor {
                 }
             }
 
+            if (execPlan != null && execPlan.getPhysicalPlan() != null) {
+                context.getAuditEventBuilder().setCboMemCostBytes(execPlan.getPhysicalPlan().getCost());
+            }
+
             // no need to execute http query dump request in BE
             if (context.isHTTPQueryDump) {
                 return;
@@ -2178,6 +2182,12 @@ public class StmtExecutor {
         }
         if (statisticsForAuditLog.spillBytes == null) {
             statisticsForAuditLog.spillBytes = 0L;
+        }
+        if (statisticsForAuditLog.feedbackMemCostBytes == null) {
+            statisticsForAuditLog.feedbackMemCostBytes = 0.0D;
+        }
+        if (statisticsForAuditLog.cboMemCostBytes == null) {
+            statisticsForAuditLog.cboMemCostBytes = 0.0D;
         }
         return statisticsForAuditLog;
     }

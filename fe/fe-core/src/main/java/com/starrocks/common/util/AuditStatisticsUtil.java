@@ -36,6 +36,8 @@ public class AuditStatisticsUtil {
         pb.cpuCostNs = tb.getCpu_cost_ns();
         pb.memCostBytes = tb.getMem_cost_bytes();
         pb.spillBytes = tb.getSpill_bytes();
+        pb.feedbackMemCostBytes = tb.getFeedback_mem_cost_bytes();
+        pb.cboMemCostBytes = tb.getCbo_mem_cost_bytes();
         if (tb.isSetStats_items()) {
             pb.statsItems = Lists.newArrayList();
             for (TAuditStatisticsItem tItem : tb.getStats_items()) {
@@ -88,6 +90,18 @@ public class AuditStatisticsUtil {
                 to.spillBytes = 0L;
             }
             to.spillBytes += from.spillBytes;
+        }
+        if (from.feedbackMemCostBytes != null) {
+            if (to.feedbackMemCostBytes == null) {
+                to.feedbackMemCostBytes = 0D;
+            }
+            to.feedbackMemCostBytes += from.feedbackMemCostBytes;
+        }
+        if (from.cboMemCostBytes != null) {
+            if (to.cboMemCostBytes == null) {
+                to.cboMemCostBytes = 0D;
+            }
+            to.cboMemCostBytes += from.cboMemCostBytes;
         }
         if (CollectionUtils.isNotEmpty(from.statsItems)) {
             if (to.statsItems == null) {
@@ -143,6 +157,12 @@ public class AuditStatisticsUtil {
         }
         if (pb.spillBytes != null) {
             tb.setSpill_bytes(pb.spillBytes);
+        }
+        if (pb.feedbackMemCostBytes != null) {
+            tb.setFeedback_mem_cost_bytes(pb.feedbackMemCostBytes);
+        }
+        if (pb.cboMemCostBytes != null) {
+            tb.setCbo_mem_cost_bytes(pb.cboMemCostBytes);
         }
         if (CollectionUtils.isNotEmpty(pb.statsItems)) {
             for (QueryStatisticsItemPB pItem : pb.statsItems) {

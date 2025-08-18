@@ -765,6 +765,8 @@ struct TAuditStatistics {
     7: optional i64 mem_cost_bytes
     8: optional i64 spill_bytes
     9: optional list<TAuditStatisticsItem> stats_items
+    10: optional double feedback_mem_cost_bytes
+    11: optional double cbo_mem_cost_bytes
 }
 
 struct TReportAuditStatisticsParams {

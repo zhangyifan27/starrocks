@@ -18,7 +18,6 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.Maps;
 import com.starrocks.analysis.DescriptorTable;
 import com.starrocks.analysis.Expr;
-import com.starrocks.common.Config;
 import com.starrocks.common.FeConstants;
 import com.starrocks.common.IdGenerator;
 import com.starrocks.common.util.ProfilingExecPlan;
@@ -70,8 +69,6 @@ public class ExecPlan {
     private volatile ProfilingExecPlan profilingPlan;
     private LogicalPlan logicalPlan;
     private ColumnRefFactory columnRefFactory;
-
-    private static final double QUERY_POOL_RATIO = 0.75;
 
     @VisibleForTesting
     public ExecPlan() {
@@ -251,18 +248,7 @@ public class ExecPlan {
                 double cost = physicalPlan.getCost();
                 String id = connectContext.getDigestWithFlowId();
                 if (connectContext.getSessionVariable().isEnableCostByFeedback() && !Strings.isNullOrEmpty(id)) {
-                    double memoryUsage = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder().getMaxMemoryRecently(id);
-                    if (memoryUsage <= 0) {
-                        memoryUsage = Config.max_cost_by_feedback;
-                    }
-                    // cost_weight value of 2.5 is applied to calibrate the cost calculated by CBO in historical version
-
-                    // The purpose of setting the cost_buffer_weight parameter to 1.6 is to compensate for omissions in memory
-                    // statistics reported by the Backend (BE) and errors caused by data skew through coefficient adjustment,
-                    // thereby improving the accuracy of resource cost calculation.
-
-                    // the query pool is 80% of the node total memory, so / 0.75 to prevent query pool OOM.
-                    cost = memoryUsage * Config.cost_weight * Config.cost_buffer_weight / QUERY_POOL_RATIO;
+                    cost = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder().getMaxMemoryRecently(id);
                 }
                 str.append("Cost: ").append(cost).append(", Est: ").append(est).append("\n");
             }
