@@ -271,9 +271,11 @@ public class ProfileManager implements MemoryTrackable {
         readLock.lock();
         try {
             element = profileMap.get(queryId) == null ? loadProfileMap.get(queryId) : profileMap.get(queryId);
-            if (element != null) {
-                return CompressionUtils.gzipDecompressString(element.profileContent);
+            if (element == null) {
+                return null;
             }
+
+            return CompressionUtils.gzipDecompressString(element.profileContent);
         } catch (IOException e) {
             LOG.warn("Decompress profile content failed, length: {}, reason: {}",
                     element.profileContent.length, e.getMessage());
@@ -281,11 +283,6 @@ public class ProfileManager implements MemoryTrackable {
         } finally {
             readLock.unlock();
         }
-        ProfileEvent event = ProfileLogReader.getProfile(queryId);
-        if (event != null) {
-            return event.getProfile();
-        }
-        return null;
     }
 
     public long getProfileSize(String queryId) {

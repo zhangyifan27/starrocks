@@ -142,13 +142,6 @@ public class Log4jConfig extends XmlConfiguration {
             "        </Delete>\n" +
             "      </DefaultRolloverStrategy>\n" +
             "    </RollingFile>\n" +
-            "    <RollingFile name=\"ProfileTwoFile\" fileName=\"${profile_log_dir}/fe.profiletwo.log\" filePattern=\"${profile_log_dir}/fe.profiletwo.log-%i\">\n" +
-            "      ${syslog_profile_layout}\n" +
-            "      <Policies>\n" +
-            "        <SizeBasedTriggeringPolicy size=\"${profile_log_roll_size_mb}MB\"/>\n" +
-            "      </Policies>\n" +
-            "      <DefaultRolloverStrategy max=\"${profile_log_roll_num}\" />\n" +
-            "    </RollingFile>\n" +
             "    <RollingFile name=\"InternalFile\" fileName=\"${internal_log_dir}/fe.internal.log\" filePattern=\"${internal_log_dir}/fe.internal.log.${internal_file_pattern}-%i\">\n" +
             "      ${syslog_default_layout}\n" +
             "      <Policies>\n" +
@@ -249,15 +242,6 @@ public class Log4jConfig extends XmlConfiguration {
             "        </Delete>\n" +
             "      </DefaultRolloverStrategy>\n" +
             "    </RollingFile>\n" +
-            "    <RollingFile name=\"ProfileTwoFile\" fileName=\"${profile_log_dir}/fe.profiletwo.log\" filePattern=\"${profile_log_dir}/fe.profiletwo.log-%i\">\n" +
-            "      <PatternLayout charset=\"UTF-8\">\n" +
-            "        <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSSXXX} [%c{1}] %m%n</Pattern>\n" +
-            "      </PatternLayout>\n" +
-            "      <Policies>\n" +
-            "        <SizeBasedTriggeringPolicy size=\"${profile_log_roll_size_mb}MB\"/>\n" +
-            "      </Policies>\n" +
-            "      <DefaultRolloverStrategy max=\"${profile_log_roll_num}\" />\n" +
-            "    </RollingFile>\n" +
             "    <RollingFile name=\"InternalFile\" fileName=\"${internal_log_dir}/fe.internal.log\" filePattern=\"${internal_log_dir}/fe.internal.log.${internal_file_pattern}-%i\">\n" +
             "      <PatternLayout charset=\"UTF-8\">\n" +
             "        <Pattern>%d{yyyy-MM-dd HH:mm:ss.SSSXXX} %p (%t|%tid) [%C{1}.%M():%L] %m%n</Pattern>\n" +
@@ -292,12 +276,6 @@ public class Log4jConfig extends XmlConfiguration {
             "    </Logger>\n" +
             "    <Logger name=\"profile\" level=\"INFO\" additivity=\"false\">\n" +
             "      <AppenderRef ref=\"ProfileFile\"/>\n" +
-            "    </Logger>\n" +
-            "    <Logger name=\"profiletwo\" level=\"INFO\" additivity=\"false\">\n" +
-            "      <AppenderRef ref=\"ProfileTwoFile\"/>\n" +
-            "    </Logger>\n" +
-            "    <Logger name=\"org.apache.kafka\" level=\"WARN\"> \n" +
-            "      <AppenderRef ref=\"SysWF\"/>\n" +
             "    </Logger>\n" +
             "<!--REPLACED BY AUDIT AND VERBOSE MODULE NAMES-->" +
             "  </Loggers>\n" +

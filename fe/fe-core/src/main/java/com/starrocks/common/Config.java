@@ -288,7 +288,7 @@ public class Config extends ConfigBase {
      * 120s    120 seconds
      */
     @ConfField
-    public static boolean enable_profile_log = false;
+    public static boolean enable_profile_log = true;
     @ConfField
     public static String profile_log_dir = StarRocksFE.STARROCKS_HOME_DIR + "/log";
     @ConfField

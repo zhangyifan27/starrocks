@@ -52,7 +52,6 @@ import com.starrocks.persist.metablock.SRMetaBlockWriter;
 import com.starrocks.plugin.PluginInfo.PluginType;
 import com.starrocks.plugin.PluginLoader.PluginStatus;
 import com.starrocks.qe.AuditLogBuilder;
-import com.starrocks.qe.ProfileLogBuilder;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.InstallPluginStmt;
 import org.apache.commons.io.FileUtils;
@@ -81,7 +80,7 @@ public class PluginMgr implements Writable {
     public static final String BUILTIN_PLUGIN_PREFIX = "__builtin_";
 
     private final Map<String, PluginLoader>[] plugins;
-    // all dynamic plugins should have unique names,
+    // all dynamic plugins should have unique names
     private final Set<String> dynamicPluginNames;
 
     public PluginMgr() {
@@ -131,12 +130,6 @@ public class PluginMgr implements Writable {
         AuditLogBuilder auditLogBuilder = new AuditLogBuilder();
         if (!registerBuiltinPlugin(auditLogBuilder.getPluginInfo(), auditLogBuilder)) {
             LOG.warn("failed to register audit log builder");
-        }
-
-        // ProfileLog
-        ProfileLogBuilder profileLogBuilder = new ProfileLogBuilder();
-        if (!registerBuiltinPlugin(profileLogBuilder.getPluginInfo(), profileLogBuilder)) {
-            LOG.warn("failed to register profile log builder");
         }
 
         // other builtin plugins
