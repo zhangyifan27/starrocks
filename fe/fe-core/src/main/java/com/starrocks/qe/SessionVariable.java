@@ -751,6 +751,11 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String EXCLUDE_THIVE_DEFAULT_PARTITION = "exclude_thive_default_partition";
 
+    public static final String ENABLE_THIVE_RANGE_PARTITION_EXHAUSTIVE_ALGORITHM =
+            "enable_thive_range_partition_exhaustive_algorithm";
+    public static final String THIVE_RANGE_PARTITION_MAX_INTERVAL = "thive_range_partition_max_interval";
+    public static final String THIVE_RANGE_PARTITION_STRING_AS_DATE = "thive_range_partition_string_as_date";
+
     public static final String ENABLE_HIVE_MODE = "enable_hive_mode";
 
     public static final String EXPERIMENTAL_ENABLE_CAST_TO_INT_ROUND = "experimental_enable_cast_to_int_round";
@@ -4644,6 +4649,39 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setEnableReplacePartitionFieldName(boolean enableReplacePartitionFieldName) {
         this.enableReplacePartitionFieldName = enableReplacePartitionFieldName;
+    }
+
+    @VarAttr(name = ENABLE_THIVE_RANGE_PARTITION_EXHAUSTIVE_ALGORITHM)
+    private boolean enableThiveRangePartitionExhaustiveAlgorithm = true;
+
+    @VarAttr(name = THIVE_RANGE_PARTITION_MAX_INTERVAL)
+    private long thiveRangePartitionMaxInterval = 5000000;
+
+    @VarAttr(name = THIVE_RANGE_PARTITION_STRING_AS_DATE)
+    private boolean thiveRangePartitionStringAsDate = true;
+
+    public boolean isEnableThiveRangePartitionExhaustiveAlgorithm() {
+        return enableThiveRangePartitionExhaustiveAlgorithm;
+    }
+
+    public void setEnableThiveRangePartitionExhaustiveAlgorithm(boolean enableThiveRangePartitionExhaustiveAlgorithm) {
+        this.enableThiveRangePartitionExhaustiveAlgorithm = enableThiveRangePartitionExhaustiveAlgorithm;
+    }
+
+    public long getThiveRangePartitionMaxInterval() {
+        return thiveRangePartitionMaxInterval;
+    }
+
+    public void setThiveRangePartitionMaxInterval(long thiveRangePartitionMaxInterval) {
+        this.thiveRangePartitionMaxInterval = thiveRangePartitionMaxInterval;
+    }
+
+    public boolean isThiveRangePartitionStringAsDate() {
+        return thiveRangePartitionStringAsDate;
+    }
+
+    public void setThiveRangePartitionStringAsDate(boolean thiveRangePartitionStringAsDate) {
+        this.thiveRangePartitionStringAsDate = thiveRangePartitionStringAsDate;
     }
 
     // Serialize to thrift object

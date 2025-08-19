@@ -289,11 +289,13 @@ public class OptThivePartitionPruner {
                     defaultPartitionIds.containsAll(selectedPartitionIds)) {
                 ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
                 scanOperatorPredicates.setSelectedPartitionIds(selectedPartitionIds);
+                scanOperatorPredicates.setPruningPredicateCanBeEvaluated(true);
             } else {
                 ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
                 Collection<Long> oldSelectedPartitionIds = scanOperatorPredicates.getSelectedPartitionIds();
                 //change oldSelectedPartitionIds
                 oldSelectedPartitionIds.retainAll(selectedPartitionIds);
+                scanOperatorPredicates.setPruningPredicateCanBeEvaluated(true);
             }
         }
     }
@@ -427,13 +429,12 @@ public class OptThivePartitionPruner {
             partitionId++;
         }
 
-        PartitionPruner partitionPruner = new ThiveRangePartitionPruner(keyRangeById,
+        ThiveRangePartitionPruner partitionPruner = new ThiveRangePartitionPruner(keyRangeById,
                 partitionColumns, operator.getColumnFilters());
 
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
         Collection<Long> selectedPartitionIds = partitionPruner.prune();
-        if (!((ThiveRangePartitionPruner) partitionPruner).isPruningPredicateCanBeEvaluated() &&
-                hasPartitionConjunctsWithHivePartSuffix(operator, hivePartColumnToPartitionValuesMap)) {
+        if (!partitionPruner.isPruningPredicateCanBeEvaluated()) {
             scanOperatorPredicates.setPruningPredicateCanBeEvaluated(false);
         }
         Collection<Long> finalPartitions = processThiveDefaultParititions(selectedPartitionIds, defaultPartitionIds,
@@ -449,11 +450,240 @@ public class OptThivePartitionPruner {
         thiveComputeSpecifyPartition(operator, hivePartPartitionColumnRefOperators.get(0),
                 hivePartColumnToPartitionValuesMap, defaultPartitionIds);
 
+        if (!scanOperatorPredicates.isPruningPredicateCanBeEvaluated() && partitionColumn.getType().isStringType() &&
+                operator.getPredicate() != null &&
+                context.getSessionVariable().isEnableThiveRangePartitionExhaustiveAlgorithm()) {
+            rangePrunePartitionsWithExhaustAllValues(operator, context, hmsTable, partitionColumns, values,
+                    partitionNameToPartitionValues);
+        }
+
         addConjunctsForThive(operator);
         List<ColumnRefOperator> partitionColumnRefOperators = new ArrayList<>();
         partitionColumnRefOperators.add(operator.getColumnReference(partitionColumn));
         computeMinMaxConjuncts(operator, partitionColumnRefOperators, hivePartColumnToPartitionValuesMap.keySet(),
                 context);
+    }
+
+    /**
+     CREATE TABLE test_thive_range_partition_str(
+     ds STRING,
+     id INT,
+     name STRING
+     )
+     PARTITION BY RANGE( ds )
+     (
+     PARTITION p_202503 VALUES LESS THAN ("20250401"),
+     PARTITION p_202504 VALUES LESS THAN ("20250501"),
+     PARTITION p_202505 VALUES LESS THAN ("20250601"),
+     PARTITION p_202506 VALUES LESS THAN ("20250701"),
+     PARTITION p_202507 VALUES LESS THAN ("20250801"),
+     PARTITION p_202508 VALUES LESS THAN ("20250901"),
+     PARTITION default
+     )
+     STORED AS ORCFILE;
+
+     p_202503: (-∞, 20250401),  p_202504: [20250401, 20250501),  p_202505: [20250501, 20250601), p_202506: [20250601, 20250701),
+     p_202507: [20250701, 20250801), p_202508: [20250801, 20250901), default: [20250901, +∞)
+
+     *  Iterate over all possible numerical values
+     */
+    public static void rangePrunePartitionsWithExhaustAllValues(LogicalScanOperator operator,
+                                                                OptimizerContext context,
+                                                                HiveMetaStoreTable hmsTable,
+                                                                List<Column> partitionColumns,
+                                                                List<LiteralExpr> values,
+                                                                Map<String, List<String>> partitionNameToPartitionValues)
+            throws AnalysisException {
+        // partitionColumnName -> (LiteralExpr -> partition ids)
+        // partitionColumnName like imp_date
+        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap =
+                Maps.newHashMap();
+        // partitionColumnName -> null partitionIds
+        Map<ColumnRefOperator, Set<Long>> columnToNullPartitions = Maps.newHashMap();
+        List<ColumnRefOperator> partitionColumnRefOperators = new ArrayList<>();
+        buildPartitionColumnInfo(operator, partitionColumns, columnToPartitionValuesMap, columnToNullPartitions,
+                partitionColumnRefOperators);
+        // only one partition column
+        Column partitionColumn = partitionColumns.get(0);
+
+        Set<Long> defaultPartitionIds = new HashSet<>();
+        // p_202503: (-∞, 20250401)
+        long firstRangePartitionId = 0;
+        // p_202504: [20250401, 20250501)
+        long secondRangePartitionId = 0;
+        boolean scanAllPartitions = false;
+        Map<Long, PartitionKey> idToPartitionKey = Maps.newHashMap();
+        ColumnRefOperator columnRefOperator = partitionColumnRefOperators.get(0);
+
+        long partitionId = 0;
+        for (Map.Entry<String, List<String>> entry : partitionNameToPartitionValues.entrySet()) {
+            PartitionKey partitionKey = new HivePartitionKey();
+            partitionKey.pushColumn(LiteralExpr.create(entry.getKey(), Type.STRING), PrimitiveType.VARCHAR);
+
+            if (!entry.getKey().equalsIgnoreCase(THiveConstants.DEFAULT)) {
+                // only one value
+                String rawValue = entry.getValue().get(0);
+                LiteralExpr literal = LiteralExpr.create(rawValue, partitionColumn.getType());
+                int index = Collections.binarySearch(values, literal);
+                if (index == 0) {
+                    firstRangePartitionId = partitionId;
+                    // add with default partition
+                    defaultPartitionIds.add(firstRangePartitionId);
+                } else {
+                    if (index == 1) {
+                        secondRangePartitionId = partitionId;
+                    }
+                    try {
+                        // String -> Long
+                        long startNum = values.get(index - 1).getLongValue();
+                        long endNum = values.get(index).getLongValue();
+                        // iterator startNum to endNum, check whether current partition is target partition or not
+                        if ((endNum - startNum) > context.getSessionVariable().getThiveRangePartitionMaxInterval()) {
+                            LOG.warn("{}.{} the interval between two range partitions[{}, {}] is bigger than 500W",
+                                    hmsTable.getDbName(), hmsTable.getTableName(), startNum, endNum);
+                            scanAllPartitions = true;
+                            break;
+                        }
+                        // try to iterator all values
+                        while (startNum < endNum) {
+                            String partVal = String.valueOf(startNum);
+                            if (context.getSessionVariable().isThiveRangePartitionStringAsDate() &&
+                                    checkPartValDateFormat(partVal)) {
+                                Set<Long> partitions = columnToPartitionValuesMap.get(columnRefOperator)
+                                        .computeIfAbsent(LiteralExpr.create(partVal, partitionColumn.getType()),
+                                                k -> Sets.newConcurrentHashSet());
+                                partitions.add(partitionId);
+                            }
+                            startNum++;
+                        }
+                    } catch (NumberFormatException e) {
+                        LOG.warn("{}.{} range partition value[{}, {}) is Nan, scan all partitions",
+                                hmsTable.getDbName(), hmsTable.getTableName(), values.get(index - 1).getStringValue(),
+                                values.get(index).getStringValue(), e.getMessage());
+                        scanAllPartitions = true;
+                        break;
+                    } catch (Throwable x) {
+                        scanAllPartitions = true;
+                        break;
+                    }
+                }
+            } else {
+                defaultPartitionIds.add(partitionId);
+            }
+            idToPartitionKey.put(partitionId, partitionKey);
+            partitionId++;
+        }
+        if (!scanAllPartitions) {
+            thiveClassifyConjuncts(operator, columnToPartitionValuesMap);
+            thiveComputePartitionInfo(operator, columnToPartitionValuesMap, columnToNullPartitions,
+                    defaultPartitionIds);
+            ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
+            if (scanOperatorPredicates.getSelectedPartitionIds().contains(secondRangePartitionId)) {
+                // if include secondRangePartitionId, we also add firstRangePartitionId
+                scanOperatorPredicates.getSelectedPartitionIds().add(firstRangePartitionId);
+            }
+        }
+    }
+
+    public static boolean checkPartValDateFormat(String partVal) {
+        if (partVal == null || partVal.isEmpty()) {
+            return false;
+        }
+        final int len = partVal.length();
+        try {
+            switch (len) {
+                case 4:
+                    return isValidYear(parseInt(partVal));
+
+                case 6:
+                    int year6 = parseInt(partVal.substring(0, 4));
+                    int month6 = parseInt(partVal.substring(4, 6));
+                    return isValidYear(year6) && isValidMonth(month6);
+
+                case 8:
+                    int year8 = parseInt(partVal.substring(0, 4));
+                    int month8 = parseInt(partVal.substring(4, 6));
+                    int day8 = parseInt(partVal.substring(6, 8));
+                    return isValidYear(year8) && isValidMonth(month8) && checkDateDay(year8, month8, day8);
+
+                case 10:
+                    int year10 = parseInt(partVal.substring(0, 4));
+                    int month10 = parseInt(partVal.substring(4, 6));
+                    int day10 = parseInt(partVal.substring(6, 8));
+                    int hour10 = parseInt(partVal.substring(8, 10));
+                    return isValidYear(year10) &&
+                            isValidMonth(month10) &&
+                            isValidHour(hour10) &&
+                            checkDateDay(year10, month10, day10);
+
+                case 12:
+                    int year12 = parseInt(partVal.substring(0, 4));
+                    int month12 = parseInt(partVal.substring(4, 6));
+                    int day12 = parseInt(partVal.substring(6, 8));
+                    int hour12 = parseInt(partVal.substring(8, 10));
+                    int min12 = parseInt(partVal.substring(10, 12));
+                    return isValidYear(year12) &&
+                            isValidMonth(month12) &&
+                            isValidHour(hour12) &&
+                            isValidMinute(min12) &&
+                            checkDateDay(year12, month12, day12);
+
+                default:
+                    return false;
+            }
+        } catch (NumberFormatException | IndexOutOfBoundsException e) {
+            return false;
+        }
+    }
+
+    private static boolean isValidYear(int year) {
+        return year > 0;
+    }
+
+    private static boolean isValidMonth(int month) {
+        return month >= 1 && month <= 12;
+    }
+
+    private static boolean isValidHour(int hour) {
+        return hour >= 0 && hour <= 23;
+    }
+
+    private static boolean isValidMinute(int minute) {
+        return minute >= 0 && minute <= 59;
+    }
+
+    private static boolean checkDateDay(int year, int month, int day) {
+        if (day < 1) {
+            return false;
+        }
+
+        switch (month) {
+            case 1:
+            case 3:
+            case 5:
+            case 7:
+            case 8:
+            case 10:
+            case 12:
+                return day <= 31;
+            case 4:
+            case 6:
+            case 9:
+            case 11:
+                return day <= 30;
+            case 2:
+                return isLeapYear(year) ? day <= 29 : day <= 28;
+            default:
+                return false;
+        }
+    }
+
+    private static boolean isLeapYear(int year) {
+        return (year % 4 == 0) && (year % 100 != 0 || year % 400 == 0);
+    }
+
+    private static int parseInt(String s) {
+        return Integer.parseInt(s);
     }
 
     /**
@@ -515,31 +745,6 @@ public class OptThivePartitionPruner {
         }
     }
 
-    public static boolean hasPartitionConjunctsWithHivePartSuffix(LogicalScanOperator operator,
-                                                                  Map<ColumnRefOperator,
-                                                                  ConcurrentNavigableMap<LiteralExpr, Set<Long>>>
-                                                                  columnToPartitionValuesMap)
-            throws AnalysisException {
-        for (ScalarOperator scalarOperator : Utils.extractConjuncts(operator.getPredicate())) {
-            List<ColumnRefOperator> columnRefOperatorList = Utils.extractColumnRef(scalarOperator);
-            if (columnRefOperatorList.size() == 0) {
-                continue;
-            }
-            // columnToPartitionValuesMap.keySet() remove _hive_part suffix
-            List<ColumnRefOperator> tmpColumnRefOperatorList = new ArrayList<>();
-            for (ColumnRefOperator columnRefOperator : columnToPartitionValuesMap.keySet()) {
-                tmpColumnRefOperatorList.add(new ColumnRefOperator(columnRefOperatorList.get(0).getId(),
-                                                                   columnRefOperator.getType(),
-                                                                   columnRefOperator.getName().replace(THiveConstants.SUFFIX, ""),
-                                                                   columnRefOperator.isNullable()));
-            }
-            if (!columnRefOperatorList.retainAll(tmpColumnRefOperatorList)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static void thiveComputePartitionInfo(LogicalScanOperator operator,
                                                   Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr,
                                                           Set<Long>>> columnToPartitionValues,
@@ -599,11 +804,13 @@ public class OptThivePartitionPruner {
                 defaultPartitionIds.size() == selectedPartitionIds.size() &&
                 defaultPartitionIds.containsAll(selectedPartitionIds)) {
             scanOperatorPredicates.setSelectedPartitionIds(selectedPartitionIds);
+            scanOperatorPredicates.setPruningPredicateCanBeEvaluated(true);
         } else if (selectedPartitionIds != null) {
             // exclude thive default partition by default in selectedPartitionIds
             Collection<Long> oldSelectedPartitionIds = scanOperatorPredicates.getSelectedPartitionIds();
             //change oldSelectedPartitionIds
             oldSelectedPartitionIds.retainAll(selectedPartitionIds);
+            scanOperatorPredicates.setPruningPredicateCanBeEvaluated(true);
         }
     }
 
