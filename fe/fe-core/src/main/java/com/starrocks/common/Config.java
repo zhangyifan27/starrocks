@@ -171,6 +171,9 @@ public class Config extends ConfigBase {
     public static boolean audit_log_enable_compress = false;
 
     @ConfField(mutable = true)
+    public static boolean enable_record_audit_log_before_query = false;
+
+    @ConfField(mutable = true)
     public static long slow_lock_threshold_ms = 3000L;
 
     @ConfField(mutable = true)

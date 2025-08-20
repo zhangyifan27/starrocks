@@ -314,6 +314,30 @@ public class ConnectProcessor {
         GlobalStateMgr.getCurrentState().getAuditEventProcessor().handleAuditEvent(ctx.getAuditEventBuilder().build());
     }
 
+    public void auditBeforeExec(String origStmt, StatementBase parsedStmt) {
+        if (ctx.getState().getErrType() == QueryState.ErrType.IGNORE_ERR) {
+            return;
+        }
+        ctx.getAuditEventBuilder().setEventType(EventType.BEFORE_QUERY)
+                .setState(QueryState.MysqlStateType.NOOP.toString())
+                .setStmtId(ctx.getStmtId())
+                .setQueryId(ctx.getQueryId() == null ? "NaN" : ctx.getQueryId().toString())
+                .setCatalog(ctx.getCurrentCatalog());
+
+        ctx.getAuditEventBuilder().setIsQuery(ctx.getState().isQuery());
+        if (!ctx.getState().isQuery() && (parsedStmt != null && AuditEncryptionChecker.needEncrypt(parsedStmt))) {
+            // Some information like username, password in the stmt should not be printed.
+            ctx.getAuditEventBuilder().setStmt(AstToSQLBuilder.toSQL(parsedStmt));
+        } else if (parsedStmt == null) {
+            // invalid sql, record the original statement to avoid audit log can't replay
+            ctx.getAuditEventBuilder().setStmt(origStmt);
+        } else {
+            ctx.getAuditEventBuilder().setStmt(LogUtil.removeLineSeparator(origStmt));
+        }
+
+        GlobalStateMgr.getCurrentState().getAuditEventProcessor().handleAuditEvent(ctx.getAuditEventBuilder().build());
+    }
+
     public static String computeStatementDigest(StatementBase queryStmt) {
         if (queryStmt == null) {
             return "";
@@ -375,6 +399,9 @@ public class ConnectProcessor {
                 throw new AnalysisException(parsingException.getMessage());
             }
 
+            if (stmts.size() == 1 && Config.enable_record_audit_log_before_query) {
+                auditBeforeExec(originStmt, stmts.get(0));
+            }
             for (int i = 0; i < stmts.size(); ++i) {
                 ctx.getState().reset();
                 ctx.setIsHiveView(false);
