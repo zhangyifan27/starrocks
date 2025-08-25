@@ -791,23 +791,11 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
         _app_stats.orc_min_stripe_size = std::min(_app_stats.orc_min_stripe_size, v);
     }
 
-    COUNTER_UPDATE(skip_file_number_counter, _orc_reader->get_skip_file_number());
     COUNTER_UPDATE(total_stripe_size_counter, total_stripe_size);
     COUNTER_UPDATE(total_stripe_number_counter, _app_stats.orc_stripe_sizes.size());
-    COUNTER_UPDATE(selected_stripe_size_counter, _orc_reader->get_selected_stripe_size());
-    COUNTER_UPDATE(selected_stripe_number_counter, _orc_reader->get_selected_stripe_number());
-    COUNTER_UPDATE(skip_stripe_size_counter, total_stripe_size - _orc_reader->get_selected_stripe_size());
-    COUNTER_UPDATE(skip_stripe_number_counter,
-                   _app_stats.orc_stripe_sizes.size() - _orc_reader->get_selected_stripe_number());
-
     COUNTER_UPDATE(total_tiny_stripe_size_counter, _app_stats.orc_total_tiny_stripe_size);
     COUNTER_SET(max_stripe_size_counter, _app_stats.orc_max_stripe_size);
     COUNTER_SET(min_stripe_size_counter, _app_stats.orc_min_stripe_size);
-
-    COUNTER_UPDATE(total_row_group_number_counter, _orc_reader->get_total_row_group_number());
-    COUNTER_UPDATE(selected_row_group_number_counter, _orc_reader->get_selected_row_group_number());
-    COUNTER_UPDATE(skip_row_group_number_counter,
-                   _orc_reader->get_total_row_group_number() - _orc_reader->get_selected_row_group_number());
 
     RuntimeProfile::Counter* stripe_active_lazy_coalesce_together_counter = root_profile->add_child_counter(
             "StripeActiveLazyColumnIOCoalesceTogether", TUnit::UNIT,
@@ -822,6 +810,17 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
     if (_orc_reader != nullptr) {
         // _orc_reader is nullptr for split task
         root_profile->add_info_string("ORCSearchArgument: ", _orc_reader->get_search_argument_string());
+
+        COUNTER_UPDATE(skip_file_number_counter, _orc_reader->get_skip_file_number());
+        COUNTER_UPDATE(selected_stripe_size_counter, _orc_reader->get_selected_stripe_size());
+        COUNTER_UPDATE(selected_stripe_number_counter, _orc_reader->get_selected_stripe_number());
+        COUNTER_UPDATE(skip_stripe_size_counter, total_stripe_size - _orc_reader->get_selected_stripe_size());
+        COUNTER_UPDATE(skip_stripe_number_counter,
+                       _app_stats.orc_stripe_sizes.size() - _orc_reader->get_selected_stripe_number());
+        COUNTER_UPDATE(total_row_group_number_counter, _orc_reader->get_total_row_group_number());
+        COUNTER_UPDATE(selected_row_group_number_counter, _orc_reader->get_selected_row_group_number());
+        COUNTER_UPDATE(skip_row_group_number_counter,
+                       _orc_reader->get_total_row_group_number() - _orc_reader->get_selected_row_group_number());
     }
 }
 
