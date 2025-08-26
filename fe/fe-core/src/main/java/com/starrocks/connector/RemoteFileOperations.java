@@ -135,6 +135,8 @@ public class RemoteFileOperations {
         long remoteFilePullTimeout = Long.MAX_VALUE;
         if (ConnectContext.get() != null && (ConnectContext.get().getSessionVariable() != null)) {
             remoteFilePullTimeout = ConnectContext.get().getSessionVariable().getRemoteFilePullTimeout();
+            int queryTimeoutS = ConnectContext.get().getSessionVariable().getQueryTimeoutS();
+            remoteFilePullTimeout = Math.min(remoteFilePullTimeout, queryTimeoutS * 1000L);
         }
         Tracers.count(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES, cacheMissSize);
         try (Timer ignored = Tracers.watchScope(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES)) {
