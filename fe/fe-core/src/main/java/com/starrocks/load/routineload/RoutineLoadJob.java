@@ -952,6 +952,7 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
             info.setTxnId(txnId);
             StreamLoadPlanner planner =
                     new StreamLoadPlanner(db, (OlapTable) table, info);
+            planner.getConnectContext().setThreadLocalInfo();
             TExecPlanFragmentParams planParams = planner.plan(loadId);
             planParams.query_options.setLoad_job_type(TLoadJobType.ROUTINE_LOAD);
             StreamLoadMgr streamLoadManager = GlobalStateMgr.getCurrentState().getStreamLoadMgr();
