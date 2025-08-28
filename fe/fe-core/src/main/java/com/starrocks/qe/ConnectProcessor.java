@@ -221,7 +221,7 @@ public class ConnectProcessor {
             if (statistics.feedbackMemCostBytes != null && statistics.feedbackMemCostBytes != 0) {
                 ctx.getAuditEventBuilder().setFeedbackMemCostBytes(statistics.feedbackMemCostBytes);
             } else {
-                if (ctx.getQueryId() != null && statistics.memCostBytes != null) {
+                if (ctx.getQueryId() != null && statistics.memCostBytes != null && !ctx.getState().isError()) {
                     double feedbackMemCostBytes = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
                             .recordQueryMemory(ctx.getQueryId(), statistics.memCostBytes);
                     ctx.getAuditEventBuilder().setFeedbackMemCostBytes(feedbackMemCostBytes);
@@ -280,7 +280,14 @@ public class ConnectProcessor {
                     MetricRepo.HISTO_INSERT_LATENCY.update(elapseMs);
                     if (elapseMs > Config.qe_slow_log_ms || ctx.getSessionVariable().isEnableSQLDigest()) {
                         MetricRepo.COUNTER_SLOW_INSERT.increase(1L);
-                        ctx.getAuditEventBuilder().setDigest(computeStatementDigest(parsedStmt));
+                        // The computeStatementDigest result after executing the plan is different from
+                        // the result without executing the plan.
+                        // so use statistics digest first for forward stmt which is planed at leader
+                        if (statistics != null && statistics.digest != null) {
+                            ctx.getAuditEventBuilder().setDigest(statistics.digest);
+                        } else {
+                            ctx.getAuditEventBuilder().setDigest(computeStatementDigest(parsedStmt));
+                        }
                     }
                 }
             }
@@ -292,7 +299,11 @@ public class ConnectProcessor {
         // Build Digest for SELECT/INSERT/UPDATE/DELETE
         if (ctx.getState().isQuery() || parsedStmt instanceof DmlStmt) {
             if (Config.enable_sql_digest || ctx.getSessionVariable().isEnableSQLDigest()) {
-                ctx.getAuditEventBuilder().setDigest(computeStatementDigest(parsedStmt));
+                if (statistics != null && statistics.digest != null) {
+                    ctx.getAuditEventBuilder().setDigest(statistics.digest);
+                } else {
+                    ctx.getAuditEventBuilder().setDigest(computeStatementDigest(parsedStmt));
+                }
             }
         }
 
@@ -416,6 +427,12 @@ public class ConnectProcessor {
                     parsedStmt = new PrepareStmt("", parsedStmt, new ArrayList<>());
                 }
 
+                if (stmts.size() == 1) {
+                    ctx.setSupersqlTraceId(SQLUtils.extractSupersqlTraceId(originStmt));
+                } else {
+                    ctx.setSupersqlTraceId(SQLUtils.extractSupersqlTraceId(originStmt, i, stmts.size()));
+                }
+
                 // only for JDBC, COM_STMT_PREPARE bundled with jdbc
                 if (ctx.getCommand() == MysqlCommand.COM_STMT_PREPARE && (parsedStmt instanceof PrepareStmt)) {
                     ((PrepareStmt) parsedStmt).setName(String.valueOf(ctx.getStmtId()));
@@ -442,25 +459,6 @@ public class ConnectProcessor {
                         return null;
                     }
                 }.visit(parsedStmt);
-
-                String digest = computeStatementDigest(parsedStmt);
-                if (stmts.size() == 1) {
-                    ctx.setSupersqlTraceId(SQLUtils.extractSupersqlTraceId(originStmt));
-                    String flowId = SQLUtils.extractFlowId(originStmt);
-                    if (!digest.isEmpty() && !Strings.isNullOrEmpty(flowId)) {
-                        ctx.setDigestWithFlowId(digest + ":" + flowId);
-                    } else {
-                        ctx.setDigestWithFlowId("");
-                    }
-                } else {
-                    ctx.setSupersqlTraceId(SQLUtils.extractSupersqlTraceId(originStmt, i, stmts.size()));
-                    String flowId = SQLUtils.extractFlowId(originStmt, i, stmts.size());
-                    if (!digest.isEmpty() && !Strings.isNullOrEmpty(flowId)) {
-                        ctx.setDigestWithFlowId(digest + ":" + flowId);
-                    } else {
-                        ctx.setDigestWithFlowId("");
-                    }
-                }
 
                 // Only add the last running stmt for multi statement,
                 // because the audit log will only show the last stmt.
@@ -916,8 +914,6 @@ public class ConnectProcessor {
         }
 
         StmtExecutor executor = null;
-        String digest = null;
-        String flowId = null;
         try {
             // set session variables first
             if (request.isSetModified_variables_sql()) {
@@ -943,8 +939,6 @@ public class ConnectProcessor {
                 }
             }.visit(statement);
             statement.setOrigStmt(new OriginStatement(request.getSql(), idx));
-            digest = computeStatementDigest(statement);
-            flowId = SQLUtils.extractFlowId(statement.getOrigStmt().originStmt);
             executor = new StmtExecutor(ctx, statement);
             ctx.setExecutor(executor);
             executor.setProxy();
@@ -994,7 +988,9 @@ public class ConnectProcessor {
 
             PQueryStatistics audit = executor.getQueryStatisticsForAuditLog();
             if (audit != null) {
-                if (!Strings.isNullOrEmpty(digest) && !Strings.isNullOrEmpty(flowId)) {
+                String digest = computeStatementDigest(executor.getParsedStmt());
+                String flowId = SQLUtils.extractFlowId(executor.getOriginStmtInString());
+                if (!Strings.isNullOrEmpty(digest) && !Strings.isNullOrEmpty(flowId) && !ctx.getState().isError()) {
                     String digestWithFlowId = digest + ":" + flowId;
                     Set<TNetworkAddress> workers = new HashSet<>();
                     int instanceNum = 0;
@@ -1006,6 +1002,7 @@ public class ConnectProcessor {
                     double cost = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder().recordQueryMemory(ctx.queryId,
                             digestWithFlowId, workers.size(), instanceNum, audit.getMemCostBytes());
                     audit.setFeedbackMemCostBytes(cost);
+                    audit.setDigest(digest);
                 }
                 if (ctx.getAuditEventBuilder() != null) {
                     audit.setCboMemCostBytes(ctx.getAuditEventBuilder().getCboMemCostBytes());

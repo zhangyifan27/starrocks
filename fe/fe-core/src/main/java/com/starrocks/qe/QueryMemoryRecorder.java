@@ -81,7 +81,7 @@ public class QueryMemoryRecorder {
 
     public double recordQueryMemory(UUID queryId, double queryPeakMemoryUsagePerNode) {
         QueryInfo queryInfo = idMap.get(queryId);
-        double queryMemory = Config.max_cost_by_feedback * Config.cost_weight * Config.cost_buffer_weight / QUERY_POOL_RATIO;
+        double queryMemory = Config.max_cost_by_feedback;
         if (queryInfo != null) {
             queryMemory = recordQueryMemory(queryId, queryInfo.getDigestWithFlowId(),
                     queryInfo.getWorkerNum(), queryInfo.getInstanceNum(), queryPeakMemoryUsagePerNode);
@@ -135,11 +135,11 @@ public class QueryMemoryRecorder {
 
         // the query pool is 80% of the node total memory, so / 0.75 to prevent query pool OOM.
         double cost = maxMemory * Config.cost_weight * Config.cost_buffer_weight / QUERY_POOL_RATIO;
-        LOG.info("feedback memory record : \n" +
-                "id: {}\n" +
-                "recently memory usage : {}\n" +
-                "recentlyMaxMemory : {}\n" +
-                "historyMaxMemory : {}\n" +
+        LOG.info("feedback memory record :\t" +
+                "id: {}\t" +
+                "recently memory usage : {}\t" +
+                "recentlyMaxMemory : {}\t" +
+                "historyMaxMemory : {}\t" +
                 "lastUpdateTime : {}",
                 memoryRecord.getId(), msg, maxMemory, memoryRecord.getMaxValue(), new Date(memoryRecord.getTime()));
         return cost;

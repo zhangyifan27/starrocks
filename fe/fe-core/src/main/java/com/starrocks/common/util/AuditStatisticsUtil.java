@@ -38,6 +38,7 @@ public class AuditStatisticsUtil {
         pb.spillBytes = tb.getSpill_bytes();
         pb.feedbackMemCostBytes = tb.getFeedback_mem_cost_bytes();
         pb.cboMemCostBytes = tb.getCbo_mem_cost_bytes();
+        pb.digest = tb.getDigest();
         if (tb.isSetStats_items()) {
             pb.statsItems = Lists.newArrayList();
             for (TAuditStatisticsItem tItem : tb.getStats_items()) {
@@ -163,6 +164,9 @@ public class AuditStatisticsUtil {
         }
         if (pb.cboMemCostBytes != null) {
             tb.setCbo_mem_cost_bytes(pb.cboMemCostBytes);
+        }
+        if (pb.digest != null) {
+            tb.setDigest(pb.digest);
         }
         if (CollectionUtils.isNotEmpty(pb.statsItems)) {
             for (QueryStatisticsItemPB pItem : pb.statsItems) {

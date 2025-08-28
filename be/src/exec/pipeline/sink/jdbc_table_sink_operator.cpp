@@ -2,7 +2,9 @@
 
 #include "exec/jdbc_scanner.h"
 #include "exec/pipeline/fragment_context.h"
+#include "exec/pipeline/pipeline_driver_executor.h"
 #include "exec/pipeline/sink/sink_io_buffer.h"
+#include "exec/workgroup/work_group.h"
 #include "gen_cpp/DataSinks_types.h"
 #include "runtime/jdbc_driver_manager.h"
 
@@ -93,6 +95,10 @@ bool JDBCTableSinkOperator::is_finished() const {
 }
 
 Status JDBCTableSinkOperator::set_finishing(RuntimeState* state) {
+    if (_num_sinkers.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        state->fragment_ctx()->workgroup()->executors()->driver_executor()->report_audit_statistics(state->query_ctx(),
+                                                                                                    state->fragment_ctx());
+    }
     return _sink_io_buffer->set_finishing();
 }
 

@@ -11,9 +11,10 @@ class JDBCTableSinkIOBuffer;
 class JDBCTableSinkOperator final : public Operator {
 public:
     JDBCTableSinkOperator(OperatorFactory* factory, int32_t id, int32_t plan_node_id, int32_t driver_sequence,
-                          std::shared_ptr<JDBCTableSinkIOBuffer> sink_io_buffer)
+                          std::shared_ptr<JDBCTableSinkIOBuffer> sink_io_buffer, std::atomic<int32_t>& num_sinkers)
             : Operator(factory, id, "jdbc_table_sink", plan_node_id, false, driver_sequence),
-              _sink_io_buffer(std::move(sink_io_buffer)) {}
+              _sink_io_buffer(std::move(sink_io_buffer)),
+              _num_sinkers(num_sinkers) {}
 
     ~JDBCTableSinkOperator() override = default;
 
@@ -39,6 +40,7 @@ public:
 
 private:
     std::shared_ptr<JDBCTableSinkIOBuffer> _sink_io_buffer;
+    std::atomic<int32_t>& _num_sinkers;
 };
 
 class JDBCTableSinkOperatorFactory final : public OperatorFactory {
@@ -54,7 +56,8 @@ public:
     ~JDBCTableSinkOperatorFactory() override = default;
 
     OperatorPtr create(int32_t dop, int32_t driver_sequence) override {
-        return std::make_shared<JDBCTableSinkOperator>(this, _id, _plan_node_id, driver_sequence, _sink_io_buffer);
+        _increment_act_num_sinkers_no_barrier();
+        return std::make_shared<JDBCTableSinkOperator>(this, _id, _plan_node_id, driver_sequence, _sink_io_buffer, _act_num_sinkers);
     }
 
     Status prepare(RuntimeState* state) override;
@@ -62,10 +65,13 @@ public:
     void close(RuntimeState* state) override;
 
 private:
+    void _increment_act_num_sinkers_no_barrier() { _act_num_sinkers.fetch_add(1, std::memory_order_relaxed); }
+
     std::vector<TExpr> _t_output_expr;
     std::vector<ExprContext*> _output_expr_ctxs;
     TJDBCTableSink _t_jdbc_table_sink;
     int32_t _num_sinkers;
+    std::atomic<int32_t> _act_num_sinkers = 0;
 
     std::shared_ptr<JDBCTableSinkIOBuffer> _sink_io_buffer;
     FragmentContext* _fragment_ctx = nullptr;

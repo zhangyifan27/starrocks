@@ -49,6 +49,7 @@ message PQueryStatistics {
     repeated QueryStatisticsItemPB stats_items = 10;
     optional double feedback_mem_cost_bytes = 15;
     optional double cbo_mem_cost_bytes = 16;
+    optional string digest = 17;
 }
 
 message QueryStatisticsItemPB {

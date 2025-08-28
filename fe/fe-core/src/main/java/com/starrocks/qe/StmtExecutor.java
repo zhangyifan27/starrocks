@@ -610,6 +610,14 @@ public class StmtExecutor {
 
             if (execPlan != null && execPlan.getPhysicalPlan() != null) {
                 context.getAuditEventBuilder().setCboMemCostBytes(execPlan.getPhysicalPlan().getCost());
+                // digest compute need after plan
+                String digest = ConnectProcessor.computeStatementDigest(parsedStmt);
+                String flowId = SQLUtils.extractFlowId(originStmt.originStmt);
+                if (!Strings.isNullOrEmpty(digest) && !Strings.isNullOrEmpty(flowId)) {
+                    context.setDigestWithFlowId(digest + ":" + flowId);
+                } else {
+                    context.setDigestWithFlowId("");
+                }
             }
 
             // no need to execute http query dump request in BE
