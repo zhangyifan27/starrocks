@@ -193,6 +193,8 @@ public class OlapScanNode extends ScanNode {
     // Set just once per query.
     private boolean alreadyFoundSomeLivingCn = false;
 
+    private boolean isPruningPredicateCanBeEvaluated = true;
+
     // Constructs node to scan given data files of table 'tbl'.
     // Constructs node to scan given data files of table 'tbl'.
     public OlapScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName) {
@@ -322,6 +324,14 @@ public class OlapScanNode extends ScanNode {
 
     public OlapTable getOlapTable() {
         return olapTable;
+    }
+
+    public boolean isPruningPredicateCanBeEvaluated() {
+        return isPruningPredicateCanBeEvaluated;
+    }
+
+    public void setPruningPredicateCanBeEvaluated(boolean pruningPredicateCanBeEvaluated) {
+        this.isPruningPredicateCanBeEvaluated = pruningPredicateCanBeEvaluated;
     }
 
     @Override

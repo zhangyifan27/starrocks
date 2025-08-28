@@ -58,6 +58,8 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
     // Rewriting the scan column ref also needs to rewrite the pruned predicate at the same time.
     private List<ScalarOperator> prunedPartitionPredicates = Lists.newArrayList();
 
+    private boolean isPruningPredicateCanBeEvaluated = true;
+
     private PhysicalOlapScanOperator() {
         super(OperatorType.PHYSICAL_OLAP_SCAN);
     }
@@ -93,6 +95,7 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
         this.hintsReplicaId = scanOperator.getHintsReplicaIds();
         this.prunedPartitionPredicates = scanOperator.getPrunedPartitionPredicates();
         this.usePkIndex = scanOperator.isUsePkIndex();
+        this.isPruningPredicateCanBeEvaluated = scanOperator.isPruningPredicateCanBeEvaluated();
     }
 
     public long getSelectedIndexId() {
@@ -183,6 +186,14 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
         return usePkIndex;
     }
 
+    public boolean isPruningPredicateCanBeEvaluated() {
+        return isPruningPredicateCanBeEvaluated;
+    }
+
+    public void setPruningPredicateCanBeEvaluated(boolean pruningPredicateCanBeEvaluated) {
+        this.isPruningPredicateCanBeEvaluated = pruningPredicateCanBeEvaluated;
+    }
+
     @Override
     public String toString() {
         return "PhysicalOlapScan" + " {" +
@@ -269,6 +280,7 @@ public class PhysicalOlapScanOperator extends PhysicalScanOperator {
             builder.usePkIndex = operator.usePkIndex;
             builder.globalDicts = operator.globalDicts;
             builder.prunedPartitionPredicates = operator.prunedPartitionPredicates;
+            builder.isPruningPredicateCanBeEvaluated = operator.isPruningPredicateCanBeEvaluated;
             return this;
         }
 

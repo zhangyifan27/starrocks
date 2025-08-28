@@ -3121,6 +3121,17 @@ public class StmtExecutor {
                         hasPartitionPruningFail = true;
                     }
                 }
+            } else if (scanNode instanceof OlapScanNode) {
+                needUpdate = true;
+                OlapScanNode olapScanNode = (OlapScanNode) scanNode;
+                int selectedPartitionNum = olapScanNode.getSelectedPartitionIds().size();
+                int totalPartitionNum = olapScanNode.getOlapTable().getVisiblePartitionNames().size();
+                if (selectedPartitionNum >= totalPartitionNum) {
+                    hasScanAllPartitions = true;
+                    if (!olapScanNode.isPruningPredicateCanBeEvaluated()) {
+                        hasPartitionPruningFail = true;
+                    }
+                }
             }
         }
         if (needUpdate) {

@@ -803,6 +803,7 @@ public class PlanFragmentBuilder {
             scanNode.setIsSortedByKeyPerTablet(node.needSortedByKeyPerTablet());
             scanNode.setIsOutputChunkByBucket(node.needOutputChunkByBucket());
             scanNode.setWithoutColocateRequirement(node.isWithoutColocateRequirement());
+            scanNode.setPruningPredicateCanBeEvaluated(node.isPruningPredicateCanBeEvaluated());
             currentExecGroup.add(scanNode);
             // set tablet
             try {

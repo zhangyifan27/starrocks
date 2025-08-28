@@ -39,7 +39,6 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Pair;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.planner.PartitionColumnFilter;
-import com.starrocks.planner.PartitionPruner;
 import com.starrocks.planner.RangePartitionPruner;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.common.ErrorType;
@@ -99,7 +98,11 @@ public class OptOlapPartitionPruner {
                     partitionColumns,
                     (RangePartitionInfo) partitionInfo,
                     selectedPartitionIds);
+            List<Long> inputSelectedPartitionIds = selectedPartitionIds;
             selectedPartitionIds = evaluator.prunePartitions(extractor, logicalOlapScanOperator.getPredicate());
+            if (inputSelectedPartitionIds.size() != selectedPartitionIds.size()) {
+                logicalOlapScanOperator.setPruningPredicateCanBeEvaluated(true);
+            }
         }
 
         try {
@@ -389,6 +392,9 @@ public class OptOlapPartitionPruner {
         partitionPruner.prepareDeduceExtraConjuncts(operator);
         try {
             List<Long> prune = partitionPruner.prune();
+            if (!partitionPruner.getNoEvalConjuncts().isEmpty()) {
+                operator.setPruningPredicateCanBeEvaluated(false);
+            }
             if (prune == null && isTemporaryPartitionPrune) {
                 return Lists.newArrayList(partitionIds);
             } else {
@@ -418,11 +424,15 @@ public class OptOlapPartitionPruner {
             keyRangeById = partitionInfo.getIdToRange(false);
             filterPartition = false;
         }
-        PartitionPruner partitionPruner = new RangePartitionPruner(keyRangeById,
+        RangePartitionPruner partitionPruner = new RangePartitionPruner(keyRangeById,
                 partitionInfo.getPartitionColumns(olapTable.getIdToColumn()),
                 operator.getColumnFilters(), filterPartition, olapTable.getName());
         try {
-            return partitionPruner.prune();
+            List<Long> prune = partitionPruner.prune();
+            if (!partitionPruner.isPruningPredicateCanBeEvaluated()) {
+                operator.setPruningPredicateCanBeEvaluated(false);
+            }
+            return prune;
         } catch (StarRocksPlannerException e) {
             LOG.warn("PartitionPrune Failed. ", e);
             throw e;

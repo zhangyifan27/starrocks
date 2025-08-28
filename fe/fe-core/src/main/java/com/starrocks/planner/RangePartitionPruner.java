@@ -68,6 +68,7 @@ public class RangePartitionPruner implements PartitionPruner {
     private Map<String, PartitionColumnFilter> partitionColumnFilters;
     private boolean hasPartitionFilter;
     private String tableName;
+    private boolean pruningPredicateCanBeEvaluated = true;
 
     public RangePartitionPruner(Map<Long, Range<PartitionKey>> rangeMap,
                                 List<Column> columns,
@@ -103,6 +104,7 @@ public class RangePartitionPruner implements PartitionPruner {
                 throw new StarRocksPlannerException("Full table scan sql; table : " + tableName
                         , ErrorType.FULL_TABLE_SCAN_ERROR);
             }
+            pruningPredicateCanBeEvaluated = false;
             minKey.pushColumn(LiteralExpr.createInfinity(Type.fromPrimitiveType(keyColumn.getPrimitiveType()), false),
                     keyColumn.getPrimitiveType());
             maxKey.pushColumn(LiteralExpr.createInfinity(Type.fromPrimitiveType(keyColumn.getPrimitiveType()), true),
@@ -282,5 +284,9 @@ public class RangePartitionPruner implements PartitionPruner {
             rangeMap.put(entry.getValue(), entry.getKey());
         }
         return prune(rangeMap, 0, minKey, maxKey, 1);
+    }
+
+    public boolean isPruningPredicateCanBeEvaluated() {
+        return pruningPredicateCanBeEvaluated;
     }
 }

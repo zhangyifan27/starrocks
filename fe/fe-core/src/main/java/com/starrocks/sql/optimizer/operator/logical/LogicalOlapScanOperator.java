@@ -48,6 +48,8 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
     // record if this scan is derived from SplitScanORToUnionRule
     private boolean fromSplitOR;
 
+    private boolean isPruningPredicateCanBeEvaluated = true;
+
     // Only for UT
     public LogicalOlapScanOperator(Table table) {
         this(table, Maps.newHashMap(), Maps.newHashMap(), null, Operator.DEFAULT_LIMIT, null);
@@ -153,6 +155,14 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
         return fromSplitOR;
     }
 
+    public boolean isPruningPredicateCanBeEvaluated() {
+        return isPruningPredicateCanBeEvaluated;
+    }
+
+    public void setPruningPredicateCanBeEvaluated(boolean pruningPredicateCanBeEvaluated) {
+        this.isPruningPredicateCanBeEvaluated = pruningPredicateCanBeEvaluated;
+    }
+
     @Override
     public <R, C> R accept(OperatorVisitor<R, C> visitor, C context) {
         return visitor.visitLogicalOlapScan(this, context);
@@ -210,6 +220,7 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
             builder.prunedPartitionPredicates = scanOperator.prunedPartitionPredicates;
             builder.usePkIndex = scanOperator.usePkIndex;
             builder.fromSplitOR = scanOperator.fromSplitOR;
+            builder.isPruningPredicateCanBeEvaluated = scanOperator.isPruningPredicateCanBeEvaluated;
             return this;
         }
 
@@ -269,6 +280,11 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
 
         public Builder setUsePkIndex(boolean usePkIndex) {
             builder.usePkIndex = usePkIndex;
+            return this;
+        }
+
+        public Builder setPruningPredicateCanBeEvaluated(boolean pruningPredicateCanBeEvaluated) {
+            builder.isPruningPredicateCanBeEvaluated = pruningPredicateCanBeEvaluated;
             return this;
         }
     }
