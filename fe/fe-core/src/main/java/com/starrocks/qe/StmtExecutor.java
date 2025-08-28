@@ -719,7 +719,13 @@ public class StmtExecutor {
                             }
 
                             if (context.isProfileEnabled()) {
-                                isAsync = tryProcessProfileAsync(execPlan, i);
+                                if (parsedStmt.isExplain() &&
+                                        StatementBase.ExplainLevel.NORMAL.equals(parsedStmt.getExplainLevel())) {
+                                    processProfileForNormalExplain(execPlan, i);
+                                } else {
+                                    isAsync = tryProcessProfileAsync(execPlan, i);
+                                }
+
                                 if (parsedStmt.isExplain() &&
                                         StatementBase.ExplainLevel.ANALYZE.equals(parsedStmt.getExplainLevel())) {
                                     if (coord != null && coord.isShortCircuit()) {
@@ -1062,7 +1068,7 @@ public class StmtExecutor {
             return false;
         }
 
-        recordDetialInfoInProfile(plan);
+        recordDetailInfoInProfile(plan);
 
         // This process will get information from the context, so it must be executed synchronously.
         // Otherwise, the context may be changed, for example, containing the wrong query id.
@@ -1107,23 +1113,60 @@ public class StmtExecutor {
                     coord.getQueryProgressInfo());
             QeProcessorImpl.INSTANCE.unMonitorQuery(executionId);
             QeProcessorImpl.INSTANCE.unregisterQuery(executionId);
-            if (Config.enable_collect_query_detail_info && Config.enable_profile_log) {
-                String jsonString = GSON.toJson(queryDetail);
-                if (Config.enable_profile_log_compress) {
-                    byte[] jsonBytes;
-                    try {
-                        jsonBytes = CompressionUtils.gzipCompressString(jsonString);
-                        PROFILE_LOG.info(jsonBytes);
-                    } catch (IOException e) {
-                        LOG.warn("Compress queryDetail string failed, length: {}, reason: {}",
-                                jsonString.length(), e.getMessage());
-                    }
-                } else {
-                    PROFILE_LOG.info(jsonString);
-                }
-            }
+            logProfileToProfileLog(queryDetail);
         };
         return coord.tryProcessProfileAsync(task);
+    }
+
+    private void processProfileForNormalExplain(ExecPlan plan, int retryIndex) {
+        recordDetailInfoInProfile(plan);
+
+        // This process will get information from the context, so it must be executed synchronously.
+        // Otherwise, the context may be changed, for example, containing the wrong query id.
+        profile = buildTopLevelProfile();
+
+        long profileCollectStartTime = System.currentTimeMillis();
+        long startTime = context.getStartTime();
+        QueryDetail queryDetail = context.getQueryDetail();
+
+        RuntimeProfile summaryProfile = profile.getChild("Summary");
+        summaryProfile.addInfoString(ProfileManager.PROFILE_COLLECT_TIME,
+                DebugUtil.getPrettyStringMs(System.currentTimeMillis() - profileCollectStartTime));
+
+        // Update TotalTime to include the Profile Collect Time and the time to build the profile.
+        long now = System.currentTimeMillis();
+        long totalTimeMs = now - startTime;
+        summaryProfile.addInfoString(ProfileManager.END_TIME, TimeUtils.longToTimeString(now));
+        summaryProfile.addInfoString(ProfileManager.TOTAL_TIME, DebugUtil.getPrettyStringMs(totalTimeMs));
+        if (retryIndex > 0) {
+            summaryProfile.addInfoString(ProfileManager.RETRY_TIMES, Integer.toString(retryIndex + 1));
+        }
+
+        ProfilingExecPlan profilingPlan = plan == null ? null : plan.getProfilingPlan();
+        String profileContent = ProfileManager.getInstance().pushProfile(profilingPlan, profile);
+        if (queryDetail != null) {
+            queryDetail.setProfile(profileContent);
+        }
+
+        logProfileToProfileLog(queryDetail);
+    }
+
+    private void logProfileToProfileLog(QueryDetail queryDetail) {
+        if (Config.enable_collect_query_detail_info && Config.enable_profile_log) {
+            String jsonString = GSON.toJson(queryDetail);
+            if (Config.enable_profile_log_compress) {
+                byte[] jsonBytes;
+                try {
+                    jsonBytes = CompressionUtils.gzipCompressString(jsonString);
+                    PROFILE_LOG.info(jsonBytes);
+                } catch (IOException e) {
+                    LOG.warn("Compress queryDetail string failed, length: {}, reason: {}",
+                            jsonString.length(), e.getMessage());
+                }
+            } else {
+                PROFILE_LOG.info(jsonString);
+            }
+        }
     }
 
     public void registerSubStmtExecutor(StmtExecutor subStmtExecutor) {
@@ -2989,7 +3032,7 @@ public class StmtExecutor {
                 && !(parsedStmt instanceof AdminSetConfigStmt);
     }
 
-    private void recordDetialInfoInProfile(ExecPlan execPlan) {
+    private void recordDetailInfoInProfile(ExecPlan execPlan) {
         Map<String, Object> scanDetailMap = Maps.newHashMap();
         List<Map<String, Object>> tableDetails = Lists.newArrayList();
 
@@ -3036,11 +3079,13 @@ public class StmtExecutor {
         scanDetailMap.put("IsScanAllPartitions", execPlan.getIsScanAllPartitions());
         scanDetailMap.put("IsPartitionPruningSuccess", execPlan.getIsPartitionPruningSuccess());
 
+        scanDetailMap.put("TableUseOmsStatistics", context.getAuditEventBuilder().getTableUseOmsStatistics());
+
         Tracers.record(Tracers.Module.EXTERNAL, "ScanDetail", GsonUtils.GSON.toJson(scanDetailMap));
 
         String explainString = buildExplainString(execPlan, ResourceGroupClassifier.QueryType.SELECT,
                 parsedStmt.getExplainLevel());
-        Tracers.record(Tracers.Module.EXTERNAL, "Sql Explain", "\n" + explainString);
+        Tracers.record(Tracers.Module.EXTERNAL, "Sql Explain", "\n" + explainString + '\n' + "SqlExplainEND");
     }
 
     private void addPartitionPruningInfoToAuditLog(ExecPlan execPlan) {

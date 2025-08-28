@@ -25,6 +25,7 @@ namespace starrocks::pipeline {
 Status ProjectOperator::prepare(RuntimeState* state) {
     _expr_compute_timer = ADD_TIMER(_unique_metrics, "ExprComputeTime");
     _common_sub_expr_compute_timer = ADD_TIMER(_unique_metrics, "CommonSubExprComputeTime");
+    _unique_metrics->add_info_string("ProjectExprStr", _project_expr_str);
     return Operator::prepare(state);
 }
 

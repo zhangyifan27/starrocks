@@ -117,6 +117,7 @@ public class DataStreamSink extends DataSink {
         if (outputColumnIds != null && !outputColumnIds.isEmpty()) {
             tStreamSink.setOutput_columns(outputColumnIds);
         }
+        tStreamSink.setPartition_keys(outputPartition.getPartitionKeys());
         result.setStream_sink(tStreamSink);
         return result;
     }

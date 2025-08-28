@@ -377,7 +377,8 @@ DataStreamSender::DataStreamSender(RuntimeState* state, int sender_id, const Row
           _destinations(destinations),
           _enable_exchange_pass_through(enable_exchange_pass_through),
           _enable_exchange_perf(enable_exchange_perf),
-          _output_columns(sink.output_columns) {
+          _output_columns(sink.output_columns),
+          _partition_keys(sink.partition_keys) {
     DCHECK_GT(destinations.size(), 0);
     DCHECK(sink.output_partition.type == TPartitionType::UNPARTITIONED ||
            sink.output_partition.type == TPartitionType::HASH_PARTITIONED ||

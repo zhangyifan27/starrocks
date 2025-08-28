@@ -51,7 +51,7 @@ public:
                          const int32_t num_shuffles_per_channel, int32_t sender_id, PlanNodeId dest_node_id,
                          const std::vector<ExprContext*>& partition_expr_ctxs, bool enable_exchange_pass_through,
                          bool enable_exchange_perf, FragmentContext* const fragment_ctx,
-                         const std::vector<int32_t>& output_columns);
+                         const std::vector<int32_t>& output_columns, const std::string& partition_keys);
 
     ~ExchangeSinkOperator() override = default;
 
@@ -207,6 +207,8 @@ private:
 
     const std::vector<int32_t>& _output_columns;
 
+    const std::string _partition_keys;
+
     std::unique_ptr<Shuffler> _shuffler;
 
     std::shared_ptr<serde::EncodeContext> _encode_context = nullptr;
@@ -220,7 +222,8 @@ public:
                                 bool is_pipeline_level_shuffle, int32_t num_shuffles_per_channel, int32_t sender_id,
                                 PlanNodeId dest_node_id, std::vector<ExprContext*> partition_expr_ctxs,
                                 bool enable_exchange_pass_through, bool enable_exchange_perf,
-                                FragmentContext* const fragment_ctx, std::vector<int32_t> output_columns);
+                                FragmentContext* const fragment_ctx, std::vector<int32_t> output_columns,
+                                const std::string& partition_keys);
 
     ~ExchangeSinkOperatorFactory() override = default;
 
@@ -249,6 +252,8 @@ private:
     FragmentContext* const _fragment_ctx;
 
     const std::vector<int32_t> _output_columns;
+
+    const std::string _partition_keys;
 };
 
 } // namespace pipeline

@@ -68,6 +68,7 @@ public class ProjectNode extends PlanNode {
         msg.project_node = new TProjectNode();
         slotMap.forEach((key, value) -> msg.project_node.putToSlot_map(key.asInt(), value.treeToThrift()));
         commonSlotMap.forEach((key, value) -> msg.project_node.putToCommon_slot_map(key.asInt(), value.treeToThrift()));
+        msg.project_node.setProject_expr_str(getNodeExplainString("", TExplainLevel.NORMAL).replace("\n", "\t"));
     }
 
     @Override

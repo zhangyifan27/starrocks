@@ -123,6 +123,8 @@ public:
 
     const std::vector<int32_t>& output_columns() const { return _output_columns; }
 
+    const std::string& get_partition_keys() const { return _partition_keys; }
+
 private:
     class Channel;
 
@@ -209,6 +211,8 @@ private:
 
     // Specify the columns which need to send
     std::vector<int32_t> _output_columns;
+
+    std::string _partition_keys;
 };
 
 } // namespace starrocks

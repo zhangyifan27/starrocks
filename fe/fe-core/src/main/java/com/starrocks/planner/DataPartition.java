@@ -134,4 +134,18 @@ public class DataPartition {
         str.append("\n");
         return str.toString();
     }
+
+    public String getPartitionKeys() {
+        StringBuilder str = new StringBuilder();
+        if (!partitionExprs.isEmpty()) {
+            List<String> strings = Lists.newArrayList();
+            for (Expr expr : partitionExprs) {
+                strings.add(expr.toSql());
+            }
+            str.append(Joiner.on(", ").join(strings));
+        } else {
+            str.append(type.toString());
+        }
+        return str.toString();
+    }
 }

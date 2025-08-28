@@ -512,6 +512,9 @@ RuntimeProfile* GlobalDriverExecutor::_build_merged_instance_profile(QueryContex
         new_instance_profile->add_child(merged_driver_profile, true, nullptr);
     }
 
+    auto* be_cpu_usage = ADD_PEAK_COUNTER(new_instance_profile, "BECpuUsage", TUnit::UNIT);
+    COUNTER_SET(be_cpu_usage, StarRocksMetrics::instance()->system_metrics()->get_cpu_usage());
+
     return new_instance_profile;
 }
 

@@ -25,13 +25,14 @@ public:
     ProjectOperator(OperatorFactory* factory, int32_t id, int32_t plan_node_id, int32_t driver_sequence,
                     std::vector<int32_t>& column_ids, const std::vector<ExprContext*>& expr_ctxs,
                     const std::vector<bool>& type_is_nullable, const std::vector<int32_t>& common_sub_column_ids,
-                    const std::vector<ExprContext*>& common_sub_expr_ctxs)
+                    const std::vector<ExprContext*>& common_sub_expr_ctxs, const std::string& project_expr_str)
             : Operator(factory, id, "project", plan_node_id, false, driver_sequence),
               _column_ids(column_ids),
               _expr_ctxs(expr_ctxs),
               _type_is_nullable(type_is_nullable),
               _common_sub_column_ids(common_sub_column_ids),
-              _common_sub_expr_ctxs(common_sub_expr_ctxs) {}
+              _common_sub_expr_ctxs(common_sub_expr_ctxs),
+              _project_expr_str(project_expr_str) {}
 
     ~ProjectOperator() override = default;
 
@@ -71,6 +72,8 @@ private:
 
     RuntimeProfile::Counter* _expr_compute_timer = nullptr;
     RuntimeProfile::Counter* _common_sub_expr_compute_timer = nullptr;
+
+    std::string _project_expr_str;
 };
 
 class ProjectOperatorFactory final : public OperatorFactory {
@@ -78,19 +81,22 @@ public:
     ProjectOperatorFactory(int32_t id, int32_t plan_node_id, std::vector<int32_t>&& column_ids,
                            std::vector<ExprContext*>&& expr_ctxs, std::vector<bool>&& type_is_nullable,
                            std::vector<int32_t>&& common_sub_column_ids,
-                           std::vector<ExprContext*>&& common_sub_expr_ctxs)
+                           std::vector<ExprContext*>&& common_sub_expr_ctxs,
+                           const std::string& project_expr_str = "")
             : OperatorFactory(id, "project", plan_node_id),
               _column_ids(std::move(column_ids)),
               _expr_ctxs(std::move(expr_ctxs)),
               _type_is_nullable(std::move(type_is_nullable)),
               _common_sub_column_ids(std::move(common_sub_column_ids)),
-              _common_sub_expr_ctxs(std::move(common_sub_expr_ctxs)) {}
+              _common_sub_expr_ctxs(std::move(common_sub_expr_ctxs)),
+              _project_expr_str(project_expr_str) {}
 
     ~ProjectOperatorFactory() override = default;
 
     OperatorPtr create(int32_t degree_of_parallelism, int32_t driver_sequence) override {
         return std::make_shared<ProjectOperator>(this, _id, _plan_node_id, driver_sequence, _column_ids, _expr_ctxs,
-                                                 _type_is_nullable, _common_sub_column_ids, _common_sub_expr_ctxs);
+                                                 _type_is_nullable, _common_sub_column_ids, _common_sub_expr_ctxs,
+                                                 _project_expr_str);
     }
 
     Status prepare(RuntimeState* state) override;
@@ -103,6 +109,8 @@ private:
 
     std::vector<int32_t> _common_sub_column_ids;
     std::vector<ExprContext*> _common_sub_expr_ctxs;
+
+    std::string _project_expr_str;
 };
 
 } // namespace pipeline

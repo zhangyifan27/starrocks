@@ -82,6 +82,8 @@ Status ProjectNode::init(const TPlanNode& tnode, RuntimeState* state) {
         _common_sub_expr_ctxs.emplace_back(context);
     }
 
+    _project_expr_str = tnode.project_node.project_expr_str;
+
     return Status::OK();
 }
 
@@ -293,7 +295,7 @@ pipeline::OpFactories ProjectNode::decompose_to_pipeline(pipeline::PipelineBuild
 
     operators.emplace_back(std::make_shared<ProjectOperatorFactory>(
             context->next_operator_id(), id(), std::move(_slot_ids), std::move(_expr_ctxs),
-            std::move(_type_is_nullable), std::move(_common_sub_slot_ids), std::move(_common_sub_expr_ctxs)));
+            std::move(_type_is_nullable), std::move(_common_sub_slot_ids), std::move(_common_sub_expr_ctxs), _project_expr_str));
     // Initialize OperatorFactory's fields involving runtime filters.
     this->init_runtime_filter_for_operator(operators.back().get(), context, rc_rf_probe_collector);
     if (limit() != -1) {

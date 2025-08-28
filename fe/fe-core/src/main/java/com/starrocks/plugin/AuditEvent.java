@@ -497,6 +497,10 @@ public class AuditEvent {
             return this;
         }
 
+        public String getTableUseOmsStatistics() {
+            return String.join(",", tableUseOmsStatistics);
+        }
+
         public AuditEventBuilder addTableStatisticInfo(String db, String tableName,
                                                        List<String> columnNames, List<String> partitionNames) {
             if (statistics == null) {

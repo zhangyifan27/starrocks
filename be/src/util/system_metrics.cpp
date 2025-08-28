@@ -54,6 +54,7 @@ const char* const SystemMetrics::_s_hook_name = "system_metrics";
 class CpuMetrics {
 public:
     static constexpr int cpu_num_metrics = 10;
+    static constexpr int idle_index = 3;
     std::unique_ptr<IntAtomicCounter> metrics[cpu_num_metrics] = {
             std::make_unique<IntAtomicCounter>(MetricUnit::PERCENT),
             std::make_unique<IntAtomicCounter>(MetricUnit::PERCENT),
@@ -220,9 +221,29 @@ void SystemMetrics::_update_cpu_metrics() {
            cpu, &values[0], &values[1], &values[2], &values[3], &values[4], &values[5], &values[6], &values[7],
            &values[8], &values[9]);
 
+    int64_t total_now = 0;
+    int64_t idle_now = 0;
     for (int i = 0; i < CpuMetrics::cpu_num_metrics; ++i) {
         _cpu_metrics->metrics[i]->set_value(values[i]);
+        total_now += values[i];
     }
+
+    if (CpuMetrics::idle_index < CpuMetrics::cpu_num_metrics) {
+        idle_now += values[CpuMetrics::idle_index];
+    }
+
+    if (_cpu_total && _cpu_idle) {
+        int64_t total_diff = total_now - _cpu_total;
+        int64_t idle_diff = idle_now - _cpu_idle;
+        if (total_diff <= 0) {
+            _cpu_usage = 0;
+        } else {
+            int64_t idle_rate = idle_diff * 1000 / total_diff;
+            _cpu_usage = 1000 - std::min(std::max(idle_rate, int64_t(0)), int64_t(1000));
+        }
+    }
+    _cpu_total = total_now;
+    _cpu_idle = idle_now;
 
     fclose(fp);
 }
@@ -723,6 +744,10 @@ void SystemMetrics::_update_fd_metrics() {
         PLOG(WARNING) << "getline failed";
     }
     fclose(fp);
+}
+
+int64_t SystemMetrics::get_cpu_usage() {
+    return _cpu_usage;
 }
 
 int64_t SystemMetrics::get_max_io_util(const std::map<std::string, int64_t>& lst_value, int64_t interval_sec) {

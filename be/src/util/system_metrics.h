@@ -100,6 +100,7 @@ public:
     // update metrics
     void update();
 
+    int64_t get_cpu_usage();
     void get_disks_io_time(std::map<std::string, int64_t>* map);
     int64_t get_max_io_util(const std::map<std::string, int64_t>& lst_value, int64_t interval_sec);
 
@@ -144,6 +145,9 @@ private:
     static const char* const _s_hook_name;
 
     std::unique_ptr<CpuMetrics> _cpu_metrics;
+    int64_t _cpu_total = 0;
+    int64_t _cpu_idle = 0;
+    int64_t _cpu_usage = -1;
     std::unique_ptr<MemoryMetrics> _memory_metrics;
     std::map<std::string, DiskMetrics*> _disk_metrics;
     std::map<std::string, NetMetrics*> _net_metrics;
