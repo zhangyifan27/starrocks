@@ -19,6 +19,7 @@ import com.google.common.collect.Maps;
 import com.starrocks.analysis.RoutineLoadDataSourceProperties;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
+import org.apache.pulsar.client.api.MessageId;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -76,4 +77,49 @@ public class AlterRoutineLoadOperationLogTest {
         in.close();
     }
 
+    @Test
+    public void testSerialzeAlterPulsarInfo() throws IOException, AnalysisException {
+        // 1. Write objects to file
+        File file = new File(fileName);
+        file.createNewFile();
+        file.deleteOnExit();
+        DataOutputStream out = new DataOutputStream(new FileOutputStream(file));
+
+        long jobId = 1000;
+        Map<String, String> jobProperties = Maps.newHashMap();
+        jobProperties.put(CreateRoutineLoadStmt.DESIRED_CONCURRENT_NUMBER_PROPERTY, "5");
+
+        String typeName = "pulsar";
+        Map<String, String> dataSourceProperties = Maps.newHashMap();
+        dataSourceProperties.put(CreateRoutineLoadStmt.PULSAR_PARTITIONS_PROPERTY,
+                "persistent://public/default/topic-partition-0, persistent://public/default/topic-partition-1");
+        dataSourceProperties.put(CreateRoutineLoadStmt.PULSAR_INITIAL_POSITIONS_PROPERTY,
+                "POSITION_EARLIEST, POSITION_LATEST");
+        RoutineLoadDataSourceProperties routineLoadDataSourceProperties = new RoutineLoadDataSourceProperties(typeName,
+                dataSourceProperties);
+        routineLoadDataSourceProperties.analyze();
+
+        AlterRoutineLoadJobOperationLog log = new AlterRoutineLoadJobOperationLog(jobId,
+                jobProperties, routineLoadDataSourceProperties, null);
+        log.write(out);
+        out.flush();
+        out.close();
+
+        // 2. Read objects from file
+        DataInputStream in = new DataInputStream(new FileInputStream(file));
+
+        AlterRoutineLoadJobOperationLog log2 = AlterRoutineLoadJobOperationLog.read(in);
+        Assert.assertEquals(1, log2.getJobProperties().size());
+        Assert.assertEquals("5", log2.getJobProperties().get(CreateRoutineLoadStmt.DESIRED_CONCURRENT_NUMBER_PROPERTY));
+        Assert.assertEquals(routineLoadDataSourceProperties.getPulsarPartitionInitialPositions().get(0).first,
+                log2.getDataSourceProperties().getPulsarPartitionInitialPositions().get(0).first);
+        Assert.assertEquals(MessageId.earliest,
+                log2.getDataSourceProperties().getPulsarPartitionInitialPositions().get(0).second);
+        Assert.assertEquals(routineLoadDataSourceProperties.getPulsarPartitionInitialPositions().get(1).first,
+                log2.getDataSourceProperties().getPulsarPartitionInitialPositions().get(1).first);
+        Assert.assertEquals(MessageId.latest,
+                log2.getDataSourceProperties().getPulsarPartitionInitialPositions().get(1).second);
+
+        in.close();
+    }
 }

@@ -43,15 +43,18 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Pair;
 import com.starrocks.load.routineload.IcebergCreateRoutineLoadStmtConfig;
 import com.starrocks.load.routineload.LoadDataSourceType;
+import com.starrocks.persist.gson.GsonPostProcessable;
+import com.starrocks.persist.gson.GsonPreProcessable;
 import com.starrocks.sql.ast.CreateRoutineLoadStmt;
 import com.starrocks.sql.parser.NodePosition;
 import org.apache.pulsar.client.api.MessageId;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-public class RoutineLoadDataSourceProperties implements ParseNode {
+public class RoutineLoadDataSourceProperties implements ParseNode, GsonPreProcessable, GsonPostProcessable {
 
     private static final ImmutableSet<String> CONFIGURABLE_KAFKA_PROPERTIES_SET = new ImmutableSet.Builder<String>()
             .add(CreateRoutineLoadStmt.KAFKA_PARTITIONS_PROPERTY)
@@ -81,8 +84,9 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
 
     @SerializedName(value = "pulsarSubscription")
     private String pulsarSubscription;
-    @SerializedName(value = "pulsarPartitionInitialPositions")
     private List<Pair<String, MessageId>> pulsarPartitionInitialPositions = Lists.newArrayList();
+    @SerializedName(value = "pulsarPartitionToInitialPositionsBytes")
+    private List<Pair<String, byte[]>> pulsarPartitionToInitialPositionsBytes;
     @SerializedName(value = "customPulsarProperties")
     private Map<String, String> customPulsarProperties = Maps.newHashMap();
     @SerializedName(value = "customIcebergProperties")
@@ -284,6 +288,25 @@ public class RoutineLoadDataSourceProperties implements ParseNode {
             sb.append(", custom properties: ").append(customIcebergProperties);
         }
         return sb.toString();
+    }
+
+    @Override
+    public void gsonPreProcess() throws IOException {
+        pulsarPartitionToInitialPositionsBytes = Lists.newArrayList();
+        for (Pair<String, MessageId> entry : pulsarPartitionInitialPositions) {
+            pulsarPartitionToInitialPositionsBytes.add(Pair.create(entry.first, entry.second.toByteArray()));
+        }
+    }
+
+    @Override
+    public void gsonPostProcess() throws IOException {
+        if (pulsarPartitionToInitialPositionsBytes != null) {
+            pulsarPartitionInitialPositions = Lists.newArrayList();
+            for (Pair<String, byte[]> entry : pulsarPartitionToInitialPositionsBytes) {
+                pulsarPartitionInitialPositions.add(
+                        Pair.create(entry.first, MessageId.fromByteArray(entry.second)));
+            }
+        }
     }
 
     @Override
