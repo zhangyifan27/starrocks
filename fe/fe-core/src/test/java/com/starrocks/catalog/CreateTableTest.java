@@ -2254,7 +2254,7 @@ public class CreateTableTest {
         try {
             ExceptionChecker.expectThrowsWithMsg(DdlException.class,
                     "Reached the limit of table count in database 10001, " +
-                    "please try to increace the 'max_table_count_limit_per_db' configuration in the frontend.Current limit: 0",
+                    "please try to increase the 'max_table_count_limit_per_db' configuration in the frontend.Current limit: 0",
                     () -> createTable(
                             "CREATE TABLE test.test_max_table_num_limit_check (\n" +
                                     "                    `k1`  date not null, `k2`  datetime,`k3`  char(20), " +
@@ -2270,6 +2270,59 @@ public class CreateTableTest {
                     ));
         } finally {
             Config.max_table_count_limit_per_db = originValue;
+        }
+    }
+
+    @Test
+    public void testCreateTableWithMaxTabletCountLimitCheck() throws Exception {
+        long originValue = Config.max_tablet_count_limit;
+        Config.max_tablet_count_limit = 0;
+        try {
+            ExceptionChecker.expectThrowsWithMsg(DdlException.class,
+                    "Reached the limit of tablet in cluster, " +
+                            "please try to delete some tables or increase the 'max_tablet_count_limit' configuration in the " +
+                            "frontend. Current limit: 0, current tablet count: 0",
+                    () -> createTable(
+                            "CREATE TABLE test.test_max_tablet_count_limit_check (\n" +
+                                    "                    `k1`  date not null, `k2`  datetime,`k3`  char(20), " +
+                                    "`k4`  varchar(20), `k5`  boolean, `k6`  tinyint, `k7`  smallint, `k8`  int, " +
+                                    "`k9`  bigint, `k10` largeint, `k11` float, `k12` double, `k13` decimal(27,9)\n" +
+                                    "                )\n" +
+                                    "                DUPLICATE KEY(k1)\n" +
+                                    "                PARTITION BY LIST (k1) (\n" +
+                                    "                   PARTITION p1 VALUES IN (\"2020-01-01\",\"2020-01-02\"),\n" +
+                                    "                   PARTITION p2 VALUES IN (\"2021-01-01\")\n" +
+                                    "                )\n" +
+                                    "                DISTRIBUTED BY HASH(k1);"
+                    ));
+        } finally {
+            Config.max_tablet_count_limit = originValue;
+        }
+    }
+
+    @Test
+    public void testCreateTableWithMaxStorageUsageCheck() throws Exception {
+        double originValue = Config.max_storage_usage;
+        Config.max_storage_usage = 0;
+        try {
+            ExceptionChecker.expectThrowsWithMsg(DdlException.class,
+                    "Reached the maximum storage usage in cluster, " +
+                            "please try to drop some data or add backends, Current limit: 0.0",
+                    () -> createTable(
+                            "CREATE TABLE test.test_max_storage_usage_check (\n" +
+                                    "                    `k1`  date not null, `k2`  datetime,`k3`  char(20), " +
+                                    "`k4`  varchar(20), `k5`  boolean, `k6`  tinyint, `k7`  smallint, `k8`  int, " +
+                                    "`k9`  bigint, `k10` largeint, `k11` float, `k12` double, `k13` decimal(27,9)\n" +
+                                    "                )\n" +
+                                    "                DUPLICATE KEY(k1)\n" +
+                                    "                PARTITION BY LIST (k1) (\n" +
+                                    "                   PARTITION p1 VALUES IN (\"2020-01-01\",\"2020-01-02\"),\n" +
+                                    "                   PARTITION p2 VALUES IN (\"2021-01-01\")\n" +
+                                    "                )\n" +
+                                    "                DISTRIBUTED BY HASH(k1);"
+                    ));
+        } finally {
+            Config.max_storage_usage = originValue;
         }
     }
 }

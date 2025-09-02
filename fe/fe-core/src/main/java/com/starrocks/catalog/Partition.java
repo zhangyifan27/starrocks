@@ -52,6 +52,7 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 
@@ -81,7 +82,7 @@ public class Partition extends MetaObject implements PhysicalPartition, GsonPost
     @SerializedName(value = "state")
     private PartitionState state;
     @SerializedName(value = "idToSubPartition")
-    private Map<Long, PhysicalPartitionImpl> idToSubPartition = Maps.newHashMap();
+    private Map<Long, PhysicalPartitionImpl> idToSubPartition = new ConcurrentHashMap<>();
     private Map<String, PhysicalPartitionImpl> nameToSubPartition = Maps.newTreeMap(String.CASE_INSENSITIVE_ORDER);
 
     @SerializedName(value = "distributionInfo")
@@ -101,7 +102,7 @@ public class Partition extends MetaObject implements PhysicalPartition, GsonPost
      * User can do query on them, show them in related 'show' stmt.
      */
     @SerializedName(value = "idToVisibleRollupIndex")
-    private Map<Long, MaterializedIndex> idToVisibleRollupIndex = Maps.newHashMap();
+    private Map<Long, MaterializedIndex> idToVisibleRollupIndex = new ConcurrentHashMap<>();
     /**
      * Shadow indexes are indexes which are not visible to user.
      * Query will not run on these shadow indexes, and user can not see them neither.

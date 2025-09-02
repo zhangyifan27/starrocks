@@ -151,6 +151,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -219,7 +220,7 @@ public class OlapTable extends Table {
     protected PartitionInfo partitionInfo;
 
     @SerializedName(value = "idToPartition")
-    protected Map<Long, Partition> idToPartition = new HashMap<>();
+    protected Map<Long, Partition> idToPartition = new ConcurrentHashMap<>();
     protected Map<String, Partition> nameToPartition = Maps.newTreeMap(String.CASE_INSENSITIVE_ORDER);
 
     protected Map<Long, Long> physicalPartitionIdToPartitionId = new HashMap<>();

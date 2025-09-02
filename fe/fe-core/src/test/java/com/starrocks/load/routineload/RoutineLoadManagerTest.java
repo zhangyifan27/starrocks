@@ -39,10 +39,18 @@ import com.google.common.collect.Maps;
 import com.starrocks.analysis.LabelName;
 import com.starrocks.analysis.ParseNode;
 import com.starrocks.analysis.TableName;
+import com.starrocks.catalog.Column;
+import com.starrocks.catalog.DataProperty;
 import com.starrocks.catalog.Database;
+import com.starrocks.catalog.KeysType;
+import com.starrocks.catalog.MaterializedView;
+import com.starrocks.catalog.PartitionInfo;
+import com.starrocks.catalog.RandomDistributionInfo;
+import com.starrocks.catalog.SinglePartitionInfo;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
+import com.starrocks.common.ExceptionChecker;
 import com.starrocks.common.InternalErrorCode;
 import com.starrocks.common.LoadException;
 import com.starrocks.common.MetaNotFoundException;
@@ -69,6 +77,7 @@ import com.starrocks.thrift.TKafkaRLTaskProgress;
 import com.starrocks.thrift.TLoadSourceType;
 import com.starrocks.thrift.TRLTaskTxnCommitAttachment;
 import com.starrocks.thrift.TResourceInfo;
+import com.starrocks.thrift.TTabletType;
 import com.starrocks.thrift.TUniqueId;
 import com.starrocks.transaction.InsertTxnCommitAttachment;
 import com.starrocks.transaction.TxnCommitAttachment;
@@ -90,6 +99,7 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -128,8 +138,7 @@ public class RoutineLoadManagerTest {
 
     @Test
     public void testAddJobByStmt(@Injectable TResourceInfo tResourceInfo,
-                                 @Mocked ConnectContext connectContext,
-                                 @Mocked GlobalStateMgr globalStateMgr) throws UserException {
+                                 @Mocked ConnectContext connectContext) throws UserException {
         String jobName = "job1";
         String dbName = "db1";
         LabelName labelName = new LabelName(dbName, jobName);
@@ -186,13 +195,28 @@ public class RoutineLoadManagerTest {
 
     @Test
     public void testCreateJobAuthDeny(@Injectable TResourceInfo tResourceInfo,
-                                      @Mocked ConnectContext connectContext,
-                                      @Mocked GlobalStateMgr globalStateMgr) {
+                                      @Mocked ConnectContext connectContext) throws Exception {
         String jobName = "job1";
         String dbName = "db1";
+        GlobalStateMgr.getCurrentState().getLocalMetastore().createDb(dbName);
+        Database database = GlobalStateMgr.getCurrentState().getLocalMetastore().getDb(dbName);
         LabelName labelName = new LabelName(dbName, jobName);
         String tableNameString = "table1";
-        TableName tableName = new TableName(dbName, tableNameString);
+
+        List<Column> baseSchema = new LinkedList<Column>();
+        RandomDistributionInfo distributionInfo = new RandomDistributionInfo(10);
+        PartitionInfo partitionInfo = new SinglePartitionInfo();
+        partitionInfo.setDataProperty(1, DataProperty.DEFAULT_DATA_PROPERTY);
+        partitionInfo.setReplicationNum(1, (short) 3);
+        partitionInfo.setIsInMemory(1, false);
+        partitionInfo.setTabletType(1, TTabletType.TABLET_TYPE_DISK);
+        MaterializedView.MvRefreshScheme refreshScheme = new MaterializedView.MvRefreshScheme();
+        MaterializedView mv = new MaterializedView(1000, 100, tableNameString, baseSchema, KeysType.AGG_KEYS,
+                partitionInfo, distributionInfo, refreshScheme);
+
+        // create
+        database.registerTableUnlocked(mv);
+
         List<ParseNode> loadPropertyList = new ArrayList<>();
         ColumnSeparator columnSeparator = new ColumnSeparator(",");
         loadPropertyList.add(columnSeparator);
@@ -207,6 +231,7 @@ public class RoutineLoadManagerTest {
         CreateRoutineLoadStmt createRoutineLoadStmt = new CreateRoutineLoadStmt(labelName, tableNameString,
                 loadPropertyList, properties,
                 typeName, customProperties, null);
+        createRoutineLoadStmt.setDBName(dbName);
         createRoutineLoadStmt.setOrigStmt(new OriginStatement("dummy", 0));
 
         RoutineLoadMgr routineLoadManager = new RoutineLoadMgr();
@@ -1159,5 +1184,65 @@ public class RoutineLoadManagerTest {
         Assert.assertTrue(taskExist);
         boolean taskNotExist = routineLoadMgr.checkTaskInJob(-1L, routineLoadTaskInfo.getId());
         Assert.assertFalse(taskNotExist);
+    }
+
+    @Test
+    public void testCreateRoutineLoadWithCheck() throws UserException {
+        String jobName = "job1";
+        String dbName = "db1";
+        LabelName labelName = new LabelName(dbName, jobName);
+        String tableNameString = "table1";
+        List<ParseNode> loadPropertyList = new ArrayList<>();
+        ColumnSeparator columnSeparator = new ColumnSeparator(",");
+        loadPropertyList.add(columnSeparator);
+        Map<String, String> properties = Maps.newHashMap();
+        properties.put(CreateRoutineLoadStmt.DESIRED_CONCURRENT_NUMBER_PROPERTY, "2");
+        String typeName = LoadDataSourceType.KAFKA.name();
+        Map<String, String> customProperties = Maps.newHashMap();
+        String topicName = "topic1";
+        customProperties.put(CreateRoutineLoadStmt.KAFKA_TOPIC_PROPERTY, topicName);
+        String serverAddress = "http://127.0.0.1:8080";
+        customProperties.put(CreateRoutineLoadStmt.KAFKA_BROKER_LIST_PROPERTY, serverAddress);
+        CreateRoutineLoadStmt createRoutineLoadStmt = new CreateRoutineLoadStmt(labelName, tableNameString,
+                loadPropertyList, properties,
+                typeName, customProperties, null);
+        createRoutineLoadStmt.setOrigStmt(new OriginStatement("dummy", 0));
+
+        KafkaRoutineLoadJob kafkaRoutineLoadJob = new KafkaRoutineLoadJob(1L, jobName, 1L, 1L,
+                serverAddress, topicName);
+
+        new MockUp<KafkaRoutineLoadJob>() {
+            @Mock
+            public KafkaRoutineLoadJob fromCreateStmt(CreateRoutineLoadStmt stmt) {
+                return kafkaRoutineLoadJob;
+            }
+        };
+
+        RoutineLoadMgr routineLoadManager = new RoutineLoadMgr();
+        double originValue = Config.max_storage_usage;
+        Config.max_storage_usage = 0;
+        try {
+            ExceptionChecker.expectThrowsWithMsg(
+                    DdlException.class,
+                    "Reached the maximum storage usage in cluster, please try to drop some data or add backends, " +
+                            "Current limit: 0.0",
+                    () -> routineLoadManager.createRoutineLoadJob(createRoutineLoadStmt)
+            );
+        } finally {
+            Config.max_storage_usage = originValue;
+        }
+
+        int originValue2 = Config.max_concurrent_routine_load_tasks;
+        Config.max_concurrent_routine_load_tasks = 0;
+        try {
+            ExceptionChecker.expectThrowsWithMsg(
+                    DdlException.class,
+                    "Reached the limit of tablet in cluster, please try to add backends or increace the " +
+                            "'max_concurrent_routine_load_tasks' configuration in the frontend. Current limit: 0",
+                    () -> routineLoadManager.createRoutineLoadJob(createRoutineLoadStmt)
+            );
+        } finally {
+            Config.max_concurrent_routine_load_tasks = originValue2;
+        }
     }
 }

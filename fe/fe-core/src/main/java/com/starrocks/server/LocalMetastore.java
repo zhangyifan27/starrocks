@@ -397,6 +397,7 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
 
     @Override
     public void createDb(String dbName, Map<String, String> properties) throws DdlException, AlreadyExistsException {
+        checkDatabaseCountLimit();
         long id = 0L;
         if (!tryLock(false)) {
             throw new DdlException("Failed to acquire globalStateMgr lock. Try again");
@@ -422,6 +423,15 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
             unlock();
         }
         LOG.info("createDb dbName = " + dbName + ", id = " + id);
+    }
+
+    protected void checkDatabaseCountLimit() throws DdlException {
+        if (idToDb.size() >= Config.max_database_count_limit) {
+            throw new DdlException(
+                    "Reached the limit of database count in cluster, Current count: " + idToDb.size() + ", " +
+                            "please try to increase the 'max_database_count_limit' configuration in the frontend. " +
+                            "Current limit: " + Config.max_database_count_limit);
+        }
     }
 
     // For replay edit log, needn't lock metadata
@@ -848,6 +858,7 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
             GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().checkClusterCapacity();
             // check db quota
             db.checkQuota();
+            checkSystemQuota(db);
         }
 
         AbstractTableFactory tableFactory = TableFactoryProvider.getFactory(stmt.getEngineName());
@@ -871,6 +882,20 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
             grantUserPermissionsWithTable(stmt.getCatalogName(), stmt.getDbName(), stmt.getTableName());
         }
         return true;
+    }
+
+    private void checkSystemQuota(Database db) throws DdlException {
+        if (db.isSystemDatabase() || db.isStatisticsDatabase()) {
+            return;
+        }
+        //check if reached the limit of tables in this db
+        if (db.getTables().size() >= Config.max_table_count_limit_per_db) {
+            throw new DdlException("Reached the limit of table count in database " + db.getId() + ", " +
+                    "please try to increase the 'max_table_count_limit_per_db' configuration in the frontend."
+                    + "Current limit: " + Config.max_table_count_limit_per_db);
+        }
+        GlobalStateMgr.getCurrentState().getSystemStatistics().checkTabletExceedLimit();
+        GlobalStateMgr.getCurrentState().getSystemStatistics().checkStorageUsageExceedLimit();
     }
 
     private void grantUserPermissionsWithTable(String catalog, String dbName, String tableName) throws DdlException {
@@ -3129,6 +3154,7 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().checkClusterCapacity();
         // check db quota
         db.checkQuota();
+        checkSystemQuota(db);
 
         Locker locker = new Locker();
         if (!locker.lockAndCheckExist(db, LockType.WRITE)) {
@@ -3179,6 +3205,7 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         if (db == null) {
             ErrorReport.reportDdlException(ErrorCode.ERR_BAD_DB_ERROR, dbName);
         }
+        checkSystemQuota(db);
 
         // check if table exists in db
         Locker locker = new Locker();

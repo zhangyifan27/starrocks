@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -67,7 +68,7 @@ public class PhysicalPartitionImpl extends MetaObject implements PhysicalPartiti
      * User can do query on them, show them in related 'show' stmt.
      */
     @SerializedName(value = "idToVisibleRollupIndex")
-    private Map<Long, MaterializedIndex> idToVisibleRollupIndex = Maps.newHashMap();
+    private Map<Long, MaterializedIndex> idToVisibleRollupIndex = new ConcurrentHashMap<>();
     /**
      * Shadow indexes are indexes which are not visible to user.
      * Query will not run on these shadow indexes, and user can not see them neither.

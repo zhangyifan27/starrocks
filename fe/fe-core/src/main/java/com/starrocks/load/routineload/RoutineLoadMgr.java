@@ -276,6 +276,8 @@ public class RoutineLoadMgr implements Writable, MemoryTrackable {
     }
 
     public void createRoutineLoadJob(CreateRoutineLoadStmt createRoutineLoadStmt) throws UserException {
+        GlobalStateMgr.getCurrentState().getSystemStatistics().checkStorageUsageExceedLimit();
+        GlobalStateMgr.getCurrentState().getSystemStatistics().checkRoutineLoadTotalConcurrencyExceedLimit();
         RoutineLoadJob routineLoadJob = null;
         LoadDataSourceType type = LoadDataSourceType.valueOf(createRoutineLoadStmt.getTypeName());
         switch (type) {

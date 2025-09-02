@@ -51,6 +51,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 // This class saved all temp partitions of a table.
 // temp partition is used to implement the overwrite load.
@@ -59,7 +60,7 @@ import java.util.Set;
 // to make an overwrite load.
 public class TempPartitions implements Writable, GsonPostProcessable {
     @SerializedName(value = "idToPartition")
-    private Map<Long, Partition> idToPartition = Maps.newHashMap();
+    private Map<Long, Partition> idToPartition = new ConcurrentHashMap<>();
     private Map<String, Partition> nameToPartition = Maps.newHashMap();
     @Deprecated
     // the range info of temp partitions has been moved to "partitionInfo" in OlapTable.

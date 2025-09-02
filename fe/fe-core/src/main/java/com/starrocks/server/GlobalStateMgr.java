@@ -521,6 +521,7 @@ public class GlobalStateMgr {
 
     private final DataCacheSelectExecutor dataCacheSelectExecutor;
     private final QueryMemoryRecorder queryMemoryRecorder;
+    private final SystemStatistics systemStatistics;
 
     public NodeMgr getNodeMgr() {
         return nodeMgr;
@@ -769,6 +770,7 @@ public class GlobalStateMgr {
 
         this.gtidGenerator = new GtidGenerator();
         this.globalConstraintManager = new GlobalConstraintManager();
+        this.systemStatistics = new SystemStatistics();
 
         GlobalStateMgr gsm = this;
         this.execution = new StateChangeExecution() {
@@ -1080,6 +1082,10 @@ public class GlobalStateMgr {
 
     public GlobalConstraintManager getGlobalConstraintManager() {
         return globalConstraintManager;
+    }
+
+    public SystemStatistics getSystemStatistics() {
+        return systemStatistics;
     }
 
     // Use tryLock to avoid potential deadlock
@@ -1428,6 +1434,7 @@ public class GlobalStateMgr {
         mvActiveChecker.start();
 
         editLogProcessor.start();
+        systemStatistics.start();
 
         // start daemon thread to report the progress of RunningTaskRun to the follower by editlog
         taskRunStateSynchronizer = new TaskRunStateSynchronizer();

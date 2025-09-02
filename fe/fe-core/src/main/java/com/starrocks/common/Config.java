@@ -3575,4 +3575,33 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = false)
     public static int max_profile_event_queue_size = 20000;
+
+    @ConfField
+    public static int system_statistics_checker_interval_seconds = 60;
+
+    /**
+     *  The maximum number of tablet in a cluster, exceeding this limit will result in table creation failure
+     */
+    @ConfField(mutable = true)
+    public static long max_tablet_count_limit = Long.MAX_VALUE;
+
+    /**
+     *  The maximum number of database in a cluster, exceeding this limit will result in database creation failure
+     */
+    @ConfField(mutable = true)
+    public static int max_database_count_limit = Integer.MAX_VALUE;
+
+    /**
+     *  The maximum number of total concurrent routine load task in a cluster,
+     *  exceeding this limit will result in routine load creation failure
+     */
+    @ConfField(mutable = true)
+    public static int max_concurrent_routine_load_tasks = Integer.MAX_VALUE;
+
+    /**
+     *  The maximum storage usage in a cluster,
+     *  exceeding this limit will result in table creation failure and routine load creation failure
+     */
+    @ConfField(mutable = true)
+    public static double max_storage_usage = 1.0;
 }
