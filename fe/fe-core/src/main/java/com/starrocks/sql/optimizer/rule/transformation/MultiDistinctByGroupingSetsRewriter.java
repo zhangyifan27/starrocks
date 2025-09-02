@@ -26,6 +26,7 @@ import com.starrocks.sql.optimizer.base.ColumnRefFactory;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.operator.AggType;
 import com.starrocks.sql.optimizer.operator.logical.LogicalAggregationOperator;
+import com.starrocks.sql.optimizer.operator.logical.LogicalFilterOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalOlapScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalProjectOperator;
@@ -368,11 +369,23 @@ public class MultiDistinctByGroupingSetsRewriter {
             aggregations.put(newColumn, newCall);
             finalColumnRefMap.put(column, newColumn);
         }
-        LogicalAggregationOperator finalAggr =
-                new LogicalAggregationOperator(AggType.GLOBAL, aggregate.getGroupingKeys(), aggregations);
+        LogicalAggregationOperator finalAggr = new LogicalAggregationOperator(AggType.GLOBAL,
+                aggregate.getGroupingKeys(),
+                aggregate.getPartitionByColumns(),
+                aggregations,
+                aggregate.isSplit(),
+                aggregate.getLimit(),
+                null);
         OptExpression aggregateOpt = OptExpression.create(finalAggr, Lists.newArrayList(input));
         // return project mapping with parent node
-        return OptExpression.create(new LogicalProjectOperator(finalColumnRefMap), Lists.newArrayList(aggregateOpt));
+        OptExpression projectOpt =
+                OptExpression.create(new LogicalProjectOperator(finalColumnRefMap), Lists.newArrayList(aggregateOpt));
+        if (aggregate.getPredicate() == null) {
+            return projectOpt;
+        }
+        // return with filter predicate with mapping project
+        LogicalFilterOperator filter = new LogicalFilterOperator(aggregate.getPredicate());
+        return OptExpression.create(filter, Lists.newArrayList(projectOpt));
     }
 
     private boolean enableTableScans(OptExpression tree, OptimizerContext context) {

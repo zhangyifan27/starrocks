@@ -636,5 +636,25 @@ public class RewriteMultiDistinctPlanTest extends PlanTestBase {
                         "  |  <slot 7> : if(5: country = 'china', 3: uin, NULL)\n" +
                         "  |  <slot 14> : clone(2: feed_id)");
     }
+
+    @Test
+    public void testMultiDistinctUserCase6() throws Exception {
+        String sql = "select * from\n" +
+                "(SELECT *, gang_punish_cnt / gang_live_cnt as gang_punish_rate from\n" +
+                "(SELECT COUNT(DISTINCT sal) as gang_live_cnt , COUNT(DISTINCT gender) as gang_punish_cnt, avg(DISTINCT sal)\n" +
+                "FROM emps \n" +
+                "group by deptno) a\n" +
+                "where gang_live_cnt >= 5\n" +
+                ") b \n" +
+                "where gang_punish_rate >= 0.5;";
+        String plan = getFragmentPlan(sql);
+        assertContains(plan,
+                "  8:AGGREGATE (merge finalize)\n" +
+                        "  |  output: count(14: count), count(15: count), avg(16: avg)\n" +
+                        "  |  group by: 2: deptno\n" +
+                        "  |  having: CAST(15: count AS DOUBLE) / CAST(14: count AS DOUBLE) >= 0.5, 14: count >= 5",
+                "  1:REPEAT_NODE\n" +
+                        "  |  repeat: repeat 1 lines [[2, 3], [2, 4]]");
+    }
 }
 
