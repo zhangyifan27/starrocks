@@ -16,6 +16,7 @@
 
 #include <utility>
 
+#include "common/config.h"
 #include "exec/exec_node.h"
 #include "exec/iceberg/iceberg_delete_builder.h"
 #include "exec/paimon/paimon_delete_file_builder.h"
@@ -463,6 +464,12 @@ Status HdfsOrcScanner::build_split_tasks(orc::Reader* reader, const std::vector<
 Status HdfsOrcScanner::do_open(RuntimeState* runtime_state) {
     // create wrapped input stream.
     RETURN_IF_ERROR(open_random_access_file());
+    auto datacache_options = _scanner_params.datacache_options;
+    if (config::orc_shared_buffer_mem_tracker_enable) {
+        if (datacache_options.enable_datacache && datacache_options.enable_datacache_async_populate_mode) {
+            _shared_buffered_input_stream->set_mem_tracker(_runtime_state->instance_mem_tracker_ptr());
+        }
+    }
     if (_input_stream == nullptr) {
         _input_stream = std::make_unique<ORCHdfsFileStream>(_file.get(), _file->get_size().value(),
                                                             _shared_buffered_input_stream.get());

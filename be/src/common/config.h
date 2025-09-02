@@ -907,6 +907,8 @@ CONF_Bool(enable_orc_late_materialization, "true");
 CONF_Bool(enable_orc_libdeflate_decompression, "true");
 CONF_Int32(orc_natural_read_size, "8388608");
 CONF_mBool(orc_coalesce_read_enable, "true");
+// used for track memory usage when shared buffer is released in starcache
+CONF_mBool(orc_shared_buffer_mem_tracker_enable, "true");
 // For orc tiny stripe optimization
 // Default is 8MB for tiny stripe threshold size
 CONF_Int32(orc_tiny_stripe_threshold_size, "8388608");

@@ -20,7 +20,8 @@
 
 #include "common/status.h"
 #include "io/seekable_input_stream.h"
-
+#include "runtime/current_thread.h"
+#include "runtime/mem_tracker.h"
 namespace starrocks::io {
 
 class SharedBufferedInputStream : public SeekableInputStream {
@@ -52,6 +53,19 @@ public:
     };
     using SharedBufferPtr = std::shared_ptr<SharedBuffer>;
 
+    struct SharedBufferMemTrackerDeleter {
+        SharedBufferMemTrackerDeleter(std::shared_ptr<MemTracker> tracker_) : tracker(std::move(tracker_)) {}
+        std::shared_ptr<MemTracker> tracker{nullptr};
+        template <typename T>
+        void operator()(T* ptr) {
+            auto mem_tracker = tracker ? tracker.get() : CurrentThread::mem_tracker();
+            SCOPED_THREAD_LOCAL_MEM_TRACKER_SETTER(mem_tracker);
+            if (ptr) {
+                delete ptr;
+            }
+        }
+    };
+
     SharedBufferedInputStream(std::shared_ptr<SeekableInputStream> stream, std::string filename, size_t file_size);
     ~SharedBufferedInputStream() override = default;
 
@@ -81,6 +95,7 @@ public:
     void release_to_offset(int64_t offset);
     void release();
     void set_coalesce_options(const CoalesceOptions& options) { _options = options; }
+    void set_mem_tracker(std::shared_ptr<MemTracker> tracker) { _mem_tracker = std::move(tracker); }
     void set_align_size(int64_t size) { _align_size = size; }
 
     int64_t shared_io_count() const { return _shared_io_count; }
@@ -99,6 +114,11 @@ public:
     bool is_cache_hit() const override { return false; }
     StatusOr<std::string_view> peek_shared_buffer(int64_t count, SharedBufferPtr* shared_buffer);
 
+    // only used for test
+    MemTracker* mem_tracker() const { return _mem_tracker.get(); }
+    std::shared_ptr<MemTracker> mem_tracker_ptr() const { return _mem_tracker; }
+    SeekableInputStream* stream() const { return _stream.get(); }
+
 private:
     void _update_estimated_mem_usage();
     Status _sort_and_check_overlap(std::vector<IORange>& ranges);
@@ -109,6 +129,7 @@ private:
     const std::string _filename;
     std::map<int64_t, SharedBufferPtr> _map;
     CoalesceOptions _options;
+    std::shared_ptr<MemTracker> _mem_tracker{nullptr};
     int64_t _offset = 0;
     int64_t _file_size = 0;
     int64_t _shared_io_count = 0;

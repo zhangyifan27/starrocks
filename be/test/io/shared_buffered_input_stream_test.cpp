@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "io_test_base.h"
+#include "shared_buffered_input_stream_test_base.h"
 #include "testutil/assert.h"
 #include "testutil/parallel_test.h"
 
@@ -177,6 +178,87 @@ TEST_F(SharedBufferedInputStreamTest, test_orc) {
             "SharedBuffer raw_offset=22420223, raw_size=197, offset=22282240, size=262144, ref_count=2, "
             "buffer_capacity=0",
             sb.value()->debug_string());
+}
+
+TEST_F(SharedBufferedInputStreamTest, test_orc_mem_tracker) {
+    size_t len = 100 * 1024 * 1024; // 1MB
+    const std::string rand_string = random_string(len);
+    auto in = std::make_shared<TestInputStream>(rand_string, len);
+
+    std::shared_ptr<MemTracker> tracker = std::make_shared<MemTracker>();
+    SCOPED_THREAD_LOCAL_MEM_TRACKER_SETTER(tracker.get());
+    auto mock_cache = MockBlockCache::instance();
+
+    //1. with MemTrackerDeleter
+    auto sb_stream = std::make_shared<MockSharedBufferedInputStream>(in, "test", len);
+    sb_stream->set_mem_tracker(tracker);
+    sb_stream->set_mock_align_size(4 * 1024 * 1024); // 4mb
+
+    auto cache_stream = std::make_shared<MockCacheInputStream>(sb_stream, "test", len, 0);
+    std::vector<io::SharedBufferedInputStream::IORange> ranges;
+
+    {
+        ranges.emplace_back(3, 4 * 1024 * 1024, false);
+        ranges.emplace_back(22417540, 22417878 + 35 - 22417540, false);
+    }
+
+    { ranges.emplace_back(22211037, 22417540 - 22211037, true); }
+
+    auto st = sb_stream->mock_set_io_ranges(ranges, false);
+    ASSERT_TRUE(st.ok());
+
+    auto sb = sb_stream->mock_find_shared_buffer(1746, 1978 - 1746);
+    sb = nullptr;
+    char p[4 * 1024 * 1024];
+
+    // sharedbuffer allocated in cache_stream->read_at_fully before
+    st = cache_stream->read_at_fully(3, p, 4 * 1024 * 1024);
+    ASSERT_TRUE(st.ok());
+    ASSERT_NE(0, tracker->consumption());
+
+    // stream released, but sb stayed in cache thread pool
+    sb_stream.reset();
+    cache_stream.reset();
+    ASSERT_NE(nullptr, tracker);
+    ASSERT_NE(0, tracker->consumption());
+
+    // after cache thread pool shutdown, sb released
+    mock_cache->start();
+    mock_cache->shutdown();
+    ASSERT_EQ(0, tracker->consumption());
+
+    //2. no MemTrackerDeleter
+    sb_stream = std::make_shared<MockSharedBufferedInputStream>(in, "test", len);
+    sb_stream->set_mock_align_size(4 * 1024 * 1024); // 4mb
+    cache_stream = std::make_shared<MockCacheInputStream>(sb_stream, "test", len, 0);
+    {
+        ranges.emplace_back(3, 4 * 1024 * 1024, false);
+        ranges.emplace_back(22417540, 22417878 + 35 - 22417540, false);
+    }
+
+    { ranges.emplace_back(22211037, 22417540 - 22211037, true); }
+
+    st = sb_stream->mock_set_io_ranges(ranges, false);
+    ASSERT_TRUE(st.ok());
+
+    sb = sb_stream->mock_find_shared_buffer(1746, 1978 - 1746);
+    sb = nullptr;
+
+    // sharedbuffer allocated in cache_stream->read_at_fully before
+    st = cache_stream->read_at_fully(3, p, 4 * 1024 * 1024);
+    ASSERT_TRUE(st.ok());
+    ASSERT_NE(0, tracker->consumption());
+
+    // stream released, but sb stayed in cache thread pool
+    sb_stream.reset();
+    cache_stream.reset();
+    ASSERT_NE(nullptr, tracker);
+    ASSERT_NE(0, tracker->consumption());
+
+    // after cache thread pool shutdown, sb released, but tracker lost statictics
+    mock_cache->start();
+    mock_cache->shutdown();
+    ASSERT_NE(0, tracker->consumption());
 }
 
 } // namespace starrocks::io

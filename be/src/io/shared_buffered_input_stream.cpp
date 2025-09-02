@@ -16,9 +16,10 @@
 
 #include <gutil/strings/substitute.h>
 
+#include <memory>
+
 #include "common/config.h"
 #include "gutil/strings/fastmem.h"
-#include "runtime/current_thread.h"
 #include "util/runtime_profile.h"
 
 namespace starrocks::io {
@@ -72,9 +73,15 @@ void SharedBufferedInputStream::_merge_small_ranges(const std::vector<IORange>& 
             // merge from [unmerge, i-1]
             int64_t ref_count = (to - from + 1);
             int64_t end = (small_ranges[to].offset + small_ranges[to].size);
-            SharedBufferPtr sb(new SharedBuffer{.raw_offset = small_ranges[from].offset,
-                                                .raw_size = end - small_ranges[from].offset,
-                                                .ref_count = ref_count});
+            SharedBufferPtr sb;
+            int64_t raw_offset = small_ranges[from].offset;
+            int64_t raw_size = end - small_ranges[from].offset;
+            if (config::orc_shared_buffer_mem_tracker_enable && _mem_tracker) {
+                sb.reset(new SharedBuffer{.raw_offset = raw_offset, .raw_size = raw_size, .ref_count = ref_count},
+                         SharedBufferMemTrackerDeleter(_mem_tracker));
+            } else {
+                sb.reset(new SharedBuffer{.raw_offset = raw_offset, .raw_size = raw_size, .ref_count = ref_count});
+            }
             sb->align(_align_size, _file_size);
             _map.insert(std::make_pair(sb->raw_offset + sb->raw_size, sb));
         };
@@ -108,7 +115,13 @@ Status SharedBufferedInputStream::_set_io_ranges_all_columns(const std::vector<I
     std::vector<IORange> small_ranges;
     for (const IORange& r : check) {
         if (r.size > _options.max_buffer_size) {
-            SharedBufferPtr sb(new SharedBuffer{.raw_offset = r.offset, .raw_size = r.size, .ref_count = 1});
+            SharedBufferPtr sb;
+            if (config::orc_shared_buffer_mem_tracker_enable && _mem_tracker) {
+                sb.reset(new SharedBuffer{.raw_offset = r.offset, .raw_size = r.size, .ref_count = 1},
+                         SharedBufferMemTrackerDeleter(_mem_tracker));
+            } else {
+                sb.reset(new SharedBuffer{.raw_offset = r.offset, .raw_size = r.size, .ref_count = 1});
+            }
             sb->align(_align_size, _file_size);
             _map.insert(std::make_pair(sb->raw_offset + sb->raw_size, sb));
         } else {
@@ -137,7 +150,13 @@ Status SharedBufferedInputStream::_set_io_ranges_active_and_lazy_columns(const s
     for (auto index = 0; index < check.size(); ++index) {
         const IORange& r = check[index];
         if (r.size > _options.max_buffer_size) {
-            SharedBufferPtr sb(new SharedBuffer{.raw_offset = r.offset, .raw_size = r.size, .ref_count = 1});
+            SharedBufferPtr sb;
+            if (config::orc_shared_buffer_mem_tracker_enable && _mem_tracker) {
+                sb.reset(new SharedBuffer{.raw_offset = r.offset, .raw_size = r.size, .ref_count = 1},
+                         SharedBufferMemTrackerDeleter(_mem_tracker));
+            } else {
+                sb.reset(new SharedBuffer{.raw_offset = r.offset, .raw_size = r.size, .ref_count = 1});
+            }
             sb->align(_align_size, _file_size);
             _map.insert(std::make_pair(sb->raw_offset + sb->raw_size, sb));
         } else {

@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include "block_cache/starcache_wrapper.h"
+
 #include <starcache/common/types.h>
 
 #include <filesystem>
@@ -70,6 +71,11 @@ Status StarCacheWrapper::write_buffer(const std::string& key, const IOBuffer& bu
         // Because we free the memory in other threads in starcache library, which is hard to track.
         // It is safe because we limit the flying memory in starcache, also, this behavior
         // doesn't affect the process memory tracker.
+
+        // NOTE: CacheInputStream may attaches a SharedBufferPtr when writing. After SR side releases
+        // ownership of the SharedBufferPtr, the shared_ptr will be freed asynchronously inside starcache
+        // if there still existing request in starcache's threadpool, which will leave a small amount of
+        // freed memory unaccounted in instance_mem_tracker.
         SCOPED_THREAD_LOCAL_MEM_TRACKER_SETTER(nullptr);
         st = to_status(_cache->set(key, buffer.const_raw_buf(), &opts));
     }
