@@ -38,6 +38,7 @@ import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.LeaderOpExecutor;
 import com.starrocks.qe.OriginStatement;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.analyzer.FeNameFormat;
 import com.starrocks.sql.ast.CreateUserStmt;
 import com.starrocks.sql.ast.TDWUserIdentity;
 import com.starrocks.sql.ast.UserIdentity;
@@ -129,10 +130,11 @@ public class TdwAuthenticate {
     }
 
     private static boolean createUser(AuthenticationMgr authenticationManager, UserIdentity userIdentity) {
+        FeNameFormat.checkUserName(userIdentity.getUser());
         String userName = ClusterNamespace.getNameFromFullName(userIdentity.getUser());
         // forward to master if necessary
         if (!GlobalStateMgr.getCurrentState().isLeader()) {
-            String showProcStmt = "CREATE USER \"" + userName + "\"";
+            String showProcStmt = "CREATE USER IF NOT EXISTS \"" + userName + "\"";
             // ConnectContext build in RestBaseAction
             ConnectContext context = ConnectContext.get();
             context.setCurrentUserIdentity(UserIdentity.ROOT);
