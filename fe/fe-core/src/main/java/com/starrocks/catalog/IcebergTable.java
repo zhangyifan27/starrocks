@@ -50,6 +50,7 @@ import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.SortField;
 import org.apache.iceberg.types.Types;
+import org.apache.iceberg.util.BucketTableUtil;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.apache.thrift.TException;
@@ -152,6 +153,10 @@ public class IcebergTable extends Table {
             }
         }
         return partitionColumns;
+    }
+
+    public boolean isBucketedPrimaryKeyTable() {
+        return BucketTableUtil.isBucketedPrimaryKey(nativeTable);
     }
 
     public List<String> getIcebergPartitionColumnNames() {

@@ -96,7 +96,7 @@ public class IcebergApiConverter {
                 .setComment(nativeTbl.properties().getOrDefault("common", ""))
                 .setNativeTable(nativeTbl)
                 .setFullSchema(toFullSchemas(nativeTbl.schema()))
-                .setIcebergProperties(toIcebergProps(nativeCatalogType));
+                .setIcebergProperties(toIcebergProps(nativeTbl.properties(), nativeCatalogType));
 
         return tableBuilder.build();
     }
@@ -217,9 +217,10 @@ public class IcebergApiConverter {
         return fullSchema;
     }
 
-    public static Map<String, String> toIcebergProps(String nativeCatalogType) {
+    public static Map<String, String> toIcebergProps(Map<String, String> properties, String nativeCatalogType) {
         Map<String, String> options = new HashMap<>();
         options.put(ICEBERG_CATALOG_TYPE, nativeCatalogType);
+        options.putAll(properties);
         return options;
     }
 
