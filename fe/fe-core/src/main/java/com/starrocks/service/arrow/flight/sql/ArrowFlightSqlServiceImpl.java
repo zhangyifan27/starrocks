@@ -122,9 +122,16 @@ public class ArrowFlightSqlServiceImpl implements FlightSqlProducer, AutoCloseab
 
     @Override
     public void closeSession(CloseSessionRequest request, CallContext context, StreamListener<CloseSessionResult> listener) {
-        ArrowFlightSqlConnectContext ctx = sessionManager.validateAndGetConnectContext(context.peerIdentity());
-        ctx.kill(true, "arrow flight sql close session");
-        sessionManager.closeSession(ctx.getArrowFlightSqlToken());
+        try {
+            ArrowFlightSqlConnectContext ctx = sessionManager.validateAndGetConnectContext(context.peerIdentity());
+            ctx.kill(true, "arrow flight sql close session");
+            sessionManager.closeSession(ctx.getArrowFlightSqlToken());
+        } catch (Throwable e) {
+            LOG.error("closeSession failed" + e.getMessage());
+            listener.onError(e);
+        }
+        listener.onNext(new CloseSessionResult(CloseSessionResult.Status.CLOSED));
+        listener.onCompleted();
     }
 
     /**
