@@ -355,6 +355,11 @@ public:
 
     StatusOr<jobject> batch_evaluate(int num_rows, jobject* input, int cols);
 
+    // Update the caller (UDF instance) for this stub
+    void update_caller(jobject new_caller) {
+        _caller = new_caller;
+    }
+
 private:
     jobject _caller;
     JVMClass _stub_clazz;
@@ -465,15 +470,15 @@ struct JavaUDFContext {
     std::string f_name;
     std::unique_ptr<ClassLoader> udf_classloader;
     std::unique_ptr<ClassAnalyzer> analyzer;
-    std::unique_ptr<BatchEvaluateStub> call_stub;
+    std::shared_ptr<BatchEvaluateStub> call_stub;
 
     JVMClass udf_class = nullptr;
     JavaGlobalRef udf_handle = nullptr;
 
     // Java Method
-    std::unique_ptr<JavaMethodDescriptor> prepare;
-    std::unique_ptr<JavaMethodDescriptor> evaluate;
-    std::unique_ptr<JavaMethodDescriptor> close;
+    std::shared_ptr<JavaMethodDescriptor> prepare;
+    std::shared_ptr<JavaMethodDescriptor> evaluate;
+    std::shared_ptr<JavaMethodDescriptor> close;
 };
 
 // Function

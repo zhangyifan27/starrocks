@@ -198,7 +198,7 @@ StatusOr<std::shared_ptr<JavaUDFContext>> JavaFunctionCallExpr::_build_udf_func_
 
     ASSIGN_OR_RETURN(desc->udf_class, desc->udf_classloader->getClass(_fn.scalar_fn.symbol));
 
-    auto add_method = [&](const std::string& name, std::unique_ptr<JavaMethodDescriptor>* res) {
+    auto add_method = [&](const std::string& name, std::shared_ptr<JavaMethodDescriptor>* res) {
         bool has_method = false;
         std::string method_name = name;
         std::string signature;
@@ -207,7 +207,7 @@ StatusOr<std::shared_ptr<JavaUDFContext>> JavaFunctionCallExpr::_build_udf_func_
         if (has_method) {
             RETURN_IF_ERROR(desc->analyzer->get_signature(desc->udf_class.clazz(), method_name, &signature));
             RETURN_IF_ERROR(desc->analyzer->get_method_desc(signature, &mtdesc));
-            *res = std::make_unique<JavaMethodDescriptor>();
+            *res = std::make_shared<JavaMethodDescriptor>();
             (*res)->name = std::move(method_name);
             (*res)->signature = std::move(signature);
             (*res)->method_desc = std::move(mtdesc);
@@ -232,7 +232,7 @@ StatusOr<std::shared_ptr<JavaUDFContext>> JavaFunctionCallExpr::_build_udf_func_
     ASSIGN_OR_RETURN(auto update_stub_clazz, desc->udf_classloader->genCallStub(stub_clazz, udf_clazz, update_method,
                                                                                 ClassLoader::BATCH_EVALUATE));
     ASSIGN_OR_RETURN(auto method, desc->analyzer->get_method_object(update_stub_clazz.clazz(), stub_method_name));
-    desc->call_stub = std::make_unique<BatchEvaluateStub>(desc->udf_handle.handle(), std::move(update_stub_clazz),
+    desc->call_stub = std::make_shared<BatchEvaluateStub>(desc->udf_handle.handle(), std::move(update_stub_clazz),
                                                           JavaGlobalRef(std::move(method)));
 
     if (desc->prepare != nullptr) {
@@ -275,7 +275,22 @@ Status JavaFunctionCallExpr::open(RuntimeState* state, ExprContext* context,
         if (_fn.__isset.isolated && !_fn.isolated) {
             ASSIGN_OR_RETURN(auto desc, function_cache->load_cacheable_java_udf(_fn.fid, _fn.hdfs_location,
                                                                                 _fn.checksum, get_func_desc));
-            _func_desc = std::any_cast<std::shared_ptr<JavaUDFContext>>(desc);
+            auto original_func_desc = std::any_cast<std::shared_ptr<JavaUDFContext>>(desc);
+
+            // Share method descriptors (already shared_ptr)
+            _func_desc->prepare = original_func_desc->prepare;
+            _func_desc->evaluate = original_func_desc->evaluate;
+            _func_desc->close = original_func_desc->close;
+
+            // Share BatchEvaluateStub (already shared_ptr)
+            _func_desc->call_stub = original_func_desc->call_stub;
+
+            // Create new UDF instance for cached context, but reuse existing BatchEvaluateStub
+            ASSIGN_OR_RETURN(_func_desc->udf_handle, original_func_desc->udf_class.newInstance());
+            // Update BatchEvaluateStub's _caller field to use new UDF instance, reuse existing CallStub class
+            if (_func_desc->call_stub) {
+                _func_desc->call_stub->update_caller(_func_desc->udf_handle.handle());
+            }
         } else {
             std::string libpath;
             RETURN_IF_ERROR(function_cache->get_libpath(_fn.fid, _fn.hdfs_location, _fn.checksum, &libpath));
