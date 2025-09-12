@@ -82,6 +82,16 @@ public:
         _position_offset = 0;
     }
 
+    // Compacts this buffer.
+    // The bytes between the buffer's current position and its limit, if any,
+    // are copied to the dst_offset of the buffer.
+    void compact(size_t dst_offset) {
+        DCHECK(_position_offset >= dst_offset);
+        memmove(_begin + dst_offset, _begin + _position_offset, available());
+        _limit_offset -= (_position_offset - dst_offset);
+        _position_offset = dst_offset;
+    }
+
 private:
     char* _begin;
     size_t _position_offset;

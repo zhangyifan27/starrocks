@@ -90,6 +90,8 @@ private:
     int64_t _last_file_scan_rows = 0;
     int64_t _last_file_scan_bytes = 0;
     int64_t _next_batch_counter = 0;
+
+    friend class ArrowScanner;
 };
 
 } // namespace starrocks

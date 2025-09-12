@@ -76,6 +76,7 @@ add_library(Formats STATIC
         parquet/column_read_order_ctx.cpp
         parquet/statistics_helper.cpp
         disk_range.hpp
+        arrow/arrow_reader.cpp
         )
 
 add_subdirectory(orc/apache-orc)

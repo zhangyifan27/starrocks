@@ -37,14 +37,22 @@ struct ScannerCounter {
 
     int64_t total_ns = 0;
     int64_t fill_ns = 0;
+    int64_t expand_buffer_ns = 0;
+    int64_t compact_buffer_ns = 0;
     int64_t read_batch_ns = 0;
     int64_t cast_chunk_ns = 0;
     int64_t materialize_ns = 0;
+    int64_t open_reader_ns = 0;
+    int64_t filter_chunk_ns = 0;
 
     int64_t init_chunk_ns = 0;
 
     int64_t file_read_ns = 0;
     int64_t file_read_count = 0;
+
+    // Used for arrow reader
+    int64_t create_reader_count = 0;
+    int64_t create_reader_ns = 0;
 };
 
 class FileScanner {

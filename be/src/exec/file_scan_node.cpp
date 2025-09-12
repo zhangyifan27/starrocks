@@ -30,6 +30,7 @@
 #include "util/defer_op.h"
 #include "util/runtime_profile.h"
 #include "util/thread.h"
+#include "arrow_scanner.h"
 
 namespace starrocks {
 
@@ -66,6 +67,12 @@ Status FileScanNode::prepare(RuntimeState* state) {
 
     _scanner_fill_timer = ADD_TIMER(p, "FillTime");
     _scanner_read_timer = ADD_TIMER(p, "ReadTime");
+    _scanner_open_reader_timer = ADD_TIMER(p, "OpenReaderTime");
+    _scanner_compact_buffer_timer = ADD_TIMER(p, "CompactBufferTime");
+    _scanner_expand_buffer_timer = ADD_TIMER(p, "ExpandBufferTime");
+    _scanner_create_reader_timer = ADD_TIMER(p, "CreateReaderTime");
+    _scanner_filter_chunk_timer = ADD_TIMER(p, "FilterChunkTime");
+    _scanner_create_reader_count = ADD_COUNTER(p, "CreateReaderCount", TUnit::UNIT);
     _scanner_cast_chunk_timer = ADD_TIMER(p, "CastChunkTime");
     _scanner_materialize_timer = ADD_TIMER(p, "MaterializeTime");
     _scanner_init_chunk_timer = ADD_TIMER(p, "CreateChunkTime");
@@ -211,6 +218,8 @@ std::unique_ptr<FileScanner> FileScanNode::_create_scanner(const TBrokerScanRang
         return std::make_unique<JsonScanner>(runtime_state(), runtime_profile(), scan_range, counter);
     } else if (scan_range.ranges[0].format_type == TFileFormatType::FORMAT_AVRO) {
         return std::make_unique<AvroScanner>(runtime_state(), runtime_profile(), scan_range, counter);
+    } else if (scan_range.ranges[0].format_type == TFileFormatType::FORMAT_ARROW_STREAM) {
+        return std::make_unique<ArrowScanner>(runtime_state(), runtime_profile(), scan_range, counter);
     } else {
         return std::make_unique<CSVScanner>(runtime_state(), runtime_profile(), scan_range, counter);
     }
@@ -333,6 +342,12 @@ void FileScanNode::_scanner_worker(int start_idx, int length) {
         COUNTER_UPDATE(_scanner_total_timer, counter.total_ns);
         COUNTER_UPDATE(_scanner_fill_timer, counter.fill_ns);
         COUNTER_UPDATE(_scanner_read_timer, counter.read_batch_ns);
+        COUNTER_UPDATE(_scanner_open_reader_timer, counter.open_reader_ns);
+        COUNTER_UPDATE(_scanner_compact_buffer_timer, counter.compact_buffer_ns);
+        COUNTER_UPDATE(_scanner_expand_buffer_timer, counter.expand_buffer_ns);
+        COUNTER_UPDATE(_scanner_create_reader_timer, counter.create_reader_ns);
+        COUNTER_UPDATE(_scanner_filter_chunk_timer, counter.filter_chunk_ns);
+        COUNTER_UPDATE(_scanner_create_reader_count, counter.create_reader_count);
         COUNTER_UPDATE(_scanner_cast_chunk_timer, counter.cast_chunk_ns);
         COUNTER_UPDATE(_scanner_materialize_timer, counter.materialize_ns);
         COUNTER_UPDATE(_scanner_init_chunk_timer, counter.init_chunk_ns);

@@ -624,6 +624,10 @@ CONF_mInt32(routine_load_pulsar_reader_receiver_queue_size, "10000");
 // and the tablet will be marked as bad, so that FE will try to repair it.
 // CONF_Bool(auto_recover_index_loading_failure, "false");
 
+// The maximum size of data that can be stored in the arrow reader.
+// It must be at least larger than the size of a record batch in order to read data normally.
+CONF_mInt32(arrow_reader_buffer_max_size, "536870912");
+
 // Max external scan cache batch count, means cache max_memory_cache_batch_count * batch_size row
 // default is 20, batch_size's defualt value is 1024 means 20 * 1024 rows will be cached
 CONF_mInt32(max_memory_sink_batch_count, "20");

@@ -135,8 +135,11 @@ Status ParquetScanner::append_batch_to_src_chunk(ChunkPtr* chunk) {
 }
 
 Status ParquetScanner::finalize_src_chunk(ChunkPtr* chunk) {
-    auto num_rows = (*chunk)->filter(_chunk_filter);
-    _counter->num_rows_filtered += _chunk_start_idx - num_rows;
+    {
+        SCOPED_RAW_TIMER(&_counter->filter_chunk_ns);
+        auto num_rows = (*chunk)->filter(_chunk_filter);
+        _counter->num_rows_filtered += _chunk_start_idx - num_rows;
+    }
     ChunkPtr cast_chunk = std::make_shared<Chunk>();
     {
         if (VLOG_ROW_IS_ON) {

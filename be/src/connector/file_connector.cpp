@@ -22,6 +22,7 @@
 #include "exec/parquet_scanner.h"
 #include "exprs/expr.h"
 #include "file_chunk_sink.h"
+#include "exec/arrow_scanner.h"
 
 namespace starrocks::connector {
 
@@ -95,6 +96,8 @@ Status FileDataSource::_create_scanner() {
         _scanner = std::make_unique<JsonScanner>(_runtime_state, _runtime_profile, _scan_range, &_counter);
     } else if (_scan_range.ranges[0].format_type == TFileFormatType::FORMAT_AVRO) {
         _scanner = std::make_unique<AvroScanner>(_runtime_state, _runtime_profile, _scan_range, &_counter);
+    } else if (_scan_range.ranges[0].format_type == TFileFormatType::FORMAT_ARROW_STREAM) {
+        _scanner = std::make_unique<ArrowScanner>(_runtime_state, _runtime_profile, _scan_range, &_counter);
     } else {
         _scanner = std::make_unique<CSVScanner>(_runtime_state, _runtime_profile, _scan_range, &_counter);
     }
@@ -183,6 +186,12 @@ void FileDataSource::_init_counter() {
         RuntimeProfile* p = _runtime_profile;
         _scanner_fill_timer = ADD_CHILD_TIMER(p, "FillTime", prefix);
         _scanner_read_timer = ADD_CHILD_TIMER(p, "ReadTime", prefix);
+        _scanner_open_reader_timer = ADD_CHILD_TIMER(p, "OpenReaderTime", prefix);
+        _scanner_compact_buffer_timer = ADD_CHILD_TIMER(p, "CompactBufferTime", prefix);
+        _scanner_expand_buffer_timer = ADD_CHILD_TIMER(p, "ExpandBufferTime", prefix);
+        _scanner_create_reader_timer = ADD_CHILD_TIMER(p, "CreateReaderTime", prefix);
+        _scanner_filter_chunk_timer = ADD_CHILD_TIMER(p, "FilterChunkTime", prefix);
+        _scanner_create_reader_count = ADD_CHILD_COUNTER(p, "CreateReaderCount", TUnit::UNIT, prefix);
         _scanner_cast_chunk_timer = ADD_CHILD_TIMER(p, "CastChunkTime", prefix);
         _scanner_materialize_timer = ADD_CHILD_TIMER(p, "MaterializeTime", prefix);
         _scanner_init_chunk_timer = ADD_CHILD_TIMER(p, "CreateChunkTime", prefix);
@@ -198,6 +207,12 @@ void FileDataSource::_update_counter() {
     COUNTER_UPDATE(_scanner_total_timer, _counter.total_ns);
     COUNTER_UPDATE(_scanner_fill_timer, _counter.fill_ns);
     COUNTER_UPDATE(_scanner_read_timer, _counter.read_batch_ns);
+    COUNTER_UPDATE(_scanner_open_reader_timer, _counter.open_reader_ns);
+    COUNTER_UPDATE(_scanner_compact_buffer_timer, _counter.compact_buffer_ns);
+    COUNTER_UPDATE(_scanner_expand_buffer_timer, _counter.expand_buffer_ns);
+    COUNTER_UPDATE(_scanner_create_reader_timer, _counter.create_reader_ns);
+    COUNTER_UPDATE(_scanner_filter_chunk_timer, _counter.filter_chunk_ns);
+    COUNTER_UPDATE(_scanner_create_reader_count, _counter.create_reader_count);
     COUNTER_UPDATE(_scanner_cast_chunk_timer, _counter.cast_chunk_ns);
     COUNTER_UPDATE(_scanner_materialize_timer, _counter.materialize_ns);
     COUNTER_UPDATE(_scanner_init_chunk_timer, _counter.init_chunk_ns);

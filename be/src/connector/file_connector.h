@@ -83,6 +83,12 @@ private:
     // Profile information
     RuntimeProfile::Counter* _scanner_total_timer = nullptr;
     RuntimeProfile::Counter* _scanner_fill_timer = nullptr;
+    RuntimeProfile::Counter* _scanner_open_reader_timer = nullptr;
+    RuntimeProfile::Counter* _scanner_expand_buffer_timer = nullptr;
+    RuntimeProfile::Counter* _scanner_compact_buffer_timer = nullptr;
+    RuntimeProfile::Counter* _scanner_create_reader_timer = nullptr;
+    RuntimeProfile::Counter* _scanner_filter_chunk_timer = nullptr;
+    RuntimeProfile::Counter* _scanner_create_reader_count = nullptr;
     RuntimeProfile::Counter* _scanner_read_timer = nullptr;
     RuntimeProfile::Counter* _scanner_cast_chunk_timer = nullptr;
     RuntimeProfile::Counter* _scanner_materialize_timer = nullptr;
