@@ -198,6 +198,7 @@ import com.starrocks.sql.ast.ShowDynamicPartitionStmt;
 import com.starrocks.sql.ast.ShowEnginesStmt;
 import com.starrocks.sql.ast.ShowExportStmt;
 import com.starrocks.sql.ast.ShowFailPointStatement;
+import com.starrocks.sql.ast.ShowFeedBackCostStmt;
 import com.starrocks.sql.ast.ShowFrontendsStmt;
 import com.starrocks.sql.ast.ShowFunctionsStmt;
 import com.starrocks.sql.ast.ShowGrantsStmt;
@@ -1082,6 +1083,18 @@ public class ShowExecutor {
             List<List<String>> rows = GlobalStateMgr.getCurrentState().getVariableMgr().dump(statement.getType(),
                     context.getSessionVariable(), matcher);
             return new ShowResultSet(statement.getMetaData(), rows);
+        }
+
+        @Override
+        public ShowResultSet visitShowFeedBackCostStatement(ShowFeedBackCostStmt statement, ConnectContext context) {
+            PatternMatcher matcher = null;
+            if (statement.getPattern() != null) {
+                matcher = PatternMatcher.createMysqlPattern(statement.getPattern(),
+                        CaseSensibility.VARIABLES.getCaseSensibility());
+            }
+            QueryMemoryRecorder queryMemoryRecorder = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder();
+            return new ShowResultSet(statement.getMetaData(),
+                    queryMemoryRecorder.getFeedbackCostInfo(matcher, statement.getLimitElement()));
         }
 
         @Override

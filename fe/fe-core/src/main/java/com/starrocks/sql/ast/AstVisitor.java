@@ -606,6 +606,10 @@ public interface AstVisitor<R, C> {
         return visitShowStatement(statement, context);
     }
 
+    default R visitShowFeedBackCostStatement(ShowFeedBackCostStmt statement, C context) {
+        return visitShowStatement(statement, context);
+    }
+
     default R visitShowProcStmt(ShowProcStmt statement, C context) {
         return visitShowStatement(statement, context);
     }
@@ -1495,5 +1499,4 @@ public interface AstVisitor<R, C> {
     default R visitUserVariableHint(UserVariableHint node, C context) {
         return visitNode(node, context);
     }
-
 }

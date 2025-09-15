@@ -35,7 +35,10 @@
 package com.starrocks.qe;
 
 import com.google.gson.annotations.SerializedName;
+import com.starrocks.analysis.LimitElement;
 import com.starrocks.common.Config;
+import com.starrocks.common.PatternMatcher;
+import com.starrocks.common.util.DateUtils;
 import com.starrocks.persist.ImageWriter;
 import com.starrocks.persist.metablock.SRMetaBlockEOFException;
 import com.starrocks.persist.metablock.SRMetaBlockException;
@@ -47,7 +50,12 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -55,6 +63,7 @@ import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 public class QueryMemoryRecorder {
     private static final Logger LOG = LogManager.getLogger(QueryMemoryRecorder.class);
@@ -143,6 +152,56 @@ public class QueryMemoryRecorder {
                 "lastUpdateTime : {}",
                 memoryRecord.getId(), msg, maxMemory, memoryRecord.getMaxValue(), new Date(memoryRecord.getTime()));
         return cost;
+    }
+
+    public List<List<String>> getFeedbackCostInfo(PatternMatcher matcher,
+                                                  LimitElement limitElement) {
+        cleanExpiredKeys();
+        List<List<String>> result = new ArrayList<>();
+
+        List<MemoryRecord> matchedRecords;
+
+        if (matcher != null) {
+            matchedRecords = memoryRecordMap.entrySet().stream()
+                    .filter(entry -> matcher.match(entry.getKey()))
+                    .map(Map.Entry::getValue)
+                    .collect(Collectors.toList());
+        } else {
+            matchedRecords = new ArrayList<>(memoryRecordMap.values());
+        }
+
+        List<MemoryRecord> sortedRecords = matchedRecords.stream()
+                .sorted(Comparator.comparingLong(MemoryRecord::getTime).reversed())
+                .collect(Collectors.toList());
+
+        List<MemoryRecord> resultMemoryRecords;
+        if (limitElement != null && limitElement.getLimit() > 0) {
+            resultMemoryRecords = sortedRecords.stream()
+                    .skip(limitElement.getOffset())
+                    .limit(limitElement.getLimit())
+                    .collect(Collectors.toList());
+        } else {
+            resultMemoryRecords = sortedRecords;
+        }
+
+        for (MemoryRecord memoryRecord : resultMemoryRecords) {
+            double maxMemory = 0;
+            StringBuilder recentlyMemoryUsage = new StringBuilder();
+            for (double record : memoryRecord.getRecords()) {
+                maxMemory = Math.max(maxMemory, record);
+                recentlyMemoryUsage.append(record).append("|");
+            }
+            List<String> line = new ArrayList<>();
+            line.add(memoryRecord.getId());
+            line.add(String.valueOf(maxMemory));
+            line.add(recentlyMemoryUsage.toString());
+            line.add(String.valueOf(memoryRecord.getMaxValue()));
+            Instant instant = Instant.ofEpochMilli(memoryRecord.getTime());
+            String formattedTime = DateUtils.DATE_TIME_FORMATTER_UNIX.withZone(ZoneId.systemDefault()).format(instant);
+            line.add(formattedTime);
+            result.add(line);
+        }
+        return result;
     }
 
     private void cleanExpiredKeys() {

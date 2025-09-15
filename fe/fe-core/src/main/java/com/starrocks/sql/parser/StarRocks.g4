@@ -203,6 +203,7 @@ statement
     | showUserPropertyStatement
     | showVariablesStatement
     | showWarningStatement
+    | showFeedBackCostStatement
     | helpStatement
 
     // authz Statement
@@ -1505,6 +1506,10 @@ showVariablesStatement
 
 showWarningStatement
     : SHOW (WARNINGS | ERRORS) (limitElement)?
+    ;
+
+showFeedBackCostStatement
+    : SHOW FEEDBACK COSTS (LIKE pattern=string)? (limitElement)?
     ;
 
 helpStatement

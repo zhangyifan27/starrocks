@@ -377,6 +377,7 @@ import com.starrocks.sql.ast.ShowEnginesStmt;
 import com.starrocks.sql.ast.ShowEventsStmt;
 import com.starrocks.sql.ast.ShowExportStmt;
 import com.starrocks.sql.ast.ShowFailPointStatement;
+import com.starrocks.sql.ast.ShowFeedBackCostStmt;
 import com.starrocks.sql.ast.ShowFrontendsStmt;
 import com.starrocks.sql.ast.ShowFunctionsStmt;
 import com.starrocks.sql.ast.ShowGrantsStmt;
@@ -3153,6 +3154,21 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         }
 
         return new ShowVariablesStmt(getVariableType(context.varType()), pattern, where, createPos(context));
+    }
+
+    @Override
+    public ParseNode visitShowFeedBackCostStatement(StarRocksParser.ShowFeedBackCostStatementContext context) {
+        String pattern = null;
+        if (context.pattern != null) {
+            StringLiteral stringLiteral = (StringLiteral) visit(context.pattern);
+            pattern = stringLiteral.getValue();
+        }
+
+        LimitElement limitElement = null;
+        if (context.limitElement() != null) {
+            limitElement = (LimitElement) visit(context.limitElement());
+        }
+        return new ShowFeedBackCostStmt(pattern, limitElement, createPos(context));
     }
 
     @Override
