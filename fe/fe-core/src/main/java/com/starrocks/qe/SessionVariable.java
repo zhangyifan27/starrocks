@@ -581,6 +581,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_COST_BY_FEEDBACK = "enable_cost_by_feedback";
 
+    public static final String COST_BY_FEEDBACK_RECENTLY_NUMBER = "cost_by_feedback_recently_number";
+
+    public static final String COST_BY_FEEDBACK_BUFFER_WEIGHT = "cost_by_feedback_buffer_weight";
+
     public static final String CUSTOM_QUERY_ID = "custom_query_id";
 
     // Access ORC columns by name. By default, columns in ORC files are accessed by
@@ -2383,6 +2387,12 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VarAttr(name = ENABLE_COST_BY_FEEDBACK)
     private boolean enableCostByFeedback = false;
+
+    @VarAttr(name = COST_BY_FEEDBACK_RECENTLY_NUMBER)
+    private int costByFeedbackRecentlyNumber = 1;
+
+    @VarAttr(name = COST_BY_FEEDBACK_BUFFER_WEIGHT)
+    private double costByFeedbackBufferWeight = 1.6;
 
     @VarAttr(name = ORC_USE_COLUMN_NAMES)
     private boolean orcUseColumnNames = false;
@@ -4397,6 +4407,22 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setEnableCostByFeedback(boolean enableCostByFeedback) {
         this.enableCostByFeedback = enableCostByFeedback;
+    }
+
+    public int getCostByFeedbackRecentlyNumber() {
+        return costByFeedbackRecentlyNumber;
+    }
+
+    public void setCostByFeedbackRecentlyNumber(int costByFeedbackRecentlyNumber) {
+        this.costByFeedbackRecentlyNumber = costByFeedbackRecentlyNumber;
+    }
+
+    public double getCostByFeedbackBufferWeight() {
+        return costByFeedbackBufferWeight;
+    }
+
+    public void setCostByFeedbackBufferWeight(double costByFeedbackBufferWeight) {
+        this.costByFeedbackBufferWeight = costByFeedbackBufferWeight;
     }
 
     public long getCrossJoinCostPenalty() {

@@ -223,7 +223,7 @@ public class ConnectProcessor {
             } else {
                 if (ctx.getQueryId() != null && statistics.memCostBytes != null && !ctx.getState().isError()) {
                     double feedbackMemCostBytes = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
-                            .recordQueryMemory(ctx.getQueryId(), statistics.memCostBytes);
+                            .recordQueryMemory(ctx.getQueryId(), statistics.memCostBytes, ctx);
                     ctx.getAuditEventBuilder().setFeedbackMemCostBytes(feedbackMemCostBytes);
                 }
             }
@@ -1000,7 +1000,7 @@ public class ConnectProcessor {
                         instanceNum++;
                     }
                     double cost = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder().recordQueryMemory(ctx.queryId,
-                            digestWithFlowId, workers.size(), instanceNum, audit.getMemCostBytes());
+                            digestWithFlowId, workers.size(), instanceNum, audit.getMemCostBytes(), ctx);
                     audit.setFeedbackMemCostBytes(cost);
                     audit.setDigest(digest);
                 }

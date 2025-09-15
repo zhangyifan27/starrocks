@@ -248,7 +248,7 @@ public class ExecPlan {
                 double cost = physicalPlan.getCost();
                 String id = connectContext.getDigestWithFlowId();
                 if (connectContext.getSessionVariable().isEnableCostByFeedback() && !Strings.isNullOrEmpty(id)) {
-                    cost = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder().getMaxMemoryRecently(id);
+                    cost = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder().getMaxMemoryRecently(id, connectContext);
                 }
                 str.append("Cost: ").append(cost).append(", Est: ").append(est).append("\n");
             }

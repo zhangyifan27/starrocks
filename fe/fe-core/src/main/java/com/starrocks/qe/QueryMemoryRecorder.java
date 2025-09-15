@@ -55,6 +55,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.Date;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -88,18 +89,18 @@ public class QueryMemoryRecorder {
         idMap.put(queryId, queryInfo);
     }
 
-    public double recordQueryMemory(UUID queryId, double queryPeakMemoryUsagePerNode) {
+    public double recordQueryMemory(UUID queryId, double queryPeakMemoryUsagePerNode, ConnectContext context) {
         QueryInfo queryInfo = idMap.get(queryId);
         double queryMemory = Config.max_cost_by_feedback;
         if (queryInfo != null) {
             queryMemory = recordQueryMemory(queryId, queryInfo.getDigestWithFlowId(),
-                    queryInfo.getWorkerNum(), queryInfo.getInstanceNum(), queryPeakMemoryUsagePerNode);
+                    queryInfo.getWorkerNum(), queryInfo.getInstanceNum(), queryPeakMemoryUsagePerNode, context);
         }
         return queryMemory;
     }
 
     public double recordQueryMemory(UUID queryId, String digestWithFlowId, int workerNum, int instanceNum,
-                                    double queryPeakMemoryUsagePerNode) {
+                                    double queryPeakMemoryUsagePerNode, ConnectContext context) {
         double queryMemory = queryPeakMemoryUsagePerNode * workerNum + (instanceNum * MEM_CHUNK_SIZE);
         long time = System.currentTimeMillis();
         put(digestWithFlowId, queryMemory, time);
@@ -109,7 +110,7 @@ public class QueryMemoryRecorder {
         }
         idMap.remove(queryId);
         // return the cost with buffer weight
-        return getMaxMemoryRecently(digestWithFlowId);
+        return getMaxMemoryRecently(digestWithFlowId, context);
     }
 
     public void put(String id, double value, long time) {
@@ -121,17 +122,30 @@ public class QueryMemoryRecorder {
         return memoryRecordMap.get(key);
     }
 
-    public double getMaxMemoryRecently(String key) {
+    public double getMaxMemoryRecently(String key, ConnectContext context) {
         MemoryRecord memoryRecord = memoryRecordMap.get(key);
         if (memoryRecord == null) {
-            return Config.max_cost_by_feedback * Config.cost_weight * Config.cost_buffer_weight / QUERY_POOL_RATIO;
+            return Config.max_cost_by_feedback * Config.cost_weight
+                    * context.getSessionVariable().getCostByFeedbackBufferWeight() / QUERY_POOL_RATIO;
         }
-        ConcurrentLinkedDeque<Double> records = memoryRecord.getRecords();
+
+        List<Double> records;
+        int recentlyNumber = context.getSessionVariable().getCostByFeedbackRecentlyNumber();
+        ConcurrentLinkedDeque<Double> memoryRecords = memoryRecord.getRecords();
+        if (recentlyNumber > 0) {
+            Iterator<Double> descendingIterator =  memoryRecords.descendingIterator();
+            records = new ArrayList<>();
+            int count = 0;
+            while (descendingIterator.hasNext() && count < recentlyNumber) {
+                records.add(descendingIterator.next());
+                count++;
+            }
+        } else {
+            records = new ArrayList<>(memoryRecords);
+        }
         double maxMemory = 0;
-        StringBuilder msg = new StringBuilder();
         for (double record : records) {
             maxMemory = Math.max(maxMemory, record);
-            msg.append(record).append("|");
         }
         if (maxMemory <= 0) {
             maxMemory = Config.max_cost_by_feedback;
@@ -143,14 +157,17 @@ public class QueryMemoryRecorder {
         // thereby improving the accuracy of resource cost calculation.
 
         // the query pool is 80% of the node total memory, so / 0.75 to prevent query pool OOM.
-        double cost = maxMemory * Config.cost_weight * Config.cost_buffer_weight / QUERY_POOL_RATIO;
+        double cost = maxMemory * Config.cost_weight
+                * context.getSessionVariable().getCostByFeedbackBufferWeight() / QUERY_POOL_RATIO;
         LOG.info("feedback memory record :\t" +
                 "id: {}\t" +
                 "recently memory usage : {}\t" +
                 "recentlyMaxMemory : {}\t" +
                 "historyMaxMemory : {}\t" +
                 "lastUpdateTime : {}",
-                memoryRecord.getId(), msg, maxMemory, memoryRecord.getMaxValue(), new Date(memoryRecord.getTime()));
+                memoryRecord.getId(),
+                memoryRecord.getRecords().stream().map(Object::toString).collect(Collectors.joining("|")),
+                maxMemory, memoryRecord.getMaxValue(), new Date(memoryRecord.getTime()));
         return cost;
     }
 
