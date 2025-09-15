@@ -398,7 +398,8 @@ public class CreateFunctionStmt extends DdlStmt {
             // RETURN_TYPE evaluate(...)
             Method method = mainClass.getMethod(EVAL_METHOD_NAME, true);
             mainClass.checkMethodNonStaticAndPublic(method);
-            if (!method.getParameterTypes()[0].getName().equals(JAVA_OBJECT_ARRAY_TYPE)) {
+            if (method.getParameterTypes().length >= 1
+                    && !method.getParameterTypes()[0].getName().equals(JAVA_OBJECT_ARRAY_TYPE)) {
                 mainClass.checkArgumentCount(method, argsDef.getArgTypes().length);
             }
             mainClass.checkReturnUdfType(method, returnType.getType());
