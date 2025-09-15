@@ -217,6 +217,7 @@ public class PolymorphicFunctionAnalyzer {
             // it's mock, need handle it in expressionAnalyzer
             .put(FunctionSet.NAMED_STRUCT, new RowDeduce())
             .put(FunctionSet.ANY_VALUE, types -> types[0])
+            .put(FunctionSet.MAX_STRUCT, types -> types[0])
             .put(FunctionSet.MAP_FROM_ENTRIES, new MapFromEntriesDeduce())
             .build();
 

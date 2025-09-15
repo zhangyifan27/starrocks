@@ -282,6 +282,7 @@ public class FunctionSet {
     public static final String KURT_POP = "kurt_pop";
     public static final String KURT_SAMP = "kurt_samp";
     public static final String ANY_VALUE = "any_value";
+    public static final String MAX_STRUCT = "max_struct";
     public static final String STD = "std";
     public static final String HLL_UNION = "hll_union";
     public static final String HLL_RAW_AGG = "hll_raw_agg";
@@ -1075,6 +1076,9 @@ public class FunctionSet {
         addBuiltin(AggregateFunction.createBuiltin(FunctionSet.GROUP_ARRAY,
                 Lists.newArrayList(Type.TIME, Type.INT), Type.ARRAY_DATETIME, Type.VARCHAR,
                 false, false, false));
+
+        addBuiltin(AggregateFunction.createBuiltin(MAX_STRUCT,
+                Lists.newArrayList(Type.ANY_STRUCT), Type.ANY_STRUCT, Type.ANY_STRUCT, true, false, false));
 
         for (Type t : Type.getSupportedTypes()) {
             if (t.isFunctionType()) {

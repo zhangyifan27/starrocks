@@ -18,6 +18,7 @@
 #include "exprs/agg/factory/aggregate_resolver.hpp"
 #include "exprs/agg/group_concat.h"
 #include "exprs/agg/group_array.h"
+#include "exprs/agg/max_struct.h"
 #include "exprs/agg/percentile_cont.h"
 #include "types/logical_type.h"
 #include "util/percentile_value.h"
@@ -102,6 +103,7 @@ void AggregateFuncResolver::register_others() {
     add_array_mapping<TYPE_DATE, TYPE_INT>("window_funnel");
 
     add_general_mapping<AnyValueSemiState>("any_value", false, AggregateFactory::MakeAnyValueSemiAggregateFunction());
+    add_general_mapping<MaxStructSemiState>("max_struct", false, AggregateFactory::MakeMaxStructSemiAggregateFunction());
     add_general_mapping_notnull("array_agg2", false, AggregateFactory::MakeArrayAggAggregateFunctionV2());
     add_general_mapping_notnull("group_concat2", false, AggregateFactory::MakeGroupConcatAggregateFunctionV2());
 }

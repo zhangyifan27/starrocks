@@ -25,6 +25,7 @@
 #include "exprs/agg/approx_top_k.h"
 #include "exprs/agg/array_agg.h"
 #include "exprs/agg/max_array.h"
+#include "exprs/agg/max_struct.h"
 #include "exprs/agg/avg.h"
 #include "exprs/agg/bitmap_agg.h"
 #include "exprs/agg/bitmap_intersect.h"
@@ -145,6 +146,10 @@ public:
 
     static AggregateFunctionPtr MakeAnyValueSemiAggregateFunction() {
         return std::make_shared<AnyValueSemiAggregateFunction>();
+    }
+
+    static AggregateFunctionPtr MakeMaxStructSemiAggregateFunction() {
+        return std::make_shared<MaxStructSemiAggregateFunction>();
     }
 
     template <typename NestedState, bool IsWindowFunc, bool IgnoreNull = true,
