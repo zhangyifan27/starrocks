@@ -89,6 +89,7 @@ public class ExchangeNode extends PlanNode {
     private DistributionSpec.DistributionType distributionType;
     // Specify the columns which need to send, work on CTE, and keep empty in other sense
     private List<Integer> receiveColumns;
+    private boolean preferNonPipelineLevelShuffle;
 
     /**
      * Create ExchangeNode that consumes output of inputNode.
@@ -120,6 +121,7 @@ public class ExchangeNode extends PlanNode {
                 limit = inputNode.limit;
             }
         }
+        this.preferNonPipelineLevelShuffle = false;
         computeTupleIds();
     }
 
@@ -130,6 +132,12 @@ public class ExchangeNode extends PlanNode {
 
     public void setDataPartition(DataPartition dataPartition) {
         this.dataPartition = dataPartition;
+    }
+
+    public void setPreferNonPipelineLevelShuffle(boolean prefer_non_pipeline_level_shuffle) {
+        // should only be setup once
+        Preconditions.checkState(!this.preferNonPipelineLevelShuffle);
+        this.preferNonPipelineLevelShuffle = prefer_non_pipeline_level_shuffle;
     }
 
     public void setPartitionType(TPartitionType type) {
@@ -182,6 +190,10 @@ public class ExchangeNode extends PlanNode {
         this.planNodeName = "MERGING-EXCHANGE";
     }
 
+    public boolean getPreferNonPipelineLevelShuffle() {
+        return this.preferNonPipelineLevelShuffle;
+    }
+
     @Override
     protected void toThrift(TPlanNode msg) {
         msg.node_type = TPlanNodeType.EXCHANGE_NODE;
@@ -203,6 +215,8 @@ public class ExchangeNode extends PlanNode {
         msg.exchange_node.setEnable_parallel_merge(sv.isEnableParallelMerge());
         TLateMaterializeMode mode = TLateMaterializeMode.valueOf(sv.getParallelMergeLateMaterializationMode().toUpperCase());
         msg.exchange_node.setParallel_merge_late_materialize_mode(mode);
+        msg.exchange_node.setPrefer_non_pipeline_level_shuffle(preferNonPipelineLevelShuffle);
+
     }
 
     @Override
@@ -210,6 +224,7 @@ public class ExchangeNode extends PlanNode {
         ToStringHelper helper = MoreObjects.toStringHelper(this);
         helper.addValue(super.debugString());
         helper.add("offset", offset);
+        //helper.add("preferNonPipelineLevelShuffle", preferNonPipelineLevelShuffle);
         return helper.toString();
     }
 
@@ -225,13 +240,17 @@ public class ExchangeNode extends PlanNode {
             if (partitionType != null) {
                 output.append(detailPrefix).append("partition type: ")
                         .append(partitionType).append('\n');
-            }
+            }             
             if (CollectionUtils.isNotEmpty(partitionExprs)) {
                 output.append(detailPrefix)
                         .append("partition exprs: ")
                         .append(getVerboseExplain(partitionExprs, detailLevel))
                         .append('\n');
             }
+            //output.append(detailPrefix)
+            //        .append("preferNonPipelineLevelShuffle: ")
+            //        .append(preferNonPipelineLevelShuffle)
+            //        .append("\n");
         }
         if (offset != 0) {
             output.append(detailPrefix)

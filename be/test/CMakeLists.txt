@@ -52,6 +52,7 @@ set(EXEC_FILES
         ./exec/pipeline/pipeline_test_base.cpp
         ./exec/pipeline/query_context_manger_test.cpp
         ./exec/pipeline/multi_cast_local_exchange_test.cpp
+        ./exec/pipeline/local_exchange_test.cpp
         ./exec/pipeline/table_function_operator_test.cpp
         ./exec/pipeline/sink/export_sink_operator_test.cpp
         ./exec/pipeline/sink/table_function_table_sink_operator_test.cpp
@@ -91,6 +92,8 @@ set(EXEC_FILES
         ./exec/repeat_node_test.cpp
         ./exec/sorting_test.cpp
         ./exec/table_function_node_test.cpp
+        ./exec/pipeline/exchange/shuffler_test.cpp
+        ./exec/pipeline/pipeline_builder_test.cpp
         ./exec/arrow_scanner_test.cpp
         ./exprs/agg/json_each_test.cpp
         ./exprs/agg/aggregate_test.cpp

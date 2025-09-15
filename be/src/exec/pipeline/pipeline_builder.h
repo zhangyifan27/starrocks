@@ -64,6 +64,16 @@ public:
 
     bool is_colocate_group() const { return _current_execution_group->type() == ExecutionGroupType::COLOCATE; }
 
+    static std::vector<uint32_t> prepare_bucket_to_partition(const std::vector<uint32_t>& bucket_list, size_t bucket_size, size_t dop) {
+        std::vector<uint32_t> bucket_to_partition(bucket_size, 0);
+        auto partition_idx = 0;
+        for (auto i = 0; i < bucket_list.size(); ++i) {
+            auto bucket_idx = bucket_list[i];
+            bucket_to_partition[bucket_idx] = (partition_idx ++) % dop;
+        }
+        return bucket_to_partition;
+    }
+
     OpFactories maybe_interpolate_local_broadcast_exchange(RuntimeState* state, int32_t plan_node_id,
                                                            OpFactories& pred_operators, int num_receivers);
 
@@ -101,7 +111,10 @@ public:
     using PartitionExprsGenerator = std::function<std::vector<ExprContext*>()>;
     OpFactories maybe_interpolate_local_shuffle_exchange(RuntimeState* state, int32_t plan_node_id,
                                                          OpFactories& pred_operators,
-                                                         const PartitionExprsGenerator& self_partition_exprs_generator);
+                                                         const PartitionExprsGenerator& self_partition_exprs_generator,
+                                                         const std::optional<std::vector<uint32_t>>& bucket_to_partition = std::nullopt,
+                                                         const std::optional<TPartitionType::type>& part_type = std::nullopt,
+                                                         const std::optional<uint32_t>& dop = std::nullopt);
 
     // The intput data is already ordered by partition_exprs. Then we can use a simply approach to split them into different channels
     // as long as the data of the same partition_exprs are in the same channel.
@@ -186,7 +199,9 @@ private:
     OpFactories _do_maybe_interpolate_local_shuffle_exchange(
             RuntimeState* state, int32_t plan_node_id, OpFactories& pred_operators,
             const std::vector<ExprContext*>& partition_expr_ctxs,
-            const TPartitionType::type part_type = TPartitionType::type::HASH_PARTITIONED);
+            const TPartitionType::type part_type = TPartitionType::type::HASH_PARTITIONED,
+            const std::optional<std::vector<uint32_t>>& bucket_to_partition = std::nullopt,
+            const std::optional<uint32_t>& dop = std::nullopt);
 
     static constexpr int kLocalExchangeBufferChunks = 8;
 

@@ -151,6 +151,7 @@ struct TDataStreamSink {
   6: optional list<i32> output_columns;
 
   7: optional string partition_keys;
+  8: optional bool prefer_non_pipeline_level_shuffle;
 }
 
 struct TMultiCastDataStreamSink {
@@ -236,7 +237,9 @@ struct TOlapTableSink {
     28: optional i64 automatic_bucket_size
     29: optional bool write_txn_log
     30: optional bool ignore_out_of_partition
-    31: optional binary encryption_meta;
+    31: optional binary encryption_meta
+    32: optional bool dynamic_overwrite
+    33: optional Partitions.TDataPartition data_partition
 }
 
 struct TSchemaTableSink {

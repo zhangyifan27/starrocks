@@ -1025,6 +1025,7 @@ struct TExchangeNode {
   4: optional Partitions.TPartitionType partition_type;
   5: optional bool enable_parallel_merge
   6: optional TLateMaterializeMode parallel_merge_late_materialize_mode;
+  7: optional bool prefer_non_pipeline_level_shuffle;
 }
 
 // This contains all of the information computed by the plan as part of the resource

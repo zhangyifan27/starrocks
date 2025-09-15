@@ -209,6 +209,9 @@ public class TFragmentInstanceFactory {
         result.params.setPer_node_scan_ranges(instance.getNode2ScanRanges());
         result.params.setNode_to_per_driver_seq_scan_ranges(instance.getNode2DriverSeqToScanRanges());
         result.params.setReport_when_finish(execFragment.isNeedReportFragmentFinish());
+        if (!instance.getTabletBucketsList().isEmpty()) {
+            result.params.setTablet_sink_buckets(instance.getTabletBucketsList());
+        }
 
         if (isEnablePipelineTableSinkDop) {
             result.params.setSender_id(accTabletSinkDop);

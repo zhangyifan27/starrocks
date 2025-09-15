@@ -119,6 +119,38 @@ Status StreamPipelineTest::execute() {
     return Status::OK();
 }
 
+OpFactories StreamPipelineTest::maybe_interpolate_local_partition_shuffle_exchange(
+        OpFactories& pred_operators, 
+        int32_t degree_of_parallelism, 
+        pipeline::ExecutionGroupRawPtr exec_group,
+        const PartitionExprsGenerator& generator) {
+    DCHECK(!pred_operators.empty() && pred_operators[0]->is_source());
+    auto* source_operator = down_cast<SourceOperatorFactory*>(pred_operators[0].get());
+    if (degree_of_parallelism == source_operator->degree_of_parallelism() && source_operator->degree_of_parallelism() == 1) {
+        return pred_operators;
+    }
+
+    auto pseudo_plan_node_id = -200;
+    auto mem_mgr = std::make_shared<pipeline::ChunkBufferMemoryManager>(
+            config::vector_chunk_size, config::local_exchange_buffer_mem_limit_per_driver);
+    auto local_exchange_source = std::make_shared<pipeline::LocalExchangeSourceOperatorFactory>(
+            next_operator_id(), pseudo_plan_node_id, mem_mgr);
+
+    auto local_exchange = std::make_shared<pipeline::PartitionExchanger>(
+            mem_mgr, local_exchange_source.get(), TPartitionType::type::BUCKET_SHUFFLE_HASH_PARTITIONED,
+            generator(), true);
+
+    auto local_exchange_sink = std::make_shared<pipeline::LocalExchangeSinkOperatorFactory>(
+            next_operator_id(), pseudo_plan_node_id, local_exchange);
+    pred_operators.emplace_back(std::move(local_exchange_sink));
+
+    _pipelines.emplace_back(std::make_unique<pipeline::Pipeline>(next_pipeline_id(), pred_operators, exec_group));
+    OpFactories operators_source_with_local_exchange;
+    local_exchange_source->set_degree_of_parallelism(degree_of_parallelism);
+    operators_source_with_local_exchange.emplace_back(std::move(local_exchange_source));
+    return operators_source_with_local_exchange;
+}
+
 OpFactories StreamPipelineTest::maybe_interpolate_local_passthrough_exchange(
         OpFactories& pred_operators, pipeline::ExecutionGroupRawPtr exec_group) {
     DCHECK(!pred_operators.empty() && pred_operators[0]->is_source());

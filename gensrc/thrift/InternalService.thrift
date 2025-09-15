@@ -385,7 +385,8 @@ struct TPlanFragmentExecParams {
 
   70: optional i32 pipeline_sink_dop
 
-  73: optional bool report_when_finish;
+  73: optional bool report_when_finish
+  74: optional list<i32> tablet_sink_buckets
 }
 
 // Global query parameters assigned by the coordinator.

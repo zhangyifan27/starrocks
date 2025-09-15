@@ -58,6 +58,12 @@ protected:
     OpFactories maybe_interpolate_local_passthrough_exchange(OpFactories& pred_operators,
                                                              pipeline::ExecutionGroupRawPtr exec_group);
 
+    using PartitionExprsGenerator = std::function<std::vector<ExprContext*>()>;
+    OpFactories maybe_interpolate_local_partition_shuffle_exchange(OpFactories& pred_operators,
+                                                                    int32_t degree_of_parallelism,
+                                                                    pipeline::ExecutionGroupRawPtr exec_group,
+                                                                    const PartitionExprsGenerator& generator);
+
     ExecEnv* _exec_env = nullptr;
     pipeline::QueryContext* _query_ctx = nullptr;
     pipeline::FragmentContext* _fragment_ctx = nullptr;

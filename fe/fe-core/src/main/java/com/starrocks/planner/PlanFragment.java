@@ -430,6 +430,7 @@ public class PlanFragment extends TreeNode<PlanFragment> {
             DataStreamSink streamSink = new DataStreamSink(destNode.getId());
             streamSink.setPartition(outputPartition);
             streamSink.setMerge(destNode.isMerge());
+            streamSink.setPreferNonPipelineLevelShuffle(destNode.getPreferNonPipelineLevelShuffle());
             streamSink.setFragment(this);
             sink = streamSink;
         } else {

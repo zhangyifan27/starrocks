@@ -32,7 +32,8 @@ namespace pipeline {
 
 class Partitioner {
 public:
-    Partitioner(LocalExchangeSourceOperatorFactory* source) : _source(source) {}
+    Partitioner(LocalExchangeSourceOperatorFactory* source, int chunk_size = 0, bool enable_optimized = false)
+        : _source(source), _use_optimized_branch(enable_optimized), _chunk_size(chunk_size) {}
 
     virtual ~Partitioner() = default;
 
@@ -61,7 +62,14 @@ public:
         }
     }
 
+    void flush();
+
 protected:
+    // TODO FIXME 
+    // It should be removed after all partition type are supported.
+    Status optimized_partition_chunk(const ChunkPtr& chunk, int32_t num_partitions, std::vector<uint32_t>& partition_row_indexes);
+    Status optimized_send_chunk(const ChunkPtr& chunk, const std::shared_ptr<std::vector<uint32_t>>& partition_row_indexes);
+
     LocalExchangeSourceOperatorFactory* _source;
 
     // This array record the channel start point in _row_indexes
@@ -71,14 +79,26 @@ protected:
     std::vector<size_t> _partition_row_indexes_start_points;
     std::vector<size_t> _partition_memory_usage;
     std::vector<uint32_t> _shuffle_channel_id;
+
+    // For combine rows in sink side
+    std::vector<ChunkPtr> _partition_chunk_builder;
+    bool _use_optimized_branch;
+    int _chunk_size;
 };
+
 
 // Shuffle by partition columns and partition type.
 class ShufflePartitioner final : public Partitioner {
 public:
     ShufflePartitioner(LocalExchangeSourceOperatorFactory* source, const TPartitionType::type part_type,
-                       const std::vector<ExprContext*>& partition_expr_ctxs)
-            : Partitioner(source), _part_type(part_type), _partition_expr_ctxs(partition_expr_ctxs) {
+                       const std::vector<ExprContext*>& partition_expr_ctxs,
+                       int chunk_size,
+                       bool enable_optimized,
+                       const std::optional<std::vector<uint32_t>>& bucket_to_partition = std::nullopt)
+            : Partitioner(source, chunk_size, enable_optimized), 
+            _part_type(part_type), 
+            _partition_expr_ctxs(partition_expr_ctxs),
+            _bucket_to_partition(bucket_to_partition) {
         _partitions_columns.resize(partition_expr_ctxs.size());
         _hash_values.reserve(source->runtime_state()->chunk_size());
     }
@@ -92,7 +112,8 @@ private:
     const std::vector<ExprContext*>& _partition_expr_ctxs;
     Columns _partitions_columns;
     std::vector<uint32_t> _hash_values;
-    std::unique_ptr<Shuffler> _shuffler;
+    std::unique_ptr<ExchangeShuffler> _shuffler;
+    std::optional<std::vector<uint32_t>> _bucket_to_partition;
 };
 
 // Random shuffle row-by-row for each chunk of source.
@@ -140,7 +161,7 @@ public:
         return true;
     }
 
-    void epoch_finish(RuntimeState* state) {
+    virtual void epoch_finish(RuntimeState* state) {
         if (incr_epoch_finished_sinker() == _sink_number) {
             for (auto* source : _source->get_sources()) {
                 static_cast<void>(source->set_epoch_finishing(state));
@@ -178,7 +199,8 @@ class PartitionExchanger final : public LocalExchanger {
 public:
     PartitionExchanger(const std::shared_ptr<ChunkBufferMemoryManager>& memory_manager,
                        LocalExchangeSourceOperatorFactory* source, const TPartitionType::type part_type,
-                       std::vector<ExprContext*> _partition_expr_ctxs);
+                       std::vector<ExprContext*> _partition_expr_ctxs, bool enable_optimized,
+                       const std::optional<std::vector<uint32_t>>& bucket_to_partition = std::nullopt);
 
     ~PartitionExchanger() override = default;
 
@@ -186,6 +208,31 @@ public:
     void close(RuntimeState* state) override;
 
     Status accept(const ChunkPtr& chunk, int32_t sink_driver_sequence) override;
+
+    void finish(RuntimeState* state) override {
+        if (decr_sinker() == 1) {
+            // TODO flush in each sink thread?
+            for (auto i = 0; i < _partitioners.size(); ++i) {
+                _partitioners[i]->flush();
+            }
+            for (auto* source : _source->get_sources()) {
+                static_cast<void>(source->set_finishing(state));
+            }
+        }
+    }
+
+    void epoch_finish(RuntimeState* state) override {
+        if (incr_epoch_finished_sinker() == _sink_number) {
+            for (auto i = 0; i < _partitioners.size(); ++i) {
+                _partitioners[i]->flush();
+            }
+            for (auto* source : _source->get_sources()) {
+                static_cast<void>(source->set_epoch_finishing(state));
+            }
+            // reset the number to be reused in the next epoch.
+            _epoch_finished_sinker = 0;
+        }
+    }
 
     void incr_sinker() override;
 
@@ -196,6 +243,9 @@ private:
     TPartitionType::type _part_type;
     std::vector<ExprContext*> _partition_exprs;
     std::vector<std::unique_ptr<ShufflePartitioner>> _partitioners;
+    bool _enable_optimized;
+    int _chunk_size;
+    std::optional<std::vector<uint32_t>> _bucket_to_partition;
 };
 
 // The input stream is already ordered by partition columns.

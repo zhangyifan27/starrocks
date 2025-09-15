@@ -21,7 +21,35 @@
 #include "util/hash_util.hpp"
 
 namespace starrocks::pipeline {
-class Shuffler {
+
+class ExchangeShuffler {
+public:
+    virtual ~ExchangeShuffler() = default;
+
+    virtual void exchange_shuffle(std::vector<uint32_t>& shuffle_channel_ids, const std::vector<uint32_t>& hash_values, size_t num_rows) = 0;
+    virtual void local_exchange_shuffle(std::vector<uint32_t>& shuffle_channel_ids, const std::vector<uint32_t>& hash_values, size_t num_rows) = 0;
+};
+
+class BucketShufflerPartitioner : public ExchangeShuffler {
+public:
+    BucketShufflerPartitioner(const std::vector<uint32_t>& bucket_to_partition): _bucket_to_partition(bucket_to_partition) {}
+
+    void exchange_shuffle(std::vector<uint32_t>& shuffle_channel_ids, const std::vector<uint32_t>& hash_values, size_t num_rows) override  {
+        for (size_t i = 0; i < num_rows; ++i) {
+            uint32_t bucket_id = ModuloOp()(hash_values[i], _bucket_to_partition.size());
+            shuffle_channel_ids[i] = _bucket_to_partition[bucket_id];
+        }
+    }
+
+    void local_exchange_shuffle(std::vector<uint32_t>& shuffle_channel_ids, const std::vector<uint32_t>& hash_values, size_t num_rows) override  {
+        return exchange_shuffle(shuffle_channel_ids, hash_values, num_rows);
+    }
+
+private:
+    std::vector<uint32_t> _bucket_to_partition;
+};
+
+class Shuffler : public ExchangeShuffler {
 public:
     Shuffler(bool compatibility, bool is_two_level_shuffle, TPartitionType::type partition_type, size_t num_channels,
              int32_t num_shuffles_per_channel)
@@ -50,12 +78,12 @@ public:
     }
 
     void exchange_shuffle(std::vector<uint32_t>& shuffle_channel_ids, const std::vector<uint32_t>& hash_values,
-                          size_t num_rows) {
+                          size_t num_rows) override {
         (this->*_exchange_shuffle)(shuffle_channel_ids, hash_values, num_rows);
     }
 
-    void local_exchange_shuffle(std::vector<uint32_t>& shuffle_channel_ids, std::vector<uint32_t>& hash_values,
-                                size_t num_rows) {
+    void local_exchange_shuffle(std::vector<uint32_t>& shuffle_channel_ids, const std::vector<uint32_t>& hash_values,
+                                size_t num_rows) override {
         (this->*_local_exchange_shuffle)(shuffle_channel_ids, hash_values, num_rows);
     }
 
@@ -64,7 +92,7 @@ private:
                                         const std::vector<uint32_t>& hash_values, size_t num_rows) = nullptr;
 
     void (Shuffler::*_local_exchange_shuffle)(std::vector<uint32_t>& shuffle_channel_ids,
-                                              std::vector<uint32_t>& hash_values, size_t num_rows) = nullptr;
+                                              const std::vector<uint32_t>& hash_values, size_t num_rows) = nullptr;
 
     template <bool two_level_shuffle, typename ReduceOp>
     void exchange_shuffle(std::vector<uint32_t>& shuffle_channel_ids, const std::vector<uint32_t>& hash_values,
@@ -90,7 +118,7 @@ private:
     // and phase 2 applies xorshift32 on the hash value.
     // Note that xorshift32 rehash must be applied for both local shuffle here and exchange sink.
     template <typename ReduceOp>
-    void local_exchange_shuffle(std::vector<uint32_t>& shuffle_channel_ids, std::vector<uint32_t>& hash_values,
+    void local_exchange_shuffle(std::vector<uint32_t>& shuffle_channel_ids, const std::vector<uint32_t>& hash_values,
                                 size_t num_rows) {
         for (int32_t i = 0; i < num_rows; ++i) {
             uint32_t driver_sequence = ReduceOp()(HashUtil::xorshift32(hash_values[i]), _num_channels);
@@ -102,4 +130,28 @@ private:
     const size_t _num_channels;
     const size_t _num_shuffles_per_channel;
 };
+
+class ExchangeShufflerFactory {
+public:
+    static std::unique_ptr<ExchangeShuffler> create_partitioner(
+            bool compatibility, 
+            bool is_two_level_shuffle, 
+            TPartitionType::type partition_type, 
+            size_t num_channels,
+            int32_t num_shuffles_per_channel, 
+            const std::vector<uint32_t>& bucket_to_partition = {}) {
+        if (!bucket_to_partition.empty()) {
+            if (partition_type != TPartitionType::type::BUCKET_SHUFFLE_HASH_PARTITIONED
+                    || num_shuffles_per_channel != 1) {
+                // TODO only support bucket shuffle for now
+                return nullptr;
+            }
+            return std::make_unique<BucketShufflerPartitioner>(bucket_to_partition);
+        }
+        return std::make_unique<Shuffler>(compatibility, is_two_level_shuffle, partition_type, num_channels, num_shuffles_per_channel);
+    }
+};
+
+
+
 } // namespace starrocks::pipeline

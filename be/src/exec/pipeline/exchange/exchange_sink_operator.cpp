@@ -54,7 +54,9 @@ public:
               _enable_exchange_pass_through(enable_exchange_pass_through),
               _enable_exchange_perf(enable_exchange_perf),
               _pass_through_context(pass_through_chunk_buffer, fragment_instance_id, dest_node_id),
-              _chunks(num_shuffles) {}
+              _chunks(num_shuffles),
+              _chunk_peak_sizes(num_shuffles),
+              _channel_peak_mem_usage(0) {}
 
     // Initialize channel.
     // Returns OK if successful, error indication otherwise.
@@ -99,7 +101,21 @@ public:
 
     bool is_local();
 
+    void inc_send_rows(size_t row) { _send_rows += row; }
+
+    size_t get_send_rows() const { return _send_rows; }
+
 private:
+    ALWAYS_INLINE void _update_peak_mem_usage(int32_t driver_sequence) {
+        auto mem_usage = _chunks[driver_sequence]->container_memory_usage();
+        auto delta = 0;
+        if (mem_usage > _chunk_peak_sizes[driver_sequence]) {
+            delta = mem_usage - _chunk_peak_sizes[driver_sequence];
+        }
+        _chunk_peak_sizes[driver_sequence] += delta;
+        _channel_peak_mem_usage += delta;
+    }
+
     Status _close_internal(RuntimeState* state, FragmentContext* fragment_ctx);
 
     bool _check_use_pass_through();
@@ -125,6 +141,8 @@ private:
     // If pipeline level shuffle is disable, the size of _chunks
     // always be 1
     std::vector<std::unique_ptr<Chunk>> _chunks;
+    std::vector<size_t> _chunk_peak_sizes;
+    size_t _channel_peak_mem_usage;
     PTransmitChunkParamsPtr _chunk_request;
     size_t _current_request_bytes = 0;
 
@@ -132,6 +150,7 @@ private:
     bool _use_pass_through = false;
     // local data is shuffled without really remote network, so it cannot be considered in computing exchange speed.
     bool _ignore_local_data = false;
+    size_t _send_rows = 0;
 };
 
 bool ExchangeSinkOperator::Channel::is_local() {
@@ -195,6 +214,7 @@ Status ExchangeSinkOperator::Channel::add_rows_selective(Chunk* chunk, int32_t d
     }
 
     if (_chunks[driver_sequence]->num_rows() + size > state->chunk_size()) {
+        _update_peak_mem_usage(driver_sequence);
         RETURN_IF_ERROR(send_one_chunk(state, _chunks[driver_sequence].get(), driver_sequence, false));
         // we only clear column data, because we need to reuse column schema
         _chunks[driver_sequence]->set_num_rows(0);
@@ -234,6 +254,7 @@ Status ExchangeSinkOperator::Channel::send_one_chunk(RuntimeState* state, const 
 
     // If chunk is not null, append it to request
     if (chunk != nullptr) {
+        _send_rows += chunk->num_rows();
         if (_use_pass_through) {
             size_t chunk_size = serde::ProtobufChunkSerde::max_serialized_size(*chunk);
             // -1 means disable pipeline level shuffle
@@ -306,6 +327,7 @@ Status ExchangeSinkOperator::Channel::_close_internal(RuntimeState* state, Fragm
     if (!fragment_ctx->is_canceled()) {
         for (auto driver_sequence = 0; driver_sequence < _chunks.size(); ++driver_sequence) {
             if (_chunks[driver_sequence] != nullptr) {
+                _update_peak_mem_usage(driver_sequence);
                 RETURN_IF_ERROR(res = send_one_chunk(state, _chunks[driver_sequence].get(), driver_sequence, false));
             }
         }
@@ -316,9 +338,8 @@ Status ExchangeSinkOperator::Channel::_close_internal(RuntimeState* state, Fragm
 }
 
 Status ExchangeSinkOperator::Channel::close(RuntimeState* state, FragmentContext* fragment_ctx) {
-    auto status = _close_internal(state, fragment_ctx);
-    state->log_error(status); // Lock only when status is not ok.
-    return status;
+    COUNTER_ADD(_parent->_exchange_chunk_builder_peak_mem_usage, _channel_peak_mem_usage);
+    return _close_internal(state, fragment_ctx);
 }
 
 ExchangeSinkOperator::ExchangeSinkOperator(
@@ -369,10 +390,23 @@ ExchangeSinkOperator::ExchangeSinkOperator(
         }
     }
 
+    std::vector<uint32_t> bucket_to_partition;
     // Each channel is bound to a specific driver sequence for the local bucket shuffle join.
     if (_is_channel_bound_driver_sequence) {
         _num_shuffles_per_channel = 1;
         _driver_sequence_per_shuffle = std::move(driver_sequence_per_channel);
+    } else if (!is_pipeline_level_shuffle && part_type == TPartitionType::BUCKET_SHUFFLE_HASH_PARTITIONED) {
+        _num_shuffles_per_channel = 1;
+        bucket_to_partition = _create_bucket_to_partition(destinations, _instance_id2channel, _channels);
+        _driver_sequence_per_shuffle.resize(_channels.size(), 0);
+        if (VLOG_QUERY_IS_ON) {
+            std::stringstream oss;
+            for (auto i = 0; i < bucket_to_partition.size(); ++i) {
+                oss << i << "->" << bucket_to_partition[i] << ", ";
+            }
+            VLOG_QUERY << print_id(fragment_ctx->fragment_instance_id())
+                       << " ExchangeSinkOperator bucket_to_partition: " << oss.str();
+        }
     } else {
         _driver_sequence_per_shuffle.reserve(_channels.size() * _num_shuffles_per_channel);
         for (int channel_id = 0; channel_id < _channels.size(); ++channel_id) {
@@ -385,8 +419,41 @@ ExchangeSinkOperator::ExchangeSinkOperator(
 
     _is_pipeline_level_shuffle = is_pipeline_level_shuffle && (_num_shuffles > 1);
 
-    _shuffler = std::make_unique<Shuffler>(runtime_state()->func_version() <= 3, !_is_channel_bound_driver_sequence,
-                                           _part_type, _channels.size(), _num_shuffles_per_channel);
+    _shuffler = ExchangeShufflerFactory::create_partitioner(
+            runtime_state()->func_version() <= 3, !_is_channel_bound_driver_sequence, _part_type, _channels.size(),
+            _num_shuffles_per_channel, bucket_to_partition);
+}
+
+std::vector<uint32_t> ExchangeSinkOperator::_create_bucket_to_partition(
+        const std::vector<TPlanFragmentDestination>& destinations,
+        const phmap::flat_hash_map<int64_t, std::unique_ptr<Channel>, StdHash<int64_t>>& instance_id2channel,
+        std::vector<Channel*>& channels) {
+    std::vector<uint32_t> bucket_to_partition(destinations.size(), 0);
+    std::vector<Channel*> final_channels;
+    final_channels.reserve(destinations.size());
+
+    std::unordered_set<int64_t> instance_ids;
+    std::unordered_map<Channel*, int> channel_to_partition;
+    // keep partition order be same with destinations order
+    for (auto i = 0; i < destinations.size(); ++i) {
+        const auto& dest = destinations[i];
+        auto channel_itr = instance_id2channel.find(dest.fragment_instance_id.lo);
+        auto channel_ptr = channel_itr == instance_id2channel.end() ? nullptr : channel_itr->second.get();
+        if (UNLIKELY(channel_ptr == nullptr)) {
+            std::ostringstream oss;
+            dest.printTo(oss);
+            throw std::runtime_error(fmt::format("Destination {} is not found in channels", oss.str()));
+        }
+        auto it = instance_ids.find(dest.fragment_instance_id.lo);
+        if (it == instance_ids.end()) {
+            final_channels.emplace_back(channel_ptr);
+            channel_to_partition[channel_ptr] = final_channels.size() - 1;
+        }
+        instance_ids.insert(dest.fragment_instance_id.lo);
+        bucket_to_partition[i] = channel_to_partition[channel_ptr];
+    }
+    channels = final_channels;
+    return bucket_to_partition;
 }
 
 Status ExchangeSinkOperator::prepare(RuntimeState* state) {
@@ -452,6 +519,9 @@ Status ExchangeSinkOperator::prepare(RuntimeState* state) {
     _pass_through_buffer_peak_mem_usage = _unique_metrics->AddHighWaterMarkCounter(
             "PassThroughBufferPeakMemoryUsage", TUnit::BYTES,
             RuntimeProfile::Counter::create_strategy(TUnit::BYTES, TCounterMergeType::SKIP_FIRST_MERGE));
+    _exchange_chunk_builder_peak_mem_usage =
+            _unique_metrics->AddHighWaterMarkCounter("ExchangeChannelBuilderPeakMemoryUsage", TUnit::BYTES,
+                                                     RuntimeProfile::Counter::create_strategy(TUnit::BYTES));
 
     for (auto& [_, channel] : _instance_id2channel) {
         RETURN_IF_ERROR(channel->init(state));
@@ -525,6 +595,7 @@ Status ExchangeSinkOperator::push_chunk(RuntimeState* state, const ChunkPtr& chu
             TRY_CATCH_BAD_ALLOC(
                     RETURN_IF_ERROR(serialize_chunk(send_chunk, pchunk, &_is_first_chunk, _channels.size())));
             _current_request_bytes += pchunk->data().size();
+            _current_request_rows += send_chunk->num_rows();
             // 3. if request bytes exceede the threshold, send current request
             if (_current_request_bytes > config::max_transmit_batched_bytes) {
                 butil::IOBuf attachment;
@@ -534,9 +605,11 @@ Status ExchangeSinkOperator::push_chunk(RuntimeState* state, const ChunkPtr& chu
                         PTransmitChunkParamsPtr copy = std::make_shared<PTransmitChunkParams>(*_chunk_request);
                         RETURN_IF_ERROR(
                                 _channels[idx]->send_chunk_request(state, copy, attachment, attachment_physical_bytes));
+                        _channels[idx]->inc_send_rows(_current_request_rows);
                     }
                 }
                 _current_request_bytes = 0;
+                _current_request_rows = 0;
                 _chunk_request.reset();
             }
         }
@@ -645,8 +718,10 @@ Status ExchangeSinkOperator::set_finishing(RuntimeState* state) {
         for (const auto& [_, channel] : _instance_id2channel) {
             PTransmitChunkParamsPtr copy = std::make_shared<PTransmitChunkParams>(*_chunk_request);
             RETURN_IF_ERROR(channel->send_chunk_request(state, copy, attachment, attachment_physical_bytes));
+            channel->inc_send_rows(_current_request_rows);
         }
         _current_request_bytes = 0;
+        _current_request_rows = 0;
         _chunk_request.reset();
     }
     Status status = Status::OK();
@@ -755,6 +830,20 @@ int64_t ExchangeSinkOperator::construct_brpc_attachment(const PTransmitChunkPara
     }
 
     return attachment_physical_bytes;
+}
+
+std::string ExchangeSinkOperator::get_name() const {
+    std::string finished = is_finished() ? "X" : "O";
+    return fmt::format("{}_{}_{}({}) {{ pending_finish:{} }}", _name, _plan_node_id, (void*)this, finished,
+                       pending_finish());
+}
+
+std::vector<size_t> ExchangeSinkOperator::channel_send_rows() const {
+    std::vector<size_t> rows(_channels.size(), 0);
+    for (auto i = 0; i < _channels.size(); ++i) {
+        rows[i] = _channels[i]->get_send_rows();
+    }
+    return rows;
 }
 
 ExchangeSinkOperatorFactory::ExchangeSinkOperatorFactory(

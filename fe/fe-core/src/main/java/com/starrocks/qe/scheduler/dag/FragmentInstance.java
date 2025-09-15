@@ -14,6 +14,7 @@
 
 package com.starrocks.qe.scheduler.dag;
 
+import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.planner.DataSink;
@@ -76,6 +77,7 @@ public class FragmentInstance {
     private final Map<Integer, Integer> bucketSeqToDriverSeq = Maps.newHashMap();
     private final Map<Integer, List<TScanRangeParams>> node2ScanRanges = Maps.newHashMap();
     private final Map<Integer, Map<Integer, List<TScanRangeParams>>> node2DriverSeqToScanRanges = Maps.newHashMap();
+    private final List<Integer> tabletBucketsList = Lists.newArrayList();
 
     private FragmentInstanceExecState execution = null;
 
@@ -330,4 +332,11 @@ public class FragmentInstance {
         }
     }
 
+    public void assignBucketLists(List<Integer> bucketsList) {
+        tabletBucketsList.addAll(bucketsList);
+    }
+
+    public List<Integer> getTabletBucketsList() {
+        return tabletBucketsList;
+    }
 }

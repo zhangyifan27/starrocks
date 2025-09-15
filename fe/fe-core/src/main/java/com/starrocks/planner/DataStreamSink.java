@@ -34,6 +34,8 @@
 
 package com.starrocks.planner;
 
+import com.google.common.base.Preconditions;
+
 import com.starrocks.thrift.TDataSink;
 import com.starrocks.thrift.TDataSinkType;
 import com.starrocks.thrift.TDataStreamSink;
@@ -55,8 +57,11 @@ public class DataStreamSink extends DataSink {
     // Specify the columns which need to send, used on MultiCastSink
     private List<Integer> outputColumnIds;
 
+    private boolean preferNonPipelineLevelShuffle;
+
     public DataStreamSink(PlanNodeId exchNodeId) {
         this.exchNodeId = exchNodeId;
+        this.preferNonPipelineLevelShuffle = false;
     }
 
     @Override
@@ -83,6 +88,12 @@ public class DataStreamSink extends DataSink {
 
     public void setOutputColumnIds(List<Integer> outputColumnIds) {
         this.outputColumnIds = outputColumnIds;
+    }
+
+    public void setPreferNonPipelineLevelShuffle(boolean preferNonPipelineLevelShuffle) {
+        // should be setup once
+        Preconditions.checkState(!this.preferNonPipelineLevelShuffle);
+        this.preferNonPipelineLevelShuffle = preferNonPipelineLevelShuffle;
     }
 
     @Override
@@ -118,6 +129,7 @@ public class DataStreamSink extends DataSink {
             tStreamSink.setOutput_columns(outputColumnIds);
         }
         tStreamSink.setPartition_keys(outputPartition.getPartitionKeys());
+        tStreamSink.setPrefer_non_pipeline_level_shuffle(preferNonPipelineLevelShuffle);
         result.setStream_sink(tStreamSink);
         return result;
     }

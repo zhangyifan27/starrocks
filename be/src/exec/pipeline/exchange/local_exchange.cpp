@@ -25,8 +25,93 @@
 #include "util/runtime_profile.h"
 
 namespace starrocks::pipeline {
+
+void Partitioner::flush() {
+    if (!_use_optimized_branch) {
+        return;
+    }
+    // flush tail chunk
+    size_t num_partitions = _source->get_sources().size();
+    if (!_partition_chunk_builder.empty() && _partition_chunk_builder.size() != num_partitions) {
+        // _partition_chunk_builder is empty when no input pushed.
+        throw std::runtime_error(fmt::format("invalid state, partition chunk builder not initized correct, partition count {}, but chunk builder size {}",
+                    _partition_chunk_builder.size(),
+                    num_partitions));
+    }
+    for (auto i = 0; i < _partition_chunk_builder.size(); ++i) {
+        if (_partition_chunk_builder[i] && _partition_chunk_builder[i]->num_rows() > 0) {
+            _source->get_sources()[i]->add_chunk(std::move(_partition_chunk_builder[i]));
+        }
+    }
+}
+
+Status Partitioner::optimized_partition_chunk(const ChunkPtr& chunk,
+        int32_t num_partitions, std::vector<uint32_t>& partition_row_indexes) {
+    size_t num_rows = chunk->num_rows();
+
+    // TODO 
+    chunk->unpack_and_duplicate_const_columns();
+
+    // step1: compute shuffle channel ids.
+    RETURN_IF_ERROR(shuffle_channel_ids(chunk, num_partitions));
+
+    // step2: shuffle chunk into dest partitions.
+    {
+        _partition_row_indexes_start_points.assign(num_partitions + 1, 0);
+        if (_partition_chunk_builder.size() <= 0) {
+            _partition_chunk_builder.resize(num_partitions);
+        }
+        if (UNLIKELY(num_partitions != _partition_chunk_builder.size())) {
+            return Status::RuntimeError(fmt::format(
+                        "invalid state, partition chunk builder not initized correct, partition count {}, but chunk builder size {}",
+                        _partition_chunk_builder.size(), num_partitions));
+        }
+
+        for (size_t i = 0; i < num_rows; ++i) {
+            _partition_row_indexes_start_points[_shuffle_channel_id[i]]++;
+        }
+        // We make the last item equal with number of rows of this chunk.
+        for (int32_t i = 1; i <= num_partitions; ++i) {
+            _partition_row_indexes_start_points[i] += _partition_row_indexes_start_points[i - 1];
+        }
+
+        for (int32_t i = num_rows - 1; i >= 0; --i) {
+            partition_row_indexes[_partition_row_indexes_start_points[_shuffle_channel_id[i]] - 1] = i;
+            _partition_row_indexes_start_points[_shuffle_channel_id[i]]--;
+        }
+    }
+    return Status::OK();
+}
+
+Status Partitioner::optimized_send_chunk(const ChunkPtr& chunk,
+        const std::shared_ptr<std::vector<uint32_t>>& partition_row_indexes) {
+
+    size_t num_partitions = _source->get_sources().size();
+    for (size_t i = 0; i < num_partitions; ++i) {
+        size_t from = partition_begin_offset(i);
+        size_t size = partition_end_offset(i) - from;
+        if (size == 0) {
+            // No data for this partition.
+            continue;
+        }
+        if (!_partition_chunk_builder[i]) {
+            _partition_chunk_builder[i] = chunk->clone_empty_with_slot(size);
+        }
+        if (_partition_chunk_builder[i]->num_rows() + size > _chunk_size) {
+            ChunkPtr chunk_ptr = std::move(_partition_chunk_builder[i]);
+            _partition_chunk_builder[i] = chunk_ptr->clone_empty_with_slot(chunk_ptr->num_rows());
+            _source->get_sources()[i]->add_chunk(chunk_ptr);
+        }
+        _partition_chunk_builder[i]->append_selective(*chunk, partition_row_indexes->data(), from, size);
+    }
+    return Status::OK();
+}
+
 Status Partitioner::partition_chunk(const ChunkPtr& chunk, int32_t num_partitions,
                                     std::vector<uint32_t>& partition_row_indexes) {
+    if (_use_optimized_branch) {
+        return optimized_partition_chunk(chunk, num_partitions, partition_row_indexes);
+    }
     size_t num_rows = chunk->num_rows();
 
     // step1: compute shuffle channel ids.
@@ -55,6 +140,10 @@ Status Partitioner::partition_chunk(const ChunkPtr& chunk, int32_t num_partition
 
 Status Partitioner::send_chunk(const ChunkPtr& chunk,
                                const std::shared_ptr<std::vector<uint32_t>>& partition_row_indexes) {
+    if (_use_optimized_branch) {
+        // TODO FIXEDME
+        return optimized_send_chunk(chunk, partition_row_indexes);
+    }
     size_t num_partitions = _source->get_sources().size();
     for (size_t i = 0; i < num_partitions; ++i) {
         size_t from = partition_begin_offset(i);
@@ -73,8 +162,11 @@ Status Partitioner::send_chunk(const ChunkPtr& chunk,
 Status ShufflePartitioner::shuffle_channel_ids(const ChunkPtr& chunk, int32_t num_partitions) {
     size_t num_rows = chunk->num_rows();
     if (_shuffler == nullptr) {
-        _shuffler = std::make_unique<Shuffler>(_source->runtime_state()->func_version() <= 3, false, _part_type,
-                                               _source->get_sources().size(), 1);
+        _shuffler = ExchangeShufflerFactory::create_partitioner(_source->runtime_state()->func_version() <= 3, false, _part_type,
+                _source->get_sources().size(), 1, _bucket_to_partition.value_or(std::vector<uint32_t>()));
+        if (!_shuffler) {
+            return Status::InternalError("Failed to create shuffler");
+        }
     }
 
     for (size_t i = 0; i < _partitions_columns.size(); ++i) {
@@ -124,17 +216,27 @@ Status RandomPartitioner::shuffle_channel_ids(const ChunkPtr& chunk, int32_t num
 
 PartitionExchanger::PartitionExchanger(const std::shared_ptr<ChunkBufferMemoryManager>& memory_manager,
                                        LocalExchangeSourceOperatorFactory* source, const TPartitionType::type part_type,
-                                       std::vector<ExprContext*> partition_expr_ctxs)
-        : LocalExchanger(strings::Substitute("Partition($0)", to_string(part_type)), memory_manager, source),
+                                       std::vector<ExprContext*> partition_expr_ctxs, bool enable_optimized,
+                                       const std::optional<std::vector<uint32_t>>& bucket_to_partition)
+        : LocalExchanger(strings::Substitute("Partition($0) optimized($1)",
+                    to_string(part_type), enable_optimized ? "true": "false"), memory_manager, source),
           _part_type(part_type),
-          _partition_exprs(std::move(partition_expr_ctxs)) {}
+          _partition_exprs(std::move(partition_expr_ctxs)),
+          _enable_optimized(enable_optimized),
+          _chunk_size(),
+          _bucket_to_partition(bucket_to_partition) {}
 
 void PartitionExchanger::incr_sinker() {
     LocalExchanger::incr_sinker();
-    _partitioners.emplace_back(std::make_unique<ShufflePartitioner>(_source, _part_type, _partition_exprs));
+    if (UNLIKELY(_chunk_size <= 0)) {
+        throw std::runtime_error("invalid state, chunk size should be initized before incr_sinker");
+    }
+    _partitioners.emplace_back(std::make_unique<ShufflePartitioner>(
+                _source, _part_type, _partition_exprs, _chunk_size, _enable_optimized, _bucket_to_partition));
 }
 
 Status PartitionExchanger::prepare(RuntimeState* state) {
+    _chunk_size = state->chunk_size();
     RETURN_IF_ERROR(LocalExchanger::prepare(state));
     RETURN_IF_ERROR(Expr::prepare(_partition_exprs, state));
     RETURN_IF_ERROR(Expr::open(_partition_exprs, state));
@@ -152,6 +254,7 @@ Status PartitionExchanger::accept(const ChunkPtr& chunk, const int32_t sink_driv
         return Status::OK();
     }
 
+    // NOTE _source drivers must be created before sink run
     size_t num_partitions = _source->get_sources().size();
     auto& partitioner = _partitioners[sink_driver_sequence];
 

@@ -84,6 +84,11 @@ public:
     // Return the physical bytes of attachment.
     int64_t construct_brpc_attachment(const PTransmitChunkParamsPtr& _chunk_request, butil::IOBuf& attachment);
 
+    std::string get_name() const override;
+
+    // NOTE used for ut
+    std::vector<size_t> channel_send_rows() const;
+
 private:
     bool _is_large_chunk(size_t sz) const {
         // ref olap_scan_node.cpp release_large_columns
@@ -92,6 +97,11 @@ private:
 
 private:
     class Channel;
+
+    std::vector<uint32_t> _create_bucket_to_partition(
+            const std::vector<TPlanFragmentDestination>& destinations,
+            const phmap::flat_hash_map<int64_t, std::unique_ptr<Channel>, StdHash<int64_t>>& instance_id2channel,
+            std::vector<Channel*>& channels);
 
     static const int32_t DEFAULT_DRIVER_SEQUENCE = 0;
 
@@ -160,6 +170,7 @@ private:
     // Only used when broadcast
     PTransmitChunkParamsPtr _chunk_request;
     size_t _current_request_bytes = 0;
+    size_t _current_request_rows = 0;
 
     bool _is_first_chunk = true;
 
@@ -182,6 +193,8 @@ private:
     RuntimeProfile::Counter* _serialized_bytes_counter = nullptr;
     RuntimeProfile::Counter* _compressed_bytes_counter = nullptr;
     RuntimeProfile::HighWaterMarkCounter* _pass_through_buffer_peak_mem_usage = nullptr;
+    // memory usage for the chunk builder
+    RuntimeProfile::HighWaterMarkCounter* _exchange_chunk_builder_peak_mem_usage = nullptr;
 
     std::atomic<bool> _is_finished = false;
     std::atomic<bool> _is_cancelled = false;
@@ -209,9 +222,8 @@ private:
 
     const std::string _partition_keys;
 
-    std::unique_ptr<Shuffler> _shuffler;
-
     std::shared_ptr<serde::EncodeContext> _encode_context = nullptr;
+    std::unique_ptr<ExchangeShuffler> _shuffler;
 };
 
 class ExchangeSinkOperatorFactory final : public OperatorFactory {

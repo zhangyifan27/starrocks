@@ -38,6 +38,7 @@ import com.starrocks.sql.common.ErrorType;
 import com.starrocks.sql.common.StarRocksPlannerException;
 import com.starrocks.system.ComputeNode;
 import com.starrocks.thrift.TNetworkAddress;
+import com.starrocks.thrift.TPartitionType;
 import com.starrocks.thrift.TPlanFragmentDestination;
 import com.starrocks.thrift.TUniqueId;
 import org.apache.logging.log4j.LogManager;
@@ -460,6 +461,37 @@ public class ExecutionDAG {
         }
     }
 
+    private void setShuffleLevel(ExecutionFragment execFragment, boolean preferNonPipelineLevelShuffle) {
+        PlanFragment fragment = execFragment.getPlanFragment();
+        PlanFragment destFragment = fragment.getDestFragment();
+        if (!(fragment.getSink() instanceof DataStreamSink)
+                || destFragment == null) {
+            return;
+        }
+        DataStreamSink streamSink = (DataStreamSink) fragment.getSink();
+        streamSink.setPreferNonPipelineLevelShuffle(preferNonPipelineLevelShuffle);
+        fragment.getDestNode().setPreferNonPipelineLevelShuffle(preferNonPipelineLevelShuffle);
+    }
+
+    private boolean isPreferNonPipelineLevelShuffle(ExecutionFragment execFragment, int shuffleConcurrency) {
+        PlanFragment fragment = execFragment.getPlanFragment();
+        PlanFragment destFragment = fragment.getDestFragment();
+        if (!(fragment.getSink() instanceof DataStreamSink)
+                || destFragment == null) {
+            return false;
+        }
+        DataStreamSink streamSink = (DataStreamSink) fragment.getSink();
+        if (streamSink.getOutputPartition().getType() != TPartitionType.HASH_PARTITIONED 
+                && streamSink.getOutputPartition().getType() != TPartitionType.BUCKET_SHUFFLE_HASH_PARTITIONED) {
+            return false;
+        }
+        int threshold = this.jobSpec.getPipelineLevelShuffleConcurrencyThreshold();
+        if (threshold <= 0) {
+            return false;
+        }
+        return shuffleConcurrency > threshold;
+    }
+
     private void connectNormalFragmentToDestFragments(ExecutionFragment execFragment) {
         PlanFragment fragment = execFragment.getPlanFragment();
         PlanFragment destFragment = fragment.getDestFragment();
@@ -539,6 +571,11 @@ public class ExecutionDAG {
                 dest.setBrpc_server(worker.getBrpcIpAddress());
 
                 execFragment.addDestination(dest);
+            }
+            boolean preferNonPipelineLevelShuffle = isPreferNonPipelineLevelShuffle(execFragment,
+                    execFragment.getDestinations().size() * destDop);
+            if (preferNonPipelineLevelShuffle) {
+                setShuffleLevel(execFragment, preferNonPipelineLevelShuffle);
             }
         }
     }

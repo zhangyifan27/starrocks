@@ -249,9 +249,15 @@ pipeline::OpFactories ExchangeNode::decompose_to_pipeline(pipeline::PipelineBuil
     OpFactories operators;
     if (!_is_merging) {
         auto* query_ctx = context->runtime_state()->query_ctx();
+        auto enable_pipeline_level_shuffle = query_ctx->enable_pipeline_level_shuffle();
+        if (_texchange_node.__isset.prefer_non_pipeline_level_shuffle 
+                && _texchange_node.prefer_non_pipeline_level_shuffle) {
+            enable_pipeline_level_shuffle = false;    
+        }
+
         auto exchange_source_op = std::make_shared<ExchangeSourceOperatorFactory>(
                 context->next_operator_id(), id(), _texchange_node, _num_senders, _input_row_desc,
-                query_ctx->enable_pipeline_level_shuffle());
+                enable_pipeline_level_shuffle);
         exchange_source_op->set_degree_of_parallelism(context->degree_of_parallelism());
         operators.emplace_back(exchange_source_op);
     } else {

@@ -176,7 +176,12 @@ void SinkBuffer::update_profile(RuntimeProfile* profile) {
 
     auto* bytes_unsent_counter = ADD_COUNTER(profile, "BytesUnsent", TUnit::BYTES);
     auto* request_unsent_counter = ADD_COUNTER(profile, "RequestUnsent", TUnit::UNIT);
-    COUNTER_SET(bytes_unsent_counter, _bytes_enqueued - _bytes_sent);
+    auto unsent = _bytes_enqueued - _bytes_sent;
+    auto* bytes_unsent_peak_counter = profile->AddHighWaterMarkCounter(
+            "SinkBufferPeakBytesUnsentBytes", TUnit::BYTES, 
+            RuntimeProfile::Counter::create_strategy(TUnit::BYTES));
+    bytes_unsent_peak_counter->set(unsent);
+    COUNTER_SET(bytes_unsent_counter, unsent);
     COUNTER_SET(request_unsent_counter, _request_enqueued - _request_sent);
 
     profile->add_derived_counter(
@@ -370,6 +375,11 @@ Status SinkBuffer::_try_to_send_rpc(const TUniqueId& instance_id, const std::fun
         if (_first_send_time == -1) {
             _first_send_time = MonotonicNanos();
         }
+        std::string trace_rpc_info = "";
+        if (VLOG_RPC_IS_ON) {
+            trace_rpc_info = _trace_request(request);
+            TRACEPRINTF("transmit_chunk send rpc req: %s", trace_rpc_info.c_str());
+        }
 
         closure->addFailedHandler([this](const ClosureContext& ctx, std::string_view rpc_error_msg) noexcept {
             auto defer = DeferOp([this]() { --_total_in_flight_rpc; });
@@ -388,7 +398,8 @@ Status SinkBuffer::_try_to_send_rpc(const TUniqueId& instance_id, const std::fun
             _fragment_ctx->cancel(Status::ThriftRpcError(err_msg));
             LOG(WARNING) << err_msg;
         });
-        closure->addSuccessHandler([this](const ClosureContext& ctx, const PTransmitChunkResult& result) noexcept {
+        closure->addSuccessHandler([this, trace_rpc_info](const ClosureContext& ctx,
+                                                          const PTransmitChunkResult& result) noexcept {
             // when _total_in_flight_rpc desc to 0, _fragment_ctx may be destructed
             auto defer = DeferOp([this]() { --_total_in_flight_rpc; });
             Status status(result.status());
@@ -397,6 +408,21 @@ Status SinkBuffer::_try_to_send_rpc(const TUniqueId& instance_id, const std::fun
                 ++_num_finished_rpcs[ctx.instance_id.lo];
                 --_num_in_flight_rpcs[ctx.instance_id.lo];
             }
+            if (VLOG_RPC_IS_ON) {
+                const auto& dest_addr = _dest_addrs[ctx.instance_id.lo];
+                auto callback_timestamp = MonotonicNanos();
+                auto rpc_costs = callback_timestamp - ctx.send_timestamp;
+                VLOG_RPC << "[RPC] " << trace_rpc_info << fmt::format(" dest={}:{}", dest_addr.hostname, dest_addr.port)
+                         << fmt::format(
+                                    " TIME_DETAIL: [send_timestamp {}, receiver_post_process_time {}, "
+                                    "callback_timestamp {}]",
+                                    ctx.send_timestamp, result.receiver_post_process_time(), callback_timestamp)
+                         << " total costs: " << rpc_costs / 1000000.0
+                         << " ms, rpc costs: " << (rpc_costs - result.receiver_post_process_time()) / 1000000.0
+                         << " ms";
+                TRACEPRINTF("transmit_chunk recv rpc resp: %s", trace_rpc_info.c_str());
+            }
+
             if (!status.ok()) {
                 _is_finishing = true;
                 _fragment_ctx->cancel(status);
@@ -474,6 +500,18 @@ Status SinkBuffer::_send_rpc(DisposableClosure<PTransmitChunkResult, ClosureCont
         request.brpc_stub->transmit_chunk(&closure->cntl, request.params.get(), &closure->result, closure);
     }
     return Status::OK();
+}
+
+std::string SinkBuffer::_trace_request(const TransmitChunkInfo& request) const {
+    std::ostringstream oss;
+    oss << "request: {query_id: " << print_id(_fragment_ctx->runtime_state()->query_id())
+        << ", fragment_instance_id: " << print_id(request.params->finst_id())
+        << ", node_id: " << request.params->node_id() << ", sender_id: " << request.params->sender_id()
+        << ", be_number: " << request.params->be_number() << ", sequence: " << request.params->sequence()
+        << ", attachment_physical_bytes: " << request.attachment_physical_bytes
+        << fmt::format(", dest_addr: {}:{}", request.brpc_addr.hostname, request.brpc_addr.port)
+        << ", eos: " << (request.params->eos() ? "true" : "false") << "}";
+    return oss.str();
 }
 
 } // namespace starrocks::pipeline

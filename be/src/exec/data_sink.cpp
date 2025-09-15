@@ -302,8 +302,9 @@ Status DataSink::decompose_data_sink_to_pipeline(pipeline::PipelineBuilderContex
         auto& t_stream_sink = request.output_sink().stream_sink;
 
         auto exchange_sink = _create_exchange_sink_operator(context, t_stream_sink, sender, dop);
+        RETURN_IF_ERROR(exchange_sink.status());
 
-        prev_operators.emplace_back(exchange_sink);
+        prev_operators.emplace_back(exchange_sink.value());
         context->add_pipeline(std::move(prev_operators));
     } else if (typeid(*this) == typeid(starrocks::MultiCastDataStreamSink)) {
         // note(yan): steps are:
@@ -355,9 +356,10 @@ Status DataSink::decompose_data_sink_to_pipeline(pipeline::PipelineBuilderContex
 
             // sink op
             auto sink_op = _create_exchange_sink_operator(context, t_stream_sink, sender.get(), dop);
+            RETURN_IF_ERROR(sink_op.status());
 
             ops.emplace_back(source_op);
-            ops.emplace_back(sink_op);
+            ops.emplace_back(sink_op.value());
             context->add_pipeline(std::move(ops));
         }
     } else if (typeid(*this) == typeid(OlapTableSink) || typeid(*this) == typeid(MultiOlapTableSink)) {
@@ -455,9 +457,9 @@ Status DataSink::decompose_data_sink_to_pipeline(pipeline::PipelineBuilderContex
 }
 DIAGNOSTIC_POP
 
-OperatorFactoryPtr DataSink::_create_exchange_sink_operator(pipeline::PipelineBuilderContext* context,
-                                                            const TDataStreamSink& stream_sink,
-                                                            const DataStreamSender* sender, size_t dop) {
+StatusOr<OperatorFactoryPtr> DataSink::_create_exchange_sink_operator(pipeline::PipelineBuilderContext* context,
+                                                                      const TDataStreamSink& stream_sink,
+                                                                      const DataStreamSender* sender, size_t dop) {
     using namespace pipeline;
     auto fragment_ctx = context->fragment_context();
 
@@ -466,12 +468,41 @@ OperatorFactoryPtr DataSink::_create_exchange_sink_operator(pipeline::PipelineBu
     bool is_pipeline_level_shuffle = false;
     int32_t dest_dop = 1;
     bool enable_pipeline_level_shuffle = context->runtime_state()->query_ctx()->enable_pipeline_level_shuffle();
+    if (stream_sink.__isset.prefer_non_pipeline_level_shuffle && stream_sink.prefer_non_pipeline_level_shuffle) {
+        enable_pipeline_level_shuffle = false;
+    }
     if (enable_pipeline_level_shuffle &&
         (sender->get_partition_type() == TPartitionType::HASH_PARTITIONED ||
          sender->get_partition_type() == TPartitionType::BUCKET_SHUFFLE_HASH_PARTITIONED)) {
         is_pipeline_level_shuffle = true;
         dest_dop = stream_sink.dest_dop;
         DCHECK_GT(dest_dop, 0);
+    }
+
+    if (!enable_pipeline_level_shuffle) {
+        const auto& destinations = sender->destinations();
+        bool is_channel_bound_driver_sequence = false;
+        for (const auto& dest : destinations) {
+            if (dest.__isset.pipeline_driver_sequence) {
+                is_channel_bound_driver_sequence = true;
+                break;
+            }
+        }
+        if (is_channel_bound_driver_sequence) {
+            return Status::InternalError(fmt::format("{} Instance Level shuffle is not support driver sequence bound",
+                                                     print_id(fragment_ctx->fragment_instance_id())));
+        }
+        if (sender->get_partition_type() == TPartitionType::BUCKET_SHUFFLE_HASH_PARTITIONED) {
+            if (VLOG_QUERY_IS_ON) {
+                std::ostringstream oss;
+                for (const auto& dest : destinations) {
+                    dest.printTo(oss);
+                    oss << ", ";
+                }
+                VLOG_QUERY << print_id(fragment_ctx->fragment_instance_id())
+                           << " Instance Level shuffle, dests: " << oss.str();
+            }
+        }
     }
 
     std::shared_ptr<SinkBuffer> sink_buffer =

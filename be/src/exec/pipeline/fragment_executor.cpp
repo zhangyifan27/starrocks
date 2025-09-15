@@ -259,6 +259,9 @@ Status FragmentExecutor::_prepare_runtime_state(ExecEnv* exec_env, const Unified
     _fragment_ctx->prepare_pass_through_chunk_buffer();
     _fragment_ctx->set_report_when_finish(request.unique().params.__isset.report_when_finish &&
                                           request.unique().params.report_when_finish);
+    if (request.unique().params.__isset.tablet_sink_buckets) {
+        _fragment_ctx->assign_tablet_sink_buckets(request.unique().params.tablet_sink_buckets);
+    }
 
     auto* obj_pool = runtime_state->obj_pool();
     // Set up desc tbl

@@ -104,7 +104,7 @@ public:
                                            const TDataSink& thrift_sink, const std::vector<TExpr>& output_exprs);
 
 private:
-    OperatorFactoryPtr _create_exchange_sink_operator(pipeline::PipelineBuilderContext* context,
+    StatusOr<OperatorFactoryPtr> _create_exchange_sink_operator(pipeline::PipelineBuilderContext* context,
                                                       const TDataStreamSink& stream_sink,
                                                       const DataStreamSender* sender, size_t dop);
 

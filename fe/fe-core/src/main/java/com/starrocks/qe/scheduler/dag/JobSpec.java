@@ -331,6 +331,7 @@ public class JobSpec {
                     .queryOptions(queryOptions)
                     .enablePipeline(context.getSessionVariable().isEnablePipelineEngine())
                     .resourceGroup(null)
+                    .setConnectContext(context)
                     .build();
         }
 
@@ -475,6 +476,10 @@ public class JobSpec {
         return enableQueue;
     }
 
+    public int getPipelineLevelShuffleConcurrencyThreshold() {
+        return connectContext.getSessionVariable().getPipelineLevelShuffleConcurrencyThreshold();
+    }
+
     public boolean isNeedQueued() {
         return needQueued;
     }
@@ -606,6 +611,11 @@ public class JobSpec {
 
         private Builder setPlanProtocol(String planProtocol) {
             instance.planProtocol = StringUtils.lowerCase(planProtocol);
+            return this;
+        }
+
+        private Builder setConnectContext(ConnectContext connectContext) {
+            instance.connectContext = connectContext;
             return this;
         }
 

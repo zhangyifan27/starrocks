@@ -566,6 +566,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_ICEBERG_IDENTITY_COLUMN_OPTIMIZE = "enable_iceberg_identity_column_optimize";
     public static final String ENABLE_PIPELINE_LEVEL_SHUFFLE = "enable_pipeline_level_shuffle";
+    public static final String PIPELINE_LEVEL_SHUFFLE_CONCURRENCY_THREOSHOLD = "pipeline_level_shuffle_threshold";
 
     public static final String ENABLE_PLAN_SERIALIZE_CONCURRENTLY = "enable_plan_serialize_concurrently";
 
@@ -1562,7 +1563,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private String traceLogMode = "command";
 
     @VariableMgr.VarAttr(name = INTERPOLATE_PASSTHROUGH, flag = VariableMgr.INVISIBLE)
-    private boolean interpolatePassthrough = true;
+    private boolean interpolatePassthrough = false;
 
     @VariableMgr.VarAttr(name = HASH_JOIN_INTERPOLATE_PASSTHROUGH, flag = VariableMgr.INVISIBLE)
     private boolean hashJoinInterpolatePassthrough = false;
@@ -2448,6 +2449,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VarAttr(name = ENABLE_PIPELINE_LEVEL_SHUFFLE, flag = VariableMgr.INVISIBLE)
     private boolean enablePipelineLevelShuffle = true;
+
+    public boolean getEnablePipelineLevelShuffle() {
+        return this.enablePipelineLevelShuffle;
+    }
+
+    @VarAttr(name = PIPELINE_LEVEL_SHUFFLE_CONCURRENCY_THREOSHOLD)
+    private int pipelineLevelShuffleConcurrencyThreshold = 512;
+
+    public int getPipelineLevelShuffleConcurrencyThreshold() {
+        return this.pipelineLevelShuffleConcurrencyThreshold;
+    }
 
     @VarAttr(name = ENABLE_CONSTANT_EXECUTE_IN_FE)
     private boolean enableConstantExecuteInFE = true;

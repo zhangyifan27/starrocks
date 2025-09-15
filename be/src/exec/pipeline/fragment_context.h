@@ -171,6 +171,18 @@ public:
 
     void set_report_when_finish(bool report) { _report_when_finish = report; }
 
+    void assign_tablet_sink_buckets(const std::vector<int32_t>& buckets) {
+        for (auto i = 0; i < buckets.size(); ++i) {
+            _sink_buckets.insert(buckets[i]);
+        }
+    }
+
+    void get_tablet_sink_buckets(std::vector<int32_t>& sink_buckets) const {
+        for (auto bucket : _sink_buckets) {
+            sink_buckets.emplace_back(bucket);
+        }
+    }
+
 private:
     bool _enable_group_execution = false;
     // Id of this query
@@ -231,6 +243,8 @@ private:
     RuntimeProfile::Counter* _jit_timer = nullptr;
 
     bool _report_when_finish{};
+
+    std::unordered_set<int32_t> _sink_buckets;
 };
 
 class FragmentContextManager {

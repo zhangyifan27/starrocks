@@ -81,9 +81,10 @@ class SinkBuffer {
 public:
     SinkBuffer(FragmentContext* fragment_ctx, const std::vector<TPlanFragmentDestination>& destinations,
                bool is_dest_merge);
-    ~SinkBuffer();
+    virtual ~SinkBuffer();
 
-    Status add_request(TransmitChunkInfo& request);
+    // Mock sink buffer for unit test
+    virtual Status add_request(TransmitChunkInfo& request);
     bool is_full() const;
 
     void set_finishing();
@@ -123,6 +124,8 @@ private:
     // `accumulated_network_time / average_concurrency`
     // And we just pick the maximum accumulated_network_time among all destination
     int64_t _network_time();
+
+    std::string _trace_request(const TransmitChunkInfo& req) const;
 
     FragmentContext* _fragment_ctx;
     MemTracker* const _mem_tracker;

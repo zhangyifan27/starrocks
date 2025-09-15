@@ -209,6 +209,50 @@ TEST_F(StreamOperatorsTest, Dop_1) {
     stop_mv();
 }
 
+TEST_F(StreamOperatorsTest, MultiDop_4_partition_exchanger) {
+    ASSERT_IF_ERROR(start_mv([&](auto* stream_ctx) {
+        auto exec_group = stream_ctx->exec_group.get();
+        _degree_of_parallelism = 4;
+        _pipeline_builder = [=](RuntimeState* state) {
+            OpFactories op_factories;
+            auto source_factory = std::make_shared<GeneratorStreamSourceOperatorFactory>(
+                    next_operator_id(), next_plan_node_id(),
+                    GeneratorStreamSourceParam{
+                            .num_column = 2, .start = 0, .step = 1, .chunk_size = 4, .ndv_count = 8});
+            source_factory->set_degree_of_parallelism(_degree_of_parallelism);
+            op_factories.emplace_back(std::move(source_factory));
+
+            // add partition exchange
+            op_factories = maybe_interpolate_local_partition_shuffle_exchange(
+                    op_factories, 4, exec_group, []() {
+                        std::vector<ExprContext*> partition_key_expr_ctxs;            
+                        partition_key_expr_ctxs.push_back(new ExprContext(new ColumnRef(TYPE_BIGINT_DESC, 0))); 
+                        return partition_key_expr_ctxs;
+                    });
+
+            // add gather exchange
+            op_factories = maybe_interpolate_local_passthrough_exchange(op_factories, exec_group);
+            op_factories.emplace_back(
+                    std::make_shared<PrinterStreamSinkOperatorFactory>(next_operator_id(), next_plan_node_id()));
+            auto pipeline = std::make_shared<pipeline::Pipeline>(next_pipeline_id(), op_factories, exec_group);
+            _pipelines.push_back(std::move(pipeline));
+        };
+        return Status::OK();
+    }));
+
+    EpochInfo epoch_info{.epoch_id = 0, .trigger_mode = TriggerMode::MANUAL};
+    ASSERT_IF_ERROR(start_epoch(_tablet_ids, epoch_info));
+    ASSERT_IF_ERROR(wait_until_epoch_finished(epoch_info));
+    auto rs = fetch_results<PrinterStreamSinkOperator>(epoch_info);
+    size_t total_row_nums = 0;
+    for (auto i = 0; i < rs.size(); ++i) {
+        total_row_nums += rs[i]->num_rows();
+    } 
+    EXPECT_EQ(total_row_nums, 16);
+
+    stop_mv();
+}
+
 TEST_F(StreamOperatorsTest, MultiDop_4) {
     ASSERT_IF_ERROR(start_mv([&](auto* stream_ctx) {
         auto exec_group = stream_ctx->exec_group.get();
