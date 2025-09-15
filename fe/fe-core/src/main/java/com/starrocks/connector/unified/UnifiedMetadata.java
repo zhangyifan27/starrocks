@@ -16,6 +16,7 @@ package com.starrocks.connector.unified;
 
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
+import com.starrocks.catalog.JDBCTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AlreadyExistsException;
@@ -120,6 +121,9 @@ public class UnifiedMetadata implements ConnectorMetadata {
         Table.TableType type = getTableType(table);
         if (table.isHiveView()) {
             type = HIVE;
+        }
+        if (table.isJDBCTable()) {
+            type = ((JDBCTable) table).getSourceMetaType();
         }
         return metadataMap.get(type);
     }

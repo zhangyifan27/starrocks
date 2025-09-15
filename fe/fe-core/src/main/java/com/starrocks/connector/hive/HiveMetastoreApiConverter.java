@@ -392,7 +392,8 @@ public class HiveMetastoreApiConverter {
         Map<String, String> properties;
         try {
             properties = toPgJDBCProperties(table);
-            return new JDBCTable(id, tableName, fullSchema, partitionColumns, dbName, catalogName, properties);
+            return new JDBCTable(id, tableName, fullSchema, partitionColumns, dbName,
+                    catalogName, properties, com.starrocks.catalog.Table.TableType.HIVE);
         } catch (Exception e) {
             throw new StarRocksConnectorException(e.getMessage());
         }

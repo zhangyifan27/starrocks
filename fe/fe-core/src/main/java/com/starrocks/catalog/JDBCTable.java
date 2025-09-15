@@ -56,6 +56,7 @@ public class JDBCTable extends Table {
     private String catalogName;
     private String dbName;
     private List<Column> partitionColumns;
+    private TableType sourceMetaType = TableType.JDBC;
 
     public JDBCTable() {
         super(TableType.JDBC);
@@ -83,6 +84,16 @@ public class JDBCTable extends Table {
         validate(properties);
     }
 
+    public JDBCTable(long id, String name, List<Column> schema, List<Column> partitionColumns, String dbName,
+                     String catalogName, Map<String, String> properties, TableType sourceMetaType) throws DdlException {
+        super(id, name, TableType.JDBC, schema);
+        this.catalogName = catalogName;
+        this.dbName = dbName;
+        this.partitionColumns = partitionColumns;
+        this.sourceMetaType = sourceMetaType;
+        validate(properties);
+    }
+
     public String getResourceName() {
         return resourceName;
     }
@@ -98,6 +109,10 @@ public class JDBCTable extends Table {
 
     public String getJdbcTable() {
         return jdbcTable;
+    }
+
+    public TableType getSourceMetaType() {
+        return sourceMetaType;
     }
 
     @Override

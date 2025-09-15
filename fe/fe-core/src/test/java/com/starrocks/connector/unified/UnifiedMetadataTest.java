@@ -21,6 +21,7 @@ import com.starrocks.catalog.DeltaLakeTable;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.HudiTable;
 import com.starrocks.catalog.IcebergTable;
+import com.starrocks.catalog.JDBCTable;
 import com.starrocks.catalog.KuduTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AlreadyExistsException;
@@ -495,5 +496,34 @@ public class UnifiedMetadataTest {
         };
         boolean exists = unifiedMetadata.tableExists("test_db", "test_tbl");
         Assert.assertTrue(exists);
+    }
+
+    @Test
+    public void testJDBCTableRouteBySourceMetaType() throws Exception {
+        java.util.Map<String, String> props = new java.util.HashMap<>();
+        props.put("user", "u");
+        props.put("password", "p");
+        props.put("jdbc_uri", "jdbc:postgresql://127.0.0.1:5432");
+        props.put("driver_url", "http://driver.jar");
+        props.put("checksum", "xx");
+        props.put("driver_class", "org.postgresql.Driver");
+
+        // table whose source meta type is HIVE
+        JDBCTable hiveRoutedJdbc = new JDBCTable(1001L, "jdbc_hive_tbl", ImmutableList.of(), ImmutableList.of(),
+                "db", "catalog", props, Table.TableType.HIVE);
+
+        TableVersionRange expected = TableVersionRange.empty();
+
+        new Expectations() {
+            {
+                hiveMetadata.getTableVersionRange("db", hiveRoutedJdbc, java.util.Optional.empty(), java.util.Optional.empty());
+                result = expected;
+                times = 1;
+            }
+        };
+
+        TableVersionRange r = unifiedMetadata.getTableVersionRange("db", hiveRoutedJdbc,
+                java.util.Optional.empty(), java.util.Optional.empty());
+        assertEquals(expected, r);
     }
 }
