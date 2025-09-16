@@ -64,7 +64,8 @@ public class ExecuteExceptionHandler {
     // When the Backend cannot find the corresponding files, it returns a "Status::ACCESS_REMOTE_FILE_ERROR."
     // To handle this exception, we perform a retry. Before initiating the retry, we need to
     // refresh the metadata cache for the table and clear the query-level metadata cache.
-    private static void handleRemoteFileNotFound(RemoteFileNotFoundException e, RetryContext context) {
+    private static void handleRemoteFileNotFound(RemoteFileNotFoundException e, RetryContext context) throws Exception {
+        LOG.warn("Remote file not found, retrying. [Exception={}]", e.getMessage());
         List<ScanNode> scanNodes = context.execPlan.getScanNodes();
         boolean existExternalCatalog = false;
         for (ScanNode scanNode : scanNodes) {
@@ -86,6 +87,7 @@ public class ExecuteExceptionHandler {
             throw e;
         }
         Tracers.record(Tracers.Module.EXTERNAL, "HMS.RETRY", String.valueOf(context.retryTime + 1));
+        rebuildExecPlan(e, context);
     }
 
     private static void handleRpcException(RpcException e, RetryContext context) throws Exception {
