@@ -406,8 +406,15 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
     }
 
     @Override
-    public void invalidateTable(String dbName, String tableName) {
-        metastore.invalidateTable(dbName, tableName);
+    public void invalidateTable(String dbName, Table table) {
+        if (table instanceof HiveMetaStoreTable) {
+            HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
+            String tableName = hmsTbl.getTableName();
+            metastore.invalidateTable(dbName, tableName);
+            invalidateRemoteFiles(hmsTbl);
+        } else {
+            metastore.invalidateTable(dbName, table.getName());
+        }
     }
 
     public void invalidateTable(String dbName, String tableName, String originLocation) {

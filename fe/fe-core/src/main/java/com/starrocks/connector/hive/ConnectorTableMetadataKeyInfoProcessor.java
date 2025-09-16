@@ -120,7 +120,7 @@ public class ConnectorTableMetadataKeyInfoProcessor extends FrontendDaemon {
                 updateProcessor.refreshTableKeyInfo(dbName, table);
             } catch (Throwable e) {
                 if (Config.invalidate_cache_when_refresh_fail) {
-                    updateProcessor.invalidateTable(dbName, tableName);
+                    updateProcessor.invalidateTable(dbName, table);
                 }
                 LOG.warn("refresh table partition key {}.{}.{} meta store info failed, msg : ", catalogName, dbName,
                         tableName, e);

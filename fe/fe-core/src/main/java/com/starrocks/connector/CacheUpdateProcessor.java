@@ -27,7 +27,7 @@ public interface CacheUpdateProcessor {
 
     void refreshTableBackground(Table table, boolean onlyCachedPartitions, ExecutorService executor);
 
-    default void invalidateTable(String dbName, String table) {
+    default void invalidateTable(String dbName, Table table) {
     }
 
     default Set<DatabaseTableName> getCachedTableNamesForPartitionKeysAndValues() {

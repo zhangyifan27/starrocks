@@ -251,7 +251,7 @@ public class ConnectorTableMetadataProcessor extends FrontendDaemon {
                 updateProcessor.refreshTableBackground(table, true, refreshRemoteFileExecutor);
             } catch (Throwable e) {
                 if (Config.invalidate_cache_when_refresh_fail) {
-                    updateProcessor.invalidateTable(dbName, tableName);
+                    updateProcessor.invalidateTable(dbName, table);
                 }
                 LOG.warn("refresh {}.{}.{} meta store info failed, msg : ", catalogName, dbName,
                         tableName, e);

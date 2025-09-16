@@ -573,8 +573,13 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
             refreshPartitionNames = refreshPartitions(presentPartitionNames, updatedPartitionKeys,
                     this::loadPartitionsByNames, partitionCache);
             if (Config.enable_refresh_hive_partitions_statistics) {
-                refreshPartitions(presentPartitionStatistics, updatedPartitionKeys,
-                        this::loadPartitionsStatistics, partitionStatsCache);
+                try {
+                    refreshPartitions(presentPartitionStatistics, updatedPartitionKeys, this::loadPartitionsStatistics,
+                            partitionStatsCache);
+                } catch (Throwable e) {
+                    invalidateTableStats(hiveDbName, hiveTblName);
+                    LOG.warn("Failed to execute metastore.getPartitionStatistics", e);
+                }
             }
             List<HiveTablePartitionColumn> presentHiveTablePartitionColumns =
                     getPresentHiveTablePartitionColumns(partitionValuesCache, hiveDbName, hiveTblName);
@@ -583,6 +588,13 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
             }
         }
         return refreshPartitionNames;
+    }
+
+    public void invalidateTableStats(String dbName, String tableName) {
+        DatabaseTableName databaseTableName = DatabaseTableName.of(dbName, tableName);
+        tableStatsCache.invalidate(databaseTableName);
+        List<HivePartitionName> presentPartitionStats = getPresentPartitionNames(partitionStatsCache, dbName, tableName);
+        presentPartitionStats.forEach(p -> partitionStatsCache.invalidate(p));
     }
 
     @Override
