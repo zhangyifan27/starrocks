@@ -223,12 +223,12 @@ TEST_F(StreamOperatorsTest, MultiDop_4_partition_exchanger) {
             op_factories.emplace_back(std::move(source_factory));
 
             // add partition exchange
-            op_factories = maybe_interpolate_local_partition_shuffle_exchange(
-                    op_factories, 4, exec_group, []() {
-                        std::vector<ExprContext*> partition_key_expr_ctxs;            
-                        partition_key_expr_ctxs.push_back(new ExprContext(new ColumnRef(TYPE_BIGINT_DESC, 0))); 
-                        return partition_key_expr_ctxs;
-                    });
+            op_factories = maybe_interpolate_local_partition_shuffle_exchange(op_factories, 4, exec_group, []() {
+                std::vector<ExprContext*> partition_key_expr_ctxs;
+                partition_key_expr_ctxs.push_back(
+                        new ExprContext(new ColumnRef(TypeDescriptor(LogicalType::TYPE_BIGINT), 0)));
+                return partition_key_expr_ctxs;
+            });
 
             // add gather exchange
             op_factories = maybe_interpolate_local_passthrough_exchange(op_factories, exec_group);
@@ -247,7 +247,7 @@ TEST_F(StreamOperatorsTest, MultiDop_4_partition_exchanger) {
     size_t total_row_nums = 0;
     for (auto i = 0; i < rs.size(); ++i) {
         total_row_nums += rs[i]->num_rows();
-    } 
+    }
     EXPECT_EQ(total_row_nums, 16);
 
     stop_mv();
