@@ -527,6 +527,28 @@ public class GlobalTransactionMgr implements MemoryTrackable {
         return transactionStateList;
     }
 
+    public int[] getWaitingAndPublishingTransactionNum(boolean nodep) {
+        int[] result = new int[2];
+        if (nodep) {
+            return result;
+        }
+
+        int waitingTaskNum = 0;
+        int publishingTaskNum = 0;
+        for (DatabaseTransactionMgr dbTransactionMgr : dbIdToDatabaseTransactionMgrs.values()) {
+            for (TransactionState state : dbTransactionMgr.getCommittedTxnList()) {
+                if (!state.hasSendTask()) {
+                    waitingTaskNum++;
+                } else {
+                    publishingTaskNum++;
+                }
+            }
+        }
+        result[0] = waitingTaskNum;
+        result[1] = publishingTaskNum;
+        return result;
+    }
+
     public boolean existPrepareTxns(Long dbId, Long tableId, Long partitionId) {
         DatabaseTransactionMgr dbTransactionMgr = dbIdToDatabaseTransactionMgrs.get(dbId);
         if (tableId == null && partitionId == null) {

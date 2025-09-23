@@ -48,6 +48,7 @@
 #include "gen_cpp/HeartbeatService_types.h"
 #include "storage/storage_engine.h"
 #include "util/cpu_usage_info.h"
+#include "util/starrocks_metrics.h"
 
 namespace starrocks {
 
@@ -136,6 +137,10 @@ class PublishVersionTaskWorkerPool : public TaskWorkerPool<PublishVersionAgentTa
 public:
     PublishVersionTaskWorkerPool(ExecEnv* env, int worker_num) : TaskWorkerPool(env, worker_num) {
         _callback_function = _worker_thread_callback;
+        REGISTER_GAUGE_STARROCKS_METRIC(publish_task_queue_size, [this]() {
+            std::lock_guard l(_worker_thread_lock);
+            return _tasks.size();
+        });
     }
 
 private:

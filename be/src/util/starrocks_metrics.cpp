@@ -185,6 +185,9 @@ StarRocksMetrics::StarRocksMetrics() : _metrics(_s_registry_name) {
     _metrics.register_metric("meta_request_duration", MetricLabels().add("type", "read"),
                              &meta_read_request_duration_us);
 
+    _metrics.register_metric("publish_task_waiting_duration", MetricLabels().add("type", "publish"),
+                             &publish_task_waiting_duration_ms);
+
     _metrics.register_metric("segment_read", MetricLabels().add("type", "segment_total_read_times"),
                              &segment_read_total);
     _metrics.register_metric("segment_read", MetricLabels().add("type", "segment_total_row_num"), &segment_row_total);
@@ -230,6 +233,8 @@ StarRocksMetrics::StarRocksMetrics() : _metrics(_s_registry_name) {
     REGISTER_STARROCKS_METRIC(process_fd_num_used);
     REGISTER_STARROCKS_METRIC(process_fd_num_limit_soft);
     REGISTER_STARROCKS_METRIC(process_fd_num_limit_hard);
+
+    REGISTER_STARROCKS_METRIC(publish_task_queue_size);
 
     REGISTER_STARROCKS_METRIC(tablet_cumulative_max_compaction_score);
     REGISTER_STARROCKS_METRIC(tablet_base_max_compaction_score);

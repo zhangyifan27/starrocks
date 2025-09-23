@@ -302,6 +302,18 @@ public class LockManager {
         }
     }
 
+    /**
+     * Notice: Here, only read operations are involved, without modifying any elements. Since it is only used for
+     * monitoring and a certain degree of inaccuracy is acceptable, synchronized is not used here in order to
+     * reduce the overhead of synchronization primitives.
+     */
+    public int waiterNum(long rid) {
+        int lockTableIdx = getLockTableIndex(rid);
+        Map<Long, Lock> lockTable = lockTables[lockTableIdx];
+        Lock lock = lockTable.get(rid);
+        return lock != null ? lock.waiterNum() : 0;
+    }
+
     public boolean isOwner(long rid, Locker locker, LockType lockType) {
         int lockTableIndex = getLockTableIndex(rid);
         synchronized (lockTableMutexes[lockTableIndex]) {

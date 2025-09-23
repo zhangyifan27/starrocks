@@ -157,6 +157,10 @@ public class Database extends MetaObject implements Writable {
         return rwLock;
     }
 
+    public int getLockQueueSize() {
+        return this.rwLock.getQueuedThreads().size();
+    }
+
     public long getId() {
         return id;
     }

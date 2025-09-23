@@ -524,12 +524,16 @@ void* PublishVersionTaskWorkerPool::_worker_thread_callback(void* arg_this) {
         }
 
         const auto& publish_version_task = *priority_tasks.top();
-        VLOG(1) << "get publish version task txn_id: " << publish_version_task.task_req.transaction_id
-                << " priority queue size: " << priority_tasks.size();
+        size_t wait_s =  time(nullptr) - publish_version_task.recv_time;
+        LOG(INFO) << "get publish version task txn_id: " << publish_version_task.task_req.transaction_id
+                  << " task wait time(s): " << wait_s
+                  << " priority queue size: " << priority_tasks.size();
+
         bool enable_sync_publish = publish_version_task.task_req.enable_sync_publish;
         if (enable_sync_publish) {
             wait_time = 0;
         }
+        StarRocksMetrics::instance()->publish_task_waiting_duration_ms.increment(wait_s * MILLIS_PER_SEC);
         StarRocksMetrics::instance()->publish_task_request_total.increment(1);
         auto& finish_task_request = finish_task_requests.emplace_back();
         finish_task_request.__set_backend(BackendOptions::get_localBackend());

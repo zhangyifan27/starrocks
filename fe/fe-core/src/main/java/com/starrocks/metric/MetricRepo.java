@@ -1121,6 +1121,9 @@ public final class MetricRepo {
             visitor.visit(metric);
         }
 
+        // publish versino metrics
+        collectPublishVersionMetrics(visitor);
+
         // database metrics
         collectDatabaseMetrics(visitor);
 
@@ -1205,6 +1208,16 @@ public final class MetricRepo {
                             .addLabel(new MetricLabel("tbl_id", String.valueOf(tableId)));
                     visitor.visit(m);
                 }
+
+                if (Config.lock_manager_enabled && Config.lock_manager_enable_using_fine_granularity_lock) {
+                    // number of threads waiting for table lock
+                    GaugeMetricImpl<Integer> tableLockWaitingNum = new GaugeMetricImpl<>("table_lock_waiting_num",
+                            MetricUnit.OPERATIONS, "count of threads waiting for table lock");
+                    tableLockWaitingNum.setValue(GlobalStateMgr.getCurrentState().getLockManager().waiterNum(tableId));
+                    tableLockWaitingNum.addLabel(new MetricLabel("db_name", dbName))
+                            .addLabel(new MetricLabel("tbl_name", tableName));
+                    visitor.visit(tableLockWaitingNum);
+                }
             }
         }
     }
@@ -1242,11 +1255,45 @@ public final class MetricRepo {
                 rlTxnNum.setValue(dbTransactionMgr.getRunningRoutineLoadTxnNums());
                 rlTxnNum.addLabel(new MetricLabel("db_name", dbName));
                 visitor.visit(rlTxnNum);
+
+                // number of threads waiting for db lock
+                GaugeMetricImpl<Integer> dbLockWaitingNum = new GaugeMetricImpl<>("db_lock_waiting_num",
+                        MetricUnit.OPERATIONS, "count of threads waiting for db lock");
+                dbLockWaitingNum.addLabel(new MetricLabel("db_name", dbName));
+                if (Config.lock_manager_enabled) {
+                    dbLockWaitingNum.setValue(GlobalStateMgr.getCurrentState().getLockManager().waiterNum(dbId));
+                } else {
+                    dbLockWaitingNum.setValue(db.getLockQueueSize());
+                }
+                visitor.visit(dbLockWaitingNum);
+
+                // number of threads waiting for db txn lock
+                GaugeMetricImpl<Integer> dbTxnLockWaitingNum = new GaugeMetricImpl<>("db_txn_lock_waiting_num",
+                        MetricUnit.OPERATIONS, "count of threads waiting for db txn lock");
+                dbTxnLockWaitingNum.setValue(dbTransactionMgr.getLockQueueSize());
+                dbTxnLockWaitingNum.addLabel(new MetricLabel("db_name", dbName));
+                visitor.visit(dbTxnLockWaitingNum);
             } catch (AnalysisException ignored) {
             }
         }
         databaseNum.setValue(dbNum);
         visitor.visit(databaseNum);
+    }
+
+    private static void collectPublishVersionMetrics(MetricVisitor visitor) {
+        int[] publishTaskNum = GlobalStateMgr.getCurrentState().getGlobalTransactionMgr().
+                getWaitingAndPublishingTransactionNum(Config.enable_new_publish_mechanism);
+        // number of publish task not been sent
+        GaugeMetricImpl<Integer> waitingPublishTaskNum = new GaugeMetricImpl<>("wait_publish_task_num",
+                MetricUnit.OPERATIONS, "count of publish task which is waiting in the queue");
+        waitingPublishTaskNum.setValue(publishTaskNum[0]);
+        visitor.visit(waitingPublishTaskNum);
+
+        // number of publish task been sent
+        GaugeMetricImpl<Integer> publishingTaskNum = new GaugeMetricImpl<>("publishing_task_num",
+                MetricUnit.OPERATIONS, "count of publish task which is being published");
+        publishingTaskNum.setValue(publishTaskNum[1]);
+        visitor.visit(publishingTaskNum);
     }
 
     private static void collectKafkaRoutineLoadProcessMetrics(MetricVisitor visitor) {

@@ -171,6 +171,7 @@ public:
 
     METRIC_DEFINE_INT_COUNTER(publish_task_request_total, MetricUnit::REQUESTS);
     METRIC_DEFINE_INT_COUNTER(publish_task_failed_total, MetricUnit::REQUESTS);
+    METRIC_DEFINE_INT_COUNTER(publish_task_waiting_duration_ms, MetricUnit::MILLISECONDS);
 
     METRIC_DEFINE_INT_COUNTER(meta_write_request_total, MetricUnit::REQUESTS);
     METRIC_DEFINE_INT_COUNTER(meta_write_request_duration_us, MetricUnit::MICROSECONDS);
@@ -274,6 +275,8 @@ public:
     METRIC_DEFINE_INT_GAUGE(process_fd_num_used, MetricUnit::NOUNIT);
     METRIC_DEFINE_INT_GAUGE(process_fd_num_limit_soft, MetricUnit::NOUNIT);
     METRIC_DEFINE_INT_GAUGE(process_fd_num_limit_hard, MetricUnit::NOUNIT);
+
+    METRIC_DEFINE_INT_GAUGE(publish_task_queue_size, MetricUnit::NOUNIT);
 
     // Consumer mertics
     METRIC_DEFINE_INT_GAUGE(create_kafka_consumer_num, MetricUnit::NOUNIT);

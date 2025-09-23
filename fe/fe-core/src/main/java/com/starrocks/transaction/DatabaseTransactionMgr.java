@@ -59,6 +59,7 @@ import com.starrocks.common.TraceManager;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.common.util.TimeUtils;
+import com.starrocks.common.util.concurrent.QueryableReentrantReadWriteLock;
 import com.starrocks.common.util.concurrent.lock.LockType;
 import com.starrocks.common.util.concurrent.lock.Locker;
 import com.starrocks.lake.LakeTableHelper;
@@ -94,7 +95,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.stream.Collectors;
 import javax.annotation.Nullable;
 import javax.validation.constraints.NotNull;
@@ -129,7 +129,7 @@ public class DatabaseTransactionMgr {
      * transactionLock is used to control the access to database transaction manager data
      * Modifications to the following multiple data structures must be protected by this lock
      * */
-    private final ReentrantReadWriteLock transactionLock = new ReentrantReadWriteLock(true);
+    private final QueryableReentrantReadWriteLock transactionLock = new QueryableReentrantReadWriteLock(true);
 
     // count the number of running transactions of database, except for shapeless.the routine load txn
     private AtomicInteger runningTxnNums = new AtomicInteger(0);
@@ -592,19 +592,23 @@ public class DatabaseTransactionMgr {
     }
 
     protected void readLock() {
-        this.transactionLock.readLock().lock();
+        this.transactionLock.sharedLock();
     }
 
     protected void readUnlock() {
-        this.transactionLock.readLock().unlock();
+        this.transactionLock.sharedUnlock();
     }
 
     protected void writeLock() {
-        this.transactionLock.writeLock().lock();
+        this.transactionLock.exclusiveLock();
     }
 
     protected void writeUnlock() {
-        this.transactionLock.writeLock().unlock();
+        this.transactionLock.exclusiveUnlock();
+    }
+
+    public int getLockQueueSize() {
+        return this.transactionLock.getQueuedThreads().size();
     }
 
     public long getDbId() {
