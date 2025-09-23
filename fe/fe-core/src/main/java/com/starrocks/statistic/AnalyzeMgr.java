@@ -40,6 +40,7 @@ import com.starrocks.persist.metablock.SRMetaBlockException;
 import com.starrocks.persist.metablock.SRMetaBlockID;
 import com.starrocks.persist.metablock.SRMetaBlockReader;
 import com.starrocks.persist.metablock.SRMetaBlockWriter;
+import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.analyzer.SemanticException;
@@ -743,7 +744,7 @@ public class AnalyzeMgr implements Writable {
         ConnectContext context = connectionMap.remove(analyzeID);
         if (killExecutor) {
             if (context != null) {
-                context.kill(false, "kill analyze unregisterConnection");
+                context.kill(false, "kill analyze unregisterConnection", PPlanFragmentCancelReason.USER_CANCEL);
             } else {
                 throw new SemanticException("There is no running task with analyzeId " + analyzeID);
             }
@@ -753,7 +754,7 @@ public class AnalyzeMgr implements Writable {
     public void killConnection(long analyzeID) {
         ConnectContext context = connectionMap.get(analyzeID);
         if (context != null) {
-            context.kill(false, "kill analyze");
+            context.kill(false, "kill analyze", PPlanFragmentCancelReason.USER_CANCEL);
         } else {
             throw new SemanticException("There is no running task with analyzeId " + analyzeID);
         }

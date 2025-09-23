@@ -39,6 +39,7 @@ import com.starrocks.common.util.TimeUtils;
 import com.starrocks.mysql.MysqlCapability;
 import com.starrocks.mysql.MysqlChannel;
 import com.starrocks.mysql.MysqlCommand;
+import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.WarehouseManager;
 import com.starrocks.thrift.TStatus;
@@ -83,7 +84,7 @@ public class ConnectContextTest {
                 minTimes = 0;
                 result = "192.168.1.1";
 
-                executor.cancel("set up");
+                executor.cancel(PPlanFragmentCancelReason.USER_CANCEL, "set up");
                 minTimes = 0;
 
                 globalStateMgr.getVariableMgr();
@@ -194,9 +195,9 @@ public class ConnectContextTest {
         Assert.assertTrue(ctx.isKilled());
 
         // Kill
-        ctx.kill(true, "sleep time out");
+        ctx.kill(true, "sleep time out", PPlanFragmentCancelReason.TIMEOUT);
         Assert.assertTrue(ctx.isKilled());
-        ctx.kill(false, "sleep time out");
+        ctx.kill(false, "sleep time out", PPlanFragmentCancelReason.TIMEOUT);
         Assert.assertTrue(ctx.isKilled());
 
         // clean up
@@ -220,7 +221,7 @@ public class ConnectContextTest {
         Assert.assertFalse(ctx.isKilled());
 
         // Kill
-        ctx.kill(true, "query timeout");
+        ctx.kill(true, "query timeout", PPlanFragmentCancelReason.TIMEOUT);
         Assert.assertTrue(ctx.isKilled());
 
         // clean up
@@ -267,14 +268,14 @@ public class ConnectContextTest {
         Status status = new Status(new TStatus(TStatusCode.MEM_LIMIT_EXCEEDED));
 
         {
-            ctx.setErrorCodeOnce(status.getErrorCodeString());
-            ctx.getState().setErrType(QueryState.ErrType.ANALYSIS_ERR);
-            Assert.assertEquals("MEM_LIMIT_EXCEEDED", ctx.getNormalizedErrorCode());
+            ctx.getState().setErrStatusCodeAndMsg(status.getErrorCode(), "");
+            ctx.getState().setErrTypeAndMsg(QueryState.ErrType.ANALYSIS_ERR, "");
+            Assert.assertEquals("MEM_LIMIT_EXCEEDED", ctx.getState().getRootErrorCode());
         }
 
         {
-            ctx.resetErrorCode();
-            Assert.assertEquals("ANALYSIS_ERR", ctx.getNormalizedErrorCode());
+            ctx.resetErrorCodeAndMsg();
+            Assert.assertEquals("", ctx.getState().getRootErrorCode());
         }
     }
 }

@@ -680,6 +680,8 @@ public class StmtExecutor {
                                     DebugUtil.printId(uuid));
                             context.setExecutionId(
                                     new TUniqueId(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits()));
+                            // reset errorCode and errorMsg
+                            context.resetErrorCodeAndMsg();
                         }
 
                         Preconditions.checkState(execPlanBuildByNewPlanner, "must use new planner");
@@ -844,23 +846,22 @@ public class StmtExecutor {
             LOG.warn("execute IOException ", e);
             // the exception happens when interact with client
             // this exception shows the connection is gone
-            context.getState().setError(e.getMessage());
+            context.getState().setErrTypeAndMsg(QueryState.ErrType.IO_ERR, e.getMessage());
         } catch (UserException e) {
             String sql = originStmt != null ? originStmt.originStmt : "";
             // analysis exception only print message, not print the stack
             LOG.info("execute Exception, sql: {}, error: {}", sql, e.getMessage());
-            context.getState().setError(e.getMessage());
             if (parsedStmt instanceof KillStmt) {
                 // ignore kill stmt execute err(not monitor it)
-                context.getState().setErrType(QueryState.ErrType.IGNORE_ERR);
+                context.getState().setErrTypeAndMsg(QueryState.ErrType.IGNORE_ERR, e.getMessage());
             } else if (e instanceof TimeoutException) {
-                context.getState().setErrType(QueryState.ErrType.EXEC_TIME_OUT);
+                context.getState().setErrTypeAndMsg(QueryState.ErrType.EXEC_TIME_OUT, e.getMessage());
             } else if (e instanceof NoAliveBackendException) {
-                context.getState().setErrType(QueryState.ErrType.INTERNAL_ERR);
+                context.getState().setErrTypeAndMsg(QueryState.ErrType.INTERNAL_ERR, e.getMessage());
             } else {
                 // TODO: some UserException doesn't belong to analysis error
                 // we should set such error type to internal error
-                context.getState().setErrType(QueryState.ErrType.ANALYSIS_ERR);
+                context.getState().setErrTypeAndMsg(QueryState.ErrType.ANALYSIS_ERR, e.getMessage());
                 if (e.getErrorCode().equals(InternalErrorCode.FRAGMENT_INSTANCES_SKEW_ERROR)) {
                     context.getState().setErrorCode(ErrorCode.ERR_FRAGMENT_INSTANCES_SKEW_ERROR);
                 } else if (e.getErrorCode().equals(InternalErrorCode.INSTANCES_SKEW_NOT_PIPELINE_ENGINE_ERROR)) {
@@ -870,8 +871,7 @@ public class StmtExecutor {
         } catch (Throwable e) {
             String sql = originStmt != null ? originStmt.originStmt : "";
             LOG.warn("execute Exception, sql " + sql, e);
-            context.getState().setError(e.getMessage());
-            context.getState().setErrType(QueryState.ErrType.INTERNAL_ERR);
+            context.getState().setErrTypeAndMsg(QueryState.ErrType.INTERNAL_ERR, e.getMessage());
         } finally {
             if (isSystemSelect) {
                 // recover enableProfile
@@ -1184,7 +1184,7 @@ public class StmtExecutor {
     }
 
     // Because this is called by other thread
-    public void cancel(String cancelledMessage) {
+    public void cancel(PPlanFragmentCancelReason reason, String cancelledMessage) {
         if (parsedStmt instanceof DeleteStmt && ((DeleteStmt) parsedStmt).shouldHandledByDeleteHandler()) {
             DeleteStmt deleteStmt = (DeleteStmt) parsedStmt;
             long jobId = deleteStmt.getJobId();
@@ -1194,12 +1194,12 @@ public class StmtExecutor {
         } else {
             if (subStmtExecutors != null && !subStmtExecutors.isEmpty()) {
                 for (StmtExecutor sub : subStmtExecutors) {
-                    sub.cancel(cancelledMessage);
+                    sub.cancel(reason, cancelledMessage);
                 }
             }
             Coordinator coordRef = coord;
             if (coordRef != null) {
-                coordRef.cancel(cancelledMessage);
+                coordRef.cancel(reason, cancelledMessage);
             }
         }
     }
@@ -1252,7 +1252,8 @@ public class StmtExecutor {
                             PrivilegeType.OPERATE.name(), ObjectType.SYSTEM.name(), null);
                 }
             }
-            killCtx.kill(killConnection, "killed by kill statement : " + originStmt.getOrigStmt());
+            killCtx.kill(killConnection, "killed by kill statement : " + originStmt.getOrigStmt(),
+                    PPlanFragmentCancelReason.USER_CANCEL);
         }
         context.getState().setOk();
     }

@@ -24,6 +24,7 @@ import com.starrocks.metric.LongCounterMetric;
 import com.starrocks.metric.MetricRepo;
 import com.starrocks.plugin.AuditEvent;
 import com.starrocks.proto.PFetchArrowSchemaResult;
+import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.proto.PUniqueId;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.DefaultCoordinator;
@@ -93,6 +94,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
@@ -243,7 +245,7 @@ public class ArrowFlightSqlServiceImplTest {
 
     @Test
     public void testCloseSession() {
-        doNothing().when(mockContext).kill(anyBoolean(), anyString());
+        doNothing().when(mockContext).kill(anyBoolean(), anyString(), eq(PPlanFragmentCancelReason.USER_CANCEL));
         doNothing().when(sessionManager).closeSession(anyString());
         FlightSqlProducer.StreamListener<CloseSessionResult> listener = mock(FlightSqlProducer.StreamListener.class);
         service.closeSession(new CloseSessionRequest(), mockCallContext, listener);

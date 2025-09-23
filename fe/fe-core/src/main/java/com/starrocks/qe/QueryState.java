@@ -40,6 +40,10 @@ import com.starrocks.mysql.MysqlEofPacket;
 import com.starrocks.mysql.MysqlErrPacket;
 import com.starrocks.mysql.MysqlOkPacket;
 import com.starrocks.mysql.MysqlPacket;
+import com.starrocks.thrift.TStatusCode;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 // query state used to record state of query, maybe query status is better
 public class QueryState {
@@ -86,10 +90,8 @@ public class QueryState {
     }
 
     private MysqlStateType stateType = MysqlStateType.OK;
-    private String errorMessage = "";
     private ErrorCode errorCode;
     private String infoMessage;
-    private ErrType errType = ErrType.UNKNOWN;
     private boolean isQuery = false;
     private RequestType requestType = RequestType.UNKNOWN;
     private long affectedRows = 0;
@@ -98,6 +100,15 @@ public class QueryState {
     // make it public for easy to use
     public int serverStatus = 0;
     private boolean isFinished = false;
+
+    private ErrType errType = ErrType.UNKNOWN;
+    private String errorMessage = "";
+
+    // Map of Query error type and error message, used for audit log.
+    // Here, we use LinkedHashMap to record the first errType and errorMessage because
+    // they are often the root cause of a failed query. Considering some corner cases,
+    // we also record the remaining errorTypes and errorMessages to avoid overwriting the root cause.
+    private final Map<String, String> errorMaps = new LinkedHashMap<>(); // errType -> errorMessage
 
     public QueryState() {
     }
@@ -114,6 +125,7 @@ public class QueryState {
         serverStatus = 0;
         isFinished = false;
         requestType = RequestType.UNKNOWN;
+        errorMaps.clear();
     }
 
     public MysqlStateType getStateType() {
@@ -157,10 +169,66 @@ public class QueryState {
 
     public void setMsg(String msg) {
         this.errorMessage = msg == null ? "" : msg;
+        addToErrorMaps(ErrType.UNKNOWN.name(), this.errorMessage);
     }
 
-    public void setErrType(ErrType errType) {
-        this.errType = errType;
+    public void resetErrTypeAndMsg() {
+        this.errorMessage = "";
+        this.errType = ErrType.UNKNOWN;
+        errorMaps.clear();
+    }
+
+    public void setErrTypeAndMsg(ErrType errType, String errMsg) {
+        this.errType = errType == null ? ErrType.UNKNOWN : errType;
+        this.stateType = MysqlStateType.ERR;
+        this.errorMessage = errMsg == null ? "" : errMsg;
+        isFinished = true;
+
+        addToErrorMaps(this.errType.name(), this.errorMessage);
+    }
+
+    public void setErrStatusCodeAndMsg(TStatusCode errCode, String errMsg) {
+        this.stateType = MysqlStateType.ERR;
+        this.errorMessage = errMsg == null ? "" : errMsg;
+        isFinished = true;
+
+        addToErrorMaps(errCode == null ? "UNKNOWN" : errCode.toString(), this.errorMessage);
+    }
+
+    private void addToErrorMaps(String errorCode, String errorMessage) {
+        if (errorCode.equals(ErrType.UNKNOWN.name()) && errorMessage.isEmpty()) {
+            return;
+        }
+        if (!errorMaps.containsKey(errorCode)) {
+            errorMaps.put(errorCode, errorMessage);
+        }
+    }
+
+    public String getRootErrorCode() {
+        if (!errorMaps.isEmpty()) {
+            return errorMaps.entrySet().iterator().next().getKey();
+        }
+        return "";
+    }
+
+    public String getRootErrorMessage() {
+        if (!errorMaps.isEmpty()) {
+            return errorMaps.entrySet().iterator().next().getValue();
+        }
+        return "";
+    }
+
+    public String printErrorCodesAndMsgs() {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (Map.Entry<String, String> entry : errorMaps.entrySet()) {
+            if (!first) {
+                sb.append(",");
+            }
+            sb.append("\"").append(entry.getKey()).append("\":\"").append(entry.getValue()).append("\"");
+            first = false;
+        }
+        return sb.toString();
     }
 
     public ErrType getErrType() {

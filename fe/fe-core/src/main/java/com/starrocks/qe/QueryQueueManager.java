@@ -27,6 +27,7 @@ import com.starrocks.qe.scheduler.slot.SlotEstimatorFactory;
 import com.starrocks.qe.scheduler.slot.SlotProvider;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.system.Frontend;
+import com.starrocks.thrift.TStatusCode;
 import com.starrocks.thrift.TWorkGroup;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -85,6 +86,7 @@ public class QueryQueueManager {
                             GlobalVariable.getQueryQueuePendingTimeoutSecond(),
                             GlobalVariable.QUERY_QUEUE_PENDING_TIMEOUT_SECOND);
                     ResourceGroupMetricMgr.increaseTimeoutQueuedQuery(context, 1L);
+                    setQueryErrorTypeAndMsg(context, TStatusCode.CANCELLED, null, errMsg);
                     throw new UserException(errMsg);
                 }
 
@@ -98,7 +100,9 @@ public class QueryQueueManager {
                     if (e.getCause() instanceof RecoverableException) {
                         continue;
                     }
-                    throw new UserException("Failed to allocate resource to query: " + e.getMessage(), e);
+                    String errMsg = "Failed to allocate resource to query: " + e.getMessage();
+                    setQueryErrorTypeAndMsg(context, null, QueryState.ErrType.INTERNAL_ERR, errMsg);
+                    throw new UserException(errMsg, e);
                 } catch (TimeoutException e) {
                     // Check timeout in the next loop.
                 } catch (CancellationException e) {
@@ -107,7 +111,9 @@ public class QueryQueueManager {
                     if (slotRequirement.isPendingTimeout()) {
                         continue;
                     }
-                    throw new UserException("Cancelled", e);
+                    String msg = "Cancelled when pending in query queue, " + e.getMessage();
+                    setQueryErrorTypeAndMsg(context, TStatusCode.CANCELLED, null, msg);
+                    throw new UserException(msg, e);
                 }
             }
         } finally {
@@ -124,7 +130,9 @@ public class QueryQueueManager {
         Pair<String, Integer> selfIpAndPort = GlobalStateMgr.getCurrentState().getNodeMgr().getSelfIpAndRpcPort();
         Frontend frontend = GlobalStateMgr.getCurrentState().getNodeMgr().getFeByHost(selfIpAndPort.first);
         if (frontend == null) {
-            throw new UserException("cannot get frontend from the local host: " + selfIpAndPort.first);
+            String errMsg = "cannot get frontend from the local host: " + selfIpAndPort.first;
+            setQueryErrorTypeAndMsg(context, null, QueryState.ErrType.INTERNAL_ERR, errMsg);
+            throw new UserException(errMsg);
         }
 
         TWorkGroup group = coord.getJobSpec().getResourceGroup();
@@ -161,6 +169,15 @@ public class QueryQueueManager {
         }
 
         return numSlots;
+    }
+
+    private void setQueryErrorTypeAndMsg(ConnectContext context, TStatusCode tStatusCode,
+                                         QueryState.ErrType errType, String errMsg) {
+        if (tStatusCode != null) {
+            context.getState().setErrStatusCodeAndMsg(tStatusCode, errMsg);
+        } else if (errType != null) {
+            context.getState().setErrTypeAndMsg(errType, errMsg);
+        }
     }
 
 }

@@ -103,7 +103,6 @@ import com.starrocks.thrift.TTabletCommitInfo;
 import com.starrocks.thrift.TTabletFailInfo;
 import com.starrocks.thrift.TUniqueId;
 import com.starrocks.thrift.TUnit;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.math3.stat.descriptive.moment.Skewness;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -593,13 +592,18 @@ public class DefaultCoordinator extends Coordinator {
             QueryQueueManager.getInstance().maybeWait(connectContext, this);
         }
 
-        if (isShortCircuit) {
-            execShortCircuit();
-            return;
-        }
+        try {
+            if (isShortCircuit) {
+                execShortCircuit();
+                return;
+            }
 
-        try (Timer timer = Tracers.watchScope(Tracers.Module.SCHEDULER, "Prepare")) {
-            prepareExec();
+            try (Timer timer = Tracers.watchScope(Tracers.Module.SCHEDULER, "Prepare")) {
+                prepareExec();
+            }
+        } catch (Exception e) {
+            setErrorCodeAndMsg(null, QueryState.ErrType.INTERNAL_ERR, e.getMessage());
+            throw e;
         }
 
         try (Timer timer = Tracers.watchScope(Tracers.Module.SCHEDULER, "Deploy")) {
@@ -715,15 +719,18 @@ public class DefaultCoordinator extends Coordinator {
     private void handleErrorExecution(Status status, FragmentInstanceExecState execution, Throwable failure)
             throws UserException, RpcException {
         cancelInternal(PPlanFragmentCancelReason.INTERNAL_ERROR);
+        // handle error when delivering fragment instance to BEs
         switch (Objects.requireNonNull(status.getErrorCode())) {
             case TIMEOUT:
+                setErrorCodeAndMsg(status.getErrorCode(), null, status.getErrorMsg());
                 throw new UserException("query timeout. backend id: " + execution.getWorker().getId());
             case THRIFT_RPC_ERROR:
+                String errMsg = String.format("rpc failed with %s: %s", execution.getWorker().getHost(), status.getErrorMsg());
+                setErrorCodeAndMsg(status.getErrorCode(), null, errMsg);
                 SimpleScheduler.addToBlocklist(execution.getWorker().getId());
-                throw new RpcException(
-                        String.format("rpc failed with %s: %s", execution.getWorker().getHost(), status.getErrorMsg()),
-                        failure);
+                throw new RpcException(errMsg);
             default:
+                setErrorCodeAndMsg(status.getErrorCode(), null, status.getErrorMsg());
                 throw new UserException(status.getErrorMsg(), failure);
         }
     }
@@ -1156,8 +1163,10 @@ public class DefaultCoordinator extends Coordinator {
         Status status = new Status();
 
         resultBatch = receiver.getNext(status);
-        if (!status.ok()) {
-            connectContext.setErrorCodeOnce(status.getErrorCodeString());
+        // For the CANCELLED status, we need to specify the root cause of the cancellation rather than simply
+        // marking it as CANCELLED, so we do not mark the CANCELLED status here.
+        if (!status.ok() && !receiver.isCancelled()) {
+            setErrorCodeAndMsg(status.getErrorCode(), null, status.getErrorMsg());
             LOG.warn("get next fail, need cancel. status {}, query id: {}", status,
                     DebugUtil.printId(jobSpec.getQueryId()));
         }
@@ -1234,6 +1243,14 @@ public class DefaultCoordinator extends Coordinator {
             } else {
                 queryStatus.setStatus(Status.CANCELLED);
                 queryStatus.setErrorMsg(message);
+
+                if (reason == PPlanFragmentCancelReason.TIMEOUT) {
+                    setErrorCodeAndMsg(TStatusCode.TIMEOUT, null, message);
+                } else if (reason == PPlanFragmentCancelReason.INTERNAL_ERROR) {
+                    setErrorCodeAndMsg(null, QueryState.ErrType.INTERNAL_ERR, message);
+                } else {
+                    setErrorCodeAndMsg(TStatusCode.CANCELLED, null, message);
+                }
             }
             LOG.info("cancel query {} because {}", connectContext.queryId, message);
             cancelInternal(reason);
@@ -1254,9 +1271,6 @@ public class DefaultCoordinator extends Coordinator {
 
     private void cancelInternal(PPlanFragmentCancelReason cancelReason) {
         jobSpec.getSlotProvider().cancelSlotRequirement(slot);
-        if (StringUtils.isEmpty(connectContext.getState().getErrorMessage())) {
-            connectContext.getState().setError(cancelReason.toString());
-        }
         if (null != receiver) {
             receiver.cancel();
         }
@@ -1340,7 +1354,7 @@ public class DefaultCoordinator extends Coordinator {
                     if (!(returnedAllResults && status.isCancelled()) && !status.ok()) {
                         ConnectContext ctx = connectContext;
                         if (ctx != null) {
-                            ctx.setErrorCodeOnce(status.getErrorCodeString());
+                            setErrorCodeAndMsg(status.getErrorCode(), null, status.getErrorMsg());
                         }
                         LOG.warn("exec state report failed status={}, query_id={}, instance_id={}, backend_id={}",
                                 status, DebugUtil.printId(jobSpec.getQueryId()),
@@ -1604,5 +1618,13 @@ public class DefaultCoordinator extends Coordinator {
 
     public ResultReceiver getReceiver() {
         return receiver;
+    }
+
+    private void setErrorCodeAndMsg(TStatusCode tStatusCode, QueryState.ErrType errType, String errMsg) {
+        if (tStatusCode != null) {
+            connectContext.getState().setErrStatusCodeAndMsg(tStatusCode, errMsg);
+        } else if (errType != null) {
+            connectContext.getState().setErrTypeAndMsg(errType, errMsg);
+        }
     }
 }

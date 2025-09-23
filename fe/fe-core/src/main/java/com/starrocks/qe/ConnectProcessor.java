@@ -87,6 +87,7 @@ import com.starrocks.thrift.TMasterOpRequest;
 import com.starrocks.thrift.TMasterOpResult;
 import com.starrocks.thrift.TNetworkAddress;
 import com.starrocks.thrift.TQueryOptions;
+import com.starrocks.thrift.TStatusCode;
 import org.apache.commons.codec.binary.Hex;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
@@ -197,14 +198,15 @@ public class ConnectProcessor {
 
         ctx.getAuditEventBuilder().setEventType(EventType.AFTER_QUERY)
                 .setState(ctx.getState().toString())
-                .setErrorCode(ctx.getNormalizedErrorCode())
-                .setErrorMessage(ctx.getState().getErrorMessage())
+                .setErrorCode(ctx.getState().getRootErrorCode())
+                .setErrorMessage(ctx.getState().getRootErrorMessage())
                 .setQueryTime(elapseMs)
                 .setReturnRows(ctx.getReturnRows())
                 .setStmtId(ctx.getStmtId())
                 .setIsForwardToLeader(isForwardToLeader)
                 .setQueryId(ctx.getQueryId() == null ? "NaN" : ctx.getQueryId().toString())
-                .setCatalog(ctx.getCurrentCatalog());
+                .setCatalog(ctx.getCurrentCatalog())
+                .addException(ctx.getState().printErrorCodesAndMsgs());
 
         if (parsedStmt != null) {
             ctx.getAuditEventBuilder().setStmtType(parsedStmt.getClass().getName());
@@ -241,10 +243,12 @@ public class ConnectProcessor {
                 MetricRepo.COUNTER_QUERY_ERR.increase(1L);
                 MetricRepo.COUNTER_REQUEST_ERR.increase(1L);
                 ResourceGroupMetricMgr.increaseQueryErr(ctx, 1L);
+                String rootErrorCode = ctx.getState().getRootErrorCode();
                 //represent analysis err
-                if (ctx.getState().getErrType() == QueryState.ErrType.ANALYSIS_ERR) {
+                if (rootErrorCode.equals(QueryState.ErrType.ANALYSIS_ERR.name())) {
                     MetricRepo.COUNTER_QUERY_ANALYSIS_ERR.increase(1L);
-                } else if (ctx.getState().getErrType() == QueryState.ErrType.EXEC_TIME_OUT) {
+                } else if (rootErrorCode.equals(QueryState.ErrType.EXEC_TIME_OUT.name())
+                        || rootErrorCode.equals(TStatusCode.TIMEOUT.toString())) {
                     MetricRepo.COUNTER_QUERY_TIMEOUT.increase(1L);
                 } else {
                     MetricRepo.COUNTER_QUERY_INTERNAL_ERR.increase(1L);
@@ -483,14 +487,12 @@ public class ConnectProcessor {
             }
         } catch (AnalysisException e) {
             LOG.warn("Failed to parse SQL: " + originStmt + ", because.", e);
-            ctx.getState().setError(e.getMessage());
-            ctx.getState().setErrType(QueryState.ErrType.ANALYSIS_ERR);
+            ctx.getState().setErrTypeAndMsg(QueryState.ErrType.ANALYSIS_ERR, e.getMessage());
         } catch (Throwable e) {
             // Catch all throwable.
             // If reach here, maybe StarRocks bug.
             LOG.warn("Process one query failed. SQL: " + originStmt + ", because unknown reason: ", e);
-            ctx.getState().setError(e.getMessage());
-            ctx.getState().setErrType(QueryState.ErrType.INTERNAL_ERR);
+            ctx.getState().setErrTypeAndMsg(QueryState.ErrType.INTERNAL_ERR, e.getMessage());
         } finally {
             Tracers.close();
             if (!onlySetStmt) {
@@ -663,7 +665,7 @@ public class ConnectProcessor {
         ctx.setCommand(command);
         ctx.setStartTime();
         ctx.setResourceGroup(null);
-        ctx.resetErrorCode();
+        ctx.resetErrorCodeAndMsg();
 
         switch (command) {
             case COM_INIT_DB:

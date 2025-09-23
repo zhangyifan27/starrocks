@@ -27,6 +27,7 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.ThreadPoolManager;
 import com.starrocks.common.util.UUIDUtil;
 import com.starrocks.privilege.AccessDeniedException;
+import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.service.ExecuteEnv;
 import com.starrocks.service.arrow.flight.sql.ArrowFlightSqlConnectContext;
@@ -55,7 +56,8 @@ public class ArrowFlightSqlSessionManager {
                     ArrowFlightSqlConnectContext context =
                             ExecuteEnv.getInstance().getScheduler().getArrowFlightSqlConnectContext(notification.getKey());
                     if (context != null) {
-                        context.kill(true, "token is expired or evicted");
+                        context.kill(true, "token is expired or evicted",
+                                PPlanFragmentCancelReason.USER_CANCEL);
                     }
                 })
                 .build(new CacheLoader<>() {

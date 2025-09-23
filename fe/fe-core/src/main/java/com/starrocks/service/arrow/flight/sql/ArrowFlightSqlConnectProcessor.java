@@ -64,23 +64,21 @@ public class ArrowFlightSqlConnectProcessor extends ConnectProcessor {
         } catch (IOException e) {
             // Client failed.
             LOG.warn("Process one query failed because IOException: ", e);
-            ctx.getState().setError("StarRocks process failed");
-            ctx.getState().setErrType(QueryState.ErrType.IO_ERR);
+            ctx.getState().setErrTypeAndMsg(QueryState.ErrType.IO_ERR, "StarRocks process failed");
         } catch (UserException e) {
             LOG.warn("Process one query failed. SQL: " + sql + ", because.", e);
-            ctx.getState().setError(e.getMessage());
             // set is as ANALYSIS_ERR so that it won't be treated as a query failure.
-            ctx.getState().setErrType(QueryState.ErrType.ANALYSIS_ERR);
+            ctx.getState().setErrTypeAndMsg(QueryState.ErrType.ANALYSIS_ERR, e.getMessage());
         } catch (Throwable e) {
             // Catch all throwable.
             // If reach here, maybe StarRocks bug.
             LOG.warn("Process one query failed. SQL: " + sql + ", because unknown reason: ", e);
-            ctx.getState().setError("Unexpected exception: " + e.getMessage());
+            String errMsg = "Unexpected exception: " + e.getMessage();
             if (parsedStmt instanceof KillStmt) {
                 // ignore kill stmt execute err(not monitor it)
-                ctx.getState().setErrType(QueryState.ErrType.IGNORE_ERR);
+                ctx.getState().setErrTypeAndMsg(QueryState.ErrType.IGNORE_ERR, errMsg);
             } else {
-                ctx.getState().setErrType(QueryState.ErrType.INTERNAL_ERR);
+                ctx.getState().setErrTypeAndMsg(QueryState.ErrType.INTERNAL_ERR, errMsg);
             }
         } finally {
             Tracers.close();
@@ -100,7 +98,7 @@ public class ArrowFlightSqlConnectProcessor extends ConnectProcessor {
         ctx.setCommand(MysqlCommand.COM_QUERY);
         ctx.setStartTime();
         ctx.setResourceGroup(null);
-        ctx.resetErrorCode();
+        ctx.resetErrorCodeAndMsg();
         this.handleQuery();
 
         // Set command as sleep, so timeCheck will close the connection.

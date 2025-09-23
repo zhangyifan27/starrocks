@@ -25,6 +25,7 @@ import com.starrocks.common.util.ArrowUtil;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.proto.PFetchArrowSchemaRequest;
 import com.starrocks.proto.PFetchArrowSchemaResult;
+import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.proto.PUniqueId;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.DefaultCoordinator;
@@ -124,7 +125,7 @@ public class ArrowFlightSqlServiceImpl implements FlightSqlProducer, AutoCloseab
     public void closeSession(CloseSessionRequest request, CallContext context, StreamListener<CloseSessionResult> listener) {
         try {
             ArrowFlightSqlConnectContext ctx = sessionManager.validateAndGetConnectContext(context.peerIdentity());
-            ctx.kill(true, "arrow flight sql close session");
+            ctx.kill(true, "arrow flight sql close session", PPlanFragmentCancelReason.USER_CANCEL);
             sessionManager.closeSession(ctx.getArrowFlightSqlToken());
         } catch (Throwable e) {
             LOG.error("closeSession failed" + e.getMessage());

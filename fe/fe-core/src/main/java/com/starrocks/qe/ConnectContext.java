@@ -61,6 +61,7 @@ import com.starrocks.privilege.AccessDeniedException;
 import com.starrocks.privilege.ObjectType;
 import com.starrocks.privilege.PrivilegeException;
 import com.starrocks.privilege.PrivilegeType;
+import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.server.CatalogMgr;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.MetadataMgr;
@@ -86,7 +87,6 @@ import com.starrocks.thrift.TUniqueId;
 import com.starrocks.thrift.TWorkGroup;
 import com.starrocks.warehouse.Warehouse;
 import org.apache.commons.collections4.MapUtils;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -147,9 +147,6 @@ public class ConnectContext {
     // state
     protected QueryState state;
     protected long returnRows;
-
-    // error code
-    protected String errorCode = "";
 
     // the protocol capability which server say it can support
     protected MysqlCapability serverCapability;
@@ -676,29 +673,8 @@ public class ConnectContext {
         this.state = state;
     }
 
-    public String getNormalizedErrorCode() {
-        // TODO: how to unify TStatusCode, ErrorCode, ErrType, ConnectContext.errorCode
-        if (StringUtils.isNotEmpty(errorCode)) {
-            // error happens in BE execution.
-            return errorCode;
-        }
-
-        if (state.getErrType() != QueryState.ErrType.UNKNOWN) {
-            // error happens in FE execution.
-            return state.getErrType().name();
-        }
-
-        return "";
-    }
-
-    public void resetErrorCode() {
-        this.errorCode = "";
-    }
-
-    public void setErrorCodeOnce(String errorCode) {
-        if (Strings.isNullOrEmpty(this.errorCode)) {
-            this.errorCode = errorCode;
-        }
+    public void resetErrorCodeAndMsg() {
+        state.resetErrTypeAndMsg();
     }
 
     public MysqlCapability getCapability() {
@@ -986,7 +962,7 @@ public class ConnectContext {
     }
 
     // kill operation with no protect.
-    public void kill(boolean killConnection, String cancelledMessage) {
+    public void kill(boolean killConnection, String cancelledMessage, PPlanFragmentCancelReason reason) {
         LOG.warn("kill query, {}, kill connection: {}",
                 getMysqlChannel().getRemoteHostPortString(), killConnection);
         // Now, cancel running process.
@@ -995,7 +971,7 @@ public class ConnectContext {
             isKilled = true;
         }
         if (executorRef != null) {
-            executorRef.cancel(cancelledMessage);
+            executorRef.cancel(reason, cancelledMessage);
         }
         if (killConnection) {
             int times = 0;
@@ -1051,7 +1027,8 @@ public class ConnectContext {
             }
         }
         if (killFlag) {
-            kill(killConnection, "query timeout");
+            kill(killConnection, "query timeout by connection timeout checker " + sessionVariable.getQueryTimeoutS()
+                    + "s, you can increase session variable query_timeout", PPlanFragmentCancelReason.TIMEOUT);
         }
     }
 

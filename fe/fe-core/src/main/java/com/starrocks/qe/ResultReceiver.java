@@ -99,6 +99,7 @@ public class ResultReceiver {
                         LOG.info("future get interrupted Exception");
                         if (isCancel) {
                             status.setStatus(Status.CANCELLED);
+                            status.setErrorMsg("Cancelled when fetching result from BE.");
                             return null;
                         }
                     }
@@ -153,12 +154,17 @@ public class ResultReceiver {
 
         if (isCancel) {
             status.setStatus(Status.CANCELLED);
+            status.setErrorMsg("Cancelled when fetching result from BE.");
         }
         return rowBatch;
     }
 
     public void cancel() {
         isCancel = true;
+    }
+
+    public boolean isCancelled() {
+        return isCancel;
     }
 
     public TNetworkAddress getAddress() {

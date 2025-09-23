@@ -290,7 +290,7 @@ public class FragmentInstanceExecState {
         } catch (TimeoutException e) {
             LOG.warn("catch a timeout exception", e);
             code = TStatusCode.TIMEOUT;
-            errMsg = "deploy query timeout.";
+            errMsg = "deploy fragment instance timeout.";
             failure = e;
         }
 

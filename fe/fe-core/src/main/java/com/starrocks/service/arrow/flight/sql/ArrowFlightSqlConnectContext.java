@@ -21,6 +21,7 @@ import com.starrocks.catalog.Column;
 import com.starrocks.common.FeConstants;
 import com.starrocks.common.util.ArrowUtil;
 import com.starrocks.common.util.UUIDUtil;
+import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.DefaultCoordinator;
 import com.starrocks.qe.ShowResultSet;
@@ -148,7 +149,7 @@ public class ArrowFlightSqlConnectContext extends ConnectContext {
 
     public void cancelQuery() {
         if (executor != null) {
-            executor.cancel("Arrow Flight SQL client disconnected");
+            executor.cancel(PPlanFragmentCancelReason.USER_CANCEL, "Arrow Flight SQL client disconnected");
         }
     }
 
@@ -160,10 +161,10 @@ public class ArrowFlightSqlConnectContext extends ConnectContext {
     }
 
     @Override
-    public void kill(boolean isKillConnection, String cancelledMessage) {
+    public void kill(boolean isKillConnection, String cancelledMessage, PPlanFragmentCancelReason reason) {
         StmtExecutor executorRef = executor;
         if (executorRef != null) {
-            executorRef.cancel(cancelledMessage);
+            executorRef.cancel(reason, cancelledMessage);
         }
 
         if (coordinatorFuture != null && coordinatorFuture.isDone()) {

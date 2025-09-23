@@ -18,6 +18,7 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.ScalarType;
 import com.starrocks.common.util.ArrowUtil;
 import com.starrocks.mysql.MysqlChannel;
+import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.ConnectScheduler;
 import com.starrocks.qe.ShowResultSet;
@@ -179,7 +180,7 @@ public class ArrowFlightSqlConnectContextTest {
         var mockExecutor = mock(com.starrocks.qe.StmtExecutor.class);
         context.setStmtExecutor(mockExecutor);
         context.cancelQuery();
-        verify(mockExecutor, times(1)).cancel("Arrow Flight SQL client disconnected");
+        verify(mockExecutor, times(1)).cancel(PPlanFragmentCancelReason.USER_CANCEL, "Arrow Flight SQL client disconnected");
     }
 
     @Test
@@ -234,11 +235,11 @@ public class ArrowFlightSqlConnectContextTest {
         try (MockedStatic<ExecuteEnv> mocked = mockStatic(ExecuteEnv.class)) {
             mocked.when(ExecuteEnv::getInstance).thenReturn(mockEnv);
 
-            context.kill(true, "cancelled");
+            context.kill(true, "cancelled", PPlanFragmentCancelReason.USER_CANCEL);
 
             verify(mysqlChannel).close();
 
-            verify(executor).cancel("cancelled");
+            verify(executor).cancel(PPlanFragmentCancelReason.USER_CANCEL, "cancelled");
 
             verify(coordinator).cancel("cancelled");
 

@@ -512,8 +512,8 @@ void PInternalServiceImplBase<T>::_cancel_plan_fragment(google::protobuf::RpcCon
     tid.__set_lo(request->finst_id().lo());
 
     Status st;
-    auto reason_string =
-            request->has_cancel_reason() ? cancel_reason_to_string(request->cancel_reason()) : "UnknownReason";
+    auto reason_string = "Cancelled by FE: " +
+            (request->has_cancel_reason() ? cancel_reason_to_string(request->cancel_reason()) : "UnknownReason");
     bool cancel_query_ctx = tid.hi == 0 && tid.lo == 0;
     if (cancel_query_ctx) {
         DCHECK(request->has_query_id());

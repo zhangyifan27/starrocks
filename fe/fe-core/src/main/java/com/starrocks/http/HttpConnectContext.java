@@ -31,6 +31,7 @@
 
 package com.starrocks.http;
 
+import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.StmtExecutor;
 import com.starrocks.sql.ast.StatementBase;
@@ -147,7 +148,7 @@ public class HttpConnectContext extends ConnectContext {
     }
 
     @Override
-    public void kill(boolean killConnection, String cancelledMessage) {
+    public void kill(boolean killConnection, String cancelledMessage, PPlanFragmentCancelReason reason) {
         LOG.warn("kill query, {}, kill connection: {}", remoteAddress, killConnection);
         // Now, cancel running process.
         StmtExecutor executorRef = executor;
@@ -155,7 +156,7 @@ public class HttpConnectContext extends ConnectContext {
             isKilled = true;
         }
         if (executorRef != null) {
-            executorRef.cancel(cancelledMessage);
+            executorRef.cancel(reason, cancelledMessage);
         }
 
         if (killConnection) {

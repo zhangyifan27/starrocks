@@ -23,6 +23,7 @@ import com.starrocks.common.util.UUIDUtil;
 import com.starrocks.common.util.Util;
 import com.starrocks.common.util.concurrent.QueryableReentrantLock;
 import com.starrocks.memory.MemoryTrackable;
+import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.scheduler.history.TaskRunHistory;
 import com.starrocks.scheduler.persist.TaskRunStatus;
@@ -89,7 +90,7 @@ public class TaskRunManager implements MemoryTrackable {
             taskRun.kill();
             ConnectContext runCtx = taskRun.getRunCtx();
             if (runCtx != null) {
-                runCtx.kill(false, "kill TaskRun");
+                runCtx.kill(false, "kill TaskRun", PPlanFragmentCancelReason.USER_CANCEL);
                 return true;
             }
         } finally {
