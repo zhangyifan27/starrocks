@@ -20,6 +20,7 @@
 #include <util/arrow/row_batch.h>
 #include <util/arrow/starrocks_column_to_arrow.h>
 
+#include "common/logging.h"
 #include "column/const_column.h"
 #include "exprs/cast_expr.h"
 #include "exprs/expr.h"
@@ -75,10 +76,9 @@ Status ArrowResultWriter::append_chunk(Chunk* chunk) {
 }
 
 Status ArrowResultWriter::close() {
-    LOG(INFO) << "[Flight] ArrowResultWriter::close() called";
-    if (_sinker != nullptr) {
-        return _sinker->close(Status::OK());
-    }
+    VLOG_ROW << "[Flight] ArrowResultWriter::close() called";
+    // no need to do close _sinker
+    // _sinker is shared by all the ResultSinkOperators, and will be closed by the last ResultSinkOperator
     return Status::OK();
 }
 
