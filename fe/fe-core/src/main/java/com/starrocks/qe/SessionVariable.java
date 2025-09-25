@@ -434,6 +434,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_READ_ICEBERG_PUFFIN_NDV = "enable_read_iceberg_puffin_ndv";
 
+    public static final String ENABLE_ICEBERG_CALC_TOTAL_PARTITION_NUM = "enable_iceberg_calc_total_partition_num";
+
     public static final String ENABLE_ICEBERG_COLUMN_STATISTICS = "enable_iceberg_column_statistics";
     public static final String ENABLE_DELTA_LAKE_COLUMN_STATISTICS = "enable_delta_lake_column_statistics";
     public static final String PLAN_MODE = "plan_mode";
@@ -2262,6 +2264,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     @VarAttr(name = ENABLE_READ_ICEBERG_PUFFIN_NDV)
     private boolean enableReadIcebergPuffinNdv = true;
 
+    @VarAttr(name = ENABLE_ICEBERG_CALC_TOTAL_PARTITION_NUM)
+    private boolean enableIcebergCalcTotalPartitionNum = true;
+
     @VarAttr(name = ENABLE_ICEBERG_COLUMN_STATISTICS)
     private boolean enableIcebergColumnStatistics = false;
 
@@ -2349,6 +2354,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setEnableReadIcebergPuffinNdv(boolean enableReadIcebergPuffinNdv) {
         this.enableReadIcebergPuffinNdv = enableReadIcebergPuffinNdv;
+    }
+
+    public boolean enableIcebergCalcTotalPartitionNum() {
+        return enableIcebergCalcTotalPartitionNum;
+    }
+
+    public void setEnableIcebergCalcTotalPartitionNum(boolean enableIcebergCalcTotalPartitionNum) {
+        this.enableIcebergCalcTotalPartitionNum = enableIcebergCalcTotalPartitionNum;
     }
 
     public boolean enableDeltaLakeColumnStatistics() {

@@ -230,10 +230,12 @@ public class IcebergScanNode extends ScanNode {
         String catalogName = icebergTable.getCatalogName();
 
         if (!isResourceMappingCatalog(catalogName)) {
-            List<String> partitionNames = GlobalStateMgr.getCurrentState().getMetadataMgr().listPartitionNames(
-                        catalogName, icebergTable.getRemoteDbName(), icebergTable.getRemoteTableName(),
-                        TableVersionRange.withEnd(snapshotId));
-            scanNodePredicates.setTotalPartitionNum(partitionNames.size());
+            if (ConnectContext.get().getSessionVariable().enableIcebergCalcTotalPartitionNum()) {
+                List<String> partitionNames = GlobalStateMgr.getCurrentState().getMetadataMgr().listPartitionNames(
+                            catalogName, icebergTable.getRemoteDbName(), icebergTable.getRemoteTableName(),
+                            TableVersionRange.withEnd(snapshotId));
+                    scanNodePredicates.setTotalPartitionNum(partitionNames.size());
+            }
         }
 
         List<RemoteFileInfo> splits = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(
