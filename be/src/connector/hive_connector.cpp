@@ -461,6 +461,12 @@ void HiveDataSource::_init_counter(RuntimeState* state) {
         _profile.shared_buffered_direct_io_count =
                 ADD_CHILD_COUNTER(_runtime_profile, "DirectIOCount", TUnit::UNIT, prefix);
         _profile.shared_buffered_direct_io_timer = ADD_CHILD_TIMER(_runtime_profile, "DirectIOTime", prefix);
+        _profile.shared_io_large_range_count =
+                ADD_CHILD_COUNTER(_runtime_profile, "SharedIOLargeRangeCount", TUnit::UNIT, prefix);
+        _profile.shared_io_peak_range_bytes = _runtime_profile->AddHighWaterMarkCounter(
+                "SharedIOPeakRangeBytes", TUnit::BYTES,
+                RuntimeProfile::Counter::create_strategy(TUnit::BYTES, TCounterMergeType::SKIP_ALL),
+                prefix);
     }
 
     if (_datacache_options.enable_datacache) {

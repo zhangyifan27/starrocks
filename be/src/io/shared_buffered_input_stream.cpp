@@ -114,7 +114,11 @@ Status SharedBufferedInputStream::_set_io_ranges_all_columns(const std::vector<I
 
     std::vector<IORange> small_ranges;
     for (const IORange& r : check) {
-        if (r.size > _options.max_buffer_size) {
+        if (r.size > _options.max_not_shared) {
+            // not use shared buffer
+            _shared_io_large_range_count++;
+            _shared_io_peak_range_bytes = std::max(_shared_io_peak_range_bytes, r.size);
+        } else if (r.size > _options.max_buffer_size) {
             SharedBufferPtr sb;
             if (config::orc_shared_buffer_mem_tracker_enable && _mem_tracker) {
                 sb.reset(new SharedBuffer{.raw_offset = r.offset, .raw_size = r.size, .ref_count = 1},
@@ -149,7 +153,11 @@ Status SharedBufferedInputStream::_set_io_ranges_active_and_lazy_columns(const s
     small_lazy_flag.assign(ranges.size(), false);
     for (auto index = 0; index < check.size(); ++index) {
         const IORange& r = check[index];
-        if (r.size > _options.max_buffer_size) {
+        if (r.size > _options.max_not_shared) {
+            // not use shared buffer
+            _shared_io_large_range_count++;
+            _shared_io_peak_range_bytes = std::max(_shared_io_peak_range_bytes, r.size);
+        } else if (r.size > _options.max_buffer_size) {
             SharedBufferPtr sb;
             if (config::orc_shared_buffer_mem_tracker_enable && _mem_tracker) {
                 sb.reset(new SharedBuffer{.raw_offset = r.offset, .raw_size = r.size, .ref_count = 1},

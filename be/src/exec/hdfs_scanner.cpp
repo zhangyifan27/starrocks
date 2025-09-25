@@ -241,7 +241,8 @@ StatusOr<std::unique_ptr<RandomAccessFile>> HdfsScanner::create_random_access_fi
     shared_buffered_input_stream = std::make_shared<io::SharedBufferedInputStream>(input_stream, filename, file_size);
     const io::SharedBufferedInputStream::CoalesceOptions shared_options = {
             .max_dist_size = config::io_coalesce_read_max_distance_size,
-            .max_buffer_size = config::io_coalesce_read_max_buffer_size};
+            .max_buffer_size = config::io_coalesce_read_max_buffer_size,
+            .max_not_shared = config::io_not_shared_buffer_size};
     shared_buffered_input_stream->set_coalesce_options(shared_options);
     input_stream = shared_buffered_input_stream;
 
@@ -433,6 +434,10 @@ void HdfsScanner::update_counter() {
     if (_shared_buffered_input_stream) {
         COUNTER_UPDATE(profile->shared_buffered_shared_io_count, _shared_buffered_input_stream->shared_io_count());
         COUNTER_UPDATE(profile->shared_buffered_shared_io_bytes, _shared_buffered_input_stream->shared_io_bytes());
+        COUNTER_UPDATE(profile->shared_io_large_range_count,
+                       _shared_buffered_input_stream->shared_io_large_range_count());
+        COUNTER_UPDATE(profile->shared_io_peak_range_bytes,
+                       _shared_buffered_input_stream->shared_io_peak_range_bytes());
         COUNTER_UPDATE(profile->shared_buffered_shared_align_io_bytes,
                        _shared_buffered_input_stream->shared_align_io_bytes());
         COUNTER_UPDATE(profile->shared_buffered_shared_io_timer, _shared_buffered_input_stream->shared_io_timer());
