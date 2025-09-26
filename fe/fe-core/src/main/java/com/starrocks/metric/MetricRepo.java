@@ -73,6 +73,7 @@ import com.starrocks.monitor.jvm.JvmStats;
 import com.starrocks.proto.PKafkaOffsetProxyRequest;
 import com.starrocks.proto.PKafkaOffsetProxyResult;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.server.SystemStatistics;
 import com.starrocks.service.ExecuteEnv;
 import com.starrocks.staros.StarMgrServer;
 import com.starrocks.system.Backend;
@@ -87,6 +88,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.SortedMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -233,6 +235,12 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_HMS_SLOW_QUERY;
     public static Histogram HISTO_HMS_REQUEST_LATENCY;
     public static Histogram HISTO_GET_REMOTE_FILES_LATENCY;
+
+    public static GaugeMetricImpl<Long> COUNTER_TOTAL_DISK_CAPACITYB;
+    public static GaugeMetricImpl<Long> COUNTER_DISK_AVAILABLE_CAPACITYB;
+    public static GaugeMetricImpl<Long> COUNTER_TOTAL_TABLET_NUM;
+    public static GaugeMetricImpl<Integer> COUNTER_ROUTINE_LOAD_TOTAL_CONCURRENCY;
+    public static GaugeMetricImpl<Integer> COUNTER_DATABASE_NUM;
 
     // following metrics will be updated by metric calculator
     public static GaugeMetricImpl<Double> GAUGE_QUERY_PER_SECOND;
@@ -745,6 +753,88 @@ public final class MetricRepo {
         COUNTER_HMS_SLOW_QUERY = new LongCounterMetric("hivemetastore_slow_query", MetricUnit.REQUESTS,
                 "total slow hivemetastore query");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_HMS_SLOW_QUERY);
+
+        COUNTER_TOTAL_DISK_CAPACITYB = new GaugeMetricImpl<>("system_statistics_total_disk_capacity", MetricUnit.BYTES,
+                "cluster total disk capacity") {
+            @Override
+            public Long getValue() {
+                if (!GlobalStateMgr.getCurrentState().isLeader()) {
+                    return 0L;
+                }
+                SystemStatistics systemStatistics = GlobalStateMgr.getCurrentState().getSystemStatistics();
+                if (systemStatistics == null) {
+                    return 0L;
+                } else {
+                    return systemStatistics.getTotalCapacityB();
+                }
+            }
+        };
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_TOTAL_DISK_CAPACITYB);
+        COUNTER_DISK_AVAILABLE_CAPACITYB = new GaugeMetricImpl<>("system_statistics_disk_available_capacity", MetricUnit.BYTES,
+                "cluster total disk available capacity") {
+            @Override
+            public Long getValue() {
+                if (!GlobalStateMgr.getCurrentState().isLeader()) {
+                    return 0L;
+                }
+                SystemStatistics systemStatistics = GlobalStateMgr.getCurrentState().getSystemStatistics();
+                if (systemStatistics == null) {
+                    return 0L;
+                } else {
+                    return systemStatistics.getDiskAvailableCapacityB();
+                }
+            }
+        };
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_DISK_AVAILABLE_CAPACITYB);
+        COUNTER_TOTAL_TABLET_NUM = new GaugeMetricImpl<>("system_statistics_total_tablet_num", MetricUnit.NOUNIT,
+                "cluster total tablet number") {
+            @Override
+            public Long getValue() {
+                if (!GlobalStateMgr.getCurrentState().isLeader()) {
+                    return 0L;
+                }
+                SystemStatistics systemStatistics = GlobalStateMgr.getCurrentState().getSystemStatistics();
+                if (systemStatistics == null) {
+                    return 0L;
+                } else {
+                    return systemStatistics.getTotalTabletNum();
+                }
+            }
+        };
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_TOTAL_TABLET_NUM);
+        COUNTER_ROUTINE_LOAD_TOTAL_CONCURRENCY =
+                new GaugeMetricImpl<>("system_statistics_routine_load_total_concurrency", MetricUnit.NOUNIT,
+                        "cluster total routine load concurrency") {
+                    @Override
+                    public Integer getValue() {
+                        if (!GlobalStateMgr.getCurrentState().isLeader()) {
+                            return 0;
+                        }
+                        SystemStatistics systemStatistics = GlobalStateMgr.getCurrentState().getSystemStatistics();
+                        if (systemStatistics == null) {
+                            return 0;
+                        } else {
+                            return systemStatistics.getRoutineLoadTotalConcurrency();
+                        }
+                    }
+                };
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_ROUTINE_LOAD_TOTAL_CONCURRENCY);
+        COUNTER_DATABASE_NUM = new GaugeMetricImpl<>("system_statistics_database_num", MetricUnit.NOUNIT,
+                "cluster total database number") {
+            @Override
+            public Integer getValue() {
+                if (!GlobalStateMgr.getCurrentState().isLeader()) {
+                    return 0;
+                }
+                ConcurrentHashMap<Long, Database> idToDbs = GlobalStateMgr.getCurrentState().getLocalMetastore().getIdToDb();
+                if (idToDbs == null) {
+                    return 0;
+                } else {
+                    return idToDbs.size();
+                }
+            }
+        };
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_DATABASE_NUM);
 
         List<Database> dbs = Lists.newArrayList();
         if (GlobalStateMgr.getCurrentState().getLocalMetastore().getIdToDb() != null) {
