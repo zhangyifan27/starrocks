@@ -1710,6 +1710,9 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static int tablet_checker_partition_batch_num = 500;
 
+    @ConfField(mutable = true)
+    public static boolean tablet_disk_random_selection_enabled = true;
+
     @Deprecated
     @ConfField(mutable = true)
     public static int report_queue_size = 100;

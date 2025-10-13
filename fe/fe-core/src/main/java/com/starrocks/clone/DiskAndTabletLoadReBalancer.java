@@ -61,6 +61,7 @@ import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 /**
@@ -1081,7 +1082,13 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
                     pathHashList.add(pathStat.getPathHash());
                 }
             }
-            beDisks.put(beStat.getBeId(), new Pair<>(pathHashList, 0));
+            if (Config.tablet_disk_random_selection_enabled) {
+                // Use random starting index to avoid always selecting the first few disks
+                int startIndex = pathHashList.isEmpty() ? 0 : ThreadLocalRandom.current().nextInt(pathHashList.size());
+                beDisks.put(beStat.getBeId(), new Pair<>(pathHashList, startIndex));
+            } else {
+                beDisks.put(beStat.getBeId(), new Pair<>(pathHashList, 0));
+            }
         }
         LOG.debug("get backend stats for cluster tablet distribution balance. medium: {}, be stats: {}, be disks: {}",
                 medium, beStats, beDisks);

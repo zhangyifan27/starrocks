@@ -60,6 +60,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
 public class BackendLoadStatistic {
@@ -408,6 +409,7 @@ public class BackendLoadStatistic {
         BackendsFitStatus status = new BackendsFitStatus(ErrCode.COMMON_ERROR);
         // try choosing path from first to end (low usage to high usage)
         List<RootPathLoadStatistic> mediumNotMatchedPath = Lists.newArrayList();
+        List<RootPathLoadStatistic> mediumMatchedPath = Lists.newArrayList();
         for (RootPathLoadStatistic pathStatistic : pathStatistics) {
             if (pathStatistic.getStorageMedium() != medium) {
                 mediumNotMatchedPath.add(pathStatistic);
@@ -420,7 +422,17 @@ public class BackendLoadStatistic {
                 continue;
             }
 
-            result.add(pathStatistic);
+            if (Config.tablet_disk_random_selection_enabled) {
+                mediumMatchedPath.add(pathStatistic);
+            } else {
+                result.add(pathStatistic);
+                return BackendsFitStatus.OK;
+            }
+        }
+        if (!mediumMatchedPath.isEmpty()) {
+            // choose one randomly
+            int index = ThreadLocalRandom.current().nextInt(mediumMatchedPath.size());
+            result.add(mediumMatchedPath.get(index));
             return BackendsFitStatus.OK;
         }
 
