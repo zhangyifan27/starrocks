@@ -37,6 +37,7 @@ package com.starrocks.qe;
 import com.starrocks.common.Status;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.proto.PFetchDataResult;
+import com.starrocks.proto.PQueryStatistics;
 import com.starrocks.proto.PUniqueId;
 import com.starrocks.rpc.BackendServiceClient;
 import com.starrocks.rpc.ConfigurableSerDesFactory;
@@ -66,6 +67,7 @@ public class ResultReceiver {
     private final PUniqueId finstId;
     private final Long backendId;
     private Thread currentThread;
+    private PQueryStatistics queryStatistics;
 
     public ResultReceiver(TUniqueId tid, Long backendId, TNetworkAddress address, int timeoutMs) {
         this.finstId = new PUniqueId();
@@ -103,6 +105,9 @@ public class ResultReceiver {
                             return null;
                         }
                     }
+                }
+                if (pResult.queryStatistics != null) {
+                    queryStatistics = pResult.queryStatistics;
                 }
                 TStatusCode code = TStatusCode.findByValue(pResult.status.statusCode);
                 if (code != TStatusCode.OK) {
@@ -173,5 +178,9 @@ public class ResultReceiver {
 
     public Long getBackendId() {
         return backendId;
+    }
+
+    public PQueryStatistics getQueryStatistics() {
+        return queryStatistics;
     }
 }

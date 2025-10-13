@@ -688,6 +688,7 @@ public class StmtExecutor {
                         handleQueryStmt(retryContext.getExecPlan());
                         break;
                     } catch (Exception e) {
+                        statisticsForAuditLog = coord.getAuditStatistics();
                         // For Arrow Flight SQL, FE doesn't know whether the client has already pull data from BE.
                         // So FE cannot decide whether it is able to retry.
                         if (i == retryTime - 1 || context instanceof ArrowFlightSqlConnectContext) {

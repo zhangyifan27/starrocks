@@ -146,6 +146,7 @@ public:
     StatusOr<int64_t> pread(uint8_t* data, int64_t size, int retry = 0) {
         RETURN_IF_ERROR(ensureOpened());
         hdfsFS fs = getFS();
+        HDFSReadSizeStats::instance()->addSize(size, false);
         if (!_hdfs_read_max_size_enable) {
             for (int i = 0; i < (retry + 1); i++) {
                 MonotonicStopWatch watch;
@@ -190,6 +191,7 @@ public:
                     _total_read_time_ns += elapsed_time_ns;
                     StarRocksMetrics::instance()->fs_hdfs_read_io_latency.increment(elapsed_time_ns / 1000);
                     StarRocksMetrics::instance()->fs_hdfs_read_count.increment(1);
+                    HDFSReadSizeStats::instance()->addSize(read_size, true);
                     if (r == -1) {
                         (void)close();
                         RETURN_IF_ERROR(ensureOpened());
@@ -218,6 +220,7 @@ public:
         RETURN_IF_ERROR(seek(_offset));
 
         hdfsFS fs = getFS();
+        HDFSReadSizeStats::instance()->addSize(size, false);
         int64_t now = 0;
         uint8_t* buf = data;
 
@@ -232,6 +235,7 @@ public:
                     r = hdfsRead(fs, _file, buf + now, size - now);
                 } else {
                     int64_t read_size = std::min(size - now, _hdfs_read_max_size);
+                    HDFSReadSizeStats::instance()->addSize(read_size, true);
                     r = hdfsRead(fs, _file, buf + now, read_size);
                 }
 

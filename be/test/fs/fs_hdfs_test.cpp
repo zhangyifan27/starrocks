@@ -76,4 +76,19 @@ TEST_F(HdfsFileSystemTest, create_file_and_destroy) {
     thread.join();
 }
 
+TEST_F(HdfsFileSystemTest, test_hdfs_read_size_stats) {
+    for (int i=0; i<3; i++ ) {
+        HDFSReadSizeStats::instance()->addSize(2048 + i, false);
+        HDFSReadSizeStats::instance()->addSize(1024 + i, true);
+        HDFSReadSizeStats::instance()->addSize(1024 + i, true);
+    }
+    auto stats = HDFSReadSizeStats::instance()->get_stats_and_clear();
+    EXPECT_EQ(stats.avg_size[0], 2049);
+    EXPECT_EQ(stats.avg_size[1], 1025);
+    EXPECT_EQ(stats.p50_size[0], 2049);
+    EXPECT_EQ(stats.p50_size[1], 1025);
+    EXPECT_EQ(stats.p90_size[0], 2050);
+    EXPECT_EQ(stats.p90_size[1], 1026);
+}
+
 } // namespace starrocks

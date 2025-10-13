@@ -678,12 +678,14 @@ public class DefaultCoordinator extends Coordinator {
             return;
         }
 
+        // Add 10 seconds to ensure QueryStat is retrieved from BE after query timeout,
+        // TimeoutChecker will cancel the query immediately without waiting for the extra 10 seconds
         TNetworkAddress execBeAddr = worker.getAddress();
         receiver = new ResultReceiver(
                 rootExecFragment.getInstances().get(0).getInstanceId(),
                 workerId,
                 worker.getBrpcAddress(),
-                jobSpec.getQueryOptions().query_timeout * 1000);
+                (jobSpec.getQueryOptions().query_timeout + 10) * 1000);
 
         if (LOG.isDebugEnabled()) {
             LOG.debug("dispatch query job: {} to {}", DebugUtil.printId(jobSpec.getQueryId()), execBeAddr);
@@ -1181,6 +1183,8 @@ public class DefaultCoordinator extends Coordinator {
         }
 
         if (!copyStatus.ok()) {
+            auditStatistics = receiver.getQueryStatistics();
+
             if (Strings.isNullOrEmpty(copyStatus.getErrorMsg())) {
                 copyStatus.rewriteErrorMsg();
             }

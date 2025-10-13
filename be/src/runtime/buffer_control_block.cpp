@@ -48,9 +48,12 @@
 
 namespace starrocks {
 
-void GetResultBatchCtx::on_failure(const Status& status) {
+void GetResultBatchCtx::on_failure(const Status& status, QueryStatistics* statistics) {
     DCHECK(!status.ok()) << "status is ok, errmsg=" << status.message();
     status.to_protobuf(result->mutable_status());
+    if (statistics != nullptr) {
+        statistics->to_pb(result->mutable_query_statistics());
+    }
     done->Run();
     delete this;
 }
@@ -299,11 +302,11 @@ Status BufferControlBlock::get_batch(TFetchDataResult* result) {
 void BufferControlBlock::get_batch(GetResultBatchCtx* ctx) {
     std::unique_lock<std::mutex> l(_lock);
     if (!_status.ok()) {
-        ctx->on_failure(_status);
+        ctx->on_failure(_status, _query_statistics.get());
         return;
     }
     if (_is_cancelled) {
-        ctx->on_failure(Status::Cancelled("Cancelled BufferControlBlock::get_batch"));
+        ctx->on_failure(Status::Cancelled("Cancelled BufferControlBlock::get_batch"), _query_statistics.get());
         return;
     }
     if (!_batch_queue.empty()) {
@@ -376,7 +379,7 @@ Status BufferControlBlock::close(Status exec_status) {
             }
         } else {
             for (auto& ctx : _waiting_rpc) {
-                ctx->on_failure(_status);
+                ctx->on_failure(_status, _query_statistics.get());
             }
         }
         _waiting_rpc.clear();
@@ -390,7 +393,7 @@ void BufferControlBlock::cancel() {
     _data_removal.notify_all();
     _data_arriaval.notify_all();
     for (auto& ctx : _waiting_rpc) {
-        ctx->on_failure(Status::Cancelled("Cancelled BufferControlBlock::cancel"));
+        ctx->on_failure(Status::Cancelled("Cancelled BufferControlBlock::cancel"), _query_statistics.get());
     }
     _waiting_rpc.clear();
 }

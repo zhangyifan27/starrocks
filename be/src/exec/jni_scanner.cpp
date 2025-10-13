@@ -150,6 +150,17 @@ Status JniScanner::_get_next_chunk(JNIEnv* env, long* chunk_meta) {
     return Status::OK();
 }
 
+void JniScanner::do_update_counter(HdfsScanProfile* profile) {
+    RuntimeProfile* runtime_profile = profile->runtime_profile;
+    int64_t total_scan_time_ns = _app_stats.column_read_ns;
+    runtime_profile->add_info_string(
+            "Top_10_ScanTimeFiles",
+            fmt::format("{},{},{},{},{},{}", total_scan_time_ns / 1000000,
+                        FormatTimestampForLog(_start_scan_time_micros), BackendOptions::get_localhost(),
+                        _scanner_params.path, _scanner_params.scan_range->offset,
+                        _scanner_params.scan_range->length));
+}
+
 template <LogicalType type>
 Status JniScanner::_append_primitive_data(const FillColumnArgs& args) {
     char* column_ptr = static_cast<char*>(next_chunk_meta_as_ptr());

@@ -370,6 +370,16 @@ void MetricsAction::handle(HttpRequest* req) {
         str.append(fmt::format("starrocks_be_fs_hdfs_top10_table_read_io_size{{table_name=\"{}\"}} {}\n", kv.first, kv.second));
     }
 
+    auto stats = HDFSReadSizeStats::instance()->get_stats_and_clear();
+    if (stats.avg_size[0] >= 0) {
+        str.append(fmt::format("starrocks_be_fs_hdfs_call_read_size_stats_avg {}\n", stats.avg_size[0]));
+        str.append(fmt::format("starrocks_be_fs_hdfs_call_read_size_stats_p50 {}\n", stats.p50_size[0]));
+        str.append(fmt::format("starrocks_be_fs_hdfs_call_read_size_stats_p90 {}\n", stats.p90_size[0]));
+        str.append(fmt::format("starrocks_be_fs_hdfs_real_read_size_stats_avg {}\n", stats.avg_size[1]));
+        str.append(fmt::format("starrocks_be_fs_hdfs_real_read_size_stats_p50 {}\n", stats.p50_size[1]));
+        str.append(fmt::format("starrocks_be_fs_hdfs_real_read_size_stats_p90 {}\n", stats.p90_size[1]));
+    }
+
     req->add_output_header(HttpHeaders::CONTENT_TYPE, "text/plain; version=0.0.4");
     if (_mock_func == nullptr) {
         HttpChannel::send_reply(req, str);

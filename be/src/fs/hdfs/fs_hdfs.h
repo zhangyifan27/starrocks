@@ -64,4 +64,59 @@ private:
     std::map<std::string, int64_t> _table_read_io_size;
 };
 
+class HDFSReadSizeStats {
+public:
+    static HDFSReadSizeStats* instance() {
+        static HDFSReadSizeStats inst;
+        return &inst;
+    }
+
+    void addSize(int64_t size, bool is_real_size) {
+        std::lock_guard<std::mutex> l(_mutex);
+        if (_read_sizes[is_real_size].size() > 1000000) {
+            return;
+        }
+        _read_sizes[is_real_size].push_back(size);
+        _total_size[is_real_size] += size;
+        _count[is_real_size]++;
+    }
+
+    struct Stats {
+        int64_t avg_size[2];
+        int64_t p50_size[2];
+        int64_t p90_size[2];
+    };
+
+    Stats get_stats_and_clear() {
+        std::lock_guard<std::mutex> l(_mutex);
+        Stats stats{{-1, -1}, {-1, -1}, {-1, -1}};
+        if (_count[0] == 0 && _count[1] == 0) {
+            return stats;
+        }
+
+        for (int i = 0; i < 2; i++) {
+            if (_count[i]) {
+                stats.avg_size[i] = _total_size[i] / _count[i];
+            }
+            std::sort(_read_sizes[i].begin(), _read_sizes[i].end());
+            stats.p50_size[i] = _read_sizes[i][_count[i] * 50 / 100];
+            stats.p90_size[i] = _read_sizes[i][_count[i] * 90 / 100];
+        }
+
+        for (int i = 0; i < 2; i++) {
+            _read_sizes[i].clear();
+            _total_size[i] = 0;
+            _count[i] = 0;
+        }
+
+        return stats;
+    }
+
+private:
+    std::mutex _mutex;
+    std::vector<int64_t> _read_sizes[2];
+    int64_t _total_size[2] = {0, 0};
+    size_t _count[2] = {0, 0};
+};
+
 } // namespace starrocks
