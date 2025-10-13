@@ -26,6 +26,7 @@ import com.starrocks.catalog.HudiTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.Config;
+import com.starrocks.common.util.DebugUtil;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
 import com.starrocks.connector.hudi.HudiRemoteFileDesc;
 import com.starrocks.datacache.DataCacheExprRewriter;
@@ -35,6 +36,7 @@ import com.starrocks.datacache.DataCacheRule;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.QualifiedName;
 import com.starrocks.sql.common.ErrorType;
 import com.starrocks.sql.common.StarRocksPlannerException;
@@ -74,6 +76,11 @@ public class RemoteScanRangeLocations {
     private long fileSizeBytes = 0;
     private long simpleLimitSizeBytes = Long.MAX_VALUE;
 
+    // Scan range count and limit tracking
+    private boolean isThiveTable = false;
+    private int scanRangeLimit = 0;
+    private int scanRangeCount = 0;
+
     public void setup(DescriptorTable descTbl, Table table, HDFSScanNodePredicates scanNodePredicates) {
         Collection<Long> selectedPartitionIds = scanNodePredicates.getSelectedPartitionIds();
         if (selectedPartitionIds.isEmpty()) {
@@ -91,9 +98,21 @@ public class RemoteScanRangeLocations {
         }
 
         forceScheduleLocal = false;
-        if (ConnectContext.get() != null) {
+        ConnectContext connectContext = ConnectContext.get();
+        SessionVariable sessionVariable = null;
+        int datafileLimit = 0;
+        boolean isThiveTable = false;
+
+        if (connectContext != null) {
             // ConnectContext sometimes will be nullptr, we need to cover it up
-            forceScheduleLocal = ConnectContext.get().getSessionVariable().getForceScheduleLocal();
+            sessionVariable = connectContext.getSessionVariable();
+            if (sessionVariable != null) {
+                datafileLimit = sessionVariable.getScanHiveDatafileNumLimit();
+                forceScheduleLocal = sessionVariable.getForceScheduleLocal();
+            }
+
+            isThiveTable = table instanceof HiveTable &&
+                    ((HiveTable) table).isThiveTable();
         }
 
         HiveMetaStoreTable hiveMetaStoreTable = (HiveMetaStoreTable) table;
@@ -111,11 +130,21 @@ public class RemoteScanRangeLocations {
             }
         }
 
+        int scannableFileCount = 0;
+
         for (int i = 0; i < partitions.size(); i++) {
             for (RemoteFileDesc fileDesc : partitions.get(i).getFiles()) {
                 fileNum++;
-                if (fileDesc.getLength() > 0) {
-                    fileSizeBytes += fileDesc.getLength();
+                long fileLength = fileDesc.getLength();
+                if (fileLength > 0) {
+                    fileSizeBytes += fileLength;
+                    scannableFileCount++;
+
+                    if (isThiveTable && datafileLimit > 0 && scannableFileCount > datafileLimit) {
+                        String msg = "Exceeded the limit of " + datafileLimit + " max scan thive external data files";
+                        LOG.warn("{} queryId: {}", msg, DebugUtil.printId(connectContext.getQueryId()));
+                        throw new SemanticException(msg);
+                    }
                 }
             }
         }
@@ -128,6 +157,7 @@ public class RemoteScanRangeLocations {
         if (simpleLimit < context.getSessionVariable().getPrunePartitionSimpleQueryMaxLimit()) {
             long totalSize = 0;
             long count = 0;
+
             List<DescriptorTable.ReferencedPartitionInfo> tmpPartitionInfos = new ArrayList<>();
             for (int i = partitionKeys.size() - 1; i >= 0; i--) {
                 try {
@@ -241,6 +271,16 @@ public class RemoteScanRangeLocations {
                                                   RemoteFileDesc fileDesc,
                                                   Optional<RemoteFileBlockDesc> blockDesc,
                                                   long offset, long length, DataCacheOptions dataCacheOptions) {
+        // Check scan range count limit for thive tables
+        if (isThiveTable && scanRangeLimit > 0 && scanRangeCount > scanRangeLimit) {
+            String msg = "Exceeded the limit of " + scanRangeLimit + " max HDFS scan ranges for thive external table";
+            ConnectContext connectContext = ConnectContext.get();
+            if (connectContext != null) {
+                LOG.warn("{} queryId: {}", msg, DebugUtil.printId(connectContext.getQueryId()));
+            }
+            throw new SemanticException(msg);
+        }
+
         TScanRangeLocations scanRangeLocations = new TScanRangeLocations();
 
         THdfsScanRange hdfsScanRange = new THdfsScanRange();
@@ -285,6 +325,7 @@ public class RemoteScanRangeLocations {
         }
 
         result.add(scanRangeLocations);
+        scanRangeCount++;
     }
 
     public static boolean isTextFormat(THdfsFileFormat format) {
@@ -295,6 +336,7 @@ public class RemoteScanRangeLocations {
                                               RemoteFileInfo partition,
                                               HudiRemoteFileDesc fileDesc,
                                               boolean useJNIReader, DataCacheOptions dataCacheOptions) {
+
         TScanRangeLocations scanRangeLocations = new TScanRangeLocations();
 
         THdfsScanRange hdfsScanRange = new THdfsScanRange();
@@ -415,6 +457,16 @@ public class RemoteScanRangeLocations {
                                                                RemoteFileDesc fileDesc,
                                                                CombineFileSplit split,
                                                                DataCacheOptions dataCacheOptions) {
+        // Check scan range count limit for thive tables
+        if (isThiveTable && scanRangeLimit > 0 && scanRangeCount > scanRangeLimit) {
+            String msg = "Exceeded the limit of " + scanRangeLimit + " max HDFS scan ranges for thive external table";
+            ConnectContext connectContext = ConnectContext.get();
+            if (connectContext != null) {
+                LOG.warn("{} queryId: {}", msg, DebugUtil.printId(connectContext.getQueryId()));
+            }
+            throw new SemanticException(msg);
+        }
+
         TScanRangeLocations scanRangeLocations = new TScanRangeLocations();
 
         THdfsScanRange hdfsScanRange = new THdfsScanRange();
@@ -441,11 +493,19 @@ public class RemoteScanRangeLocations {
         scanRangeLocations.addToLocations(scanRangeLocation);
 
         result.add(scanRangeLocations);
+        scanRangeCount++;
     }
 
     public List<TScanRangeLocations> getScanRangeLocations(DescriptorTable descTbl, Table table,
                                                            HDFSScanNodePredicates scanNodePredicates) {
         result.clear();
+        scanRangeCount = 0;
+
+        // Initialize scan range limit tracking for thive tables
+        ConnectContext connectContext = ConnectContext.get();
+        isThiveTable = table instanceof HiveTable && ((HiveTable) table).isThiveTable();
+        scanRangeLimit = connectContext.getSessionVariable().getScanHiveDatafileNumLimit();
+
         HiveMetaStoreTable hiveMetaStoreTable = (HiveMetaStoreTable) table;
 
         long start = System.currentTimeMillis();
