@@ -39,9 +39,10 @@ private:
     int _db_index{0};
     int _table_index{0};
     int _column_index{0};
+    int _ordinal_position{1};
     TGetDbsResult _db_result;
     TGetTablesResult _table_result;
-    TDescribeTableResult _desc_result;
+    TDescribeTablesResult _desc_result;
 
     static SchemaScanner::ColumnDesc _s_col_columns[];
 };

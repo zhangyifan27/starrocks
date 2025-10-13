@@ -184,6 +184,8 @@ import com.starrocks.thrift.TCreatePartitionResult;
 import com.starrocks.thrift.TDBPrivDesc;
 import com.starrocks.thrift.TDescribeTableParams;
 import com.starrocks.thrift.TDescribeTableResult;
+import com.starrocks.thrift.TDescribeTablesParams;
+import com.starrocks.thrift.TDescribeTablesResult;
 import com.starrocks.thrift.TExecPlanFragmentParams;
 import com.starrocks.thrift.TExprNode;
 import com.starrocks.thrift.TFeLocksReq;
@@ -330,6 +332,7 @@ import com.starrocks.transaction.TxnCommitAttachment;
 import com.starrocks.utils.TdwUtil;
 import com.starrocks.warehouse.Warehouse;
 import com.starrocks.warehouse.WarehouseInfo;
+import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -1041,6 +1044,64 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         }
 
         return false;
+    }
+
+    @Override
+    public TDescribeTablesResult describeTables(TDescribeTablesParams params) throws TException {
+        LOG.debug("get desc tables request: {}", params);
+        TDescribeTablesResult result = new TDescribeTablesResult();
+        List<TColumnDef> columns = Lists.newArrayList();
+        result.setColumns(columns);
+
+        List<String> tables = params.getTables_name();
+
+        // database privs should be checked in analysis phrase
+        UserIdentity currentUser = null;
+        if (params.isSetCurrent_user_ident()) {
+            currentUser = UserIdentity.fromThrift(params.current_user_ident);
+        } else {
+            currentUser = UserIdentity.createAnalyzedUserIdentWithIp(params.user, params.user_ip);
+        }
+        long limit = params.isSetLimit() ? params.getLimit() : -1;
+
+        // if user query schema meta such as "select * from information_schema.columns limit 10;",
+        // in this case, there is no predicate and only has limit clause,we can call the
+        // describe_table interface only once, which can reduce RPC time from BE to FE, and
+        // the amount of data. In additional,we need add db_name & table_name values to TColumnDesc.
+        if (!params.isSetDb() && CollectionUtils.isEmpty(tables)) {
+            describeWithoutDbAndTable(currentUser, columns, limit);
+            return result;
+        }
+
+        String catalogName = null;
+        if (params.isSetCatalog_name()) {
+            catalogName = params.getCatalog_name();
+        }
+
+        MetadataMgr metadataMgr = GlobalStateMgr.getCurrentState().getMetadataMgr();
+        Database db = metadataMgr.getDb(catalogName, params.db);
+
+        if (db != null) {
+            Locker locker = new Locker();
+            try {
+                locker.lockDatabase(db, LockType.READ);
+                for (String tableName : tables) {
+                    Table table = metadataMgr.getTable(catalogName, params.db, tableName);
+                    if (table == null) {
+                        return result;
+                    }
+                    try {
+                        Authorizer.checkAnyActionOnTableLikeObject(currentUser, null, params.db, table);
+                    } catch (AccessDeniedException e) {
+                        return result;
+                    }
+                    setColumnDesc(columns, table, limit, true, params.db, tableName);
+                }
+            } finally {
+                locker.unLockDatabase(db, LockType.READ);
+            }
+        }
+        return result;
     }
 
     @Override

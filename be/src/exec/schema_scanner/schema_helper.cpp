@@ -103,6 +103,12 @@ Status SchemaHelper::describe_table(const SchemaScannerState& state, const TDesc
             state, [&request, &result](FrontendServiceConnection& client) { client->describeTable(*result, request); });
 }
 
+Status SchemaHelper::describe_tables(const SchemaScannerState& state, const TDescribeTablesParams& request,
+                                    TDescribeTablesResult* result) {
+    return _call_rpc(
+            state, [&request, &result](FrontendServiceConnection& client) { client->describeTables(*result, request); });
+}
+
 Status SchemaHelper::show_variables(const SchemaScannerState& state, const TShowVariableRequest& request,
                                     TShowVariableResult* result) {
     return _call_rpc(

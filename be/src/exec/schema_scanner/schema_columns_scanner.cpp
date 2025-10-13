@@ -16,6 +16,7 @@
 
 #include <sstream>
 
+#include "common/config.h"
 #include "exec/schema_scanner/schema_helper.h"
 #include "gutil/strings/substitute.h"
 #include "runtime/runtime_state.h"
@@ -234,12 +235,7 @@ Status SchemaColumnsScanner::fill_chunk(ChunkPtr* chunk) {
             // TABLE_SCHEMA
             {
                 ColumnPtr column = (*chunk)->get_column_by_slot_id(2);
-                std::string db_name;
-                if (_param->without_db_table) {
-                    db_name = SchemaHelper::extract_db_name(_desc_result.columns[_column_index].columnDesc.dbName);
-                } else {
-                    db_name = SchemaHelper::extract_db_name(_db_result.dbs[_db_index - 1]);
-                }
+                std::string db_name = SchemaHelper::extract_db_name(_desc_result.columns[_column_index].columnDesc.dbName);
                 Slice value(db_name.c_str(), db_name.length());
                 fill_column_with_slot<TYPE_VARCHAR>(column.get(), (void*)&value);
             }
@@ -249,12 +245,7 @@ Status SchemaColumnsScanner::fill_chunk(ChunkPtr* chunk) {
             // TABLE_NAME
             {
                 ColumnPtr column = (*chunk)->get_column_by_slot_id(3);
-                std::string* table_name;
-                if (_param->without_db_table) {
-                    table_name = &_desc_result.columns[_column_index].columnDesc.tableName;
-                } else {
-                    table_name = &_table_result.tables[_table_index - 1];
-                }
+                std::string* table_name = &_desc_result.columns[_column_index].columnDesc.tableName;
                 Slice value(table_name->c_str(), table_name->length());
                 fill_column_with_slot<TYPE_VARCHAR>(column.get(), (void*)&value);
             }
@@ -273,8 +264,20 @@ Status SchemaColumnsScanner::fill_chunk(ChunkPtr* chunk) {
         case 5: {
             // ORDINAL_POSITION
             {
+                if (_column_index == 0) {
+                    _ordinal_position = 1;
+                } else {
+                    const std::string& current_table = _desc_result.columns[_column_index].columnDesc.tableName;
+                    const std::string& previous_table = _desc_result.columns[_column_index - 1].columnDesc.tableName;
+
+                    if (current_table != previous_table) {
+                        _ordinal_position = 1;
+                    } else {
+                        _ordinal_position++;
+                    }
+                }
                 ColumnPtr column = (*chunk)->get_column_by_slot_id(5);
-                int64_t value = _column_index + 1;
+                int64_t value = _ordinal_position;
                 fill_column_with_slot<TYPE_BIGINT>(column.get(), (void*)&value);
             }
             break;
@@ -531,13 +534,18 @@ Status SchemaColumnsScanner::fill_chunk(ChunkPtr* chunk) {
 }
 
 Status SchemaColumnsScanner::get_new_desc() {
-    TDescribeTableParams desc_params;
+    TDescribeTablesParams desc_params;
     if (nullptr != _param->catalog) {
         desc_params.__set_catalog_name(*(_param->catalog));
     }
     if (!_param->without_db_table) {
         desc_params.__set_db(_db_result.dbs[_db_index - 1]);
-        desc_params.__set_table_name(_table_result.tables[_table_index++]);
+        for (int i = 0; i < config::describe_tables_batch_size; ++i) {
+            if (_table_index >= _table_result.tables.size()) {
+                break;
+            }
+            desc_params.tables_name.push_back(_table_result.tables[_table_index++]);
+        }
     }
     if (nullptr != _param->current_user_ident) {
         desc_params.__set_current_user_ident(*(_param->current_user_ident));
@@ -554,7 +562,7 @@ Status SchemaColumnsScanner::get_new_desc() {
         desc_params.__set_limit(_param->limit);
     }
 
-    RETURN_IF_ERROR(SchemaHelper::describe_table(_ss_state, desc_params, &_desc_result));
+    RETURN_IF_ERROR(SchemaHelper::describe_tables(_ss_state, desc_params, &_desc_result));
     _column_index = 0;
 
     return Status::OK();

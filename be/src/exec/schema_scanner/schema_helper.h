@@ -63,6 +63,9 @@ public:
     static Status describe_table(const SchemaScannerState& state, const TDescribeTableParams& desc_params,
                                  TDescribeTableResult* desc_result);
 
+    static Status describe_tables(const SchemaScannerState& state, const TDescribeTablesParams& desc_params,
+                              TDescribeTablesResult* desc_result);
+
     static Status show_variables(const SchemaScannerState& state, const TShowVariableRequest& var_params,
                                  TShowVariableResult* var_result);
 

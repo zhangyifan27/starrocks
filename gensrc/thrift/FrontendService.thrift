@@ -112,6 +112,25 @@ struct TDescribeTableResult {
   1: required list<TColumnDef> columns
 }
 
+// Arguments to DescribeTables, which returns a list of column descriptors for
+// given tables
+struct TDescribeTablesParams {
+  1: optional string db
+  2: required list<string> tables_name
+  3: optional string user   // deprecated
+  4: optional string user_ip    // deprecated
+  5: optional Types.TUserIdentity current_user_ident // to replace the user and user ip
+  6: optional i64 limit
+
+    // If not set, match default_catalog
+  7: optional string catalog_name
+}
+
+// Results of a call to describeTables()
+struct TDescribeTablesResult {
+  1: required list<TColumnDef> columns
+}
+
 struct TShowVariableRequest {
     1: required i64 threadId
     2: required Types.TVarType varType
@@ -1923,6 +1942,7 @@ service FrontendService {
     TGetTablesIndexResponse getTablesIndex(1: TGetTablesIndexRequest request)
 
     TDescribeTableResult describeTable(1:TDescribeTableParams params)
+    TDescribeTablesResult describeTables(1: TDescribeTablesParams params)
     TShowVariableResult showVariables(1:TShowVariableRequest params)
     TReportExecStatusResult reportExecStatus(1:TReportExecStatusParams params)
     TReportAuditStatisticsResult reportAuditStatistics(1:TReportAuditStatisticsParams params)

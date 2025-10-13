@@ -1509,4 +1509,7 @@ CONF_mBool(enable_frequency_base, "false");
 
 // default ttl_repaer schedule time interval
 CONF_mInt32(star_cache_ttl_reaper_interval, "10000");
+
+// default batch size for simdjson lib
+CONF_mInt32(describe_tables_batch_size, "100");
 } // namespace starrocks::config
