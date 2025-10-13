@@ -35,6 +35,8 @@
 package com.starrocks.qe;
 
 import com.google.common.base.Strings;
+import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -67,13 +69,92 @@ public class SQLUtils {
         Pattern pattern = Pattern.compile("/\\*\\*?(.*?)\\*/", Pattern.DOTALL);
         Matcher matcher = pattern.matcher(sql);
 
+        boolean extractFlowId = FLOW_ID.equals(keyOfId);
         while (matcher.find()) {
             String comment = matcher.group(1);
             String id = getIdFromComment(comment, keyOfId, delimiter);
             if (!Strings.isNullOrEmpty(id)) {
                 return id;
             }
+
+            if (extractFlowId) {
+                // for json common like:  /*trace: {"trace_id":"abc123","extra_info":{"flow_id":"263245"}}*/
+                id = extractFlowIdFromJsonComment(comment);
+                if (!Strings.isNullOrEmpty(id)) {
+                    return id;
+                }
+            }
         }
+        return null;
+    }
+
+    private static String extractFlowIdFromJsonComment(String comment) {
+        if (Strings.isNullOrEmpty(comment)) {
+            return null;
+        }
+        try {
+            String jsonStr = extractJsonFromComment(comment);
+            if (jsonStr == null) {
+                return null;
+            }
+
+            JSONObject jsonObject = new JSONObject(jsonStr);
+            return findFlowIdRecursively(jsonObject);
+        } catch (Exception ignored) {
+
+        }
+
+        return null;
+    }
+
+    private static String findFlowIdRecursively(Object jsonObject) {
+        if (jsonObject == null) {
+            return null;
+        }
+
+        if (jsonObject instanceof JSONObject) {
+            JSONObject obj = (JSONObject) jsonObject;
+            if (obj.has(FLOW_ID)) {
+                Object value = obj.get(FLOW_ID);
+                if (value != null) {
+                    return value.toString();
+                }
+            }
+
+            for (String key : obj.keySet()) {
+                Object value = obj.get(key);
+                String result = findFlowIdRecursively(value);
+                if (result != null) {
+                    return result;
+                }
+            }
+        } else if (jsonObject instanceof JSONArray) {
+            JSONArray array = (JSONArray) jsonObject;
+
+            for (int i = 0; i < array.length(); i++) {
+                Object value = array.get(i);
+                String result = findFlowIdRecursively(value);
+                if (result != null) {
+                    return result;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    private static String extractJsonFromComment(String comment) {
+        if (Strings.isNullOrEmpty(comment)) {
+            return null;
+        }
+
+        int jsonStart = comment.indexOf('{');
+        int jsonEnd = comment.lastIndexOf('}');
+
+        if (jsonStart >= 0 && jsonEnd > jsonStart) {
+            return comment.substring(jsonStart, jsonEnd + 1);
+        }
+
         return null;
     }
 
