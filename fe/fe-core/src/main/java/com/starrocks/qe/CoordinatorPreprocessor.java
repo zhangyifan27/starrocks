@@ -98,6 +98,7 @@ public class CoordinatorPreprocessor {
                 sessionVariable.isPreferComputeNode(), sessionVariable.getUseComputeNodes(),
                 sessionVariable.getComputationFragmentSchedulingPolicy(), jobSpec.getWarehouseId());
 
+        connectContext.auditEventBuilder.setUseCnNum(workerProvider.selectAllComputeNodes().size());
         this.fragmentAssignmentStrategyFactory = new FragmentAssignmentStrategyFactory(connectContext, jobSpec, executionDAG);
 
     }
@@ -117,6 +118,8 @@ public class CoordinatorPreprocessor {
                 GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo(),
                 sessionVariable.isPreferComputeNode(), sessionVariable.getUseComputeNodes(),
                 sessionVariable.getComputationFragmentSchedulingPolicy(), jobSpec.getWarehouseId());
+
+        connectContext.auditEventBuilder.setUseCnNum(workerProvider.selectAllComputeNodes().size());
 
         Map<PlanFragmentId, PlanFragment> fragmentMap =
                 fragments.stream().collect(Collectors.toMap(PlanFragment::getFragmentId, Function.identity()));
@@ -216,6 +219,7 @@ public class CoordinatorPreprocessor {
                 sessionVariable.isPreferComputeNode(), sessionVariable.getUseComputeNodes(),
                 sessionVariable.getComputationFragmentSchedulingPolicy(), jobSpec.getWarehouseId());
 
+        connectContext.auditEventBuilder.setUseCnNum(workerProvider.selectAllComputeNodes().size());
         jobSpec.getFragments().forEach(PlanFragment::reset);
     }
 

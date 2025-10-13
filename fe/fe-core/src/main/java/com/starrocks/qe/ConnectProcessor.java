@@ -212,6 +212,13 @@ public class ConnectProcessor {
             ctx.getAuditEventBuilder().setStmtType(parsedStmt.getClass().getName());
         }
 
+        if (Strings.isNullOrEmpty(ctx.getAuditEventBuilder().getFlowId())) {
+            String flowId = SQLUtils.extractFlowId(origStmt);
+            if (!Strings.isNullOrEmpty(flowId)) {
+                ctx.getAuditEventBuilder().setFlowId(flowId);
+            }
+        }
+
         if (statistics != null) {
             ctx.getAuditEventBuilder().setScanBytes(statistics.scanBytes);
             ctx.getAuditEventBuilder().setScanRows(statistics.scanRows);
@@ -232,6 +239,9 @@ public class ConnectProcessor {
 
             if (statistics.cboMemCostBytes != null && statistics.cboMemCostBytes != 0) {
                 ctx.getAuditEventBuilder().setCboMemCostBytes(statistics.cboMemCostBytes);
+            }
+            if (statistics.useCnNum != null && statistics.useCnNum > 0) {
+                ctx.getAuditEventBuilder().setUseCnNum(statistics.useCnNum);
             }
         }
 
@@ -1008,6 +1018,7 @@ public class ConnectProcessor {
                 }
                 if (ctx.getAuditEventBuilder() != null) {
                     audit.setCboMemCostBytes(ctx.getAuditEventBuilder().getCboMemCostBytes());
+                    audit.setUseCnNum(ctx.getAuditEventBuilder().getUseCnNum());
                 }
                 result.setAudit_statistics(AuditStatisticsUtil.toThrift(audit));
             }

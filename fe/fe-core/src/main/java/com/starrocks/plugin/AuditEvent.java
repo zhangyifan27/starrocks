@@ -118,6 +118,10 @@ public class AuditEvent {
     public long memCostBytes = -1;
     @AuditField(value = "FeedbackMemCostBytes", ignore_zero = true)
     public double feedbackMemCostBytes = -1;
+    @AuditField(value = "UseCnNum", ignore_zero = true)
+    public int useCnNum = -1;
+    @AuditField(value = "FlowId")
+    public String flowId = "";
     @AuditField(value = "CboMemCostBytes", ignore_zero = true)
     public double cboMemCostBytes = -1;
     @AuditField(value = "StmtId")
@@ -342,6 +346,23 @@ public class AuditEvent {
             return auditEvent.cboMemCostBytes;
         }
 
+        public AuditEventBuilder setUseCnNum(int cnNum) {
+            auditEvent.useCnNum = cnNum;
+            return this;
+        }
+
+        public int getUseCnNum() {
+            return auditEvent.useCnNum;
+        }
+
+        public AuditEventBuilder setFlowId(String flowId) {
+            auditEvent.flowId = flowId;
+            return this;
+        }
+
+        public String getFlowId() {
+            return auditEvent.flowId;
+        }
 
         public AuditEventBuilder setSpilledBytes(long spilledBytes) {
             auditEvent.spilledBytes = spilledBytes;

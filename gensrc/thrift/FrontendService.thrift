@@ -787,6 +787,7 @@ struct TAuditStatistics {
     10: optional double feedback_mem_cost_bytes
     11: optional double cbo_mem_cost_bytes
     12: optional string digest
+    13: optional i32 use_cn_num
 }
 
 struct TReportAuditStatisticsParams {

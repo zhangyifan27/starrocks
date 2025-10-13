@@ -615,6 +615,7 @@ public class StmtExecutor {
                 String flowId = SQLUtils.extractFlowId(originStmt.originStmt);
                 if (!Strings.isNullOrEmpty(digest) && !Strings.isNullOrEmpty(flowId)) {
                     context.setDigestWithFlowId(digest + ":" + flowId);
+                    context.auditEventBuilder.setFlowId(flowId);
                 } else {
                     context.setDigestWithFlowId("");
                 }
@@ -2241,6 +2242,9 @@ public class StmtExecutor {
         }
         if (statisticsForAuditLog.cboMemCostBytes == null) {
             statisticsForAuditLog.cboMemCostBytes = 0.0D;
+        }
+        if (statisticsForAuditLog.useCnNum == null) {
+            statisticsForAuditLog.useCnNum = 0;
         }
         return statisticsForAuditLog;
     }
