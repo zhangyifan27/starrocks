@@ -141,17 +141,6 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
 
         if (refreshPartitionNames != null) {
             Map<BasePartitionInfo, Partition> updatedPartitions = getUpdatedPartitions(hmsTbl, refreshPartitionNames);
-            if (!updatedPartitions.isEmpty()) {
-                // update partition remote files cache
-                Set<String> updatedPaths = updatedPartitions.values().stream().map(Partition::getFullPath)
-                        .map(path -> path.endsWith("/") ? path : path + "/")
-                        .collect(Collectors.toSet());
-                refreshRemoteFilesBackground(hmsTbl.getTableLocation(), updatedPaths, onlyCachedPartitions, executor);
-
-                LOG.info("{}.{}.{} partitions has updated, updated partition size is {}, " +
-                                "refresh partition and file success", hmsTbl.getCatalogName(), hmsTbl.getDbName(),
-                        hmsTbl.getTableName(), updatedPartitions.size());
-            }
 
             // update partitionUpdatedTimes
             updatedPartitions.entrySet().stream().filter(entry -> entry.getValue().getModifiedTime() != 0).
@@ -160,6 +149,9 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
             partitionUpdatedTimes.keySet().removeIf(basePartitionInfo -> !cachedPartitions.containsKey(
                     HivePartitionName.of(basePartitionInfo.dbName, basePartitionInfo.tableName,
                             basePartitionInfo.partitionName)));
+
+            // update partition remote files cache
+            refreshRemoteFilesBackground(refreshPartitionNames, hmsTbl, onlyCachedPartitions, executor);
         }
         if ((refreshTableResult.second != null) && refreshTableResult.second) {
             invalidateRemoteFiles(hmsTbl);
@@ -291,6 +283,22 @@ public class HiveCacheUpdateProcessor implements CacheUpdateProcessor {
         if (isSchemaChange) {
             hiveTable.modifyTableSchema(srDbName, hiveTable.getName(), resourceMappingCatalogTable);
         }
+    }
+
+    private void refreshRemoteFilesBackground(List<HivePartitionName> refreshPartitionNames, HiveMetaStoreTable hmsTbl,
+                                              boolean onlyCachedPartitions, ExecutorService executor) {
+        if (refreshPartitionNames.isEmpty()) {
+            return;
+        }
+        Map<HivePartitionName, Partition> partitions = metastore.getCachedPartitions(refreshPartitionNames);
+        // update partition remote files cache
+        Set<String> updatedPaths = partitions.values().stream().map(Partition::getFullPath)
+                .map(path -> path.endsWith("/") ? path : path + "/").collect(Collectors.toSet());
+        refreshRemoteFilesBackground(hmsTbl.getTableLocation(), updatedPaths, onlyCachedPartitions, executor);
+
+        LOG.info("{}.{}.{} partitions has updated, updated partition size is {}, " +
+                        "refresh partition and file success", hmsTbl.getCatalogName(), hmsTbl.getDbName(),
+                hmsTbl.getTableName(), updatedPaths.size());
     }
 
     private void refreshRemoteFilesBackground(String tableLocation, Set<String> updatePaths,
