@@ -809,6 +809,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String CBO_EQ_BASE_TYPE = "cbo_eq_base_type";
 
+    public static final String CBO_TYPE_COERCION_DATE_VS_INTEGER = "cbo_type_coercion_date_vs_integer";
+
     public static final String ENABLE_SHORT_CIRCUIT = "enable_short_circuit";
 
     public static final String ENABLE_PREPARE_STMT = "enable_prepare_stmt";
@@ -2306,6 +2308,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     @VarAttr(name = CBO_EQ_BASE_TYPE)
     private String cboEqBaseType = SessionVariableConstants.VARCHAR;
 
+    @VarAttr(name = CBO_TYPE_COERCION_DATE_VS_INTEGER)
+    private String cboTypeCoercionDateVsInteger = SessionVariableConstants.DOUBLE;
+
     @VariableMgr.VarAttr(name = ENABLE_RESULT_SINK_ACCUMULATE)
     private boolean enableResultSinkAccumulate = true;
 
@@ -2338,6 +2343,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public String getCboEqBaseType() {
         return cboEqBaseType;
+    }
+
+    public String getCboTypeCoercionDateVsInteger() {
+        return cboTypeCoercionDateVsInteger;
+    }
+
+    public void setCboTypeCoercionDateVsInteger(String value) {
+        this.cboTypeCoercionDateVsInteger = value;
     }
 
     public boolean isEnablePruneIcebergManifest() {

@@ -36,6 +36,8 @@ public class SessionVariableConstants {
 
     public static final String VARCHAR = "varchar";
 
+    public static final String TIMESTAMP = "timestamp";
+
     public static final String ALWAYS = "always";
 
     public static final String NEVER = "never";

@@ -275,6 +275,15 @@ public class TypeManager {
             return type1;
         }
 
+        if (ConnectContext.get() != null && SessionVariableConstants.TIMESTAMP.equalsIgnoreCase(ConnectContext.get()
+                .getSessionVariable().getCboTypeCoercionDateVsInteger())) {
+            if (type1.isFixedPointType() && type2.isDateType()) {
+                return type2;
+            } else if (type1.isDateType() && type2.isFixedPointType()) {
+                return type1;
+            }
+        }
+
         return Type.DOUBLE;
     }
 
