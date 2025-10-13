@@ -191,6 +191,10 @@
                     <groupId>dnsjava</groupId>
                     <artifactId>*</artifactId>
                 </exclusion>
+                <exclusion>
+                    <groupId>com.tencent.tdw</groupId>
+                    <artifactId>security-common</artifactId>
+                </exclusion>
             </exclusions>
         </dependency>
 
