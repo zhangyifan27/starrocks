@@ -35,6 +35,8 @@
 #include "common/daemon.h"
 
 #include <gflags/gflags.h>
+#include <signal.h>
+#include <unistd.h>
 
 #include "block_cache/block_cache.h"
 #include "column/column_helper.h"
@@ -309,6 +311,46 @@ void init_signals() {
     ret = install_signal(SIGTERM, sigterm_handler);
     if (ret < 0) {
         exit(-1);
+    }
+
+    // For CN role running as PID 1 inside minimal containers: default fatal signal
+    // re-raise from glog will not terminate PID1. Install hard-exit wrappers here
+    // (after glog may have installed its handlers) so we still exit.
+    bool as_cn = FLAGS_cn;
+    LOG(INFO) << "init_signals, as_cn=" << as_cn << " current_pid=" << getpid();
+
+    if (as_cn && getpid() == 1) {
+        static struct sigaction g_old_fatal_actions[NSIG];
+        auto install_force_exit = [&](int signo) {
+            struct sigaction oldact;
+            if (sigaction(signo, nullptr, &oldact) != 0) {
+                PLOG(ERROR) << "query existing signal action failed, signo=" << signo;
+                return;
+            }
+            g_old_fatal_actions[signo] = oldact;
+            struct sigaction sa;
+            memset(&sa, 0, sizeof(sa));
+            sa.sa_flags = SA_SIGINFO | SA_RESTART;
+            if (oldact.sa_flags & SA_ONSTACK) sa.sa_flags |= SA_ONSTACK;
+            sa.sa_sigaction = [](int sig, siginfo_t* info, void* context) {
+                static volatile sig_atomic_t entered = 0;
+                if (!entered) {
+                    entered = 1;
+                    struct sigaction& prev = g_old_fatal_actions[sig];
+                    if (prev.sa_sigaction && (prev.sa_flags & SA_SIGINFO)) {
+                        prev.sa_sigaction(sig, info, context);
+                    } else if (prev.sa_handler && prev.sa_handler != SIG_IGN && prev.sa_handler != SIG_DFL) {
+                        prev.sa_handler(sig);
+                    }
+                }
+                _exit(128 + sig);
+            };
+            sigemptyset(&sa.sa_mask);
+            sigaction(signo, &sa, nullptr);
+        };
+        int fatal_signals[] = {SIGSEGV, SIGABRT, SIGILL, SIGFPE, SIGBUS};
+        for (int s : fatal_signals) install_force_exit(s);
+        LOG(INFO) << "Installed forced-exit fatal signal handlers for CN PID1 process (init_signals)";
     }
 }
 

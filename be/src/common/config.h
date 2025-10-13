@@ -558,6 +558,10 @@ CONF_mDouble(load_process_max_memory_hard_limit_ratio, "2");
 CONF_mBool(enable_new_load_on_memory_limit_exceeded, "false");
 CONF_Int64(compaction_max_memory_limit, "-1");
 CONF_Int32(compaction_max_memory_limit_percent, "100");
+
+// Whether CN role should perform a fast exit (skip normal resource reclamation)
+// after wait_for_finish(). Default false to preserve previous behavior.
+CONF_Bool(cn_fast_exit, "false");
 CONF_Int64(compaction_memory_limit_per_worker, "2147483648"); // 2GB
 CONF_String(consistency_max_memory_limit, "10G");
 CONF_Int32(consistency_max_memory_limit_percent, "20");

@@ -321,6 +321,12 @@ void start_be(const std::vector<StorePath>& paths, bool as_cn) {
     exec_env->wait_for_finish();
     LOG(INFO) << process_name << " exit step " << exit_step++ << ": wait exec engine tasks finish successfully";
 
+    if (as_cn && config::cn_fast_exit) {
+        LOG(INFO) << "CN fast exit (config enabled): skipping resource reclamation and calling _exit(0)";
+        google::FlushLogFiles(google::INFO);
+        _exit(0);
+    }
+
     heartbeat_server->stop();
     heartbeat_server->join();
     heartbeat_server.reset();
