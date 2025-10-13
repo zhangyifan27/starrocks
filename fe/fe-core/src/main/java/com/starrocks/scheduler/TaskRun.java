@@ -46,10 +46,14 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
+import static com.starrocks.common.util.PropertyAnalyzer.PROPERTIES_WAREHOUSE;
+
 public class TaskRun implements Comparable<TaskRun> {
 
     private static final Logger LOG = LogManager.getLogger(TaskRun.class);
 
+    // NOTE: ALL task run properties should be defined here, and the associated properties configuration below should be
+    // added carefully.
     public static final String MV_ID = "mvId";
     public static final String PARTITION_START = "PARTITION_START";
     public static final String PARTITION_END = "PARTITION_END";
@@ -57,12 +61,33 @@ public class TaskRun implements Comparable<TaskRun> {
     public static final String PARTITION_VALUES = "PARTITION_VALUES";
     public static final String FORCE = "FORCE";
     public static final String START_TASK_RUN_ID = "START_TASK_RUN_ID";
-    // All properties that can be set in TaskRun
-    public static final Set<String> TASK_RUN_PROPERTIES = ImmutableSet.of(
-            MV_ID, PARTITION_START, PARTITION_END, FORCE, START_TASK_RUN_ID, PARTITION_VALUES);
 
     // Only used in FE's UT
     public static final String IS_TEST = "__IS_TEST__";
+
+    // TODO: Refactor this for better extensibility later by using a class rather than a map.
+    // MV's task run can be generated from the last task run, those properties are not allowed to be copied from one task run
+    // to another and must be only set specifically for each run but cannot be extended from the last task run.
+    // eg: `FORCE` is only allowed to set in the first task run and cannot be copied into the following task run.
+    public static final Set<String> MV_UNCOPYABLE_PROPERTIES = ImmutableSet.of(
+            PARTITION_START, PARTITION_END, PARTITION_VALUES, FORCE);
+    // If there are many pending mv task runs, we can merge some of them by comparing the properties, those properties that are
+    // used to check equality of task runs and we can ignore the other properties.
+    // eg:
+    // - `FORCE` is used to check equality of task runs because the refresh partitions are different for each task run.
+    // - `PROPERTIES_WAREHOUSE`/`START_TASK_RUN_ID` is no need to check equality of task runs because they will not affect
+    //  the task run's result.
+    public static final Set<String> MV_COMPARABLE_PROPERTIES = ImmutableSet.of(
+            MV_ID, PARTITION_START, PARTITION_END, PARTITION_VALUES, FORCE);
+    // Properties that can be set in TaskRun which are used to distinguish other noisy properties from users' defined properties.
+    // and will ignore other properties in the task run history.
+    // This should be only used in the task run history table and should not used for checking task run's real properties
+    // because this is not a complete list of task run properties.
+    public static final Set<String> RESERVED_HISTORY_TASK_RUN_PROPERTIES = ImmutableSet.of(
+            MV_ID, PARTITION_START, PARTITION_END, FORCE, START_TASK_RUN_ID, PARTITION_VALUES, PROPERTIES_WAREHOUSE, IS_TEST);
+
+    public static final int INVALID_TASK_PROGRESS = -1;
+
     private boolean isKilled = false;
 
     @SerializedName("taskId")
@@ -202,7 +227,7 @@ public class TaskRun implements Comparable<TaskRun> {
 
             Warehouse w = GlobalStateMgr.getCurrentState().getWarehouseMgr().getWarehouse(
                     materializedView.getWarehouseId());
-            newProperties.put(PropertyAnalyzer.PROPERTIES_WAREHOUSE, w.getName());
+            newProperties.put(PROPERTIES_WAREHOUSE, w.getName());
         } catch (Exception e) {
             LOG.warn("refresh task properties failed:", e);
         }
