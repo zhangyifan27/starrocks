@@ -404,7 +404,12 @@ public class AuthorizationMgr {
         try {
             lockForRoleUpdate();
             long roleId = getRoleIdByNameNoLock(roleName);
-            invalidateRolesInCacheRoleUnlocked(roleId);
+            // If modifying public role, invalidate all cache because it affects all users
+            if (roleId == PrivilegeBuiltinConstants.PUBLIC_ROLE_ID) {
+                invalidateAllCache();
+            } else {
+                invalidateRolesInCacheRoleUnlocked(roleId);
+            }
             RolePrivilegeCollectionV2 collection = getRolePrivilegeCollectionUnlocked(roleId, true);
             collection.grant(objectType, privilegeTypes, objects, isGrant);
 
@@ -465,7 +470,12 @@ public class AuthorizationMgr {
             long roleId = getRoleIdByNameNoLock(roleName);
             RolePrivilegeCollectionV2 collection = getRolePrivilegeCollectionUnlocked(roleId, true);
             collection.revoke(objectType, privilegeTypes, objects);
-            invalidateRolesInCacheRoleUnlocked(roleId);
+            // If modifying public role, invalidate all cache because it affects all users
+            if (roleId == PrivilegeBuiltinConstants.PUBLIC_ROLE_ID) {
+                invalidateAllCache();
+            } else {
+                invalidateRolesInCacheRoleUnlocked(roleId);
+            }
 
             Map<Long, RolePrivilegeCollectionV2> rolePrivCollectionModified = new HashMap<>();
             rolePrivCollectionModified.put(roleId, collection);
@@ -938,6 +948,15 @@ public class AuthorizationMgr {
         for (Pair<UserIdentity, Set<Long>> pair : badKeys) {
             ctxToMergedPrivilegeCollections.invalidate(pair);
         }
+    }
+
+    /**
+     * if the privileges of public role are changed, call this function to invalidate all cache
+     * because public role affects all users.
+     * require not extra lock.
+     */
+    protected void invalidateAllCache() {
+        ctxToMergedPrivilegeCollections.invalidateAll();
     }
 
     public UserPrivilegeCollectionV2 getUserPrivilegeCollection(UserIdentity userIdentity) {

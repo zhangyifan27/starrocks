@@ -1919,4 +1919,161 @@ public class AuthorizationMgrTest {
         setCurrentUserAndRoles(ctx, testUser);
         Authorizer.checkSystemAction(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds(), PrivilegeType.GRANT);
     }
+
+    @Test
+    public void testInvalidateAllCacheWhenModifyPublicRole() throws Exception {
+        AuthorizationMgr manager = ctx.getGlobalStateMgr().getAuthorizationMgr();
+
+        // Create another test user
+        CreateUserStmt createUserStmt = (CreateUserStmt) UtFrameUtils.parseStmtWithNewParser(
+                "create user test_user2", ctx);
+        ctx.getGlobalStateMgr().getAuthenticationMgr().createUser(createUserStmt);
+        UserIdentity testUser2 = UserIdentity.createAnalyzedUserIdentWithIp("test_user2", "%");
+
+        // Load privileges for both users to populate cache
+        setCurrentUserAndRoles(ctx, testUser);
+        manager.mergePrivilegeCollection(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds());
+
+        setCurrentUserAndRoles(ctx, testUser2);
+        manager.mergePrivilegeCollection(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds());
+
+        // Verify cache has entries
+        int cacheSize = manager.ctxToMergedPrivilegeCollections.asMap().size();
+        Assert.assertTrue("Cache should have entries", cacheSize > 0);
+
+        // Grant privilege to public role
+        setCurrentUserAndRoles(ctx, UserIdentity.ROOT);
+        String sql = "grant select on table db.tbl0 to role public";
+        GrantPrivilegeStmt grantStmt = (GrantPrivilegeStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+        manager.grant(grantStmt);
+
+        // Verify cache is cleared after granting to public role
+        int cacheSizeAfterGrant = manager.ctxToMergedPrivilegeCollections.asMap().size();
+        Assert.assertEquals("Cache should be cleared after granting to public role", 0, cacheSizeAfterGrant);
+
+        // Reload cache
+        setCurrentUserAndRoles(ctx, testUser);
+        manager.mergePrivilegeCollection(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds());
+
+        setCurrentUserAndRoles(ctx, testUser2);
+        manager.mergePrivilegeCollection(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds());
+
+        cacheSize = manager.ctxToMergedPrivilegeCollections.asMap().size();
+        Assert.assertTrue("Cache should have entries after reload", cacheSize > 0);
+
+        // Revoke privilege from public role
+        setCurrentUserAndRoles(ctx, UserIdentity.ROOT);
+        sql = "revoke select on table db.tbl0 from role public";
+        RevokePrivilegeStmt revokeStmt = (RevokePrivilegeStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+        manager.revoke(revokeStmt);
+
+        // Verify cache is cleared after revoking from public role
+        int cacheSizeAfterRevoke = manager.ctxToMergedPrivilegeCollections.asMap().size();
+        Assert.assertEquals("Cache should be cleared after revoking from public role", 0, cacheSizeAfterRevoke);
+    }
+
+    @Test
+    public void testInvalidateAllCacheMethod() throws Exception {
+        AuthorizationMgr manager = ctx.getGlobalStateMgr().getAuthorizationMgr();
+
+        // Load privileges for test user to populate cache
+        setCurrentUserAndRoles(ctx, testUser);
+        manager.mergePrivilegeCollection(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds());
+
+        // Verify cache has entries
+        int cacheSize = manager.ctxToMergedPrivilegeCollections.asMap().size();
+        Assert.assertTrue("Cache should have entries", cacheSize > 0);
+
+        // Call invalidateAllCache directly
+        manager.invalidateAllCache();
+
+        // Verify cache is cleared
+        int cacheSizeAfterInvalidate = manager.ctxToMergedPrivilegeCollections.asMap().size();
+        Assert.assertEquals("Cache should be empty after invalidateAllCache", 0, cacheSizeAfterInvalidate);
+    }
+
+    @Test
+    public void testPublicRolePrivilegesAffectAllUsers() throws Exception {
+        AuthorizationMgr manager = ctx.getGlobalStateMgr().getAuthorizationMgr();
+
+        // Create another test user
+        CreateUserStmt createUserStmt = (CreateUserStmt) UtFrameUtils.parseStmtWithNewParser(
+                "create user test_user3", ctx);
+        ctx.getGlobalStateMgr().getAuthenticationMgr().createUser(createUserStmt);
+        UserIdentity testUser3 = UserIdentity.createAnalyzedUserIdentWithIp("test_user3", "%");
+
+        // Grant privilege to public role
+        setCurrentUserAndRoles(ctx, UserIdentity.ROOT);
+        String sql = "grant select on table db.tbl0 to role public";
+        GrantPrivilegeStmt grantStmt = (GrantPrivilegeStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+        manager.grant(grantStmt);
+
+        // Verify both users have the privilege from public role
+        setCurrentUserAndRoles(ctx, testUser);
+        Authorizer.checkTableAction(
+                ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds(), DB_NAME, TABLE_NAME_0, PrivilegeType.SELECT);
+
+        setCurrentUserAndRoles(ctx, testUser3);
+        Authorizer.checkTableAction(
+                ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds(), DB_NAME, TABLE_NAME_0, PrivilegeType.SELECT);
+
+        // Revoke privilege from public role
+        setCurrentUserAndRoles(ctx, UserIdentity.ROOT);
+        sql = "revoke select on table db.tbl0 from role public";
+        RevokePrivilegeStmt revokeStmt = (RevokePrivilegeStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+        manager.revoke(revokeStmt);
+
+        // Verify both users no longer have the privilege
+        setCurrentUserAndRoles(ctx, testUser);
+        Assert.assertThrows(AccessDeniedException.class, () -> Authorizer.checkTableAction(
+                ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds(), DB_NAME, TABLE_NAME_0, PrivilegeType.SELECT));
+
+        setCurrentUserAndRoles(ctx, testUser3);
+        Assert.assertThrows(AccessDeniedException.class, () -> Authorizer.checkTableAction(
+                ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds(), DB_NAME, TABLE_NAME_0, PrivilegeType.SELECT));
+    }
+
+    @Test
+    public void testNonPublicRoleDoesNotInvalidateAllCache() throws Exception {
+        AuthorizationMgr manager = ctx.getGlobalStateMgr().getAuthorizationMgr();
+
+        // Create a custom role
+        setCurrentUserAndRoles(ctx, UserIdentity.ROOT);
+        String sql = "create role test_role";
+        StatementBase stmt = UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+        DDLStmtExecutor.execute(stmt, ctx);
+
+        // Grant role to test_user
+        sql = "grant test_role to test_user";
+        GrantRoleStmt grantRoleStmt = (GrantRoleStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+        manager.grantRole(grantRoleStmt);
+
+        // Load privileges for test user to populate cache
+        setCurrentUserAndRoles(ctx, testUser);
+        manager.mergePrivilegeCollection(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds());
+
+        // Create another user without the role
+        CreateUserStmt createUserStmt = (CreateUserStmt) UtFrameUtils.parseStmtWithNewParser(
+                "create user test_user4", ctx);
+        ctx.getGlobalStateMgr().getAuthenticationMgr().createUser(createUserStmt);
+        UserIdentity testUser4 = UserIdentity.createAnalyzedUserIdentWithIp("test_user4", "%");
+
+        setCurrentUserAndRoles(ctx, testUser4);
+        manager.mergePrivilegeCollection(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds());
+
+        int cacheSizeBefore = manager.ctxToMergedPrivilegeCollections.asMap().size();
+        Assert.assertTrue("Cache should have entries", cacheSizeBefore >= 2);
+
+        // Grant privilege to custom role (not public)
+        setCurrentUserAndRoles(ctx, UserIdentity.ROOT);
+        sql = "grant select on table db.tbl0 to role test_role";
+        GrantPrivilegeStmt grantStmt = (GrantPrivilegeStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+        manager.grant(grantStmt);
+
+        // Verify cache is not completely cleared (only affected users)
+        int cacheSizeAfter = manager.ctxToMergedPrivilegeCollections.asMap().size();
+        // Cache should be partially cleared (only users with test_role), not all users
+        Assert.assertTrue("Cache should not be completely cleared for non-public role",
+                cacheSizeAfter < cacheSizeBefore);
+    }
 }
