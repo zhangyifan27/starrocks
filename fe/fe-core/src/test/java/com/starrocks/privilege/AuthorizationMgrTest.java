@@ -2034,6 +2034,77 @@ public class AuthorizationMgrTest {
     }
 
     @Test
+    public void testReplayPublicRoleInvalidatesAllCache() throws Exception {
+        GlobalStateMgr masterGlobalStateMgr = ctx.getGlobalStateMgr();
+        AuthorizationMgr masterManager = masterGlobalStateMgr.getAuthorizationMgr();
+        UtFrameUtils.PseudoJournalReplayer.resetFollowerJournalQueue();
+
+        // Create another test user
+        CreateUserStmt createUserStmt = (CreateUserStmt) UtFrameUtils.parseStmtWithNewParser(
+                "create user test_user_replay", ctx);
+        ctx.getGlobalStateMgr().getAuthenticationMgr().createUser(createUserStmt);
+        UserIdentity testUserReplay = UserIdentity.createAnalyzedUserIdentWithIp("test_user_replay", "%");
+
+        // Grant privilege to public role on leader
+        setCurrentUserAndRoles(ctx, UserIdentity.ROOT);
+        String sql = "grant select on table db.tbl0 to role public";
+        GrantPrivilegeStmt grantStmt = (GrantPrivilegeStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+        masterManager.grant(grantStmt);
+
+        // Simulate follower: load privileges for both users to populate cache
+        UtFrameUtils.PseudoImage emptyImage = new UtFrameUtils.PseudoImage();
+        saveRBACPrivilege(masterGlobalStateMgr, emptyImage.getImageWriter());
+        loadRBACPrivilege(masterGlobalStateMgr, emptyImage.getJsonReader());
+        AuthorizationMgr followerManager = masterGlobalStateMgr.getAuthorizationMgr();
+
+        setCurrentUserAndRoles(ctx, testUser);
+        followerManager.mergePrivilegeCollection(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds());
+
+        setCurrentUserAndRoles(ctx, testUserReplay);
+        followerManager.mergePrivilegeCollection(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds());
+
+        // Verify cache has entries
+        int cacheSize = followerManager.ctxToMergedPrivilegeCollections.asMap().size();
+        Assert.assertTrue("Cache should have entries before replay", cacheSize > 0);
+
+        // Replay the grant operation on follower
+        RolePrivilegeCollectionInfo info = (RolePrivilegeCollectionInfo)
+                UtFrameUtils.PseudoJournalReplayer.replayNextJournal(OperationType.OP_UPDATE_ROLE_PRIVILEGE_V2);
+        followerManager.replayUpdateRolePrivilegeCollection(info);
+
+        // Verify cache is cleared after replaying public role update
+        int cacheSizeAfterReplay = followerManager.ctxToMergedPrivilegeCollections.asMap().size();
+        Assert.assertEquals("Cache should be cleared after replaying public role update",
+                0, cacheSizeAfterReplay);
+
+        // Reload cache
+        setCurrentUserAndRoles(ctx, testUser);
+        followerManager.mergePrivilegeCollection(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds());
+
+        setCurrentUserAndRoles(ctx, testUserReplay);
+        followerManager.mergePrivilegeCollection(ctx.getCurrentUserIdentity(), ctx.getCurrentRoleIds());
+
+        cacheSize = followerManager.ctxToMergedPrivilegeCollections.asMap().size();
+        Assert.assertTrue("Cache should have entries after reload", cacheSize > 0);
+
+        // Revoke privilege from public role on leader
+        setCurrentUserAndRoles(ctx, UserIdentity.ROOT);
+        sql = "revoke select on table db.tbl0 from role public";
+        RevokePrivilegeStmt revokeStmt = (RevokePrivilegeStmt) UtFrameUtils.parseStmtWithNewParser(sql, ctx);
+        followerManager.revoke(revokeStmt);
+
+        // Replay the revoke operation on follower
+        info = (RolePrivilegeCollectionInfo)
+                UtFrameUtils.PseudoJournalReplayer.replayNextJournal(OperationType.OP_UPDATE_ROLE_PRIVILEGE_V2);
+        followerManager.replayUpdateRolePrivilegeCollection(info);
+
+        // Verify cache is cleared after replaying public role revoke
+        int cacheSizeAfterRevokeReplay = followerManager.ctxToMergedPrivilegeCollections.asMap().size();
+        Assert.assertEquals("Cache should be cleared after replaying public role revoke",
+                0, cacheSizeAfterRevokeReplay);
+    }
+
+    @Test
     public void testNonPublicRoleDoesNotInvalidateAllCache() throws Exception {
         AuthorizationMgr manager = ctx.getGlobalStateMgr().getAuthorizationMgr();
 

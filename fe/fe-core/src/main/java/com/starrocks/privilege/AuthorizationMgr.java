@@ -1260,7 +1260,12 @@ public class AuthorizationMgr {
         try {
             for (Map.Entry<Long, RolePrivilegeCollectionV2> entry : info.getRolePrivCollectionModified().entrySet()) {
                 long roleId = entry.getKey();
-                invalidateRolesInCacheRoleUnlocked(roleId);
+                // If it's public role, invalidate all users' cache
+                if (roleId == PrivilegeBuiltinConstants.PUBLIC_ROLE_ID) {
+                    invalidateAllCache();
+                } else {
+                    invalidateRolesInCacheRoleUnlocked(roleId);
+                }
                 RolePrivilegeCollectionV2 privilegeCollection = entry.getValue();
                 if (!PrivilegeBuiltinConstants.IMMUTABLE_BUILT_IN_ROLE_IDS.contains(roleId)) {
                     provider.upgradePrivilegeCollection(privilegeCollection, info.getPluginId(), info.getPluginVersion());
