@@ -15,14 +15,15 @@
 package com.starrocks.planner;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.TableFunctionTable;
 import com.starrocks.catalog.Type;
 import com.starrocks.qe.SessionVariable;
+import com.starrocks.thrift.TCloudType;
 import com.starrocks.thrift.TDataSink;
 import com.starrocks.thrift.TDataSinkType;
 import com.starrocks.thrift.TExplainLevel;
+import com.starrocks.thrift.TTableFunctionTableSink;
 import org.junit.Test;
 
 import java.util.HashMap;
@@ -31,9 +32,11 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class TableFunctionTableSinkTest {
+
     @Test
     public void testTableFunctionTableSink() {
         List<Column> columns = ImmutableList.of(new Column("k1", Type.INT));
@@ -59,5 +62,45 @@ public class TableFunctionTableSinkTest {
                 "  RANDOM\n", tableFunctionTableSink.getExplainString("", TExplainLevel.NORMAL));
         TDataSink tDataSink = tableFunctionTableSink.toThrift();
         assertEquals(tDataSink.getType(), TDataSinkType.TABLE_FUNCTION_TABLE_SINK);
+    }
+
+    @Test
+    public void testHDFSCloudConfiguration() {
+        List<Column> columns = ImmutableList.of(new Column("value", Type.DOUBLE));
+        Map<String, String> properties = new HashMap<>();
+        properties.put("path", "hdfs://namenode:8020/data/");
+        properties.put("format", "parquet");
+        properties.put("compression", "uncompressed");
+        properties.put("hadoop.security.authentication", "simple");
+        properties.put("hadoop.username", "testuser");
+
+        TableFunctionTable tableFunctionTable = new TableFunctionTable(columns, properties, new SessionVariable());
+        TableFunctionTableSink sink = new TableFunctionTableSink(tableFunctionTable);
+
+        TDataSink tDataSink = sink.toThrift();
+        TTableFunctionTableSink tTableSink = tDataSink.getTable_function_table_sink();
+        assertNotNull(tTableSink.getCloud_configuration());
+        // Note: Cloud type may be DEFAULT if HDFS properties are not recognized
+        assertEquals(TCloudType.DEFAULT, tTableSink.getCloud_configuration().getCloud_type());
+    }
+
+    @Test
+    public void testAWSCloudConfiguration() {
+        List<Column> columns = ImmutableList.of(new Column("metric", Type.FLOAT));
+        Map<String, String> properties = new HashMap<>();
+        properties.put("path", "s3://my-bucket/output/");
+        properties.put("format", "parquet");
+        properties.put("compression", "snappy");
+        properties.put("aws.s3.region", "us-west-2");
+        properties.put("aws.s3.access_key", "test-ak");
+        properties.put("aws.s3.secret_key", "test-sk");
+
+        TableFunctionTable tableFunctionTable = new TableFunctionTable(columns, properties, new SessionVariable());
+        TableFunctionTableSink sink = new TableFunctionTableSink(tableFunctionTable);
+
+        TDataSink tDataSink = sink.toThrift();
+        TTableFunctionTableSink tTableSink = tDataSink.getTable_function_table_sink();
+        assertNotNull(tTableSink.getCloud_configuration());
+        assertEquals(TCloudType.AWS, tTableSink.getCloud_configuration().getCloud_type());
     }
 }

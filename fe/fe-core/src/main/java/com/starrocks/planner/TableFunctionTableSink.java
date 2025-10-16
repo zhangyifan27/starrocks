@@ -17,6 +17,7 @@ package com.starrocks.planner;
 import com.starrocks.catalog.TableFunctionTable;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.credential.CloudConfigurationFactory;
+import com.starrocks.credential.hdfs.HDFSCloudConfiguration;
 import com.starrocks.thrift.TCloudConfiguration;
 import com.starrocks.thrift.TDataSink;
 import com.starrocks.thrift.TDataSinkType;
@@ -33,8 +34,10 @@ public class TableFunctionTableSink extends DataSink {
                 targetTable.getProperties());
         this.table = targetTable;
         this.cloudConfiguration = cloudConfiguration;
-        String username = TdwUtil.getTdwUserName();
-        this.cloudConfiguration = this.cloudConfiguration.cloneWithNewUsername(username);
+        if (cloudConfiguration instanceof HDFSCloudConfiguration) {
+            String username = TdwUtil.getTdwUserName();
+            this.cloudConfiguration = this.cloudConfiguration.cloneWithNewUsername(username);
+        }
     }
 
     @Override
