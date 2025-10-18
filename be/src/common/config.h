@@ -1526,4 +1526,9 @@ CONF_mInt32(star_cache_ttl_reaper_interval, "10000");
 
 // default batch size for simdjson lib
 CONF_mInt32(describe_tables_batch_size, "100");
+CONF_Int32(llm_max_queue_size, "4096");
+
+CONF_Int32(llm_max_concurrent_queries, "8");
+
+CONF_Int32(llm_cache_size, "131072");
 } // namespace starrocks::config

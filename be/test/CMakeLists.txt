@@ -99,6 +99,7 @@ set(EXEC_FILES
         ./exec/arrow_scanner_test.cpp
         ./exprs/agg/json_each_test.cpp
         ./exprs/agg/aggregate_test.cpp
+        ./exprs/ai_functions_test.cpp
         ./exprs/arithmetic_expr_test.cpp
         ./exprs/arithmetic_operation_test.cpp
         ./exprs/array_element_expr_test.cpp
@@ -490,6 +491,8 @@ set(EXEC_FILES
         ./block_cache/block_cache_hit_rate_counter_test.cpp
         ./util/thrift_rpc_helper_test.cpp
         ./util/thrift_client_test.cpp
+        ./util/llm_cache_test.cpp
+        ./util/llm_query_service_test.cpp
         )
 
 if ("${WITH_STARCACHE}" STREQUAL "ON" OR "${WITH_CACHELIB}" STREQUAL "ON")

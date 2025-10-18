@@ -110,6 +110,7 @@ set(EXPR_FILES
   eval_ml_method.cpp
   caliper_matching.cpp
   probability_distributions.cpp
+  ai_functions.cpp
 )
 
 add_library(Exprs ${EXPR_FILES})

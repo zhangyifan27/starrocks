@@ -1428,4 +1428,7 @@ vectorized_functions = [
     
     # gauss_error_function
     [200021, "gauss_error_function", True, False, "DOUBLE", ['DOUBLE'], 'ProbabilityDistributions::gauss_error_function'],
+
+    # ai functions
+    [200030, 'ai_query', True, False, 'VARCHAR', ['VARCHAR', 'JSON'], "AiFunctions::ai_query"]
 ]
