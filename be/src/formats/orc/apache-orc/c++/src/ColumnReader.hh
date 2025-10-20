@@ -35,6 +35,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <unordered_map>
 
 #include "ByteRLE.hh"
@@ -124,6 +125,25 @@ public:
 };
 
 /**
+  * State shared between Reader and Row Reader
+  */
+struct FileContents {
+    std::unique_ptr<InputStream> stream;
+    std::unique_ptr<proto::PostScript> postscript;
+    std::unique_ptr<proto::Footer> footer;
+    std::unique_ptr<Type> schema;
+    uint64_t blockSize;
+    CompressionKind compression;
+    MemoryPool* pool;
+    std::ostream* errorStream;
+    /// Decimal64 in ORCv2 uses RLE to store values. This flag indicates whether
+    /// this new encoding is used.
+    bool isDecimalAsLong;
+    std::unique_ptr<proto::Metadata> metadata;
+    ReaderMetrics* readerMetrics;
+};
+
+/**
    * The interface for reading ORC data types.
    */
 class ColumnReader {
@@ -191,12 +211,16 @@ public:
     }
 
     virtual void lazyLoadSeekToRowGroup(PositionProviderMap* providers) { seekToRowGroup(providers); }
+
+    virtual void releaseToOffset(const int64_t offset){};
 };
 
 /**
    * Create a reader for the given stripe.
    */
-std::unique_ptr<ColumnReader> buildReader(const Type& type, std::shared_ptr<StripeStreams>& stripe);
+std::unique_ptr<ColumnReader> buildReader(const Type& type, std::shared_ptr<StripeStreams>& stripe,
+                                          std::shared_ptr<FileContents> contents = nullptr,
+                                          std::vector<uint64_t>* offsets = nullptr);
 
 // collect string dictionary from column reader
 void collectStringDictionary(ColumnReader* reader, std::unordered_map<uint64_t, StringDictionary*>& coll);

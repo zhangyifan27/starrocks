@@ -1035,6 +1035,8 @@ void RowReaderImpl::markEndOfFile() {
 void RowReaderImpl::buildIORanges(std::vector<InputStream::IORange>* io_ranges) {
     // column streams: index & data
     uint64_t offset = currentStripeInfo.offset();
+    dataStreamOffsets.clear();
+    dataStreamOffsets.assign(contents->footer->types_size(), 0);
     for (const proto::Stream& stream : currentStripeFooter.streams()) {
         uint32_t columnId = stream.column();
         uint64_t length = stream.length();
@@ -1054,6 +1056,9 @@ void RowReaderImpl::buildIORanges(std::vector<InputStream::IORange>* io_ranges) 
                 is_active = false;
             }
             io_ranges->emplace_back(InputStream::IORange{.offset = offset, .size = length, .is_active = is_active});
+        }
+        if (stream.has_kind() && stream.kind() == proto::Stream_Kind_DATA) {
+            dataStreamOffsets[columnId] = offset;
         }
         offset += length;
     }
@@ -1157,7 +1162,7 @@ void RowReaderImpl::startNextStripe() {
             std::shared_ptr<StripeStreams> stripeStreams = std::make_shared<StripeStreamsImpl>(
                     *this, currentStripe, currentStripeInfo, currentStripeFooter, currentStripeInfo.offset(),
                     *contents->stream, writerTimezone, readerTimezone);
-            reader = buildReader(*contents->schema, stripeStreams);
+            reader = buildReader(*contents->schema, stripeStreams, contents, &dataStreamOffsets);
 
             if (sargsApplier) {
                 if (sargsApplier->getRowReaderFilter()) {

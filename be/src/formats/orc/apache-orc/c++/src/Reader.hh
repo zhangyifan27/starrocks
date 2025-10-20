@@ -65,25 +65,6 @@ public:
     bool compareGT(const WriterVersion other) const { return version > other; }
 };
 
-/**
-  * State shared between Reader and Row Reader
-  */
-struct FileContents {
-    std::unique_ptr<InputStream> stream;
-    std::unique_ptr<proto::PostScript> postscript;
-    std::unique_ptr<proto::Footer> footer;
-    std::unique_ptr<Type> schema;
-    uint64_t blockSize;
-    CompressionKind compression;
-    MemoryPool* pool;
-    std::ostream* errorStream;
-    /// Decimal64 in ORCv2 uses RLE to store values. This flag indicates whether
-    /// this new encoding is used.
-    bool isDecimalAsLong;
-    std::unique_ptr<proto::Metadata> metadata;
-    ReaderMetrics* readerMetrics;
-};
-
 proto::StripeFooter getStripeFooter(const proto::StripeInformation& info, const FileContents& contents);
 
 class ReaderImpl;
@@ -158,6 +139,7 @@ private:
     proto::StripeInformation currentStripeInfo;
     proto::StripeFooter currentStripeFooter;
     std::unique_ptr<ColumnReader> reader;
+    std::vector<uint64_t> dataStreamOffsets;
 
     bool enableEncodedBlock;
     // internal methods

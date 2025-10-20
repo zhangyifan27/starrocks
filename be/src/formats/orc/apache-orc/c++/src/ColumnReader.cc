@@ -38,11 +38,14 @@
 #include <bits/endian.h>
 
 #include <cmath>
+#include <cstdint>
 #include <iostream>
+#include <vector>
 
 #include "Adaptor.hh"
 #include "ByteRLE.hh"
 #include "RLE.hh"
+#include "Reader.hh"
 #include "orc/Exceptions.hh"
 #include "orc/Int128.hh"
 
@@ -1058,9 +1061,13 @@ private:
     std::vector<uint64_t> fieldIndex;
     std::vector<std::unique_ptr<ColumnReader>> lazyLoadChildren;
     std::vector<uint64_t> lazyLoadFieldIndex;
+    std::shared_ptr<FileContents> contents;
+    std::vector<uint64_t> realFieldColumnId;
+    std::vector<uint64_t>* offsets;
 
 public:
-    StructColumnReader(const Type& type, std::shared_ptr<StripeStreams>& stripe);
+    StructColumnReader(const Type& type, std::shared_ptr<StripeStreams>& stripe,
+                       std::shared_ptr<FileContents> contents = nullptr, std::vector<uint64_t>* offsets = nullptr);
 
     uint64_t skip(uint64_t numValues) override;
 
@@ -1081,6 +1088,7 @@ public:
     void lazyLoadSkip(uint64_t numValues) override;
     void lazyLoadNext(ColumnVectorBatch& rowBatch, uint64_t numValues, char* notNull) override;
     void lazyLoadNextEncoded(ColumnVectorBatch& rowBatch, uint64_t numValues, char* notNull) override;
+    void releaseToOffset(const int64_t offset) override;
 
 private:
     template <bool encoded, bool lazyLoad>
@@ -1091,9 +1099,12 @@ private:
     bool isAllFieldsLazy();
 };
 
-StructColumnReader::StructColumnReader(const Type& type, std::shared_ptr<StripeStreams>& stripe)
+StructColumnReader::StructColumnReader(const Type& type, std::shared_ptr<StripeStreams>& stripe,
+                                       std::shared_ptr<FileContents> _contents, std::vector<uint64_t>* _offsets)
         : ColumnReader(type, *stripe.get()) {
     // count the number of selected sub-columns
+    contents = _contents;
+    offsets = _offsets;
     const std::vector<bool> selectedColumns = stripe->getSelectedColumns();
     const std::vector<bool> lazyLoadColumns = stripe->getLazyLoadColumns();
     switch (static_cast<int64_t>(stripe->getEncoding(columnId).kind())) {
@@ -1118,6 +1129,7 @@ StructColumnReader::StructColumnReader(const Type& type, std::shared_ptr<StripeS
                         lazyLoadFieldIndex.push_back(fi);
                     }
                 }
+                realFieldColumnId.push_back(columnId);
                 fi++;
             }
         }
@@ -1161,6 +1173,9 @@ void StructColumnReader::nextInternal(const std::vector<std::unique_ptr<ColumnRe
     notNull = rowBatch.hasNulls ? rowBatch.notNull.data() : nullptr;
     for (auto iter = children.begin(); iter != children.end(); ++iter, ++i) {
         uint64_t fi = fieldIndex[i];
+        if (offsets && contents->stream->isIOCoalesceEnabled() && !offsets->empty()) {
+            releaseToOffset(offsets->at(realFieldColumnId[i]));
+        }
         if constexpr (lazyLoad) {
             if constexpr (encoded) {
                 (*iter)->lazyLoadNextEncoded(*(dynamic_cast<StructVectorBatch&>(rowBatch).fields[fi]), numValues,
@@ -1213,6 +1228,10 @@ void StructColumnReader::lazyLoadNext(ColumnVectorBatch& rowBatch, uint64_t numV
 
 void StructColumnReader::lazyLoadNextEncoded(ColumnVectorBatch& rowBatch, uint64_t numValues, char* notNull) {
     nextInternal<true, true>(lazyLoadChildren, lazyLoadFieldIndex, rowBatch, numValues, notNull);
+}
+
+void StructColumnReader::releaseToOffset(const int64_t offset) {
+    contents->stream->releaseToOffset(offset);
 }
 
 class ListColumnReader : public ColumnReader {
@@ -2072,7 +2091,8 @@ void DecimalHive11ColumnReader::next(ColumnVectorBatch& rowBatch, uint64_t numVa
 /**
    * Create a reader for the given stripe.
    */
-std::unique_ptr<ColumnReader> buildReader(const Type& type, std::shared_ptr<StripeStreams>& stripe) {
+std::unique_ptr<ColumnReader> buildReader(const Type& type, std::shared_ptr<StripeStreams>& stripe,
+                                          std::shared_ptr<FileContents> contents, std::vector<uint64_t>* offsets) {
     switch (static_cast<int64_t>(type.getKind())) {
     case DATE:
     case INT:
@@ -2110,7 +2130,7 @@ std::unique_ptr<ColumnReader> buildReader(const Type& type, std::shared_ptr<Stri
         return std::unique_ptr<ColumnReader>(new UnionColumnReader(type, stripe));
 
     case STRUCT:
-        return std::unique_ptr<ColumnReader>(new StructColumnReader(type, stripe));
+        return std::unique_ptr<ColumnReader>(new StructColumnReader(type, stripe, contents, offsets));
 
     case FLOAT:
     case DOUBLE:
