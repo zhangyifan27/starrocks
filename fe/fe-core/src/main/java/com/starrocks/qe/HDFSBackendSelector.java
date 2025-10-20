@@ -137,7 +137,7 @@ public class HDFSBackendSelector implements BackendSelector {
                 if (hdfsScanRange.isSetPartition_id() &&
                         predicates.getIdToPartitionKey().containsKey(hdfsScanRange.getPartition_id())) {
                     PartitionKey partitionKey = predicates.getIdToPartitionKey().get(hdfsScanRange.getPartition_id());
-                    primitiveSink.putInt(partitionKey.hashCode());
+                    primitiveSink.putInt(partitionKey.toString().hashCode());
                 }
                 if (hdfsScanRange.isSetRelative_path()) {
                     primitiveSink.putString(hdfsScanRange.relative_path, StandardCharsets.UTF_8);
