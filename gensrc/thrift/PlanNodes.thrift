@@ -401,6 +401,9 @@ struct THdfsScanRange {
 
     // storage format split info
     28: optional string storage_format_split_info
+
+    // the server which hold cache data before new cn/be added
+    101: optional Types.TNetworkAddress previous_cache_node
 }
 
 struct TBinlogScanRange {

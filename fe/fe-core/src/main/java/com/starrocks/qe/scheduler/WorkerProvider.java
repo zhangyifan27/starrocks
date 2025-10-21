@@ -71,6 +71,8 @@ public interface WorkerProvider {
 
     Collection<ComputeNode> getAllWorkers();
 
+    Collection<ComputeNode> getAllBackendBefore();
+
     ComputeNode getWorkerById(long workerId);
 
     boolean isDataNodeAvailable(long dataNodeId);

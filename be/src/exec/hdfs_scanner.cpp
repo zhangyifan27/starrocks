@@ -228,7 +228,8 @@ void HdfsScanner::close() noexcept {
 
 StatusOr<std::unique_ptr<RandomAccessFile>> HdfsScanner::create_random_access_file(
         std::shared_ptr<io::SharedBufferedInputStream>& shared_buffered_input_stream,
-        std::shared_ptr<io::CacheInputStream>& cache_input_stream, const OpenFileOptions& options) {
+        std::shared_ptr<io::CacheInputStream>& cache_input_stream, const OpenFileOptions& options,
+        const std::optional<TNetworkAddress>& previous_cache_node, RuntimeState* runtime_state) {
     ASSIGN_OR_RETURN(std::unique_ptr<RandomAccessFile> raw_file, options.fs->new_random_access_file(options.path))
     const int64_t file_size = options.file_size;
     raw_file->set_size(file_size);
@@ -246,9 +247,17 @@ StatusOr<std::unique_ptr<RandomAccessFile>> HdfsScanner::create_random_access_fi
     shared_buffered_input_stream->set_coalesce_options(shared_options);
     input_stream = shared_buffered_input_stream;
 
+    bool use_remote_node_cache = false;
+    if (runtime_state && runtime_state->query_options().enable_scan_datacache && previous_cache_node.has_value() &&
+        (previous_cache_node->hostname != BackendOptions::get_localhost() ||
+         previous_cache_node->port != config::brpc_port)) {
+        use_remote_node_cache = true;
+    }
+
     // input_stream = CacheInputStream(input_stream)
     const DataCacheOptions& datacache_options = options.datacache_options;
-    if (datacache_options.enable_datacache) {
+    if (datacache_options.enable_datacache || use_remote_node_cache) {
+        Status s = Status::OK();
         if (datacache_options.enable_cache_select) {
             cache_input_stream = std::make_shared<io::CacheSelectInputStream>(
                     shared_buffered_input_stream, filename, file_size, datacache_options.modification_time,
@@ -260,12 +269,24 @@ StatusOr<std::unique_ptr<RandomAccessFile>> HdfsScanner::create_random_access_fi
             cache_input_stream->set_enable_async_populate_mode(datacache_options.enable_datacache_async_populate_mode);
             cache_input_stream->set_enable_cache_io_adaptor(datacache_options.enable_datacache_io_adaptor);
             cache_input_stream->set_enable_block_buffer(config::datacache_block_buffer_enable);
-            input_stream = cache_input_stream;
+            if (use_remote_node_cache) {
+                DCHECK(runtime_state != nullptr);
+                s = cache_input_stream->set_remote_cache_node(runtime_state, previous_cache_node.value());
+            }
+            // must be use_remote_node_cache && remote_cache_node init failed
+            if (!s.ok()) {
+                LOG(WARNING) << "fall back to normal input stream. " << s.message();
+                cache_input_stream.reset();
+            } else {
+                input_stream = cache_input_stream;
+            }
         }
-        cache_input_stream->set_priority(datacache_options.datacache_priority);
-        cache_input_stream->set_ttl_seconds(datacache_options.datacache_ttl_seconds);
-        cache_input_stream->set_runtime_state(options.runtime_state);
-        shared_buffered_input_stream->set_align_size(cache_input_stream->get_align_size());
+        if (s.ok()) {
+            cache_input_stream->set_priority(datacache_options.datacache_priority);
+            cache_input_stream->set_ttl_seconds(datacache_options.datacache_ttl_seconds);
+            cache_input_stream->set_runtime_state(options.runtime_state);
+            shared_buffered_input_stream->set_align_size(cache_input_stream->get_align_size());
+        }
     }
 
     // if compression
@@ -299,7 +320,8 @@ Status HdfsScanner::open_random_access_file() {
                             .datacache_options = _scanner_params.datacache_options,
                             .compression_type = _compression_type};
 
-    ASSIGN_OR_RETURN(_file, create_random_access_file(_shared_buffered_input_stream, _cache_input_stream, options));
+    ASSIGN_OR_RETURN(_file, create_random_access_file(_shared_buffered_input_stream, _cache_input_stream, options,
+                                                      _scanner_params.previous_cache_node, runtime_state()));
     return Status::OK();
 }
 
@@ -364,9 +386,11 @@ void HdfsScanner::update_hdfs_counter(HdfsScanProfile* profile) {
         }
     }
 
-    runtime_profile->add_info_string("Top_10_ScanTimeFiles", fmt::format("{},{},{},{},{},{}", total_scan_time_ns / 1000000,
-        FormatTimestampForLog(_start_scan_time_micros), BackendOptions::get_localhost(), _scanner_params.path,
-        _scanner_params.scan_range->offset, _scanner_params.scan_range->length));
+    runtime_profile->add_info_string(
+            "Top_10_ScanTimeFiles",
+            fmt::format("{},{},{},{},{},{}", total_scan_time_ns / 1000000,
+                        FormatTimestampForLog(_start_scan_time_micros), BackendOptions::get_localhost(),
+                        _scanner_params.path, _scanner_params.scan_range->offset, _scanner_params.scan_range->length));
 }
 
 void HdfsScanner::do_update_counter(HdfsScanProfile* profile) {}
@@ -400,7 +424,7 @@ void HdfsScanner::update_counter() {
     COUNTER_UPDATE(profile->column_read_timer, _app_stats.column_read_ns);
     COUNTER_UPDATE(profile->column_convert_timer, _app_stats.column_convert_ns);
 
-    if (_scanner_params.datacache_options.enable_datacache && _cache_input_stream) {
+    if (_cache_input_stream) {
         const io::CacheInputStream::Stats& stats = _cache_input_stream->stats();
         COUNTER_UPDATE(profile->datacache_read_counter, stats.read_cache_count);
         COUNTER_UPDATE(profile->datacache_read_bytes, stats.read_cache_bytes);
@@ -418,6 +442,10 @@ void HdfsScanner::update_counter() {
         COUNTER_UPDATE(profile->datacache_skip_write_bytes, stats.skip_write_cache_bytes);
         COUNTER_UPDATE(profile->datacache_read_block_buffer_counter, stats.read_block_buffer_count);
         COUNTER_UPDATE(profile->datacache_read_block_buffer_bytes, stats.read_block_buffer_bytes);
+        COUNTER_UPDATE(profile->datacache_read_remote_cache_counter, stats.read_remote_cache_count);
+        COUNTER_UPDATE(profile->datacache_read_remote_cache_fail_counter, stats.read_remote_cache_fail_count);
+        COUNTER_UPDATE(profile->datacache_read_remote_cache_timer, stats.read_remote_cache_ns);
+        COUNTER_UPDATE(profile->datacache_read_remote_cache_bytes, stats.read_remote_cache_bytes);
 
         if (_scanner_params.datacache_options.enable_cache_select) {
             // For cache select, we will update load datacache metrics

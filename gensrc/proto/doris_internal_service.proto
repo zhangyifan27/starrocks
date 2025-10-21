@@ -84,4 +84,6 @@ service PBackendService {
     rpc list_fail_point(starrocks.PListFailPointRequest) returns (starrocks.PListFailPointResponse);
 
     rpc process_dictionary_cache(starrocks.PProcessDictionaryCacheRequest) returns (starrocks.PProcessDictionaryCacheResult);
+
+    rpc read_node_cache(starrocks.PReadNodeCacheRequest) returns (starrocks.PReadNodeCacheResult);
 };

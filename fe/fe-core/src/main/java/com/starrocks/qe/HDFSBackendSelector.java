@@ -24,6 +24,7 @@ import com.google.common.hash.Funnel;
 import com.google.common.hash.Hashing;
 import com.google.common.hash.PrimitiveSink;
 import com.starrocks.catalog.PartitionKey;
+import com.starrocks.common.Config;
 import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.common.util.ConsistentHashRing;
@@ -42,6 +43,7 @@ import com.starrocks.planner.PaimonScanNode;
 import com.starrocks.planner.ScanNode;
 import com.starrocks.qe.scheduler.NonRecoverableException;
 import com.starrocks.qe.scheduler.WorkerProvider;
+import com.starrocks.server.WarehouseManager;
 import com.starrocks.sql.plan.HDFSScanNodePredicates;
 import com.starrocks.system.ComputeNode;
 import com.starrocks.thrift.THdfsScanRange;
@@ -55,10 +57,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-
+import javax.annotation.Nonnull;
 /**
  * Hybrid backend selector for hive table.
  * Support hybrid and independent deployment with datanode.
@@ -143,6 +146,8 @@ public class HDFSBackendSelector implements BackendSelector {
                     primitiveSink.putString(hdfsScanRange.relative_path, StandardCharsets.UTF_8);
                 }
             }
+            // Always hash offset in the default hasher (normal ring). The "file-path-only" feature
+            // is now restricted to hashRingBefore (previous backend view) via a dedicated funnel.
             if (hdfsScanRange.isSetOffset()) {
                 primitiveSink.putLong(hdfsScanRange.getOffset());
             }
@@ -150,6 +155,34 @@ public class HDFSBackendSelector implements BackendSelector {
     }
 
     private final HdfsScanRangeHasher hdfsScanRangeHasher;
+    // dedicated funnel for normal hashing (with offset)
+    private final TScanRangeLocationsFunnel normalFunnel = new TScanRangeLocationsFunnel();
+    // funnel for file-path-only hashing (skip offset) used ONLY for hashRingBefore when enabled
+    private final Funnel<TScanRangeLocations> filePathOnlyFunnel = new Funnel<TScanRangeLocations>() {
+        @Override
+        public void funnel(@Nonnull TScanRangeLocations tScanRangeLocations, @Nonnull PrimitiveSink primitiveSink) {
+            THdfsScanRange hdfsScanRange = tScanRangeLocations.scan_range.hdfs_scan_range;
+            if (hdfsScanRange == null) {
+                return;
+            }
+            if (hdfsScanRange.isSetFull_path()) {
+                primitiveSink.putString(hdfsScanRange.full_path, StandardCharsets.UTF_8);
+                return;
+            }
+            // Mirror the path/partition portion of HdfsScanRangeHasher.acceptScanRangeLocations (without offset)
+            if (hdfsScanRange.isSetPartition_id() &&
+                    hdfsScanRangeHasher.predicates != null &&
+                    hdfsScanRangeHasher.predicates.getIdToPartitionKey().containsKey(hdfsScanRange.getPartition_id())) {
+                PartitionKey partitionKey = hdfsScanRangeHasher.predicates.getIdToPartitionKey().get(
+                        hdfsScanRange.getPartition_id());
+                primitiveSink.putInt(partitionKey.hashCode());
+            }
+            if (hdfsScanRange.isSetRelative_path() && hdfsScanRange.relative_path != null) {
+                primitiveSink.putString(hdfsScanRange.relative_path, StandardCharsets.UTF_8);
+            }
+            // DO NOT hash offset here.
+        }
+    };
 
     public HDFSBackendSelector(ScanNode scanNode, List<TScanRangeLocations> locations,
                                FragmentScanRangeAssignment assignment, WorkerProvider workerProvider,
@@ -163,11 +196,17 @@ public class HDFSBackendSelector implements BackendSelector {
     }
 
     private boolean needRebalance() {
-        boolean forceReBalance = connectContext != null ? connectContext.getSessionVariable().
-                getHdfsBackendSelectorForceRebalance() : false;
-        boolean enableDataCache = connectContext != null ? connectContext.getSessionVariable().
-                isEnableScanDataCache() : false;
-        return forceReBalance || !enableDataCache;
+        if (connectContext == null) {
+            return true;
+        }
+        SessionVariable vars = connectContext.getSessionVariable();
+        if (vars.isEnableCacheSelect()) {
+            return false;
+        }
+        if (vars.getHdfsBackendSelectorForceRebalance()) {
+            return true;
+        }
+        return !vars.isEnableScanDataCache();
     }
 
     // re-balance scan ranges for compute node if needed, return the compute node which scan range is assigned to
@@ -199,7 +238,7 @@ public class HDFSBackendSelector implements BackendSelector {
 
     class ComputeNodeFunnel implements Funnel<ComputeNode> {
         @Override
-        public void funnel(ComputeNode computeNode, PrimitiveSink primitiveSink) {
+        public void funnel(@Nonnull ComputeNode computeNode, @Nonnull PrimitiveSink primitiveSink) {
             primitiveSink.putString(computeNode.getHost(), StandardCharsets.UTF_8);
             primitiveSink.putInt(computeNode.getBePort());
         }
@@ -207,27 +246,27 @@ public class HDFSBackendSelector implements BackendSelector {
 
     class TScanRangeLocationsFunnel implements Funnel<TScanRangeLocations> {
         @Override
-        public void funnel(TScanRangeLocations tScanRangeLocations, PrimitiveSink primitiveSink) {
+        public void funnel(@Nonnull TScanRangeLocations tScanRangeLocations, @Nonnull PrimitiveSink primitiveSink) {
             hdfsScanRangeHasher.acceptScanRangeLocations(tScanRangeLocations, primitiveSink);
         }
     }
 
     @VisibleForTesting
-    public HashRing makeHashRing() {
-        Set<ComputeNode> nodes = assignedScansPerComputeNode.keySet();
-        HashRing hashRing = null;
+    public HashRing<TScanRangeLocations, ComputeNode> makeHashRing(Set<ComputeNode> nodes, boolean filePathOnly) {
+        HashRing<TScanRangeLocations, ComputeNode> hashRing = null;
         String hashAlgorithm = getSelectAlgorithm();
         int virtualNodeNum = connectContext != null ? connectContext.getSessionVariable().
                 getConsistentHashVirtualNodeNum() : CONSISTENT_HASH_RING_VIRTUAL_NUMBER;
+        Funnel<TScanRangeLocations> funnelToUse = filePathOnly ? filePathOnlyFunnel : normalFunnel;
         if (hashAlgorithm.equalsIgnoreCase(SessionVariable.BackendSelectorHashAlgorithm.RENDEZVOUS)) {
-            hashRing = new RendezvousHashRing(Hashing.murmur3_128(), new TScanRangeLocationsFunnel(),
+            hashRing = new RendezvousHashRing<>(Hashing.murmur3_128(), funnelToUse,
                     new ComputeNodeFunnel(), nodes);
         } else if (hashAlgorithm.equalsIgnoreCase(SessionVariable.BackendSelectorHashAlgorithm.ROUNDROBIN)) {
-            hashRing = new RoundRobin(nodes, scanNode.getStartRandomScanRangeOffset(), scanNode.getDeployedScanRangeOffset());
+            hashRing = new RoundRobin<>(nodes, scanNode.getStartRandomScanRangeOffset(), scanNode.getDeployedScanRangeOffset());
         } else if (hashAlgorithm.equalsIgnoreCase(SessionVariable.BackendSelectorHashAlgorithm.PLAIN)) {
-            hashRing = new PlainHashRing(Hashing.murmur3_128(), new TScanRangeLocationsFunnel(), nodes);
+            hashRing = new PlainHashRing<>(Hashing.murmur3_128(), funnelToUse, nodes);
         } else {
-            hashRing = new ConsistentHashRing(Hashing.murmur3_128(), new TScanRangeLocationsFunnel(),
+            hashRing = new ConsistentHashRing<>(Hashing.murmur3_128(), funnelToUse,
                     new ComputeNodeFunnel(), nodes, virtualNodeNum);
         }
         return hashRing;
@@ -305,12 +344,35 @@ public class HDFSBackendSelector implements BackendSelector {
             return;
         }
 
+        // force enable needRebalance when enable_remote_node_cache && using non-default warehouse as executors
+        if (Config.enable_remote_node_cache && 
+                assignedScansPerComputeNode.keySet().stream().anyMatch(
+                    node -> node.getWarehouseId() != WarehouseManager.DEFAULT_WAREHOUSE_ID)) {
+            needRebalance = true;
+        }
+
         // use consistent hashing to schedule remote scan ranges
-        HashRing hashRing = makeHashRing();
+        // Decide whether file-path-only hashing should apply to the main ring as well:
+        //  - Session variable hdfsScanRangeHashFilePathOnly must be true
+        //  - Cache select (isEnableCacheSelect) must be enabled (we favor stable mapping for cache locality)
+        boolean filePathOnlyFlag = connectContext != null && connectContext.getSessionVariable() != null
+                && connectContext.getSessionVariable().getHdfsScanRangeHashFilePathOnly();
+        boolean mainRingFilePathOnly = filePathOnlyFlag && connectContext.getSessionVariable().isEnableCacheSelect();
+        // Main ring (current backends). May use file-path-only hashing if conditions satisfied above.
+        HashRing<TScanRangeLocations, ComputeNode> hashRing = makeHashRing(
+                assignedScansPerComputeNode.keySet(), mainRingFilePathOnly);
+        // cache previous backends list to avoid multiple defensive copies
+        Collection<ComputeNode> backendsBeforeRaw = workerProvider.getAllBackendBefore();
+        // Previous ring still uses the raw flag (it was the original scope of this feature)
+        HashRing<TScanRangeLocations, ComputeNode> hashRingBefore = makeHashRing(
+                new HashSet<>(backendsBeforeRaw), filePathOnlyFlag);
+        // previous Backends should be fixed, no need to rebalance
+        // long avgNodeScanRangeBytesBefore = totalSize / Math.max(backendsBeforeRaw.size(), 1) + 1;
         if (connectContext.getSessionVariable().getHDFSBackendSelectorScanRangeShuffle()) {
             Collections.shuffle(remoteScanRangeLocations);
         }
         // assign scan ranges.
+
         for (int i = 0; i < remoteScanRangeLocations.size(); ++i) {
             TScanRangeLocations scanRangeLocations = remoteScanRangeLocations.get(i);
             List<ComputeNode> backends = hashRing.get(scanRangeLocations, needRebalance ? kCandidateNumber : 1);
@@ -318,6 +380,16 @@ public class HDFSBackendSelector implements BackendSelector {
                     reBalanceScanRangeForComputeNode(backends, avgNodeScanRangeBytes, scanRangeLocations, needRebalance);
             if (node == null) {
                 throw new RuntimeException("Failed to find backend to execute");
+            }
+            if (Config.enable_remote_node_cache) {
+                List<ComputeNode> backendsBefore = hashRingBefore.get(scanRangeLocations, 1);
+                if (!backendsBefore.isEmpty()) {
+                    ComputeNode nodeBefore = backendsBefore.get(0);
+                    if (!nodeBefore.getBrpcAddress().equals(node.getBrpcAddress())) {
+                        scanRangeLocations.scan_range.hdfs_scan_range.setPrevious_cache_node(nodeBefore.getBrpcAddress());
+                        scanRangeLocations.scan_range.hdfs_scan_range.setPrevious_cache_nodeIsSet(true);
+                    }
+                }
             }
             recordScanRangeAssignment(node, backends, scanRangeLocations);
         }

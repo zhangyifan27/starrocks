@@ -16,8 +16,11 @@
 
 #include <starcache/common/types.h>
 
+#include <algorithm>
+#include <cctype>
 #include <filesystem>
 
+#include "common/config.h"
 #include "common/logging.h"
 #include "common/statusor.h"
 #include "gutil/strings/fastmem.h"
@@ -45,6 +48,7 @@ Status StarCacheWrapper::init(const CacheOptions& options) {
         opt.ttl_check_interval_ms = config::star_cache_ttl_reaper_interval;
     }
     opt.enable_frequency_base = config::enable_frequency_base;
+    opt.durability_type = string_to_durability_type(config::datacache_durability_type);
     _enable_tiered_cache = options.enable_tiered_cache;
     _cache = std::make_unique<starcache::StarCache>();
     return to_status(_cache->init(opt));
@@ -203,6 +207,21 @@ void StarCacheWrapper::record_read_cache(size_t size, int64_t lateny_us) {
 Status StarCacheWrapper::shutdown() {
     // TODO: starcache implement shutdown to release memory
     return Status::OK();
+}
+
+starcache::DurabilityType StarCacheWrapper::string_to_durability_type(const std::string& str) {
+    std::string lower_str = str;
+    std::transform(lower_str.begin(), lower_str.end(), lower_str.begin(), ::tolower);
+
+    if (lower_str == "none") {
+        return starcache::DurabilityType::NONE;
+    } else if (lower_str == "rocksdb") {
+        return starcache::DurabilityType::ROCKSDB;
+    } else {
+        // Default to NONE for unrecognized strings
+        LOG(INFO) << "Unrecognized durability type: " << str << ", defaulting to NONE.";
+        return starcache::DurabilityType::NONE;
+    }
 }
 
 } // namespace starrocks

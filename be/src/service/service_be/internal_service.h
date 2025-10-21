@@ -97,6 +97,10 @@ public:
                                            const PTabletReaderScanGetNextRequest* request,
                                            PTabletReaderScanGetNextResult* response,
                                            google::protobuf::Closure* done) override;
+    void read_node_cache(google::protobuf::RpcController* controller,
+                         const PReadNodeCacheRequest* request,
+                         PReadNodeCacheResult* response,
+                         google::protobuf::Closure* done) override;
 };
 
 } // namespace starrocks

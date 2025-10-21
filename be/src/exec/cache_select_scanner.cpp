@@ -238,8 +238,8 @@ Status CacheSelectScanner::_write_entire_file(const std::string& file_path, size
 
     std::shared_ptr<io::SharedBufferedInputStream> shared_buffered_input_stream;
     std::shared_ptr<io::CacheInputStream> cache_input_stream;
-    ASSIGN_OR_RETURN(auto dummy_file,
-                     create_random_access_file(shared_buffered_input_stream, cache_input_stream, options));
+    ASSIGN_OR_RETURN(auto dummy_file, create_random_access_file(shared_buffered_input_stream, cache_input_stream,
+                                                                options, std::nullopt, nullptr));
 
     std::vector<DiskRange> disk_ranges{};
     disk_ranges.emplace_back(0, file_size);

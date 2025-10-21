@@ -253,6 +253,41 @@ void BackendInternalServiceImpl<T>::local_tablet_reader_scan_get_next(google::pr
     response->mutable_status()->set_status_code(TStatusCode::NOT_IMPLEMENTED_ERROR);
 }
 
+template <typename T>
+void BackendInternalServiceImpl<T>::read_node_cache(google::protobuf::RpcController* controller,
+                                                    const PReadNodeCacheRequest* request,
+                                                    PReadNodeCacheResult* response, google::protobuf::Closure* done) {
+    ClosureGuard closure_guard(done);
+    if (!config::datacache_enable || !BlockCache::instance()->available()) {
+        LOG(WARNING) << "datacache is not enabled or block cache is not available";
+        response->mutable_status()->set_status_code(TStatusCode::NOT_FOUND);
+        response->mutable_status()->add_error_msgs("datacache is not available");
+        return;
+    }
+
+    const auto& cache_key = request->cache_key();
+    const auto& off = request->offset();
+    const auto& size = request->size();
+
+    // Use std::string for zero-copy optimization with protobuf
+    std::string buffer;
+    buffer.resize(size);
+
+    ReadCacheOptions options;
+    options.use_adaptor = request->options().use_adaptor();
+    auto res = BlockCache::instance()->read_buffer(cache_key, off, size, buffer.data(), &options);
+    if (!res.ok()) {
+        res.status().to_protobuf(response->mutable_status());
+        return;
+    }
+
+    VLOG(4) << "success read cache with size: " << res.value();
+    Status::OK().to_protobuf(response->mutable_status());
+
+    response->set_size(size);
+    response->set_data(std::move(buffer));
+}
+
 template class BackendInternalServiceImpl<PInternalService>;
 template class BackendInternalServiceImpl<doris::PBackendService>;
 } // namespace starrocks

@@ -20,6 +20,7 @@
 #include <utility>
 
 #include "gutil/strings/fastmem.h"
+#include "io/remote_node_cache.h"
 #include "util/hash_util.hpp"
 #include "util/runtime_profile.h"
 #include "util/stack_util.h"
@@ -64,6 +65,27 @@ CacheInputStream::CacheInputStream(const std::shared_ptr<SharedBufferedInputStre
 }
 
 CacheInputStream::~CacheInputStream() = default;
+
+Status CacheInputStream::set_remote_cache_node(RuntimeState* runtime_state, const TNetworkAddress& remote_node) {
+    if (remote_node.hostname.empty() || remote_node.port <= 0) {
+        return Status::InvalidArgument("invalid address");
+    }
+
+    _remote_node_cache = std::make_unique<RemoteNodeCache>(remote_node);
+    if (auto s = _remote_node_cache->init(runtime_state); !s.ok()) {
+        LOG(WARNING) << "init remote cache node failed. fallback to normal form. msg: " << s.message();
+        return s;
+    }
+
+    _try_get_cache_from_remote = true;
+    _enable_block_buffer = true;
+    if (_block_size == 0) {
+        _block_size = config::datacache_block_size;
+        _buffer_size = 16 * _block_size;
+        _buffer.reserve(_buffer_size);
+    }
+    return Status::OK();
+}
 
 Status CacheInputStream::_read_block_from_local(const int64_t offset, const int64_t size, char* out) {
     if (UNLIKELY(size == 0)) {
@@ -113,7 +135,13 @@ Status CacheInputStream::_read_block_from_local(const int64_t offset, const int6
     {
         options.use_adaptor = _enable_cache_io_adaptor;
         SCOPED_RAW_TIMER(&read_cache_ns);
-        if (_enable_block_buffer) {
+        if (_try_get_cache_from_remote) {
+            res = _remote_node_cache->read_buffer(_cache_key, block_offset, load_size, &block.buffer, options);
+            read_size = load_size;
+            if (res.ok() && _cache->available()) {
+                _write_io_buf(block.buffer, block_offset, nullptr);
+            }
+        } else if (_enable_block_buffer) {
             res = _cache->read_buffer(_cache_key, block_offset, load_size, &block.buffer, &options);
             read_size = load_size;
         } else {
@@ -142,6 +170,11 @@ Status CacheInputStream::_read_block_from_local(const int64_t offset, const int6
         if (_enable_cache_io_adaptor) {
             _cache->record_read_cache(read_size, read_cache_ns / 1000);
         }
+        if (_try_get_cache_from_remote) {
+            _stats.read_remote_cache_count += 1;
+            _stats.read_remote_cache_ns += read_cache_ns;
+            _stats.read_remote_cache_bytes += read_size;
+        }
     } else if (res.is_resource_busy()) {
         _stats.skip_read_cache_count += 1;
         _stats.skip_read_cache_bytes += read_size;
@@ -150,6 +183,10 @@ Status CacheInputStream::_read_block_from_local(const int64_t offset, const int6
     if (res.ok() && sb) {
         // Duplicate the block ranges to avoid saving the same data both in cache and shared buffer.
         _deduplicate_shared_buffer(sb);
+    }
+
+    if (_try_get_cache_from_remote && res.is_not_found()) {
+        _stats.read_remote_cache_fail_count += 1;
     }
 
     return res;
@@ -278,7 +315,6 @@ Status CacheInputStream::read_at_fully(int64_t offset, void* out, int64_t count)
     char* p = static_cast<char*>(out);
     char* pe = p + count;
 
-    const int64_t _block_size = _cache->block_size();
     const int64_t start_block_id = offset / _block_size;
     const int64_t end_block_id = (end_offset - 1) / _block_size;
 
@@ -420,23 +456,72 @@ StatusOr<std::string_view> CacheInputStream::peek(int64_t count) {
     return s;
 }
 
+void CacheInputStream::_write_io_buf(const IOBuffer& io_buf, int64_t offset, WriteCacheOptions* options_ptr) {
+    if (!_cache->available() || io_buf.empty()) return;
+    DCHECK(offset % _block_size == 0);
+    size_t write_size = io_buf.size();
+    if (_already_populated_blocks.contains(offset / _block_size)) {
+        return;
+    }
+    if (_runtime_state != nullptr && _runtime_state->query_ctx() != nullptr) {
+        if (_runtime_state->query_ctx()->populate_block_cache_bytes() >= populate_block_cache_max_bytes) {
+            return;
+        }
+    }
+    SCOPED_RAW_TIMER(&_stats.write_cache_ns);
+    WriteCacheOptions local_options;
+    WriteCacheOptions* opt = options_ptr ? options_ptr : &local_options;
+    if (!options_ptr) {
+        opt->async = _enable_async_populate_mode;
+        opt->evict_probability = _datacache_evict_probability;
+        opt->priority = _priority;
+        opt->ttl_seconds = _ttl_seconds;
+    }
+    Status r = _cache->write_buffer(_cache_key, offset, io_buf, opt);
+    if (r.ok() || r.is_already_exist()) {
+        _already_populated_blocks.emplace(offset / _block_size);
+    }
+    if (r.ok()) {
+        _stats.write_cache_count += 1;
+        _stats.write_cache_bytes += write_size;
+        _stats.write_mem_cache_bytes += opt->stats.write_mem_bytes;
+        _stats.write_disk_cache_bytes += opt->stats.write_disk_bytes;
+        if (_runtime_state != nullptr && _runtime_state->query_ctx() != nullptr) {
+            _runtime_state->query_ctx()->incr_populate_block_cache_bytes(write_size);
+        }
+    } else if (!_can_ignore_populate_error(r)) {
+        _stats.write_cache_fail_count += 1;
+        _stats.write_cache_fail_bytes += write_size;
+        LOG(WARNING) << "write block cache failed, errmsg: " << r.message();
+    } else if (r.is_already_exist() || r.is_resource_busy()) {
+        _stats.skip_write_cache_count += 1;
+        _stats.skip_write_cache_bytes += write_size;
+        LOG(WARNING) << "write block cache skip, errmsg: " << r.message();
+    }
+    if (_enable_populate_error_logs && (!r.ok() && !r.is_already_exist() && !r.is_resource_busy())) {
+        _populate_cache_status.emplace_back(std::move(r));
+    }
+}
+
 void CacheInputStream::_populate_to_cache(const char* p, int64_t offset, int64_t count, const SharedBufferPtr& sb) {
+    if (!_cache->available()) return;
     int64_t begin = offset / _block_size * _block_size;
     int64_t end = std::min((offset + count + _block_size - 1) / _block_size * _block_size, _size);
     p -= (offset - begin);
-    auto f = [sb, this](const char* buf, size_t off, size_t size) {
-        DCHECK(off % _block_size == 0);
-        if (_already_populated_blocks.contains(off / _block_size)) {
-            // Already populate in CacheInputStream's lifecycle, ignore this time
-            return;
-        }
-        if (_runtime_state != nullptr && _runtime_state->query_ctx() != nullptr) {
-            if (_runtime_state->query_ctx()->populate_block_cache_bytes() >= populate_block_cache_max_bytes) {
-                return;
-            }
-        }
 
-        SCOPED_RAW_TIMER(&_stats.write_cache_ns);
+    while (begin < end) {
+        size_t size = std::min(_block_size, end - begin);
+        if (_already_populated_blocks.contains(begin / _block_size)) {
+            begin += size;
+            p += size;
+            continue;
+        }
+        if (_runtime_state != nullptr && _runtime_state->query_ctx() != nullptr &&
+            _runtime_state->query_ctx()->populate_block_cache_bytes() >= populate_block_cache_max_bytes) {
+            break;
+        }
+        IOBuffer io_buf;
+        io_buf.append_user_data(const_cast<char*>(p), size, [](void*) {}); // no-op deleter
         WriteCacheOptions options;
         options.async = _enable_async_populate_mode;
         options.evict_probability = _datacache_evict_probability;
@@ -444,47 +529,15 @@ void CacheInputStream::_populate_to_cache(const char* p, int64_t offset, int64_t
         options.ttl_seconds = _ttl_seconds;
         if (options.async && sb) {
             auto cb = [sb](int code, const std::string& msg) {
-                // We only need to keep the shared buffer pointer
                 LOG_IF(WARNING, code != 0 && code != EEXIST) << "write block cache failed, errmsg: " << msg;
             };
             options.callback = cb;
             options.allow_zero_copy = true;
         }
-        Status r = _cache->write_buffer(_cache_key, off, size, buf, &options);
-        if (r.ok() || r.is_already_exist()) {
-            _already_populated_blocks.emplace(off / _block_size);
-        }
-
-        if (r.ok()) {
-            _stats.write_cache_count += 1;
-            _stats.write_cache_bytes += size;
-            _stats.write_mem_cache_bytes += options.stats.write_mem_bytes;
-            _stats.write_disk_cache_bytes += options.stats.write_disk_bytes;
-            if (_runtime_state != nullptr && _runtime_state->query_ctx() != nullptr) {
-                _runtime_state->query_ctx()->incr_populate_block_cache_bytes(size);
-            }
-        } else if (!_can_ignore_populate_error(r)) {
-            _stats.write_cache_fail_count += 1;
-            _stats.write_cache_fail_bytes += size;
-            LOG(WARNING) << "write block cache failed, errmsg: " << r.message();
-        } else if (r.is_already_exist() || r.is_resource_busy()) {
-            _stats.skip_write_cache_count += 1;
-            _stats.skip_write_cache_bytes += size;
-            LOG(WARNING) << "write block cache failed, errmsg: " << r.message();
-        }
-
-        if (_enable_populate_error_logs && (!r.ok() && !r.is_already_exist() && !r.is_resource_busy())) {
-            _populate_cache_status.emplace_back(std::move(r));
-        }
-    };
-
-    while (begin < end) {
-        size_t size = std::min(_block_size, end - begin);
-        f(p, begin, size);
+        _write_io_buf(io_buf, begin, &options);
         begin += size;
         p += size;
     }
-    return;
 }
 
 bool CacheInputStream::_can_ignore_populate_error(const Status& status) const {

@@ -59,6 +59,8 @@ public:
 
     DataCacheEngineType engine_type() override { return DataCacheEngineType::STARCACHE; }
 
+    static starcache::DurabilityType string_to_durability_type(const std::string& str);
+
 private:
     std::unique_ptr<starcache::StarCache> _cache;
     std::unique_ptr<starcache::TimeBasedCacheAdaptor> _cache_adaptor;

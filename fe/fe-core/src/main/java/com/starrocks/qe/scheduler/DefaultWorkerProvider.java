@@ -20,6 +20,7 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
+import com.starrocks.common.Config;
 import com.starrocks.common.FeConstants;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariableConstants.ComputationFragmentSchedulingPolicy;
@@ -72,6 +73,8 @@ public class DefaultWorkerProvider implements WorkerProvider {
      */
     private final ImmutableMap<Long, ComputeNode> availableID2ComputeNode;
 
+    private final ImmutableMap<Long, ComputeNode> id2BackendBefore;
+
     /**
      * These three members record the workers used by the related job.
      * They are updated when calling {@code chooseXXX} methods.
@@ -114,8 +117,17 @@ public class DefaultWorkerProvider implements WorkerProvider {
                 LOG.debug("idToComputeNode: {}", idToComputeNode);
             }
 
+            ImmutableMap<Long, ComputeNode> id2BackendBefore = ImmutableMap.copyOf(systemInfoService.getIdToBackend());
+            if (systemInfoService.getBackendChangeTime().get() + Config.previous_backend_cache_keep_time
+                    > System.currentTimeMillis()) {
+                id2BackendBefore = ImmutableMap.copyOf(systemInfoService.getIdToBackendRefBefore());
+            }
+
+            LOG.debug("id2BackendBefore : {}", id2BackendBefore);
+
             return new DefaultWorkerProvider(idToBackend, idToComputeNode,
                     filterAvailableWorkers(idToBackend), filterAvailableWorkers(idToComputeNode),
+                    id2BackendBefore,
                     preferComputeNode);
         }
     }
@@ -125,6 +137,7 @@ public class DefaultWorkerProvider implements WorkerProvider {
                                  ImmutableMap<Long, ComputeNode> id2ComputeNode,
                                  ImmutableMap<Long, ComputeNode> availableID2Backend,
                                  ImmutableMap<Long, ComputeNode> availableID2ComputeNode,
+                                 ImmutableMap<Long, ComputeNode> id2BackendBefore,
                                  boolean preferComputeNode) {
         this.id2Backend = id2Backend;
         this.id2ComputeNode = id2ComputeNode;
@@ -132,6 +145,7 @@ public class DefaultWorkerProvider implements WorkerProvider {
         this.availableID2Backend = availableID2Backend;
         this.availableID2ComputeNode = availableID2ComputeNode;
 
+        this.id2BackendBefore = id2BackendBefore;
         this.selectedWorkerIds = Sets.newConcurrentHashSet();
 
         this.hasComputeNode = MapUtils.isNotEmpty(availableID2ComputeNode);
@@ -146,12 +160,14 @@ public class DefaultWorkerProvider implements WorkerProvider {
     @VisibleForTesting
     public DefaultWorkerProvider(
             ImmutableMap<Long, ComputeNode> id2ComputeNode,
-            ImmutableMap<Long, ComputeNode> availableID2ComputeNode) {
+            ImmutableMap<Long, ComputeNode> availableID2ComputeNode,
+            ImmutableMap<Long, ComputeNode> id2BackendBefore) {
         this.id2Backend = ImmutableMap.of();
         this.id2ComputeNode = id2ComputeNode;
 
         this.availableID2Backend = ImmutableMap.of();
         this.availableID2ComputeNode = availableID2ComputeNode;
+        this.id2BackendBefore = id2BackendBefore;
 
         this.selectedWorkerIds = Sets.newConcurrentHashSet();
 
@@ -207,6 +223,11 @@ public class DefaultWorkerProvider implements WorkerProvider {
         } else {
             return ImmutableList.copyOf(availableID2Backend.values());
         }
+    }
+
+    @Override
+    public Collection<ComputeNode> getAllBackendBefore() {
+        return ImmutableList.copyOf(id2BackendBefore.values());
     }
 
     @Override

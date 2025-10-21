@@ -3604,4 +3604,10 @@ public class Config extends ConfigBase {
      */
     @ConfField(mutable = true)
     public static double max_storage_usage = 1.0;
+
+    @ConfField(mutable = true)
+    public static boolean enable_remote_node_cache = false;
+
+    @ConfField(mutable = true)
+    public static int previous_backend_cache_keep_time = 1000 * 60 * 60; // 1h
 }

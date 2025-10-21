@@ -742,6 +742,11 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String COMPUTE_NODE_SELECTOR = "compute_node_selector";
 
     public static final String HDFS_BACKEND_SELECTOR_HASH_ALGORITHM = "hdfs_backend_selector_hash_algorithm";
+    // If true, when using ConsistentHashRing for HDFS backend selection, the hash of a scan range
+    // will only consider file path related fields (full_path / partition_id / relative_path) and
+    // ignore other changing attributes such as offset. This reduces hash churn when file splits
+    // (offset based) change, improving cache locality and backend stickiness.
+    public static final String HDFS_SCAN_RANGE_HASH_FILE_PATH_ONLY = "hdfs_scan_range_hash_file_path_only";
 
     public static final String ENABLE_ADAPTIVE_BACKEND_SELECTOR_HASH_ALGORITHM =
             "enable_adaptive_backend_selector_hash_algorithm";
@@ -1670,6 +1675,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = HDFS_BACKEND_SELECTOR_HASH_ALGORITHM, flag = VariableMgr.INVISIBLE)
     private String hdfsBackendSelectorHashAlgorithm = BackendSelectorHashAlgorithm.CONSISTENT;
+
+    @VariableMgr.VarAttr(name = HDFS_SCAN_RANGE_HASH_FILE_PATH_ONLY, flag = VariableMgr.INVISIBLE)
+    private boolean hdfsScanRangeHashFilePathOnly = false;
 
     @VariableMgr.VarAttr(name = ENABLE_ADAPTIVE_BACKEND_SELECTOR_HASH_ALGORITHM, flag = VariableMgr.INVISIBLE)
     private boolean enableAdaptiveBackendSelectorHashAlgorithm = true;
@@ -2662,6 +2670,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.datacachePriority = dataCachePriority;
     }
 
+    public boolean isEnableCacheSelect() {
+        return this.enableCacheSelect;
+    }
+
     public void setDatacacheTTLSeconds(long datacacheTTLSeconds) {
         this.datacacheTTLSeconds = datacacheTTLSeconds;
     }
@@ -2987,6 +2999,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setConsistentHashVirtualNodeNum(int consistentHashVirtualNodeNum) {
         this.consistentHashVirtualNodeNum = consistentHashVirtualNodeNum;
+    }
+
+    public boolean getHdfsScanRangeHashFilePathOnly() {
+        return hdfsScanRangeHashFilePathOnly;
+    }
+
+    public void setHdfsScanRangeHashFilePathOnly(boolean hdfsScanRangeHashFilePathOnly) {
+        this.hdfsScanRangeHashFilePathOnly = hdfsScanRangeHashFilePathOnly;
     }
 
     // when pipeline engine is enabled

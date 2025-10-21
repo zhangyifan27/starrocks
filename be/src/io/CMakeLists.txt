@@ -32,4 +32,5 @@ add_library(IO STATIC
         shared_buffered_input_stream.cpp
         async_flush_output_stream.cpp
         direct_s3_output_stream.cpp
+        remote_node_cache.cpp
         )

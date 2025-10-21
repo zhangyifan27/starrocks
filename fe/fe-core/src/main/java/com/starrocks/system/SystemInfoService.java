@@ -114,6 +114,12 @@ public class SystemInfoService implements GsonPostProcessable {
     @SerializedName(value = "ce")
     protected volatile ConcurrentHashMap<Long, ComputeNode> idToComputeNodeRef;
 
+    @SerializedName(value = "pre_be")
+    protected volatile ConcurrentHashMap<Long, Backend> idToBackendRefBefore;
+
+    @SerializedName(value = "time")
+    protected volatile AtomicLong backendChangeTime;
+
     protected volatile ImmutableMap<Long, AtomicLong> idToReportVersionRef;
     private volatile ImmutableMap<Long, DiskInfo> pathHashToDishInfoRef;
 
@@ -122,6 +128,8 @@ public class SystemInfoService implements GsonPostProcessable {
     public SystemInfoService() {
         idToBackendRef = new ConcurrentHashMap<>();
         idToComputeNodeRef = new ConcurrentHashMap<>();
+        idToBackendRefBefore = new ConcurrentHashMap<>();
+        backendChangeTime = new AtomicLong(System.currentTimeMillis());
 
         idToReportVersionRef = ImmutableMap.of();
         pathHashToDishInfoRef = ImmutableMap.of();
@@ -250,6 +258,9 @@ public class SystemInfoService implements GsonPostProcessable {
 
     // Final entry of adding backend
     private void addBackend(String host, int heartbeatPort, String warehouse) throws DdlException {
+        idToBackendRefBefore = new ConcurrentHashMap<>(idToBackendRef);
+        backendChangeTime = new AtomicLong(System.currentTimeMillis());
+
         Backend newBackend = new Backend(GlobalStateMgr.getCurrentState().getNextId(), host, heartbeatPort);
         // add backend to DEFAULT_CLUSTER
         setBackendOwner(newBackend);
@@ -285,6 +296,11 @@ public class SystemInfoService implements GsonPostProcessable {
         Backend preUpdateBackend = candidateBackends.get(0);
         Backend updateBackend = idToBackendRef.get(preUpdateBackend.getId());
         updateBackend.setHost(fqdn);
+
+        Backend backend = idToBackendRefBefore.get(preUpdateBackend.getId());
+        if (backend != null) {
+            backend.setHost(fqdn);
+        }
 
         // log
         GlobalStateMgr.getCurrentState().getEditLog().logBackendStateChange(updateBackend);
@@ -506,6 +522,9 @@ public class SystemInfoService implements GsonPostProcessable {
             }
         }
 
+        idToBackendRefBefore = new ConcurrentHashMap<>(idToBackendRef);
+        backendChangeTime = new AtomicLong(System.currentTimeMillis());
+
         // update idToBackend
         idToBackendRef.remove(droppedBackend.getId());
 
@@ -596,6 +615,10 @@ public class SystemInfoService implements GsonPostProcessable {
 
         GlobalStateMgr.getCurrentState().getEditLog()
                 .logCancelDisableDisk(new CancelDisableDiskInfo(backend.getId(), diskList));
+    }
+
+    public AtomicLong getBackendChangeTime() {
+        return backendChangeTime;
     }
 
     public void replayDecommissionDisks(DecommissionDiskInfo info) {
@@ -975,6 +998,10 @@ public class SystemInfoService implements GsonPostProcessable {
         return ImmutableMap.copyOf(idToBackendRef);
     }
 
+    public ImmutableMap<Long, Backend> getIdToBackendRefBefore() {
+        return ImmutableMap.copyOf(idToBackendRefBefore);
+    }
+
     public ImmutableMap<Long, ComputeNode> getIdComputeNode() {
         return ImmutableMap.copyOf(idToComputeNodeRef);
     }
@@ -1069,6 +1096,9 @@ public class SystemInfoService implements GsonPostProcessable {
     }
 
     public void replayAddBackend(Backend newBackend) {
+        idToBackendRefBefore = new ConcurrentHashMap<>(idToBackendRef);
+        backendChangeTime = new AtomicLong(System.currentTimeMillis());
+
         // update idToBackend
         idToBackendRef.put(newBackend.getId(), newBackend);
 
@@ -1102,6 +1132,9 @@ public class SystemInfoService implements GsonPostProcessable {
 
     public void replayDropBackend(Backend backend) {
         LOG.debug("replayDropBackend: {}", backend);
+        idToBackendRefBefore = new ConcurrentHashMap<>(idToBackendRef);
+        backendChangeTime = new AtomicLong(System.currentTimeMillis());
+
         // update idToBackend
         idToBackendRef.remove(backend.getId());
 

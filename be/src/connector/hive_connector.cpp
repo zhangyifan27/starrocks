@@ -156,6 +156,10 @@ Status HiveDataSource::open(RuntimeState* state) {
         }
     }
 
+    if (_scan_range.__isset.previous_cache_node && _datacache_options.enable_datacache == false) {
+        _datacache_options.modification_time = _scan_range.modification_time;
+    }
+
     // Don't use datacache when priority = -1
     // todo: should remove it later
     if (_scan_range.__isset.datacache_options && _scan_range.datacache_options.__isset.priority &&
@@ -469,7 +473,7 @@ void HiveDataSource::_init_counter(RuntimeState* state) {
                 prefix);
     }
 
-    if (_datacache_options.enable_datacache) {
+    if (_datacache_options.enable_datacache || _scan_range.__isset.previous_cache_node) {
         static const char* prefix = "DataCache";
         ADD_COUNTER(_runtime_profile, prefix, TUnit::NONE);
         _profile.runtime_profile->add_info_string("DataCachePriority",
@@ -505,6 +509,14 @@ void HiveDataSource::_init_counter(RuntimeState* state) {
                 ADD_CHILD_COUNTER(_runtime_profile, "DataCacheReadBlockBufferCounter", TUnit::UNIT, prefix);
         _profile.datacache_read_block_buffer_bytes =
                 ADD_CHILD_COUNTER(_runtime_profile, "DataCacheReadBlockBufferBytes", TUnit::BYTES, prefix);
+        _profile.datacache_read_remote_cache_counter =
+                ADD_CHILD_COUNTER(_runtime_profile, "DataCacheReadRemoteCacheCounter", TUnit::UNIT, prefix);
+        _profile.datacache_read_remote_cache_fail_counter =
+                ADD_CHILD_COUNTER(_runtime_profile, "DataCacheReadRemoteCacheFailCounter", TUnit::UNIT, prefix);
+        _profile.datacache_read_remote_cache_timer =
+                ADD_CHILD_TIMER(_runtime_profile, "DataCacheReadRemoteCacheTimer", prefix);
+        _profile.datacache_read_remote_cache_bytes =
+                ADD_CHILD_COUNTER(_runtime_profile, "DataCacheReadRemoteCacheBytes", TUnit::BYTES, prefix);
     }
 
     {
@@ -628,6 +640,10 @@ Status HiveDataSource::_init_scanner(RuntimeState* state) {
     }
     if (scan_range.__isset.paimon_deletion_file && !scan_range.paimon_deletion_file.path.empty()) {
         scanner_params.paimon_deletion_file = std::make_shared<TPaimonDeletionFile>(scan_range.paimon_deletion_file);
+    }
+
+    if (scan_range.__isset.previous_cache_node) {
+        scanner_params.previous_cache_node = scan_range.previous_cache_node;
     }
 
     // setup options for datacache

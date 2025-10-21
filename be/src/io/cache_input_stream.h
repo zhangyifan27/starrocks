@@ -24,6 +24,7 @@
 #include "runtime/runtime_state.h"
 
 namespace starrocks::io {
+class RemoteNodeCache;
 
 class CacheInputStream : public SeekableInputStreamWrapper {
 public:
@@ -46,6 +47,10 @@ public:
         int64_t write_cache_fail_bytes = 0;
         int64_t read_block_buffer_bytes = 0;
         int64_t read_block_buffer_count = 0;
+        int64_t read_remote_cache_count = 0;
+        int64_t read_remote_cache_fail_count = 0;
+        int64_t read_remote_cache_ns = 0;
+        int64_t read_remote_cache_bytes = 0;
     };
 
     explicit CacheInputStream(const std::shared_ptr<SharedBufferedInputStream>& stream, const std::string& filename,
@@ -78,6 +83,8 @@ public:
     void set_priority(const int8_t priority) { _priority = priority; }
 
     void set_ttl_seconds(const uint64_t ttl_seconds) { _ttl_seconds = ttl_seconds; }
+
+    Status set_remote_cache_node(RuntimeState* runtime_state, const TNetworkAddress& remote_node);
 
     int64_t get_align_size() const;
 
@@ -134,6 +141,10 @@ protected:
     // Read multiple blocks from remote
     virtual Status _read_blocks_from_remote(const int64_t offset, const int64_t size, char* out);
     void _populate_to_cache(const char* src, int64_t offset, int64_t count, const SharedBufferPtr& sb);
+    // Write a IOBuffer (one or multiple blocks) into local block cache. Logic aligns with _populate_to_cache.
+    // Write a single aligned block IOBuffer to cache. `offset` must be block aligned.
+    // Caller prepares WriteCacheOptions (may be nullptr for default synchronous write).
+    void _write_io_buf(const IOBuffer& buf, int64_t offset, WriteCacheOptions* options);
     void _deduplicate_shared_buffer(const SharedBufferPtr& sb);
     bool _can_ignore_populate_error(const Status& status) const;
 
@@ -165,6 +176,9 @@ private:
     std::unordered_set<int64_t> _already_populated_blocks{};
     RuntimeState* _runtime_state = nullptr;
     int64_t populate_block_cache_max_bytes = INT64_MAX;
+
+    bool _try_get_cache_from_remote = false;
+    std::unique_ptr<RemoteNodeCache> _remote_node_cache;
 };
 
 } // namespace starrocks::io

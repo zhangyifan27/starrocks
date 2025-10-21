@@ -162,7 +162,8 @@ public class HDFSBackendSelectorTest {
         FragmentScanRangeAssignment assignment = new FragmentScanRangeAssignment();
         ImmutableMap<Long, ComputeNode> computeNodes = createComputeNodes(hostNumber);
         DefaultWorkerProvider workerProvider =
-                new DefaultWorkerProvider(ImmutableMap.of(), computeNodes, ImmutableMap.of(), computeNodes, true);
+                new DefaultWorkerProvider(ImmutableMap.of(), computeNodes, ImmutableMap.of(), computeNodes,
+                        ImmutableMap.of(), true);
 
         sessionVariable.setHdfsBackendSelectorHashAlgorithm(hashRingAlgorithm);
         sessionVariable.setConsistentHashVirtualNodeNum(virtualNodeNum);
@@ -212,7 +213,8 @@ public class HDFSBackendSelectorTest {
 
         // test empty compute nodes
         workerProvider =
-                new DefaultWorkerProvider(ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of(), true);
+                new DefaultWorkerProvider(ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of(), ImmutableMap.of(),
+                        ImmutableMap.of(), true);
         selector = new HDFSBackendSelector(hdfsScanNode, locations, assignment, workerProvider, context);
         try {
             selector.computeScanRangeAssignment();
@@ -254,6 +256,7 @@ public class HDFSBackendSelectorTest {
                 computeNodes,
                 ImmutableMap.of(),
                 computeNodes,
+                ImmutableMap.of(),
                 true
         );
 
@@ -271,6 +274,7 @@ public class HDFSBackendSelectorTest {
 
         // test empty compute nodes
         workerProvider = new DefaultWorkerProvider(
+                ImmutableMap.of(),
                 ImmutableMap.of(),
                 ImmutableMap.of(),
                 ImmutableMap.of(),
@@ -322,6 +326,7 @@ public class HDFSBackendSelectorTest {
                     computeNodes,
                     ImmutableMap.of(),
                     computeNodes,
+                    ImmutableMap.of(),
                     true
             );
 
@@ -353,6 +358,7 @@ public class HDFSBackendSelectorTest {
                     computeNodes,
                     ImmutableMap.of(),
                     computeNodes,
+                    ImmutableMap.of(),
                     true
             );
 
@@ -375,11 +381,11 @@ public class HDFSBackendSelectorTest {
             // test empty compute nodes
             int scanRangeNumber = 30000;
             int scanRangeSize = 10000;
-            int hostNumber = 3;
             List<TScanRangeLocations> locations = createScanRanges(scanRangeNumber, scanRangeSize);
             FragmentScanRangeAssignment assignment = new FragmentScanRangeAssignment();
-            ImmutableMap<Long, ComputeNode> computeNodes = createComputeNodes(hostNumber);
-            DefaultWorkerProvider workerProvider = workerProvider = new DefaultWorkerProvider(
+            // Empty compute nodes provider to trigger failure path
+            DefaultWorkerProvider workerProvider = new DefaultWorkerProvider(
+                    ImmutableMap.of(),
                     ImmutableMap.of(),
                     ImmutableMap.of(),
                     ImmutableMap.of(),
@@ -431,6 +437,7 @@ public class HDFSBackendSelectorTest {
                 computeNodes,
                 ImmutableMap.of(),
                 computeNodes,
+                ImmutableMap.of(),
                 true
         );
 
@@ -449,6 +456,7 @@ public class HDFSBackendSelectorTest {
 
         // test empty compute nodes
         workerProvider = new DefaultWorkerProvider(
+                ImmutableMap.of(),
                 ImmutableMap.of(),
                 ImmutableMap.of(),
                 ImmutableMap.of(),
@@ -498,6 +506,7 @@ public class HDFSBackendSelectorTest {
                 computeNodes,
                 ImmutableMap.of(),
                 computeNodes,
+                ImmutableMap.of(),
                 true
         );
 
@@ -545,25 +554,28 @@ public class HDFSBackendSelectorTest {
                 computeNodes,
                 ImmutableMap.of(),
                 computeNodes,
+                ImmutableMap.of(),
                 true
         );
         HDFSBackendSelector selector =
                 new HDFSBackendSelector(hdfsScanNode, locations, assignment, workerProvider, context);
-        HashRing hashRing = selector.makeHashRing();
+        HashRing<TScanRangeLocations, ComputeNode> hashRing =
+                selector.makeHashRing(selector.assignedScansPerComputeNode.keySet(), false);
         Assert.assertTrue(hashRing.policy().equals(SessionVariable.BackendSelectorHashAlgorithm.CONSISTENT));
-        ConsistentHashRing consistentHashRing = (ConsistentHashRing) hashRing;
+        ConsistentHashRing<TScanRangeLocations, ComputeNode> consistentHashRing =
+                (ConsistentHashRing<TScanRangeLocations, ComputeNode>) hashRing;
         Assert.assertTrue(consistentHashRing.getVirtualNumber() ==
                 HDFSBackendSelector.CONSISTENT_HASH_RING_VIRTUAL_NUMBER);
 
         sessionVariable.setHdfsBackendSelectorHashAlgorithm(SessionVariable.BackendSelectorHashAlgorithm.RENDEZVOUS);
-        hashRing = selector.makeHashRing();
+        hashRing = selector.makeHashRing(selector.assignedScansPerComputeNode.keySet(), false);
         Assert.assertTrue(hashRing.policy().equals(SessionVariable.BackendSelectorHashAlgorithm.RENDEZVOUS));
 
         sessionVariable.setHdfsBackendSelectorHashAlgorithm(SessionVariable.BackendSelectorHashAlgorithm.CONSISTENT);
         sessionVariable.setConsistentHashVirtualNodeNum(64);
-        hashRing = selector.makeHashRing();
+        hashRing = selector.makeHashRing(selector.assignedScansPerComputeNode.keySet(), false);
         Assert.assertTrue(hashRing.policy().equals(SessionVariable.BackendSelectorHashAlgorithm.CONSISTENT));
-        consistentHashRing = (ConsistentHashRing) hashRing;
+        consistentHashRing = (ConsistentHashRing<TScanRangeLocations, ComputeNode>) hashRing;
         Assert.assertTrue(consistentHashRing.getVirtualNumber() == 64);
     }
 
@@ -610,6 +622,7 @@ public class HDFSBackendSelectorTest {
                 computeNodes,
                 ImmutableMap.of(),
                 computeNodes,
+                ImmutableMap.of(),
                 true
         );
 
@@ -622,5 +635,88 @@ public class HDFSBackendSelectorTest {
         for (Map.Entry<Long, Long> entry : stats.entrySet()) {
             System.out.printf("%s -> %d bytes\n", entry.getKey(), entry.getValue());
         }
+    }
+
+    @Test
+    public void testFilePathOnlyHashRingOffsetIgnored() throws Exception {
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setForceScheduleLocal(false);
+        sessionVariable.setHdfsBackendSelectorScanRangeShuffle(false);
+        // enable file-path-only hashing
+        sessionVariable.setHdfsScanRangeHashFilePathOnly(true);
+
+        new Expectations() {
+            {
+                hdfsScanNode.getId();
+                result = scanNodeId;
+                hdfsScanNode.getTableName();
+                result = "hive_tbl";
+                hiveTable.getTableLocation();
+                result = "hdfs://dfs00/dataset/";
+                context.getSessionVariable();
+                result = sessionVariable;
+            }
+        };
+
+        // build a selector with a modest number of nodes to increase dispersion probability
+        int hostNumber = 5;
+        List<TScanRangeLocations> dummy = createScanRanges(1, 1024);
+        FragmentScanRangeAssignment assignment = new FragmentScanRangeAssignment();
+        ImmutableMap<Long, ComputeNode> computeNodes = createComputeNodes(hostNumber);
+        DefaultWorkerProvider workerProvider = new DefaultWorkerProvider(
+                ImmutableMap.of(),
+                computeNodes,
+                ImmutableMap.of(),
+                computeNodes,
+                ImmutableMap.of(),
+                true
+        );
+        HDFSBackendSelector selector = new HDFSBackendSelector(hdfsScanNode, dummy, assignment, workerProvider, context);
+
+        // normal ring (with offset) and file-path-only ring (without offset in hash)
+        HashRing<TScanRangeLocations, ComputeNode> normalRing = selector.makeHashRing(
+                selector.assignedScansPerComputeNode.keySet(), false);
+        HashRing<TScanRangeLocations, ComputeNode> pathOnlyRing = selector.makeHashRing(
+                selector.assignedScansPerComputeNode.keySet(), true);
+
+        // helper to create a scan range with specified offset but identical relative path
+        java.util.function.LongFunction<TScanRangeLocations> builder = (off) -> {
+            TScanRangeLocations locs = new TScanRangeLocations();
+            TScanRange range = new TScanRange();
+            THdfsScanRange hdfs = new THdfsScanRange();
+            hdfs.setRelative_path("000001");
+            hdfs.setOffset(off);
+            hdfs.setLength(1024);
+            range.setHdfs_scan_range(hdfs);
+            locs.setScan_range(range);
+            // add a dummy location to satisfy potential logic
+            TScanRangeLocation location = new TScanRangeLocation();
+            location.setServer(new TNetworkAddress("localhost", -1));
+            java.util.List<TScanRangeLocation> list = new java.util.ArrayList<>();
+            list.add(location);
+            locs.setLocations(list);
+            return locs;
+        };
+
+        java.util.Set<Long> normalBackendIds = new java.util.HashSet<>();
+        Long pathOnlyBackendId = null;
+        for (long off = 0; off < 10; off++) {
+            TScanRangeLocations locs = builder.apply(off);
+            ComputeNode normalNode = normalRing.get(locs, 1).get(0);
+            ComputeNode pathNode = pathOnlyRing.get(locs, 1).get(0);
+            normalBackendIds.add(normalNode.getId());
+            if (pathOnlyBackendId == null) {
+                pathOnlyBackendId = pathNode.getId();
+            } else {
+                // file-path-only ring must produce identical backend regardless of offset
+                Assert.assertEquals(pathOnlyBackendId.longValue(), pathNode.getId());
+            }
+        }
+
+        // If normal ring shows multiple backend assignments, it demonstrates offset influence; if not, still fine.
+        // We assert at least one backend chosen.
+        Assert.assertFalse(normalBackendIds.isEmpty());
+        System.out.println("normal ring distinct backends (may be >1 if offset influences hash): " + normalBackendIds);
+        System.out.println("file-path-only ring backend id: " + pathOnlyBackendId);
     }
 }

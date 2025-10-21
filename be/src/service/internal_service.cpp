@@ -290,6 +290,15 @@ void PInternalServiceImplBase<T>::exec_plan_fragment(google::protobuf::RpcContro
 }
 
 template <typename T>
+void PInternalServiceImplBase<T>::read_node_cache(google::protobuf::RpcController* controller,
+                                                  const PReadNodeCacheRequest* request,
+                                                  PReadNodeCacheResult* response,
+                                                  google::protobuf::Closure* done) {
+    ClosureGuard closure_guard(done);
+    response->mutable_status()->set_status_code(TStatusCode::NOT_IMPLEMENTED_ERROR);
+}
+
+template <typename T>
 void PInternalServiceImplBase<T>::_exec_plan_fragment(google::protobuf::RpcController* cntl_base,
                                                       const PExecPlanFragmentRequest* request,
                                                       PExecPlanFragmentResult* response,

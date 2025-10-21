@@ -138,6 +138,10 @@ struct HdfsScanProfile {
     RuntimeProfile::Counter* datacache_write_fail_bytes = nullptr;
     RuntimeProfile::Counter* datacache_read_block_buffer_counter = nullptr;
     RuntimeProfile::Counter* datacache_read_block_buffer_bytes = nullptr;
+    RuntimeProfile::Counter* datacache_read_remote_cache_counter = nullptr;
+    RuntimeProfile::Counter* datacache_read_remote_cache_fail_counter = nullptr;
+    RuntimeProfile::Counter* datacache_read_remote_cache_timer = nullptr;
+    RuntimeProfile::Counter* datacache_read_remote_cache_bytes = nullptr;
 
     RuntimeProfile::Counter* shared_buffered_shared_io_count = nullptr;
     RuntimeProfile::Counter* shared_buffered_shared_io_bytes = nullptr;
@@ -230,6 +234,8 @@ struct HdfsScannerParams {
     MORParams mor_params;
 
     int64_t connector_max_split_size = 0;
+
+    std::optional<TNetworkAddress> previous_cache_node;
 };
 
 struct HdfsScannerContext {
@@ -384,7 +390,8 @@ public:
 protected:
     static StatusOr<std::unique_ptr<RandomAccessFile>> create_random_access_file(
             std::shared_ptr<io::SharedBufferedInputStream>& shared_buffered_input_stream,
-            std::shared_ptr<io::CacheInputStream>& cache_input_stream, const OpenFileOptions& options);
+            std::shared_ptr<io::CacheInputStream>& cache_input_stream, const OpenFileOptions& options,
+            const std::optional<TNetworkAddress>& previous_cache_node, RuntimeState* runtime_state);
     Status open_random_access_file();
     static CompressionTypePB get_compression_type_from_path(const std::string& filename);
 
