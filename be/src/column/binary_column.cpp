@@ -574,6 +574,9 @@ void BinaryColumnBase<T>::fnv_hash(uint32_t* hashes, uint32_t from, uint32_t to)
     for (uint32_t i = from; i < to; ++i) {
         hashes[i] = HashUtil::fnv_hash(_bytes.data() + _offsets[i],
                                        static_cast<uint32_t>(_offsets[i + 1] - _offsets[i]), hashes[i]);
+        if constexpr (std::is_same_v<T, uint32_t>) {
+            hashes[i] = HashUtil::xorshift32(hashes[i]);
+        }
     }
 }
 

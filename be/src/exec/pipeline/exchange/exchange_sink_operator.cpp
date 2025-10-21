@@ -647,6 +647,8 @@ Status ExchangeSinkOperator::push_chunk(RuntimeState* state, const ChunkPtr& chu
             // Compute hash for each partition column
             if (_part_type == TPartitionType::HASH_PARTITIONED) {
                 _hash_values.assign(num_rows, HashUtil::FNV_SEED);
+                // Each binary column now performs xorshift32 internally inside fnv_hash.
+                // For non-binary columns, fnv_hash has no extra op.
                 for (const ColumnPtr& column : _partitions_columns) {
                     column->fnv_hash(&_hash_values[0], 0, num_rows);
                 }
