@@ -835,6 +835,10 @@ public class OlapScanNode extends ScanNode {
             if (!conjuncts.isEmpty()) {
                 output.append(prefix).append("Predicates: ").append(getVerboseExplain(conjuncts)).append("\n");
             }
+            if (!prunedPartitionPredicates.isEmpty()) {
+                output.append(prefix).append("Partition Predicates: ").append(
+                        getVerboseExplain(prunedPartitionPredicates)).append("\n");
+            }
             if (!dictStringIdToIntIds.isEmpty()) {
                 List<String> flatDictList = dictStringIdToIntIds.entrySet().stream().limit(5)
                         .map((entry) -> "(" + entry.getKey() + "," + entry.getValue() + ")")

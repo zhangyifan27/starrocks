@@ -42,6 +42,7 @@ import com.starrocks.sql.optimizer.operator.scalar.MapOperator;
 import com.starrocks.sql.optimizer.operator.scalar.MultiInPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.rewrite.ScalarOperatorRewriteContext;
+import com.starrocks.sql.optimizer.rewrite.scalar.FoldConstantsRule;
 
 import java.util.Arrays;
 import java.util.List;
@@ -162,9 +163,14 @@ public class ImplicitCastRule extends TopDownScalarOperatorRewriteRule {
             return predicate;
         }
 
+        // Treat CAST-of-constant as constant-like so the fast path can trigger
+        boolean leftIsConstLike = leftChild.isConstantRef() ||
+                (leftChild instanceof CastOperator && leftChild.getChild(0).isConstantRef());
+        boolean rightIsConstLike = rightChild.isConstantRef() ||
+                (rightChild instanceof CastOperator && rightChild.getChild(0).isConstantRef());
         // we will try cast const operator to variable operator
-        if ((rightChild.isVariable() && leftChild.isConstantRef()) ||
-                (leftChild.isVariable() && rightChild.isConstantRef())) {
+        if ((rightChild.isVariable() && leftIsConstLike) ||
+                (leftChild.isVariable() && rightIsConstLike)) {
             int constant = leftChild.isVariable() ? 1 : 0;
             int variable = 1 - constant;
             Optional<BinaryPredicateOperator> optional = optimizeConstantAndVariable(predicate, constant, variable);
@@ -189,6 +195,17 @@ public class ImplicitCastRule extends TopDownScalarOperatorRewriteRule {
                                                                           int constantIndex, int variableIndex) {
         ScalarOperator constant = predicate.getChild(constantIndex);
         ScalarOperator variable = predicate.getChild(variableIndex);
+
+        // If constant is a CAST operator, try to fold it first
+        if (constant instanceof CastOperator && constant.getChild(0).isConstantRef()) {
+            FoldConstantsRule foldRule = new FoldConstantsRule();
+            ScalarOperator foldedConstant = foldRule.apply(constant, new ScalarOperatorRewriteContext());
+            if (foldedConstant instanceof ConstantOperator) {
+                predicate.getChildren().set(constantIndex, foldedConstant);
+                constant = foldedConstant;
+            }
+        }
+
         Type typeConstant = constant.getType();
         Type typeVariable = variable.getType();
 
