@@ -433,8 +433,7 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         boolean caseSensitive = CaseSensibility.TABLE.getCaseSensibility();
         if (params.isSetPattern()) {
             try {
-                matcher = PatternMatcher.createMysqlPattern(params.getPattern(),
-                        CaseSensibility.TABLE.getCaseSensibility());
+                matcher = PatternMatcher.createMysqlPattern(params.getPattern(), caseSensitive);
             } catch (SemanticException e) {
                 throw new TException("Pattern is in bad format: " + params.getPattern());
             }
@@ -459,6 +458,14 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         if (db != null) {
             for (String tableName : metadataMgr.listTableNames(catalogName, params.db)) {
                 LOG.debug("get table: {}, wait to check", tableName);
+                if (params.isSetTable_name() && !tableName.equals(params.getTable_name())) {
+                    continue;
+                }
+                if (matcher != null
+                        && !PatternMatcher.matchPattern(params.getPattern(), tableName, matcher, caseSensitive)) {
+                    continue;
+                }
+
                 Table tbl = null;
                 try {
                     tbl = metadataMgr.getTable(catalogName, params.db, tableName);
@@ -477,11 +484,8 @@ public class FrontendServiceImpl implements FrontendService.Iface {
                     continue;
                 }
 
-                if (!PatternMatcher.matchPattern(params.getPattern(), tableName, matcher, caseSensitive)) {
-                    continue;
-                }
-
                 tablesResult.add(tableName);
+                LOG.info("get table: {}, add table to result", tableName);
             }
         }
         return result;

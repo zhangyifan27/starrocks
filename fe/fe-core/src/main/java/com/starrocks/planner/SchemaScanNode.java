@@ -105,12 +105,20 @@ public class SchemaScanNode extends ScanNode {
         this.schemaTable = schemaTable;
     }
 
+    public void setSchemaWild(String schemaWild) {
+        this.schemaWild = schemaWild;
+    }
+
     public String getSchemaDb() {
         return schemaDb;
     }
 
     public String getSchemaTable() {
         return schemaTable;
+    }
+
+    public String getSchemaWild() {
+        return schemaWild;
     }
 
     public void setUser(String user) {

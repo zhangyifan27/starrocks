@@ -705,6 +705,67 @@ public class FrontendServiceImplTest {
     }
 
     @Test
+    public void testGetTableNamesWithPattern() throws TException {
+        FrontendServiceImpl impl = new FrontendServiceImpl(exeEnv);
+        TGetTablesParams params = new TGetTablesParams();
+        params.setCatalog_name("default_catalog");
+        params.setDb("test");
+        params.setPattern("site_access%"); // Test pattern matching
+        TUserIdentity tUserIdentity = new TUserIdentity();
+        tUserIdentity.setUsername("root");
+        tUserIdentity.setHost("%");
+        tUserIdentity.setIs_domain(false);
+        params.setCurrent_user_ident(tUserIdentity);
+
+        TGetTablesResult result = impl.getTableNames(params);
+        // Should return tables matching the pattern
+        Assert.assertTrue(result.tables.size() > 0);
+        // All returned tables should match the pattern
+        for (String tableName : result.tables) {
+            Assert.assertTrue(tableName.startsWith("site_access"));
+        }
+    }
+
+    @Test
+    public void testGetTableNamesWithExactTableName() throws TException {
+        FrontendServiceImpl impl = new FrontendServiceImpl(exeEnv);
+        TGetTablesParams params = new TGetTablesParams();
+        params.setCatalog_name("default_catalog");
+        params.setDb("test");
+        params.setTable_name("site_access_auto"); // Test exact table name matching
+        TUserIdentity tUserIdentity = new TUserIdentity();
+        tUserIdentity.setUsername("root");
+        tUserIdentity.setHost("%");
+        tUserIdentity.setIs_domain(false);
+        params.setCurrent_user_ident(tUserIdentity);
+
+        TGetTablesResult result = impl.getTableNames(params);
+        // Should return only the exact table
+        Assert.assertEquals(1, result.tables.size());
+        Assert.assertEquals("site_access_auto", result.tables.get(0));
+    }
+
+    @Test
+    public void testGetTableNamesWithPatternAndTableName() throws TException {
+        FrontendServiceImpl impl = new FrontendServiceImpl(exeEnv);
+        TGetTablesParams params = new TGetTablesParams();
+        params.setCatalog_name("default_catalog");
+        params.setDb("test");
+        params.setPattern("site_access%");
+        params.setTable_name("site_access_auto"); // Both pattern and exact name
+        TUserIdentity tUserIdentity = new TUserIdentity();
+        tUserIdentity.setUsername("root");
+        tUserIdentity.setHost("%");
+        tUserIdentity.setIs_domain(false);
+        params.setCurrent_user_ident(tUserIdentity);
+
+        TGetTablesResult result = impl.getTableNames(params);
+        // Should return only the exact table (table_name takes precedence)
+        Assert.assertEquals(1, result.tables.size());
+        Assert.assertEquals("site_access_auto", result.tables.get(0));
+    }
+
+    @Test
     public void testListTableStatus() throws TException {
         FrontendServiceImpl impl = new FrontendServiceImpl(exeEnv);
         TListTableStatusResult result = impl.listTableStatus(buildListTableStatusParam());

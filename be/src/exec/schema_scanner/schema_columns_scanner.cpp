@@ -578,7 +578,10 @@ Status SchemaColumnsScanner::get_new_table() {
         table_params.__set_catalog_name(*(_param->catalog));
     }
     if (nullptr != _param->table) {
-        table_params.__set_pattern(*(_param->table));
+        table_params.__set_table_name(*(_param->table));
+    }
+    if (nullptr != _param->wild) {
+        table_params.__set_pattern(*(_param->wild));
     }
     if (nullptr != _param->current_user_ident) {
         table_params.__set_current_user_ident(*(_param->current_user_ident));

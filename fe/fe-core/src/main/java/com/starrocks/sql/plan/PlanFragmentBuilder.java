@@ -1665,14 +1665,18 @@ public class PlanFragmentBuilder {
                     }
                 } else if (predicate instanceof LikePredicateOperator) {
                     LikePredicateOperator like = (LikePredicateOperator) predicate;
+                    String likeValue = ((ConstantOperator) like.getChild(1)).getVarchar();
+                    String columnName = columnRefOperator.getName();
                     // currently, we only optimize `log rlike xxx` or `log regexp xxx`, raise an error if using `like`
-                    if (columnRefOperator.getName().equals("LOG")) {
+                    if (columnName.equals("LOG")) {
                         if (like.getLikeType() == LikePredicateOperator.LikeType.REGEXP) {
-                            scanNode.setLogPattern(((ConstantOperator) like.getChild(1)).getVarchar());
+                            scanNode.setLogPattern(likeValue);
                         } else {
                             throw UnsupportedException.unsupportedException(
                                     "only support `regexp` or `rlike` for log grep");
                         }
+                    } else if (columnName.equals("TABLE_NAME")) {
+                        scanNode.setSchemaWild(likeValue);
                     }
                 }
             }
