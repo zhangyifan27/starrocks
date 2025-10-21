@@ -689,7 +689,9 @@ public class StmtExecutor {
                         handleQueryStmt(retryContext.getExecPlan());
                         break;
                     } catch (Exception e) {
-                        statisticsForAuditLog = coord.getAuditStatistics();
+                        if (coord != null) {
+                            statisticsForAuditLog = coord.getAuditStatistics();
+                        }
                         // For Arrow Flight SQL, FE doesn't know whether the client has already pull data from BE.
                         // So FE cannot decide whether it is able to retry.
                         if (i == retryTime - 1 || context instanceof ArrowFlightSqlConnectContext) {
@@ -2873,11 +2875,13 @@ public class StmtExecutor {
             } while (!batch.isEos());
         } catch (Exception e) {
             LOG.warn("Failed to execute executeStmtWithExecPlan", e);
-            coord.getExecStatus().setInternalErrorStatus(e.getMessage());
+            if (coord != null) {
+                coord.getExecStatus().setInternalErrorStatus(e.getMessage());
+            }
         } finally {
             QeProcessorImpl.INSTANCE.unregisterQuery(context.getExecutionId());
         }
-        return Pair.create(sqlResult, coord.getExecStatus());
+        return Pair.create(sqlResult, coord != null ? coord.getExecStatus() : null);
     }
 
     public List<ByteBuffer> getProxyResultBuffer() {
