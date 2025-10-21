@@ -34,11 +34,20 @@ import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static com.starrocks.connector.hive.HiveMetastoreOperations.EXTERNAL_LOCATION_PROPERTY;
 
 public class HiveWriteUtils {
     private static final Logger LOG = LogManager.getLogger(HiveWriteUtils.class);
+
+    /**
+     * Cache of UGI objects by proxy user name.
+     * This prevents FileSystem.Cache from creating duplicate entries for the same user.
+     */
+    private static final ConcurrentHashMap<String, UserGroupInformation> UGI_CACHE =
+            new ConcurrentHashMap<>();
+
     public static boolean isS3Url(String prefix) {
         return prefix.startsWith("oss://") || prefix.startsWith("s3n://") || prefix.startsWith("s3a://") ||
                 prefix.startsWith("s3://") || prefix.startsWith("cos://") || prefix.startsWith("cosn://") ||
@@ -83,6 +92,10 @@ public class HiveWriteUtils {
         }
     }
 
+    /**
+     * Get FileSystem with TAuth authentication.
+     * CRITICAL: Caches UGI objects to prevent FileSystem.Cache memory leak.
+     */
     public static FileSystem getTAuthFileSystem(Path path, Configuration conf) throws IOException, InterruptedException,
             SecureException {
         String proxyUser = "";
@@ -92,8 +105,22 @@ public class HiveWriteUtils {
         if (proxyUser.equals("root")) {
             proxyUser = TAuthUtils.getDefaultTdwUser();
         }
-        UserGroupInformation ugi = TAuthUtils.getPlatformUser();
-        UserGroupInformation proxyUgi = UserGroupInformation.createProxyUser(proxyUser, ugi);
+
+        // Get or create cached UGI for this proxy user
+        final String finalProxyUser = proxyUser;
+        UserGroupInformation proxyUgi = UGI_CACHE.computeIfAbsent(proxyUser, k -> {
+            try {
+                UserGroupInformation platformUgi = TAuthUtils.getPlatformUser();
+                UserGroupInformation newProxyUgi = UserGroupInformation.createProxyUser(finalProxyUser, platformUgi);
+                LOG.info("Created cached UGI for proxy user: {} (cache size: {})",
+                        finalProxyUser, UGI_CACHE.size());
+                return newProxyUgi;
+            } catch (Exception e) {
+                LOG.error("Failed to create UGI for proxy user: {}", finalProxyUser, e);
+                throw new RuntimeException("Failed to create UGI", e);
+            }
+        });
+
         conf.set("hadoop.security.authentication", "TAUTH");
         return proxyUgi.doAs((PrivilegedExceptionAction<FileSystem>) () ->
                 FileSystem.get(path.toUri(), conf));
