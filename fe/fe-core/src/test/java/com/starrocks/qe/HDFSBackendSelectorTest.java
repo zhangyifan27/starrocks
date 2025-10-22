@@ -672,6 +672,7 @@ public class HDFSBackendSelectorTest {
                 true
         );
         HDFSBackendSelector selector = new HDFSBackendSelector(hdfsScanNode, dummy, assignment, workerProvider, context);
+        selector.computeScanRangeAssignment();
 
         // normal ring (with offset) and file-path-only ring (without offset in hash)
         HashRing<TScanRangeLocations, ComputeNode> normalRing = selector.makeHashRing(
