@@ -16,6 +16,7 @@
 
 #include <utility>
 
+#include "block_cache/block_cache.h"
 #include "common/config.h"
 #include "exec/exec_node.h"
 #include "exec/iceberg/iceberg_delete_builder.h"
@@ -28,6 +29,7 @@
 #include "gen_cpp/orc_proto.pb.h"
 #include "simd/simd.h"
 #include "storage/chunk_helper.h"
+#include "util/defer_op.h"
 #include "util/runtime_profile.h"
 #include "util/timezone_utils.h"
 
@@ -485,11 +487,49 @@ Status HdfsOrcScanner::do_open(RuntimeState* runtime_state) {
         errno = 0;
         orc::ReaderOptions options;
         options.setMemoryPool(*getOrcMemoryPool());
+        bool use_file_metacache = false;
+        string metacache_key;
+        DataCacheHandle footer_cache_handle;
+#ifdef WITH_STARCACHE
+        if (_scanner_ctx.use_file_metacache && config::datacache_enable) {
+            _cache = BlockCache::instance();
+        }
+#endif
         if (_scanner_ctx.split_context != nullptr) {
             auto* split_context = down_cast<const SplitContext*>(_scanner_ctx.split_context);
             options.setSerializedFileTail(*(split_context->footer.get()));
+        } else if (_cache) {
+            // try read serialized footer(FileTail) from cache
+            metacache_key = build_metacache_key(_file->filename(), _file->get_size().value(), datacache_options);
+            Status st = _cache->read_object(metacache_key, &footer_cache_handle);
+            if (st.ok()) {
+                string serialized_footer = *(static_cast<const string*>(footer_cache_handle.ptr()));
+                options.setSerializedFileTail(serialized_footer);
+                _app_stats.footer_cache_read_count += 1;
+                use_file_metacache = true;
+            }
         }
         reader = orc::createReader(std::move(_input_stream), options);
+        // write serialized footer(FileTail) to cache on miss
+        if (!use_file_metacache && _cache) {
+            string serialized_tail = reader->getSerializedFileTail();
+            string* capture = new string(serialized_tail);
+            Status st = Status::InternalError("write footer cache failed");
+            int64_t serialized_tail_size = serialized_tail.length();
+            DeferOp op([&st, this, capture, serialized_tail_size]() {
+                if (st.ok()) {
+                    _app_stats.footer_cache_write_bytes += serialized_tail_size;
+                    _app_stats.footer_cache_write_count += 1;
+                } else {
+                    _app_stats.footer_cache_write_fail_count += 1;
+                }
+            });
+            auto deleter = [capture]() { delete capture; };
+            WriteCacheOptions wopts;
+            wopts.evict_probability = datacache_options.datacache_evict_probability;
+            st = _cache->write_object(metacache_key, capture, serialized_tail_size, deleter, &footer_cache_handle,
+                                      &wopts);
+        }
     } catch (std::exception& e) {
         bool is_not_found = (errno == ENOENT);
         auto s = strings::Substitute("HdfsOrcScanner::do_open failed. reason = $0", e.what());
@@ -829,6 +869,23 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
         COUNTER_UPDATE(skip_row_group_number_counter,
                        _orc_reader->get_total_row_group_number() - _orc_reader->get_selected_row_group_number());
     }
+
+    // update footer cache counters
+    RuntimeProfile::Counter* orc_footer_cache_write_counter =
+            ADD_CHILD_COUNTER(root_profile, "OrcFooterCacheWriteCount", TUnit::UNIT, orcProfileSectionPrefix);
+    RuntimeProfile::Counter* orc_footer_cache_write_bytes =
+            ADD_CHILD_COUNTER(root_profile, "OrcFooterCacheWriteBytes", TUnit::BYTES, orcProfileSectionPrefix);
+    RuntimeProfile::Counter* orc_footer_cache_write_fail_counter =
+            ADD_CHILD_COUNTER(root_profile, "OrcFooterCacheWriteFailCount", TUnit::UNIT, orcProfileSectionPrefix);
+    RuntimeProfile::Counter* orc_footer_cache_read_counter =
+            ADD_CHILD_COUNTER(root_profile, "OrcFooterCacheReadCount", TUnit::UNIT, orcProfileSectionPrefix);
+    RuntimeProfile::Counter* orc_footer_cache_read_timer =
+            ADD_CHILD_TIMER(root_profile, "OrcFooterCacheReadTimer", orcProfileSectionPrefix);
+    COUNTER_UPDATE(orc_footer_cache_write_counter, _app_stats.footer_cache_write_count);
+    COUNTER_UPDATE(orc_footer_cache_write_bytes, _app_stats.footer_cache_write_bytes);
+    COUNTER_UPDATE(orc_footer_cache_write_fail_counter, _app_stats.footer_cache_write_fail_count);
+    COUNTER_UPDATE(orc_footer_cache_read_counter, _app_stats.footer_cache_read_count);
+    COUNTER_UPDATE(orc_footer_cache_read_timer, _app_stats.footer_cache_read_ns);
 }
 
 } // namespace starrocks

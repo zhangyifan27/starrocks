@@ -32,6 +32,14 @@ namespace starrocks {
 
 class RuntimeFilterProbeCollector;
 
+// Build a metacache key for file footer caching
+// Format: hash(filename) + "ft" + mtime_or_size
+// - hash(filename): 8 bytes hash of the file path
+// - "ft": 2 bytes footer suffix
+// - mtime_or_size: 4 bytes modification time (if available) or file size
+std::string build_metacache_key(const std::string& filename, uint64_t file_size,
+                                const DataCacheOptions& datacache_options);
+
 struct HdfsSplitContext : public pipeline::ScanSplitContext {
     size_t split_start = 0;
     size_t split_end = 0;
