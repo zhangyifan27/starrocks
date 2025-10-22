@@ -95,6 +95,10 @@ public class FeConstants {
     // the raw data of one tablet equals to 10GB approximately
     public static final long AUTO_DISTRIBUTION_UNIT = 3221225472L;
 
+    public static final String GENERATED_PARTITION_COLUMN_PREFIX = "__generated_partition_column_";
+
+    public static final String ICEBERG_TRANSFORM_EXPRESSION_PREFIX = "__iceberg_transform_";
+
     // Max counter num of TOP K function
     public static final int MAX_COUNTER_NUM_OF_TOP_K = 100000;
 

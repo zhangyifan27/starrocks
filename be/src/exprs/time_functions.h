@@ -873,6 +873,14 @@ public:
      */
     DEFINE_VECTORIZED_FN(time_format);
 
+    DEFINE_VECTORIZED_FN(iceberg_years_since_epoch_date);
+    DEFINE_VECTORIZED_FN(iceberg_years_since_epoch_datetime);
+    DEFINE_VECTORIZED_FN(iceberg_months_since_epoch_date);
+    DEFINE_VECTORIZED_FN(iceberg_months_since_epoch_datetime);
+    DEFINE_VECTORIZED_FN(iceberg_days_since_epoch_date);
+    DEFINE_VECTORIZED_FN(iceberg_days_since_epoch_datetime);
+    DEFINE_VECTORIZED_FN(iceberg_hours_since_epoch_datetime);
+
 private:
     DEFINE_VECTORIZED_FN_TEMPLATE(_t_from_unix_to_datetime);
 
@@ -926,6 +934,7 @@ private:
 
 public:
     static TimestampValue start_of_time_slice;
+    static TimestampValue unix_epoch;
     static std::string info_reported_by_time_slice;
 
     enum FormatType {

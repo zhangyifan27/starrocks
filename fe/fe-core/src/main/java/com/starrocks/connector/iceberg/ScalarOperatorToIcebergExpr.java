@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package com.starrocks.connector.iceberg;
 
 import com.google.common.base.Preconditions;
@@ -23,6 +22,7 @@ import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.sql.optimizer.operator.scalar.BinaryPredicateOperator;
+import com.starrocks.sql.optimizer.operator.scalar.CallOperator;
 import com.starrocks.sql.optimizer.operator.scalar.CastOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.CompoundPredicateOperator;
@@ -37,6 +37,7 @@ import org.apache.iceberg.exceptions.ValidationException;
 import org.apache.iceberg.expressions.Binder;
 import org.apache.iceberg.expressions.Expression;
 import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.expressions.UnboundTerm;
 import org.apache.iceberg.types.Type;
 import org.apache.iceberg.types.Types;
 import org.apache.logging.log4j.LogManager;
@@ -182,10 +183,81 @@ public class ScalarOperatorToIcebergExpr {
             }
         }
 
+        public <T> Expression visitIcebergTransformFunction(BinaryPredicateOperator operator, IcebergContext context) {
+            CallOperator callOperator = (CallOperator) operator.getChild(0);
+            UnboundTerm<T> term;
+            T literalValue;
+            String columnName = getColumnName(callOperator.getChild(0));
+            if (columnName == null) {
+                LOG.warn("columnName is null");
+                return null;
+            }
+            switch (callOperator.getFnName()) {
+                case "__iceberg_transform_year":
+                    ConstantOperator year = (ConstantOperator) operator.getChild(1);
+                    term = Expressions.year(columnName);
+                    literalValue = (T) (Long) year.castTo(com.starrocks.catalog.Type.BIGINT).get().getBigint();
+                    break;
+                case "__iceberg_transform_month":
+                    ConstantOperator month = (ConstantOperator) operator.getChild(1);
+                    term = Expressions.month(columnName);
+                    literalValue = (T) (Long) month.castTo(com.starrocks.catalog.Type.BIGINT).get().getBigint();
+                    break;
+                case "__iceberg_transform_day":
+                    ConstantOperator day = (ConstantOperator) operator.getChild(1);
+                    term = Expressions.day(columnName);
+                    literalValue = (T) (Long) day.castTo(com.starrocks.catalog.Type.BIGINT).get().getBigint();
+                    break;
+                case "__iceberg_transform_hour":
+                    ConstantOperator hour = (ConstantOperator) operator.getChild(1);
+                    term = Expressions.hour(columnName);
+                    literalValue = (T) (Long) hour.castTo(com.starrocks.catalog.Type.BIGINT).get().getBigint();
+                    break;
+                case "__iceberg_transform_bucket":
+                    ConstantOperator bucketSize = (ConstantOperator) callOperator.getChild(1);
+                    int bucketSizeInt = bucketSize.castTo(com.starrocks.catalog.Type.INT).get().getInt();
+                    term = Expressions.bucket(columnName, bucketSizeInt);
+
+                    ConstantOperator bucketId = (ConstantOperator) operator.getChild(1);
+                    literalValue = (T) (Integer) bucketId.castTo(com.starrocks.catalog.Type.INT).get().getInt();
+                    break;
+                case "__iceberg_transform_truncate":
+                    ConstantOperator truncateSize = (ConstantOperator) callOperator.getChild(1);
+                    term = Expressions.truncate(columnName, truncateSize.castTo(com.starrocks.catalog.Type.INT).get().getInt());
+
+                    Type icebergType = getResultType(columnName, context);
+                    ConstantOperator value = (ConstantOperator) operator.getChild(1);
+                    literalValue = (T) ScalarOperatorToIcebergExpr.getLiteralValue(value, icebergType);
+                    break;
+                default:
+                    return null;
+            }
+
+            switch (operator.getBinaryType()) {
+                case LT:
+                    return lessThan(term, literalValue);
+                case LE:
+                    return lessThanOrEqual(term, literalValue);
+                case GT:
+                    return greaterThan(term, literalValue);
+                case GE:
+                    return greaterThanOrEqual(term, literalValue);
+                case EQ:
+                    return equal(term, literalValue);
+                case NE:
+                    return notEqual(term, literalValue);
+                default:
+                    return null;
+            }
+        }
+
         @Override
         public Expression visitBinaryPredicate(BinaryPredicateOperator operator, IcebergContext context) {
             String columnName = getColumnName(operator.getChild(0));
             if (columnName == null) {
+                if (operator.getChild(0) instanceof CallOperator) {
+                    return visitIcebergTransformFunction(operator, context);
+                }
                 return null;
             }
 
@@ -350,8 +422,8 @@ public class ScalarOperatorToIcebergExpr {
                 case BINARY:
                     res = operator.castTo(com.starrocks.catalog.Type.VARBINARY);
                     break;
-                    // num usually don't need cast, and num and string has different comparator
-                    // cast is dangerous.
+                // num usually don't need cast, and num and string has different comparator
+                // cast is dangerous.
                 case INTEGER:
                 case LONG:
                     // usually not used as partition column, don't do much work
