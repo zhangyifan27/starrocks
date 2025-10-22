@@ -1519,6 +1519,13 @@ public class Config extends ConfigBase {
     @ConfField
     public static int db_used_data_quota_update_interval_secs = 300;
 
+    /*
+     * Whether to enable quota check for create table & partition default is false;
+     * true: for SR migration by starrocks-cluster-sync and need set to false after migration
+     */
+    @ConfField(mutable = true)
+    public static boolean disable_check_db_quota = false;
+
     /**
      * Load using hadoop cluster will be deprecated in the future.
      * Set to true to disable this kind of load.

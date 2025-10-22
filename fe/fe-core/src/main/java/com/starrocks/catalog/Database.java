@@ -42,6 +42,7 @@ import com.starrocks.catalog.Table.TableType;
 import com.starrocks.catalog.system.information.InfoSchemaDb;
 import com.starrocks.catalog.system.sys.SysDb;
 import com.starrocks.cluster.ClusterNamespace;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
@@ -285,6 +286,9 @@ public class Database extends MetaObject implements Writable {
     }
 
     public void checkQuota() throws DdlException {
+        if (Config.disable_check_db_quota) {
+            return;
+        }
         checkDataSizeQuota();
         checkReplicaQuota();
     }
