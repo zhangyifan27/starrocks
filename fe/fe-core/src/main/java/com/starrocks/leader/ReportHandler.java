@@ -658,7 +658,6 @@ public class ReportHandler extends Daemon implements MemoryTrackable {
                 int logSyncCounter = 0;
                 List<Long> tabletIds = allTabletIds.subList(offset, allTabletIds.size());
                 Locker locker = new Locker();
-                locker.lockDatabase(db, LockType.WRITE);
                 List<ReplicaPersistInfo> persistInfos = new ArrayList<>();
                 try {
                     List<TabletMeta> tabletMetaList = invertedIndex.getTabletMetaList(tabletIds);
@@ -675,112 +674,116 @@ public class ReportHandler extends Daemon implements MemoryTrackable {
                         LOG.debug("sync tablet {} partition {} in db[{}]. backend[{}]",
                                 tabletId, physicalPartitionId, dbId, backendId);
 
-                        OlapTable olapTable =
-                                (OlapTable) globalStateMgr.getLocalMetastore().getTableIncludeRecycleBin(db, tableId);
-                        if (olapTable == null) {
-                            continue;
-                        }
-
-                        PhysicalPartition partition = globalStateMgr.getLocalMetastore()
-                                .getPhysicalPartitionIncludeRecycleBin(olapTable, physicalPartitionId);
-                        if (partition == null) {
-                            continue;
-                        }
-
-                        long indexId = tabletMeta.getIndexId();
-                        MaterializedIndex index = partition.getIndex(indexId);
-                        if (index == null) {
-                            continue;
-                        }
-                        int schemaHash = olapTable.getSchemaHashByIndexId(indexId);
-
-                        LocalTablet tablet = (LocalTablet) index.getTablet(tabletId);
-                        if (tablet == null) {
-                            continue;
-                        }
-
-                        Replica replica = tablet.getReplicaByBackendId(backendId);
-                        if (replica == null) {
-                            continue;
-                        }
-                        // yiguolei: it is very important here, if the replica is under schema change or
-                        // rollup
-                        // should ignore the report.
-                        // eg.
-                        // original replica import successfully, but the dest schema change replica
-                        // failed
-                        // the fe will sync the replica with the original replica, but ignore the schema
-                        // change replica.
-                        // if the last failed version is changed, then fe will think schema change
-                        // successfully.
-                        // this is an fatal error.
-                        if (replica.getState() == ReplicaState.NORMAL) {
-                            long metaVersion = replica.getVersion();
-                            long backendVersion = -1L;
-                            long backendMinReadableVersion = 0;
-                            long rowCount = -1L;
-                            long dataSize = -1L;
-                            // schema change maybe successfully in fe, but not inform be, then be will
-                            // report two schema hash
-                            // just select the dest schema hash
-                            for (TTabletInfo tabletInfo : backendTablets.get(tabletId).getTablet_infos()) {
-                                if (tabletInfo.getSchema_hash() == schemaHash) {
-                                    if (Config.enable_sync_publish) {
-                                        backendVersion = tabletInfo.getMax_readable_version();
-                                    } else {
-                                        backendVersion = tabletInfo.getVersion();
-                                    }
-                                    backendMinReadableVersion = tabletInfo.getMin_readable_version();
-                                    rowCount = tabletInfo.getRow_count();
-                                    dataSize = tabletInfo.getData_size();
-                                    break;
-                                }
-                            }
-                            if (backendVersion == -1L) {
+                        locker.lockTableWithIntensiveDbLock(db, tableId, LockType.WRITE);
+                        try {
+                            OlapTable olapTable =
+                                    (OlapTable) globalStateMgr.getLocalMetastore().getTableIncludeRecycleBin(db, tableId);
+                            if (olapTable == null) {
                                 continue;
                             }
 
-                            // 1. replica is not set bad force
-                            // 2. metaVersion < backendVersion or (metaVersion == backendVersion &&
-                            // replica.isBad())
-                            if (!replica.isSetBadForce() &&
-                                    ((metaVersion < backendVersion) ||
-                                            (metaVersion == backendVersion && replica.isBad()))) {
+                            PhysicalPartition partition = globalStateMgr.getLocalMetastore()
+                                    .getPhysicalPartitionIncludeRecycleBin(olapTable, physicalPartitionId);
+                            if (partition == null) {
+                                continue;
+                            }
 
-                                // happens when
-                                // 1. PUSH finished in BE but failed or not yet report to FE
-                                // 2. repair for VERSION_INCOMPLETE finished in BE, but failed or not yet report
-                                // to FE
-                                replica.updateRowCount(backendVersion, backendMinReadableVersion, dataSize, rowCount);
+                            long indexId = tabletMeta.getIndexId();
+                            MaterializedIndex index = partition.getIndex(indexId);
+                            if (index == null) {
+                                continue;
+                            }
+                            int schemaHash = olapTable.getSchemaHashByIndexId(indexId);
 
-                                if (replica.getLastFailedVersion() < 0) {
-                                    // last failed version < 0 means this replica becomes health after sync,
-                                    // so we write an edit log to sync this operation
-                                    replica.setBad(false);
-                                    ReplicaPersistInfo info = ReplicaPersistInfo.createForClone(dbId, tableId,
-                                            physicalPartitionId, indexId, tabletId, backendId, replica.getId(),
-                                            replica.getVersion(), schemaHash,
-                                            dataSize, rowCount,
-                                            replica.getLastFailedVersion(),
-                                            replica.getLastSuccessVersion(),
-                                            replica.getMinReadableVersion());
-                                    persistInfos.add(info);
-                                    ++logSyncCounter;
+                            LocalTablet tablet = (LocalTablet) index.getTablet(tabletId);
+                            if (tablet == null) {
+                                continue;
+                            }
+
+                            Replica replica = tablet.getReplicaByBackendId(backendId);
+                            if (replica == null) {
+                                continue;
+                            }
+                            // yiguolei: it is very important here, if the replica is under schema change or
+                            // rollup
+                            // should ignore the report.
+                            // eg.
+                            // original replica import successfully, but the dest schema change replica
+                            // failed
+                            // the fe will sync the replica with the original replica, but ignore the schema
+                            // change replica.
+                            // if the last failed version is changed, then fe will think schema change
+                            // successfully.
+                            // this is an fatal error.
+                            if (replica.getState() == ReplicaState.NORMAL) {
+                                long metaVersion = replica.getVersion();
+                                long backendVersion = -1L;
+                                long backendMinReadableVersion = 0;
+                                long rowCount = -1L;
+                                long dataSize = -1L;
+                                // schema change maybe successfully in fe, but not inform be, then be will
+                                // report two schema hash
+                                // just select the dest schema hash
+                                for (TTabletInfo tabletInfo : backendTablets.get(tabletId).getTablet_infos()) {
+                                    if (tabletInfo.getSchema_hash() == schemaHash) {
+                                        if (Config.enable_sync_publish) {
+                                            backendVersion = tabletInfo.getMax_readable_version();
+                                        } else {
+                                            backendVersion = tabletInfo.getVersion();
+                                        }
+                                        backendMinReadableVersion = tabletInfo.getMin_readable_version();
+                                        rowCount = tabletInfo.getRow_count();
+                                        dataSize = tabletInfo.getData_size();
+                                        break;
+                                    }
+                                }
+                                if (backendVersion == -1L) {
+                                    continue;
                                 }
 
-                                ++syncCounter;
-                                LOG.debug("sync replica {} of tablet {} in backend {} in db {}. report version: {}",
-                                        replica.getId(), tabletId, backendId, dbId, backendReportVersion);
-                            } else {
-                                LOG.debug("replica {} of tablet {} in backend {} version is changed"
-                                                + " between check and real sync. meta[{}]. backend[{}]",
-                                        replica.getId(), tabletId, backendId, metaVersion,
-                                        backendVersion);
+                                // 1. replica is not set bad force
+                                // 2. metaVersion < backendVersion or (metaVersion == backendVersion &&
+                                // replica.isBad())
+                                if (!replica.isSetBadForce() &&
+                                        ((metaVersion < backendVersion) ||
+                                                (metaVersion == backendVersion && replica.isBad()))) {
+
+                                    // happens when
+                                    // 1. PUSH finished in BE but failed or not yet report to FE
+                                    // 2. repair for VERSION_INCOMPLETE finished in BE, but failed or not yet report
+                                    // to FE
+                                    replica.updateRowCount(backendVersion, backendMinReadableVersion, dataSize, rowCount);
+
+                                    if (replica.getLastFailedVersion() < 0) {
+                                        // last failed version < 0 means this replica becomes health after sync,
+                                        // so we write an edit log to sync this operation
+                                        replica.setBad(false);
+                                        ReplicaPersistInfo info = ReplicaPersistInfo.createForClone(dbId, tableId,
+                                                physicalPartitionId, indexId, tabletId, backendId, replica.getId(),
+                                                replica.getVersion(), schemaHash,
+                                                dataSize, rowCount,
+                                                replica.getLastFailedVersion(),
+                                                replica.getLastSuccessVersion(),
+                                                replica.getMinReadableVersion());
+                                        persistInfos.add(info);
+                                        ++logSyncCounter;
+                                    }
+
+                                    ++syncCounter;
+                                    LOG.debug("sync replica {} of tablet {} in backend {} in db {}. report version: {}",
+                                            replica.getId(), tabletId, backendId, dbId, backendReportVersion);
+                                } else {
+                                    LOG.debug("replica {} of tablet {} in backend {} version is changed"
+                                                    + " between check and real sync. meta[{}]. backend[{}]",
+                                            replica.getId(), tabletId, backendId, metaVersion,
+                                            backendVersion);
+                                }
                             }
+                        } finally {
+                            locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.WRITE);
                         }
                     } // end for tabletMetaSyncMap
                 } finally {
-                    locker.unLockDatabase(db, LockType.WRITE);
                     persistInfos.forEach(info -> GlobalStateMgr.getCurrentState().getEditLog().logUpdateReplica(info));
                 }
                 LOG.info("sync {} update {} in {} tablets in db[{}]. backend[{}]", syncCounter, logSyncCounter,
@@ -799,48 +802,32 @@ public class ReportHandler extends Daemon implements MemoryTrackable {
                 .getClusterInfo().getBackend(backendId).getDisks().values()) {
             hashToDiskInfo.put(diskInfo.getPathHash(), diskInfo);
         }
-        final long MAX_DB_WLOCK_HOLDING_TIME_MS = 1000L;
         List<Long> deleteTablets = new ArrayList<>();
         List<ReplicaPersistInfo> replicaPersistInfoList = new ArrayList<>();
-        DB_TRAVERSE:
+
         for (Long dbId : tabletDeleteFromMeta.keySet()) {
             Database db = globalStateMgr.getLocalMetastore().getDbIncludeRecycleBin(dbId);
             if (db == null) {
                 continue;
             }
             Locker locker = new Locker();
-            locker.lockDatabase(db, LockType.WRITE);
-            long lockStartTime = System.currentTimeMillis();
-            try {
-                int deleteCounter = 0;
-                List<Long> tabletIds = tabletDeleteFromMeta.get(dbId);
-                List<TabletMeta> tabletMetaList = invertedIndex.getTabletMetaList(tabletIds);
-                for (int i = 0; i < tabletMetaList.size(); i++) {
-                    // Because we need to write bdb with db write lock hold,
-                    // to avoid block other threads too long, we periodically release and
-                    // acquire the db write lock (every MAX_DB_WLOCK_HOLDING_TIME_MS milliseconds).
-                    long currentTime = System.currentTimeMillis();
-                    if (currentTime - lockStartTime > MAX_DB_WLOCK_HOLDING_TIME_MS) {
-                        locker.unLockDatabase(db, LockType.WRITE);
-                        db = globalStateMgr.getLocalMetastore().getDbIncludeRecycleBin(dbId);
-                        if (db == null) {
-                            continue DB_TRAVERSE;
-                        }
-                        locker.lockDatabase(db, LockType.WRITE);
-                        lockStartTime = currentTime;
-                    }
+            int deleteCounter = 0;
+            List<Long> tabletIds = tabletDeleteFromMeta.get(dbId);
+            List<TabletMeta> tabletMetaList = invertedIndex.getTabletMetaList(tabletIds);
+            for (int i = 0; i < tabletMetaList.size(); i++) {
+                TabletMeta tabletMeta = tabletMetaList.get(i);
+                if (tabletMeta == TabletInvertedIndex.NOT_EXIST_TABLET_META) {
+                    continue;
+                }
+                long tabletId = tabletIds.get(i);
+                long tableId = tabletMeta.getTableId();
+                long partitionId = tabletMeta.getPhysicalPartitionId();
 
-                    TabletMeta tabletMeta = tabletMetaList.get(i);
-                    if (tabletMeta == TabletInvertedIndex.NOT_EXIST_TABLET_META) {
-                        continue;
-                    }
-                    long tabletId = tabletIds.get(i);
-                    long tableId = tabletMeta.getTableId();
-                    long partitionId = tabletMeta.getPhysicalPartitionId();
+                LOG.debug("delete tablet {} in partition {} of table {} in db {} from meta. backend[{}]",
+                        tabletId, partitionId, tableId, dbId, backendId);
 
-                    LOG.debug("delete tablet {} in partition {} of table {} in db {} from meta. backend[{}]",
-                            tabletId, partitionId, tableId, dbId, backendId);
-
+                locker.lockTableWithIntensiveDbLock(db, tableId, LockType.WRITE);
+                try {
                     OlapTable olapTable = (OlapTable) globalStateMgr.getLocalMetastore().getTableIncludeRecycleBin(db, tableId);
                     if (olapTable == null) {
                         continue;
@@ -1000,11 +987,11 @@ public class ReportHandler extends Daemon implements MemoryTrackable {
                             LOG.error("invalid situation. tablet[{}] is empty", tabletId);
                         }
                     }
-                } // end for tabletMetas
-                LOG.info("delete {} replica(s) from globalStateMgr in db[{}]", deleteCounter, dbId);
-            } finally {
-                locker.unLockDatabase(db, LockType.WRITE);
-            }
+                } finally {
+                    locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.WRITE);
+                }
+            } // end for tabletMetas
+            LOG.info("delete {} replica(s) from globalStateMgr in db[{}]", deleteCounter, dbId);
         } // end for dbs
 
         if (deleteTablets.size() > 0) {
@@ -1300,17 +1287,17 @@ public class ReportHandler extends Daemon implements MemoryTrackable {
                 continue;
             }
             Locker locker = new Locker();
-            locker.lockDatabase(db, LockType.WRITE);
-            try {
-                List<Long> tabletIds = tabletRecoveryMap.get(dbId);
-                List<TabletMeta> tabletMetaList = invertedIndex.getTabletMetaList(tabletIds);
-                for (int i = 0; i < tabletMetaList.size(); i++) {
-                    TabletMeta tabletMeta = tabletMetaList.get(i);
-                    if (tabletMeta == TabletInvertedIndex.NOT_EXIST_TABLET_META) {
-                        continue;
-                    }
-                    long tabletId = tabletIds.get(i);
-                    long tableId = tabletMeta.getTableId();
+            List<Long> tabletIds = tabletRecoveryMap.get(dbId);
+            List<TabletMeta> tabletMetaList = invertedIndex.getTabletMetaList(tabletIds);
+            for (int i = 0; i < tabletMetaList.size(); i++) {
+                TabletMeta tabletMeta = tabletMetaList.get(i);
+                if (tabletMeta == TabletInvertedIndex.NOT_EXIST_TABLET_META) {
+                    continue;
+                }
+                long tabletId = tabletIds.get(i);
+                long tableId = tabletMeta.getTableId();
+                locker.lockTableWithIntensiveDbLock(db, tableId, LockType.WRITE);
+                try {
                     OlapTable olapTable = (OlapTable) db.getTable(tableId);
                     if (olapTable == null) {
                         continue;
@@ -1347,9 +1334,9 @@ public class ReportHandler extends Daemon implements MemoryTrackable {
                                 dbId, tableId, partitionId, indexId, tabletId, backendId, replica.getId());
                         backendTabletsInfo.addReplicaInfo(replicaPersistInfo);
                     }
+                } finally {
+                    locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.WRITE);
                 }
-            } finally {
-                locker.unLockDatabase(db, LockType.WRITE);
             }
         } // end for recovery map
 

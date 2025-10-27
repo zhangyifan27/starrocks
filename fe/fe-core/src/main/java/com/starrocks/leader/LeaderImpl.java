@@ -499,7 +499,7 @@ public class LeaderImpl {
             Database db = GlobalStateMgr.getCurrentState().getDb(dbId);
             if (db != null) {
                 Locker locker = new Locker();
-                locker.lockDatabase(db, LockType.READ);
+                locker.lockTableWithIntensiveDbLock(db, tableId, LockType.READ);
                 try {
                     OlapTable olapTable = (OlapTable) db.getTable(tableId);
                     if (olapTable != null) {
@@ -509,7 +509,7 @@ public class LeaderImpl {
                         }
                     }
                 } finally {
-                    locker.unLockDatabase(db, LockType.READ);
+                    locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.READ);
                 }
             }
         } finally {
@@ -566,7 +566,7 @@ public class LeaderImpl {
         LOG.debug("push report state: {}", pushState.name());
 
         Locker locker = new Locker();
-        locker.lockDatabase(db, LockType.WRITE);
+        locker.lockTableWithIntensiveDbLock(db, tableId, LockType.WRITE);
         try {
             OlapTable olapTable = (OlapTable) db.getTable(tableId);
             if (olapTable == null) {
@@ -643,7 +643,7 @@ public class LeaderImpl {
             AgentTaskQueue.removeTask(backendId, TTaskType.REALTIME_PUSH, signature);
             LOG.warn("finish push replica error", e);
         } finally {
-            locker.unLockDatabase(db, LockType.WRITE);
+            locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.WRITE);
         }
     }
 
@@ -809,7 +809,7 @@ public class LeaderImpl {
             }
 
             Locker locker = new Locker();
-            locker.lockDatabase(db, LockType.WRITE);
+            locker.lockTableWithIntensiveDbLock(db, tabletMeta.getTableId(), LockType.WRITE);
             try {
                 // local migration just set path hash
                 Replica replica =
@@ -817,7 +817,7 @@ public class LeaderImpl {
                 Preconditions.checkArgument(reportedTablet.isSetPath_hash());
                 replica.setPathHash(reportedTablet.getPath_hash());
             } finally {
-                locker.unLockDatabase(db, LockType.WRITE);
+                locker.unLockTableWithIntensiveDbLock(db, tabletMeta.getTableId(), LockType.WRITE);
             }
         } finally {
             AgentTaskQueue.removeTask(task.getBackendId(), TTaskType.STORAGE_MEDIUM_MIGRATE, task.getSignature());
@@ -931,26 +931,25 @@ public class LeaderImpl {
             return response;
         }
 
+        Table table = db.getTable(tableName);
+        if (table == null) {
+            TStatus status = new TStatus(TStatusCode.NOT_FOUND);
+            status.setError_msgs(Lists.newArrayList("table " + tableName + " not exist"));
+            response.setStatus(status);
+            return response;
+        }
+
+        // just only support OlapTable, ignore others such as ESTable
+        if (!(table instanceof OlapTable)) {
+            TStatus status = new TStatus(TStatusCode.NOT_IMPLEMENTED_ERROR);
+            status.setError_msgs(Lists.newArrayList("only olap table supported"));
+            response.setStatus(status);
+            return response;
+        }
+
         Locker locker = new Locker();
+        locker.lockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
         try {
-            locker.lockDatabase(db, LockType.READ);
-
-            Table table = db.getTable(tableName);
-            if (table == null) {
-                TStatus status = new TStatus(TStatusCode.NOT_FOUND);
-                status.setError_msgs(Lists.newArrayList("table " + tableName + " not exist"));
-                response.setStatus(status);
-                return response;
-            }
-
-            // just only support OlapTable, ignore others such as ESTable
-            if (!(table instanceof OlapTable)) {
-                TStatus status = new TStatus(TStatusCode.NOT_IMPLEMENTED_ERROR);
-                status.setError_msgs(Lists.newArrayList("only olap table supported"));
-                response.setStatus(status);
-                return response;
-            }
-
             OlapTable olapTable = (OlapTable) table;
             tableMeta = new TTableMeta();
             tableMeta.setTable_id(table.getId());
@@ -1139,7 +1138,7 @@ public class LeaderImpl {
             LOG.info("error msg: {}", e.getMessage(), e);
             response.setStatus(status);
         } finally {
-            locker.unLockDatabase(db, LockType.READ);
+            locker.unLockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
         }
         return response;
     }

@@ -283,13 +283,14 @@ public class TabletChecker extends FrontendDaemon {
             int partitionBatchNum = Config.tablet_checker_partition_batch_num;
             int partitionChecked = 0;
             Locker locker = new Locker();
-            locker.lockDatabase(db, LockType.READ);
-            lockStart = System.nanoTime();
-            try {
-                List<Long> aliveBeIdsInCluster =
-                        GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendIds(true);
-                TABLE:
-                for (Table table : GlobalStateMgr.getCurrentState().getLocalMetastore().getTablesIncludeRecycleBin(db)) {
+            List<Long> aliveBeIdsInCluster =
+                    GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendIds(true);
+
+            TABLE:
+            for (Table table : GlobalStateMgr.getCurrentState().getLocalMetastore().getTablesIncludeRecycleBin(db)) {
+                locker.lockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
+                lockStart = System.nanoTime();
+                try {
                     if (!table.needSchedule(false)) {
                         continue;
                     }
@@ -317,8 +318,8 @@ public class TabletChecker extends FrontendDaemon {
                             LOG.debug("partition checked reached batch value, release lock");
                             lockTotalTime += System.nanoTime() - lockStart;
                             // release lock, so that lock can be acquired by other threads.
-                            locker.unLockDatabase(db, LockType.READ);
-                            locker.lockDatabase(db, LockType.READ);
+                            locker.unLockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
+                            locker.lockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
                             LOG.debug("checker get lock again");
                             lockStart = System.nanoTime();
                             if (GlobalStateMgr.getCurrentState().getLocalMetastore().getDbIncludeRecycleBin(dbId) == null) {
@@ -366,11 +367,11 @@ public class TabletChecker extends FrontendDaemon {
                                     olapTbl.getId(), Lists.newArrayList(physicalPartition.getId())));
                         }
                     } // partitions
-                } // tables
-            } finally {
-                lockTotalTime += System.nanoTime() - lockStart;
-                locker.unLockDatabase(db, LockType.READ);
-            }
+                } finally {
+                    lockTotalTime += System.nanoTime() - lockStart;
+                    locker.unLockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
+                }
+            } // tables
         } // end for dbs
 
         long cost = (System.nanoTime() - start) / 1000000;
@@ -520,10 +521,10 @@ public class TabletChecker extends FrontendDaemon {
             }
 
             Locker locker = new Locker();
-            locker.lockDatabase(db, LockType.READ);
-            try {
-                for (Map.Entry<Long, Set<PrioPart>> tblEntry : dbEntry.getValue().entrySet()) {
-                    long tblId = tblEntry.getKey();
+            for (Map.Entry<Long, Set<PrioPart>> tblEntry : dbEntry.getValue().entrySet()) {
+                long tblId = tblEntry.getKey();
+                locker.lockTableWithIntensiveDbLock(db, tblId, LockType.READ);
+                try {
                     OlapTable tbl = (OlapTable) db.getTable(tblId);
                     if (tbl == null) {
                         deletedUrgentTable.add(Pair.create(dbId, tblId));
@@ -536,13 +537,13 @@ public class TabletChecker extends FrontendDaemon {
                     if (parts.isEmpty()) {
                         deletedUrgentTable.add(Pair.create(dbId, tblId));
                     }
+                } finally {
+                    locker.unLockTableWithIntensiveDbLock(db, tblId, LockType.READ);
                 }
+            }
 
-                if (dbEntry.getValue().isEmpty()) {
-                    iter.remove();
-                }
-            } finally {
-                locker.unLockDatabase(db, LockType.READ);
+            if (dbEntry.getValue().isEmpty()) {
+                iter.remove();
             }
         }
         for (Pair<Long, Long> prio : deletedUrgentTable) {
@@ -623,17 +624,17 @@ public class TabletChecker extends FrontendDaemon {
         long dbId = db.getId();
         long tblId;
         List<Long> partIds = Lists.newArrayList();
+        Table tbl = db.getTable(tblName);
+        if (tbl == null || tbl.getType() != TableType.OLAP) {
+            throw new DdlException("Table does not exist or is not OLAP table: " + tblName);
+        }
+
+        tblId = tbl.getId();
+        OlapTable olapTable = (OlapTable) tbl;
+
         Locker locker = new Locker();
-        locker.lockDatabase(db, LockType.READ);
+        locker.lockTableWithIntensiveDbLock(db, tblId, LockType.READ);
         try {
-            Table tbl = db.getTable(tblName);
-            if (tbl == null || tbl.getType() != TableType.OLAP) {
-                throw new DdlException("Table does not exist or is not OLAP table: " + tblName);
-            }
-
-            tblId = tbl.getId();
-            OlapTable olapTable = (OlapTable) tbl;
-
             if (partitions == null || partitions.isEmpty()) {
                 partIds = olapTable.getPhysicalPartitions().stream().map(PhysicalPartition::getId).collect(Collectors.toList());
             } else {
@@ -647,7 +648,7 @@ public class TabletChecker extends FrontendDaemon {
                 }
             }
         } finally {
-            locker.unLockDatabase(db, LockType.READ);
+            locker.unLockTableWithIntensiveDbLock(db, tblId, LockType.READ);
         }
 
         Preconditions.checkState(tblId != -1);

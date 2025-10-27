@@ -323,12 +323,12 @@ public class TabletScheduler extends FrontendDaemon {
             do {
                 AddResult res = addTablet(tabletSchedCtx, forceAdd /* force or not */);
                 if (res == AddResult.LIMIT_EXCEED) {
-                    locker.unLockDatabase(db, LockType.READ);
+                    locker.unLockTableWithIntensiveDbLock(db, tabletSchedCtx.getTblId(), LockType.READ);
                     // It's ok to sleep a relative long time here so that the scheduler will spare more
                     // slots after the sleep and the following adding won't block.
                     Thread.sleep(BLOCKING_ADD_SLEEP_DURATION_MS);
                     result.second += BLOCKING_ADD_SLEEP_DURATION_MS;
-                    locker.lockDatabase(db, LockType.READ);
+                    locker.lockTableWithIntensiveDbLock(db, tabletSchedCtx.getTblId(), LockType.READ);
                 } else {
                     result.first = (res == AddResult.ADDED);
                     break;
@@ -336,7 +336,7 @@ public class TabletScheduler extends FrontendDaemon {
             } while (true);
         } catch (InterruptedException e) {
             LOG.warn("Failed to execute blockingAddTabletCtxToScheduler", e);
-            locker.lockDatabase(db, LockType.READ);
+            locker.lockTableWithIntensiveDbLock(db, tabletSchedCtx.getTblId(), LockType.READ);
         }
 
         return result;
@@ -699,7 +699,7 @@ public class TabletScheduler extends FrontendDaemon {
 
         Pair<TabletHealthStatus, TabletSchedCtx.Priority> statusPair;
         Locker locker = new Locker();
-        locker.lockDatabase(db, LockType.READ);
+        locker.lockTableWithIntensiveDbLock(db, tabletCtx.getTblId(), LockType.READ);
         try {
             OlapTable tbl = (OlapTable) GlobalStateMgr.getCurrentState()
                     .getLocalMetastore().getTableIncludeRecycleBin(db, tabletCtx.getTblId());
@@ -832,7 +832,7 @@ public class TabletScheduler extends FrontendDaemon {
                         tabletCtx.getTablet().getReplicaInfos());
             }
         } finally {
-            locker.unLockDatabase(db, LockType.READ);
+            locker.unLockTableWithIntensiveDbLock(db, tabletCtx.getTblId(), LockType.READ);
         }
 
         handleTabletByTypeAndStatus(statusPair.first, tabletCtx, batchTask);
@@ -1076,7 +1076,7 @@ public class TabletScheduler extends FrontendDaemon {
         }
         Locker locker = new Locker();
         try {
-            locker.lockDatabase(db, LockType.WRITE);
+            locker.lockTableWithIntensiveDbLock(db, tabletCtx.getTblId(), LockType.WRITE);
             checkMetaExist(tabletCtx);
             if (deleteBackendDropped(tabletCtx, force)
                     || deleteBadReplica(tabletCtx, force)
@@ -1093,7 +1093,7 @@ public class TabletScheduler extends FrontendDaemon {
                 throw new SchedException(Status.FINISHED, "redundant replica is deleted");
             }
         } finally {
-            locker.unLockDatabase(db, LockType.WRITE);
+            locker.unLockTableWithIntensiveDbLock(db, tabletCtx.getTblId(), LockType.WRITE);
         }
         throw new SchedException(Status.UNRECOVERABLE, "unable to delete any redundant replicas");
     }
@@ -1310,7 +1310,7 @@ public class TabletScheduler extends FrontendDaemon {
         }
         Locker locker = new Locker();
         try {
-            locker.lockDatabase(db, LockType.WRITE);
+            locker.lockTableWithIntensiveDbLock(db, tabletCtx.getTblId(), LockType.WRITE);
             checkMetaExist(tabletCtx);
             List<Replica> replicas = tabletCtx.getReplicas();
             for (Replica replica : replicas) {
@@ -1331,7 +1331,7 @@ public class TabletScheduler extends FrontendDaemon {
             }
             throw new SchedException(Status.UNRECOVERABLE, "unable to delete any colocate redundant replicas");
         } finally {
-            locker.unLockDatabase(db, LockType.WRITE);
+            locker.unLockTableWithIntensiveDbLock(db, tabletCtx.getTblId(), LockType.WRITE);
         }
     }
 
@@ -1531,11 +1531,11 @@ public class TabletScheduler extends FrontendDaemon {
 
             Table tbl;
             Locker locker = new Locker();
-            locker.lockDatabase(db, LockType.READ);
+            locker.lockTableWithIntensiveDbLock(db, tableId, LockType.READ);
             try {
                 tbl = db.getTable(tableId);
             } finally {
-                locker.unLockDatabase(db, LockType.READ);
+                locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.READ);
             }
 
             if (!(tbl instanceof OlapTable)) {

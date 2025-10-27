@@ -1595,11 +1595,11 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         Table tbl = null;
         if (db != null) {
             Locker locker = new Locker();
-            locker.lockDatabase(db, LockType.READ);
+            locker.lockTableWithIntensiveDbLock(db, tableId, LockType.READ);
             try {
                 tbl = db.getTable(tableId);
             } finally {
-                locker.unLockDatabase(db, LockType.READ);
+                locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.READ);
             }
         }
 
@@ -2110,11 +2110,11 @@ public abstract class RoutineLoadJob extends AbstractTxnStateChangeCallback
         Table tbl = null;
         if (db != null) {
             Locker locker = new Locker();
-            locker.lockDatabase(db, LockType.READ);
+            locker.lockTableWithIntensiveDbLock(db, tableId, LockType.READ);
             try {
                 tbl = db.getTable(tableId);
             } finally {
-                locker.unLockDatabase(db, LockType.READ);
+                locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.READ);
             }
         }
         readLock();

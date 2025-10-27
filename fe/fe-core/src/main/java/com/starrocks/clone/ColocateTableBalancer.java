@@ -741,11 +741,12 @@ public class ColocateTableBalancer extends FrontendDaemon {
         int partitionBatchNum = Config.tablet_checker_partition_batch_num;
         int partitionChecked = 0;
         Locker locker = new Locker();
-        locker.lockDatabase(db, LockType.READ);
-        long lockStart = System.nanoTime();
-        try {
-            TABLE:
-            for (Long tableId : tableIds) {
+
+        TABLE:
+        for (Long tableId : tableIds) {
+            locker.lockTableWithIntensiveDbLock(db, tableId, LockType.READ);
+            long lockStart = System.nanoTime();
+            try {
                 OlapTable olapTable = (OlapTable) globalStateMgr.getLocalMetastore().getTableIncludeRecycleBin(db, tableId);
                 if (olapTable == null || !colocateIndex.isColocateTable(olapTable.getId())) {
                     continue;
@@ -768,8 +769,8 @@ public class ColocateTableBalancer extends FrontendDaemon {
                     if (partitionChecked % partitionBatchNum == 0) {
                         lockTotalTime += System.nanoTime() - lockStart;
                         // release lock, so that lock can be acquired by other threads.
-                        locker.unLockDatabase(db, LockType.READ);
-                        locker.lockDatabase(db, LockType.READ);
+                        locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.READ);
+                        locker.lockTableWithIntensiveDbLock(db, tableId, LockType.READ);
                         lockStart = System.nanoTime();
                         if (globalStateMgr.getLocalMetastore().getDbIncludeRecycleBin(groupId.dbId) == null) {
                             return new ColocateMatchResult(lockTotalTime, Status.UNKNOWN);
@@ -881,12 +882,11 @@ public class ColocateTableBalancer extends FrontendDaemon {
                                         Lists.newArrayList(partition.getId())));
                     }
                 } // end for partitions
-            } // end for tables
-
-        } finally {
-            lockTotalTime += System.nanoTime() - lockStart;
-            locker.unLockDatabase(db, LockType.READ);
-        }
+            } finally {
+                lockTotalTime += System.nanoTime() - lockStart;
+                locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.READ);
+            }
+        } // end for tables
 
         return new ColocateMatchResult(lockTotalTime - waitTotalTimeMs * 1000000,
                 isGroupStable ? Status.STABLE : Status.UNSTABLE);

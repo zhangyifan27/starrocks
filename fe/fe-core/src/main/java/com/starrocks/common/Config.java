@@ -1711,7 +1711,7 @@ public class Config extends ConfigBase {
     public static long tablet_report_drop_tablet_delay_sec = 120;
 
     /**
-     * After checked tablet_checker_partition_batch_num partitions, db lock will be released,
+     * After checked tablet_checker_partition_batch_num partitions, db lock or table lock will be released,
      * so that other threads can get the lock.
      */
     @ConfField(mutable = true)

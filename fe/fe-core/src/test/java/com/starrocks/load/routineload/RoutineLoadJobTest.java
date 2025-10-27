@@ -258,7 +258,7 @@ public class RoutineLoadJobTest {
         {
             // PAUSE state
             PulsarRoutineLoadJob routineLoadJob = new PulsarRoutineLoadJob(
-                    1L, "task1", 1, 1, "http://url", "task-1", "sub-1");
+                    1L, "task1", 1, 2, "http://url", "task-1", "sub-1");
             Deencapsulation.setField(routineLoadJob, "state", RoutineLoadJob.JobState.PAUSED);
             ErrorReason errorReason = new ErrorReason(InternalErrorCode.INTERNAL_ERR,
                     TransactionState.TxnStatusChangeReason.OFFSET_OUT_OF_RANGE.toString());

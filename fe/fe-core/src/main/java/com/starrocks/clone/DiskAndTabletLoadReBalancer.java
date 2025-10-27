@@ -718,10 +718,10 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
 
         Locker locker = new Locker();
         try {
-            locker.lockDatabase(db, LockType.READ);
+            locker.lockTableWithIntensiveDbLock(db, tblId, LockType.READ);
             return (OlapTable) globalStateMgr.getLocalMetastore().getTableIncludeRecycleBin(db, tblId);
         } finally {
-            locker.unLockDatabase(db, LockType.READ);
+            locker.unLockTableWithIntensiveDbLock(db, tblId, LockType.READ);
         }
     }
 
@@ -1016,7 +1016,7 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
         }
 
         Locker locker = new Locker();
-        locker.lockDatabase(db, LockType.READ);
+        locker.lockTableWithIntensiveDbLock(db, tableId, LockType.READ);
         try {
             OlapTable table = (OlapTable) globalStateMgr.getLocalMetastore().getTableIncludeRecycleBin(db, tableId);
             if (table == null) {
@@ -1051,7 +1051,7 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
             }
             return cnt;
         } finally {
-            locker.unLockDatabase(db, LockType.READ);
+            locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.READ);
         }
     }
 
@@ -1467,7 +1467,7 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
         }
         Locker locker = new Locker();
         try {
-            locker.lockDatabase(db, LockType.READ);
+            locker.lockTableWithIntensiveDbLock(db, tableId, LockType.READ);
             OlapTable table = (OlapTable) globalStateMgr.getLocalMetastore().getTableIncludeRecycleBin(db, tableId);
             if (table == null) {
                 return result;
@@ -1538,7 +1538,7 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
                 result.add(new Pair<>(entry.getKey(), entry.getValue()));
             }
         } finally {
-            locker.unLockDatabase(db, LockType.READ);
+            locker.unLockTableWithIntensiveDbLock(db, tableId, LockType.READ);
         }
 
         return result;
@@ -1554,7 +1554,7 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
 
         Locker locker = new Locker();
         try {
-            locker.lockDatabase(db, LockType.READ);
+            locker.lockTableWithIntensiveDbLock(db, olapTable.getId(), LockType.READ);
             PhysicalPartition physicalPartition = globalStateMgr.getLocalMetastore()
                     .getPhysicalPartitionIncludeRecycleBin(olapTable, tabletMeta.getPhysicalPartitionId());
             if (physicalPartition == null) {
@@ -1589,7 +1589,7 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
             return statusPair.first != LocalTablet.TabletHealthStatus.LOCATION_MISMATCH &&
                     statusPair.first != LocalTablet.TabletHealthStatus.HEALTHY;
         } finally {
-            locker.unLockDatabase(db, LockType.READ);
+            locker.unLockTableWithIntensiveDbLock(db, olapTable.getId(), LockType.READ);
         }
     }
 
@@ -1632,20 +1632,20 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
             int partitionBatchNum = Config.tablet_checker_partition_batch_num;
             int partitionChecked = 0;
             Locker locker = new Locker();
-            locker.lockDatabase(db, LockType.READ);
-            lockStart = System.nanoTime();
-            try {
-                TABLE:
-                for (Table table : globalStateMgr.getLocalMetastore().getTablesIncludeRecycleBin(db)) {
-                    // check table is olap table or colocate table
-                    if (!table.needSchedule(isLocalBalance)) {
-                        continue;
-                    }
-                    if (table.isCloudNativeTableOrMaterializedView()) {
-                        // replicas are managed by StarOS and cloud storage.
-                        continue;
-                    }
+            TABLE:
+            for (Table table : globalStateMgr.getLocalMetastore().getTablesIncludeRecycleBin(db)) {
+                // check table is olap table or colocate table
+                if (!table.needSchedule(isLocalBalance)) {
+                    continue;
+                }
+                if (table.isCloudNativeTableOrMaterializedView()) {
+                    // replicas are managed by StarOS and cloud storage.
+                    continue;
+                }
 
+                locker.lockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
+                lockStart = System.nanoTime();
+                try {
                     OlapTable olapTbl = (OlapTable) table;
                     // Table not in NORMAL state is not allowed to do balance,
                     // because the change of tablet location can cause Schema change or rollup failed
@@ -1659,8 +1659,8 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
                             lockTotalTime += System.nanoTime() - lockStart;
                             // release lock, so that lock can be acquired by other threads.
                             LOG.debug("partition checked reached batch value, release lock");
-                            locker.unLockDatabase(db, LockType.READ);
-                            locker.lockDatabase(db, LockType.READ);
+                            locker.unLockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
+                            locker.lockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
                             LOG.debug("balancer get lock again");
                             lockStart = System.nanoTime();
                             if (globalStateMgr.getLocalMetastore().getDbIncludeRecycleBin(dbId) == null) {
@@ -1751,10 +1751,10 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
                             }
                         }
                     }
+                } finally {
+                    lockTotalTime += System.nanoTime() - lockStart;
+                    locker.unLockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
                 }
-            } finally {
-                lockTotalTime += System.nanoTime() - lockStart;
-                locker.unLockDatabase(db, LockType.READ);
             }
         }
 
@@ -1798,9 +1798,9 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
             }
 
             Locker locker = new Locker();
-            locker.lockDatabase(db, LockType.READ);
-            try {
-                for (Table table : globalStateMgr.getLocalMetastore().getTablesIncludeRecycleBin(db)) {
+            for (Table table : globalStateMgr.getLocalMetastore().getTablesIncludeRecycleBin(db)) {
+                locker.lockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
+                try {
                     // check table is olap table or colocate table
                     if (!table.needSchedule(false)) {
                         continue;
@@ -1818,9 +1818,9 @@ public class DiskAndTabletLoadReBalancer extends Rebalancer {
                                         partition.getId());
                         partitionReplicaCnt.put(partition.getId(), replicaTotalCnt);
                     }
+                } finally {
+                    locker.unLockTableWithIntensiveDbLock(db, table.getId(), LockType.READ);
                 }
-            } finally {
-                locker.unLockDatabase(db, LockType.READ);
             }
         }
 
