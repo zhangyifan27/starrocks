@@ -900,8 +900,10 @@ public class DatabaseTransactionMgr {
         }
 
         List<Long> tableIdList = txn.getTableIdList();
+        long lockStartTime = System.nanoTime();
         Locker locker = new Locker();
         locker.lockTablesWithIntensiveDbLock(db, tableIdList, LockType.READ);
+        txn.addTableLockCostInCanTxnFinish(System.nanoTime() - lockStartTime);
         long currentTs = System.currentTimeMillis();
         try {
             // check each table involved in transaction
@@ -995,7 +997,10 @@ public class DatabaseTransactionMgr {
     }
 
     public void finishTransaction(long transactionId, Set<Long> errorReplicaIds) throws UserException {
+        long txnLockCost = 0;
+        long startTime = System.nanoTime();
         TransactionState transactionState = getTransactionState(transactionId);
+        txnLockCost += (System.nanoTime() - startTime);
         // add all commit errors and publish errors to a single set
         if (errorReplicaIds == null) {
             errorReplicaIds = Sets.newHashSet();
@@ -1029,12 +1034,15 @@ public class DatabaseTransactionMgr {
 
         List<Long> tableIdList = transactionState.getTableIdList();
         Locker locker = new Locker();
+        long lockStartTime = System.nanoTime();
         locker.lockTablesWithIntensiveDbLock(db, tableIdList, LockType.WRITE);
+        transactionState.addTableLockCostInTxnFinish(System.nanoTime() - lockStartTime);
         try {
             transactionState.writeLock();
             try {
                 boolean hasError = false;
                 Set<Long> droppedTableIds = Sets.newHashSet();
+                long time = System.nanoTime();
                 for (TableCommitInfo tableCommitInfo : transactionState.getIdToTableCommitInfos().values()) {
                     long tableId = tableCommitInfo.getTableId();
                     OlapTable table = (OlapTable) db.getTable(tableId);
@@ -1084,6 +1092,7 @@ public class DatabaseTransactionMgr {
                                             partitionId, partition.getVisibleVersion() + 1,
                                             partitionCommitInfo.getVersion(), tableId);
                             transactionState.setErrorMsg(errMsg);
+                            transactionState.addFinishTxnCost(System.nanoTime() - startTime);
                             return;
                         }
 
@@ -1175,6 +1184,8 @@ public class DatabaseTransactionMgr {
                         tableCommitInfo.removePartition(partitionId);
                     }
                 }
+                transactionState.addCheckQuorumCost(System.nanoTime() - time);
+
                 for (Long tableId : droppedTableIds) {
                     transactionState.removeTable(tableId);
                 }
@@ -1186,7 +1197,9 @@ public class DatabaseTransactionMgr {
                     return;
                 }
                 boolean txnOperated = false;
+                lockStartTime = System.nanoTime();
                 writeLock();
+                txnLockCost += (System.nanoTime() - lockStartTime);
                 try {
                     transactionState.setErrorReplicas(errorReplicaIds);
                     transactionState.setFinishTime(System.currentTimeMillis());
@@ -1204,13 +1217,17 @@ public class DatabaseTransactionMgr {
                     transactionState.afterStateTransform(TransactionStatus.VISIBLE, txnOperated);
                 }
 
+                time = System.nanoTime();
                 persistTxnStateInTxnLevelLock(transactionState);
+                transactionState.addPersistTxnStateCost(System.nanoTime() - time);
 
+                time = System.nanoTime();
                 Span updateCatalogSpan = TraceManager.startSpan("updateCatalogAfterVisible", finishSpan);
                 try {
                     updateCatalogAfterVisible(transactionState, db);
                 } finally {
                     updateCatalogSpan.end();
+                    transactionState.addUpdateCatalogCost(System.nanoTime() - time);
                 }
             } catch (Exception e) {
                 LOG.warn("finish transaction failed", e);
@@ -1227,8 +1244,13 @@ public class DatabaseTransactionMgr {
         transactionState.notifyVisible();
         transactionState.updateMetrics();
         // do after transaction finish
+        long time = System.nanoTime();
         GlobalStateMgr.getCurrentState().getOperationListenerBus().onStreamJobTransactionFinish(transactionState);
+        transactionState.addListenerBusCost(System.nanoTime() - time);
+
         GlobalStateMgr.getCurrentState().getLocalMetastore().handleMVRepair(transactionState);
+        transactionState.addTxnDBLockCostInTxnFinish(txnLockCost);
+        transactionState.addFinishTxnCost(System.nanoTime() - startTime);
         LOG.info("finish transaction {} successfully", transactionState);
     }
 

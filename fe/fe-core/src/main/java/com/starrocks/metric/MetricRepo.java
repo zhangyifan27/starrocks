@@ -1211,7 +1211,7 @@ public final class MetricRepo {
             visitor.visit(metric);
         }
 
-        // publish versino metrics
+        // publish version metrics
         collectPublishVersionMetrics(visitor);
 
         // database metrics

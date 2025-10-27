@@ -82,6 +82,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import javax.validation.constraints.NotNull;
 
@@ -100,11 +101,31 @@ public class PublishVersionDaemon extends FrontendDaemon {
     private ThreadPoolExecutor deleteTxnLogExecutor;
     private Set<Long> publishingLakeTransactions;
 
+    // finish task thread pool
+    private static final int FINISH_TASK_THREAD_POOL_DEFAULT_MAX_SIZE = 10;
+    private ThreadPoolExecutor finishTaskExecutor;
+    private final Map<PublishChecker, Set<Long>> checkerToTablesMap = new HashMap<>();
+    private final List<PublishChecker> publishCheckers = new ArrayList<>();
+    private long nextCheckerId = 0;
+
+    // trace info
+    private final PublishTraceInfo traceInfo = new PublishTraceInfo();
+
     @VisibleForTesting
     protected Set<Long> publishingLakeTransactionsBatchTableId;
 
+    private static final long NANOS_PER_MILLI = 1000000L;
+
     public PublishVersionDaemon() {
         super("PUBLISH_VERSION", Config.publish_version_interval_ms);
+        if (!Config.enable_new_publish_mechanism) {
+            if (Config.use_new_publish_checker) {
+                initFinishTaskExecutor();
+            } else {
+                PublishChecker checker = new PublishChecker(traceInfo);
+                publishCheckers.add(checker);
+            }
+        }
     }
 
     @Override
@@ -269,9 +290,11 @@ public class PublishVersionDaemon extends FrontendDaemon {
         return publishingLakeTransactionsBatchTableId;
     }
 
-    private void publishVersionForOlapTable(List<TransactionState> readyTransactionStates) throws UserException {
+    private void publishVersionForOlapTable(List<TransactionState> readyTransactionStates)
+            throws InterruptedException, UserException {
         GlobalTransactionMgr globalTransactionMgr = GlobalStateMgr.getCurrentState().getGlobalTransactionMgr();
 
+        long startTime = System.nanoTime();
         // every backend-transaction identified a single task
         AgentBatchTask batchTask = new AgentBatchTask();
         List<Long> transactionIds = new ArrayList<>();
@@ -285,64 +308,40 @@ public class PublishVersionDaemon extends FrontendDaemon {
             if (!tasks.isEmpty()) {
                 transactionState.setHasSendTask(true);
                 transactionIds.add(transactionState.getTransactionId());
+                if (Config.use_new_publish_checker) {
+                    // blocking put txn state
+                    addTxnToChecker(transactionState);
+                }
+                traceInfo.publishTxnCount++;
             }
         }
         LOG.debug("send publish tasks for transactions: {}", transactionIds);
+        long submitTime = System.nanoTime();
         if (!batchTask.getAllTasks().isEmpty()) {
             AgentTaskExecutor.submit(batchTask);
         }
 
+        long finishTime = System.nanoTime();
         // FIXME(murphy) refresh the mv in new publish mechanism
         if (Config.enable_new_publish_mechanism) {
             publishVersionNew(globalTransactionMgr, readyTransactionStates);
             return;
         }
 
-        // try to finish the transaction, if failed just retry in next loop
-        for (TransactionState transactionState : readyTransactionStates) {
-            Map<Long, PublishVersionTask> transTasks = transactionState.getPublishVersionTasks();
-            Set<Long> publishErrorReplicaIds = Sets.newHashSet();
-            Set<Long> unfinishedBackends = Sets.newHashSet();
-            boolean allTaskFinished = true;
-            for (PublishVersionTask publishVersionTask : transTasks.values()) {
-                if (publishVersionTask.isFinished()) {
-                    // sometimes backend finish publish version task, but it maybe failed to change
-                    // transaction id to version for some tablets,
-                    // and it will upload the failed tablet info to fe and fe will deal with them
-                    Set<Long> errReplicas = publishVersionTask.getErrorReplicas();
-                    if (!errReplicas.isEmpty()) {
-                        publishErrorReplicaIds.addAll(errReplicas);
-                    }
-                } else {
-                    allTaskFinished = false;
-                    // Publish version task may succeed and finish in quorum replicas
-                    // but not finish in one replica.
-                    // here collect the backendId that do not finish publish version
-                    unfinishedBackends.add(publishVersionTask.getBackendId());
-                }
-            }
-            boolean shouldFinishTxn = true;
-            if (!allTaskFinished) {
-                shouldFinishTxn = globalTransactionMgr.canTxnFinished(transactionState,
-                        publishErrorReplicaIds, unfinishedBackends);
-            }
+        if (!Config.use_new_publish_checker) {
+            publishVersionOld(globalTransactionMgr, readyTransactionStates);
+        }
 
-            if (shouldFinishTxn) {
-                globalTransactionMgr.finishTransaction(transactionState.getDbId(), transactionState.getTransactionId(),
-                        publishErrorReplicaIds);
-                if (transactionState.getTransactionStatus() != TransactionStatus.VISIBLE) {
-                    transactionState.updateSendTaskTime();
-                    LOG.debug("publish version for transaction {} failed, has {} error replicas during publish",
-                            transactionState, publishErrorReplicaIds.size());
-                } else {
-                    for (PublishVersionTask task : transactionState.getPublishVersionTasks().values()) {
-                        AgentTaskQueue.removeTask(task.getBackendId(), TTaskType.PUBLISH_VERSION, task.getSignature());
-                    }
-                    // clear publish version tasks to reduce memory usage when state changed to visible.
-                    transactionState.clearAfterPublished();
-                }
-            }
-        } // end for readyTransactionStates
+        // print trace info
+        collectAndPrintTraceInfo(startTime, submitTime, finishTime);
+    }
+
+    private void publishVersionOld(GlobalTransactionMgr globalTransactionMgr, List<TransactionState> txns)
+            throws UserException {
+        // try to finish the transaction, if failed just retry in next loop
+        for (TransactionState transactionState : txns) {
+            publishCheckers.get(0).checkAndFinishOneTxn(globalTransactionMgr, transactionState);
+        }
     }
 
     private void publishVersionNew(GlobalTransactionMgr globalTransactionMgr, List<TransactionState> txns) {
@@ -543,7 +542,7 @@ public class PublishVersionDaemon extends FrontendDaemon {
                 // used to delete txnLog when publish success
                 Map<ComputeNode, List<Long>> nodeToTablets = new HashMap<>();
                 Utils.publishVersionBatch(publishTablets, txnInfos,
-                        startVersion - 1, endVersion, compactionScores, 
+                        startVersion - 1, endVersion, compactionScores,
                         warehouseId,
                         nodeToTablets);
 
@@ -795,6 +794,184 @@ public class PublishVersionDaemon extends FrontendDaemon {
             LOG.error("Fail to publish partition {} of txn {}: {}", partitionCommitInfo.getPartitionId(),
                     txnId, e.getMessage());
             return false;
+        }
+    }
+
+    private void initFinishTaskExecutor() {
+        if (finishTaskExecutor == null) {
+            int numThreads = Config.publish_finish_task_max_threads;
+            numThreads = numThreads <= 0 ? FINISH_TASK_THREAD_POOL_DEFAULT_MAX_SIZE : numThreads;
+            finishTaskExecutor =
+                    ThreadPoolManager.newDaemonFixedThreadPool(numThreads, Integer.MAX_VALUE,
+                    "publish-finish-task",
+                    true);
+
+            for (int i = 0; i < numThreads; i++) {
+                PublishChecker publishChecker = new PublishChecker(traceInfo);
+                publishCheckers.add(publishChecker);
+                checkerToTablesMap.put(publishChecker, new HashSet<>());
+                finishTaskExecutor.submit(() -> {
+                    try {
+                        publishChecker.checkAndFinishTxns();
+                    } catch (Exception e) {
+                        LOG.warn("check and finish txn failed", e);
+                    }
+                });
+            }
+        }
+    }
+
+    private void addTxnToChecker(TransactionState txn) throws InterruptedException {
+        PublishChecker checker = getPublishChecker(txn);
+        checker.addTxnToQueue(txn);
+    }
+
+    private PublishChecker getPublishChecker(TransactionState txn) {
+        List<Long> tableList = txn.getTableIdList();
+        for (Long tableID : tableList) {
+            for (Map.Entry<PublishChecker, Set<Long>> entry : checkerToTablesMap.entrySet()) {
+                if (entry.getValue().contains(tableID)) {
+                    // put all tables of this transaction into one slot to strictly guarantee that
+                    // transactions for the same table are in the same slot
+                    entry.getValue().addAll(tableList);
+                    return entry.getKey();
+                }
+            }
+        }
+
+        // table does not belong to any checker, then get next publish checker by round-robin
+        int idx = (int) (nextCheckerId++ % publishCheckers.size());
+        PublishChecker checker = publishCheckers.get(idx);
+        checkerToTablesMap.get(checker).addAll(tableList);
+        return checker;
+    }
+
+    private void collectAndPrintTraceInfo(long startTime, long submitTime, long finishTime) {
+        long endTime = System.nanoTime();
+
+        // collect trace info
+        if (!Config.use_new_publish_checker) {
+            traceInfo.totalCost = endTime - startTime;
+            traceInfo.createTaskCost = submitTime - startTime;
+            traceInfo.submitTaskCost = finishTime - submitTime;
+            traceInfo.finishTaskCost = endTime - finishTime;
+        } else {
+            traceInfo.totalCost += endTime - startTime;
+            traceInfo.createTaskCost += submitTime - startTime;
+            traceInfo.submitTaskCost += finishTime - submitTime;
+            traceInfo.finishTaskCost += endTime - startTime;    // use asynchronous method to execute txn finish
+        }
+
+        // check whether need to print trace or not
+        if (!shouldPrintTraceInfo()) {
+            return;
+        }
+
+        // print trace info
+        printTraceInfo(traceInfo);
+        traceInfo.reset();
+    }
+
+    /**
+     * If Config.use_new_publish_checker is true, then print only if cumulative total cost time of several
+     * rounds exceeds the threshold.
+     * Else, print only if total cost time of the current round exceeds the threshold.
+     */
+    private boolean shouldPrintTraceInfo() {
+        return traceInfo.totalCost >= Config.publish_version_trace_threshold_ms * NANOS_PER_MILLI;
+    }
+
+    private void printTraceInfo(PublishTraceInfo info) {
+        StringBuilder sb = new StringBuilder("Publish Daemon check. ");
+        sb.append("Publish txn count: ").append(info.publishTxnCount);
+        sb.append(", finished txn count: ").append(info.finishedTxnCount);
+        sb.append(", fail to finish txn count: ").append(info.failedFinishedTxnCount);
+        sb.append(", total time cost: ").append(info.totalCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", create task cost: ").append(info.createTaskCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", submit task cost: ").append(info.submitTaskCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", finish task cost: ").append(info.finishTaskCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", collect trace cost: ").append(info.collectTraceCost.totalValue() / NANOS_PER_MILLI).append("ms");
+
+        // checkAllTaskFinishCost
+        sb.append(", check all task finish cost: ").
+                append(info.checkAllTaskFinishCost.totalValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" maxCost ").append(info.checkAllTaskFinishCost.maxValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" txnID ").append(info.checkAllTaskFinishCost.txnId());
+
+        // checkTxnFinishCost
+        sb.append(", check txn finish cost: ").
+                append(info.checkTxnFinishCost.totalValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" maxCost ").append(info.checkTxnFinishCost.maxValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" txnID ").append(info.checkTxnFinishCost.txnId());
+
+        // tableLockCostInCheckTxnFinish
+        sb.append(", table lock cost in check txn finish: ").
+                append(info.tableLockCostInCheckTxnFinish.totalValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" maxCost ").append(info.tableLockCostInCheckTxnFinish.maxValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" txnID ").append(info.tableLockCostInCheckTxnFinish.txnId());
+
+        // finishTxnCost
+        sb.append(", finish txn cost: ").append(info.finishTxnCost.totalValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" maxCost ").append(info.finishTxnCost.maxValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" txnID ").append(info.finishTxnCost.txnId());
+
+        // tableLockCostInTxnFinish
+        sb.append(", table lock cost in txn finish: ").
+                append(info.tableLockCostInTxnFinish.totalValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" maxCost ").append(info.tableLockCostInTxnFinish.maxValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" txnID ").append(info.tableLockCostInTxnFinish.txnId());
+
+        // txnDbLockCostInTxnFinish
+        sb.append(", txn db lock cost in txn finish: ").
+                append(info.txnDbLockCostInTxnFinish.totalValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" maxCost ").append(info.txnDbLockCostInTxnFinish.maxValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" txnID ").append(info.txnDbLockCostInTxnFinish.txnId());
+
+        // checkQuorumCostInTxnFinish
+        sb.append(", check quorum cost: ").
+                append(info.checkQuorumCost.totalValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" maxCost ").append(info.checkQuorumCost.maxValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" txnID ").append(info.checkQuorumCost.txnId());
+
+        // persistTxnStateCostInTxnFinish
+        sb.append(", persist txn state cost: ").
+                append(info.persistTxnStateCost.totalValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" maxCost ").append(info.persistTxnStateCost.maxValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" txnID ").append(info.persistTxnStateCost.txnId());
+
+        // updateCatalogCostInTxnFinish
+        sb.append(", update catalog cost: ").
+                append(info.updateCatalogCost.totalValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" maxCost ").append(info.updateCatalogCost.maxValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" txnID ").append(info.updateCatalogCost.txnId());
+
+        // listenerBusCostInTxnFinish
+        sb.append(", listener bus cost: ").
+                append(info.listenerBusCost.totalValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" maxCost ").append(info.listenerBusCost.maxValue() / NANOS_PER_MILLI).append("ms");
+        sb.append(" txnID ").append(info.listenerBusCost.txnId());
+
+
+        LOG.info(sb.toString());
+    }
+
+    public void stopPublishCheckers() {
+        if (!Config.use_new_publish_checker) {
+            return;
+        }
+
+        for (PublishChecker checker : publishCheckers) {
+            checker.stop();
+        }
+
+        finishTaskExecutor.shutdown();
+        try {
+            if (!finishTaskExecutor.awaitTermination(3, TimeUnit.SECONDS)) {
+                finishTaskExecutor.shutdownNow();
+            }
+        } catch (InterruptedException e) {
+            finishTaskExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
         }
     }
 }

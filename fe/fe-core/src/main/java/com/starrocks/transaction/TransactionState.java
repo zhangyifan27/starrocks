@@ -85,6 +85,8 @@ import javax.validation.constraints.NotNull;
 public class TransactionState implements Writable {
     private static final Logger LOG = LogManager.getLogger(TransactionState.class);
 
+    private static final long NANOS_PER_MILLI = 1000000L;
+
     // compare the TransactionState by txn id, desc
     public static class TxnStateComparator implements Comparator<TransactionState> {
         @Override
@@ -248,6 +250,39 @@ public class TransactionState implements Writable {
     @SerializedName("rs")
     private String reason = "";
 
+    // indicates after how many rounds of check by publish daemon thread the current transaction was finished.
+    private int checkCount = 0;
+
+    // time cost of finish publish task rpc from BE
+    private long finishPublishTaskRPCCost;
+
+    // Used for tracking the time spent in each stage upon transaction completion
+    private long checkAllPublishTaskFinishCost;
+    private long tableLockCostInCanTxnFinish;
+    private long checkCanTxnFinishCost;
+    private long tableLockCostInTxnFinish;
+    private long txnDBLockCostInTxnFinish;
+    private long finishTxnCost;
+    // process in finish txn api
+    private long checkQuorumCost;
+    private long persistTxnStateCost;
+    private long updateCatalogCost;
+    private long listenerBusCost;
+
+
+    // Used for tracking the time spent in each stage of transactions in a single check round
+    private long tmpCheckAllPublishTaskFinishCost;
+    private long tmpTableLockCostInCanTxnFinish;
+    private long tmpCheckCanTxnFinishCost;
+    private long tmpTableLockCostInTxnFinish;
+    private long tmpTxnDBLockCostInTxnFinish;
+    private long tmpFinishTxnCost;
+
+    private long tmpCheckQuorumCost;
+    private long tmpPersistTxnStateCost;
+    private long tmpUpdateCatalogCost;
+    private long tmpListenerBusCost;
+
     // whether this txn is finished using new mechanism
     // this field needs to be persisted, so we shared the serialization field with `reason`.
     // `reason` is only used when txn is aborted, so it's ok to reuse the space for visible txns.
@@ -324,6 +359,7 @@ public class TransactionState implements Writable {
     private String errMsg = "";
 
     private long lastErrTimeMs = 0;
+    private long lastCheckPublishTimeMs = 0;
 
     // used for PublishDaemon to check whether this txn can be published
     // not persisted, so need to rebuilt if FE restarts
@@ -908,6 +944,18 @@ public class TransactionState implements Writable {
         if (finishTime > prepareTime) {
             sb.append(", total cost: ").append(finishTime - prepareTime).append("ms");
         }
+        sb.append(", finish publish rpc cost: ").append(finishPublishTaskRPCCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", check all publish task finish cost: ").append(checkAllPublishTaskFinishCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", check txn finish cost: ").append(checkCanTxnFinishCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", table lock cost in check txn finish: ").append(tableLockCostInCanTxnFinish / NANOS_PER_MILLI).append("ms");
+        sb.append(", finish txn api cost: ").append(finishTxnCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", table lock cost in txn finish: ").append(tableLockCostInTxnFinish / NANOS_PER_MILLI).append("ms");
+        sb.append(", txn db lock cost in txn finish: ").append(txnDBLockCostInTxnFinish / NANOS_PER_MILLI).append("ms");
+        sb.append(", check quorum cost: ").append(checkQuorumCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", persist txn state cost: ").append(persistTxnStateCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", update catalog cost: ").append(updateCatalogCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", listener bus cost: ").append(listenerBusCost / NANOS_PER_MILLI).append("ms");
+        sb.append(", check round count: ").append(checkCount);
         sb.append(", reason: ").append(reason);
         if (newFinish) {
             sb.append(", newFinish");
@@ -1101,6 +1149,112 @@ public class TransactionState implements Writable {
 
     public String getTraceParent() {
         return traceParent;
+    }
+
+    public void addFinishTxnCost(long finishTxnCost) {
+        this.finishTxnCost += finishTxnCost;
+        tmpFinishTxnCost = finishTxnCost;
+    }
+
+    public void addCheckCanTxnFinishCost(long checkCanTxnFinishCost) {
+        this.checkCanTxnFinishCost += checkCanTxnFinishCost;
+        tmpCheckCanTxnFinishCost = checkCanTxnFinishCost;
+    }
+
+    public void addCheckAllPublishTaskFinishCost(long checkAllPublishTaskFinishCost) {
+        this.checkAllPublishTaskFinishCost += checkAllPublishTaskFinishCost;
+        tmpCheckAllPublishTaskFinishCost = checkAllPublishTaskFinishCost;
+    }
+
+    public void addFinishPublishTaskRPCCost(long finishPublishTaskRPCCost) {
+        this.finishPublishTaskRPCCost += finishPublishTaskRPCCost;
+    }
+
+    public void addTableLockCostInTxnFinish(long dbLockCostInTxnFinish) {
+        this.tableLockCostInTxnFinish += dbLockCostInTxnFinish;
+        tmpTableLockCostInTxnFinish = dbLockCostInTxnFinish;
+    }
+
+    public void addTxnDBLockCostInTxnFinish(long txnDBLockCostInTxnFinish) {
+        this.txnDBLockCostInTxnFinish += txnDBLockCostInTxnFinish;
+        tmpTxnDBLockCostInTxnFinish = txnDBLockCostInTxnFinish;
+    }
+
+    public void addTableLockCostInCanTxnFinish(long dbLockCostInCanTxnFinish) {
+        this.tableLockCostInCanTxnFinish += dbLockCostInCanTxnFinish;
+        tmpTableLockCostInCanTxnFinish = dbLockCostInCanTxnFinish;
+    }
+
+    public void addCheckQuorumCost(long checkQuorumCost) {
+        this.checkQuorumCost += checkQuorumCost;
+        tmpCheckQuorumCost = checkQuorumCost;
+    }
+
+    public void addPersistTxnStateCost(long persistTxnStateCost) {
+        this.persistTxnStateCost += persistTxnStateCost;
+        tmpPersistTxnStateCost = persistTxnStateCost;
+    }
+
+    public void addUpdateCatalogCost(long updateCatalogCost) {
+        this.updateCatalogCost += updateCatalogCost;
+        tmpUpdateCatalogCost = updateCatalogCost;
+    }
+
+    public void addListenerBusCost(long listenerBusCost) {
+        this.listenerBusCost += listenerBusCost;
+        tmpListenerBusCost = listenerBusCost;
+    }
+
+    public void increaseCheckCount() {
+        this.checkCount++;
+    }
+
+    public long getCheckAllPublishTaskFinishCost() {
+        return tmpCheckAllPublishTaskFinishCost;
+    }
+
+    public long getTableLockCostInCanTxnFinish() {
+        return tmpTableLockCostInCanTxnFinish;
+    }
+
+    public long getCheckCanTxnFinishCost() {
+        return tmpCheckCanTxnFinishCost;
+    }
+
+    public long getTableLockCostInTxnFinish() {
+        return tmpTableLockCostInTxnFinish;
+    }
+
+    public long getTxnDBLockCostInTxnFinish() {
+        return tmpTxnDBLockCostInTxnFinish;
+    }
+
+    public long getFinishTxnCost() {
+        return tmpFinishTxnCost;
+    }
+
+    public long getCheckQuorumCost() {
+        return tmpCheckQuorumCost;
+    }
+
+    public long getPersistTxnStateCost() {
+        return tmpPersistTxnStateCost;
+    }
+
+    public long getUpdateCatalogCost() {
+        return tmpUpdateCatalogCost;
+    }
+
+    public long getListenerBusCost() {
+        return tmpListenerBusCost;
+    }
+
+    public long getLastCheckPublishTimeMs() {
+        return lastCheckPublishTimeMs;
+    }
+
+    public void setLastCheckPublishTimeMs(long lastCheckPublishTimeMs) {
+        this.lastCheckPublishTimeMs = lastCheckPublishTimeMs;
     }
 
     // A value of -1 indicates this field is not set.

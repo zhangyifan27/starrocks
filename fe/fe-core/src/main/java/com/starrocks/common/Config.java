@@ -2840,6 +2840,27 @@ public class Config extends ConfigBase {
     public static int quorum_publish_wait_time_ms = 5000;
 
     /**
+     * Time threshold for trace log printing by the publish version daemon
+     */
+    @ConfField(mutable = true)
+    public static int publish_version_trace_threshold_ms = 3000;
+
+    /**
+     * The max number of threads to check and finish txn after publishing.
+     */
+    @ConfField(mutable = false, comment = "the max number of threads for txn check and finish after publishing")
+    public static int publish_finish_task_max_threads = 10;
+
+    /**
+     * The check interval for a transaction. It is used to avoid checking too frequently.
+     */
+    @ConfField(mutable = true)
+    public static int publish_check_interval_ms = 100;
+
+    @ConfField(mutable = false)
+    public static boolean use_new_publish_checker = false;
+
+    /**
      * FE journal queue size
      * Write log will fail if queue is full
      **/

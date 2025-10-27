@@ -722,6 +722,7 @@ public class LeaderImpl {
     }
 
     private void finishPublishVersion(AgentTask task, TFinishTaskRequest request) {
+        long startTime = System.nanoTime();
         List<Long> errorTabletIds = null;
         if (request.isSetError_tablet_ids()) {
             errorTabletIds = request.getError_tablet_ids();
@@ -750,6 +751,7 @@ public class LeaderImpl {
         TransactionState txnState = publishVersionTask.getTxnState();
         if (txnState != null) {
             txnState.updatePublishTaskFinishTime();
+            txnState.addFinishPublishTaskRPCCost(System.nanoTime() - startTime);
         }
 
         if (request.getTask_status().getStatus_code() != TStatusCode.OK) {
