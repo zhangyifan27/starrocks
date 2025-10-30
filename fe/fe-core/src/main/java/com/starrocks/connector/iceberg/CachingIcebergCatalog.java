@@ -306,10 +306,10 @@ public class CachingIcebergCatalog implements IcebergCatalog {
                 listPartitionNamesWithSnapshotId(updatedTable, dbName, tableName, updatedSnapshotId, executorService) :
                 new ArrayList<>();
 
+        IcebergTableName icebergTableName = new IcebergTableName(dbName, tableName);
         synchronized (this) {
-            partitionNames.put(updatedIcebergTableName, updatedPartitionNames);
-            tables.put(updatedIcebergTableName, updatedTable);
-            partitionNames.invalidate(baseIcebergTableName);
+            partitionNames.put(icebergTableName, updatedPartitionNames);
+            tables.put(icebergTableName, updatedTable);
         }
 
         TableMetadata updatedTableMetadata = updatedTable.operations().current();
@@ -344,7 +344,7 @@ public class CachingIcebergCatalog implements IcebergCatalog {
                 Long latestAccessTime = tableLatestAccessTime.get(identifier);
                 if (latestAccessTime == null || (System.currentTimeMillis() - latestAccessTime) / 1000 >
                         Config.background_refresh_metadata_time_secs_since_last_access_secs) {
-                    return;
+                    continue;
                 }
                 
                 refreshTable(identifier.dbName, identifier.tableName, backgroundExecutor);

@@ -147,6 +147,7 @@ public class IcebergConnector implements Connector {
 
     public IcebergCatalog getNativeCatalog(String username) {
         IcebergCatalog icebergCatalog = icebergCatalogCache.get(username, this::loadIcebergNativeCatalog);
+        // TODO registerCachingIcebergCatalog
         return icebergCatalog;
     }
 
