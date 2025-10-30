@@ -189,6 +189,9 @@ public enum ScalarOperatorEvaluator {
         FunctionInvoker invoker = functions.get(signature);
 
         if (invoker == null) {
+            if (FunctionSet.nonDeterministicFunctions.contains(fn.getFunctionName().getFunction().toLowerCase())) {
+                return root;
+            }
             boolean enableThiveFunction =
                     ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableThiveFunction();
             if (fn.getFunctionName().isThiveFunction() || enableThiveFunction) {
