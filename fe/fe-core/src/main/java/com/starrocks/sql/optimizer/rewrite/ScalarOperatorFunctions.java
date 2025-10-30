@@ -414,7 +414,7 @@ public class ScalarOperatorFunctions {
             return ConstantOperator.createNull(Type.VARCHAR);
         }
         // unix style
-        if (format.trim().contains("%")) {
+        if (!SUPPORT_JAVA_STYLE_DATETIME_FORMATTER.contains(format.trim())) {
             DateTimeFormatter builder = DateUtils.unixDatetimeFormatter(fmtLiteral.getVarchar());
             return ConstantOperator.createVarchar(builder.format(date.getDatetime()));
         } else {
@@ -736,7 +736,18 @@ public class ScalarOperatorFunctions {
         }
         ConstantOperator dl = ConstantOperator.createDatetime(
                 LocalDateTime.ofInstant(Instant.ofEpochSecond(value), TimeUtils.getTimeZone().toZoneId()));
-        return dateFormat(dl, fmtLiteral);
+        String format = fmtLiteral.getVarchar();
+        if (format.isEmpty()) {
+            return ConstantOperator.createNull(Type.VARCHAR);
+        }
+        // unix style
+        if (format.trim().contains("%")) {
+            DateTimeFormatter builder = DateUtils.unixDatetimeFormatter(fmtLiteral.getVarchar());
+            return ConstantOperator.createVarchar(builder.format(dl.getDatetime()));
+        } else {
+            String result = dl.getDatetime().format(DateTimeFormatter.ofPattern(fmtLiteral.getVarchar()));
+            return ConstantOperator.createVarchar(result);
+        }
     }
 
     @ConstantFunction.List(list = {
