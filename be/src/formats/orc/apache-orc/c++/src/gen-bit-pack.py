@@ -75,7 +75,7 @@ def gen_unpack_driver():
         in = _unpack64_{fb}(in, out);
         out += 64;
         }}
-        bit_unpack_tail(in, {fb}, out, nums % 64);
+        bit_unpack_tail_optimized<{fb}>(in, out, nums % 64);
         }}""".format(fb=fb))
 
     oss.emit('void bit_unpack(const uint8_t* in, int fb, int64_t* data, int nums) {')

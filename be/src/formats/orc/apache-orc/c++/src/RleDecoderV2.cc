@@ -24,12 +24,28 @@
 namespace orc {
 
 int64_t RleDecoderV2::readLongBE(uint64_t bsz) {
-    int64_t ret = 0, val;
-    uint64_t n = bsz;
-    while (n > 0) {
-        n--;
-        val = readByte();
-        ret |= (val << (n * 8));
+    int64_t ret = 0;
+    switch (bsz) {
+    case 8:
+        ret |= static_cast<int64_t>(static_cast<uint8_t>(readByte())) << 56;
+    case 7:
+        ret |= static_cast<int64_t>(static_cast<uint8_t>(readByte())) << 48;
+    case 6:
+        ret |= static_cast<int64_t>(static_cast<uint8_t>(readByte())) << 40;
+    case 5:
+        ret |= static_cast<int64_t>(static_cast<uint8_t>(readByte())) << 32;
+    case 4:
+        ret |= static_cast<int64_t>(static_cast<uint8_t>(readByte())) << 24;
+    case 3:
+        ret |= static_cast<int64_t>(static_cast<uint8_t>(readByte())) << 16;
+    case 2:
+        ret |= static_cast<int64_t>(static_cast<uint8_t>(readByte())) << 8;
+    case 1:
+        ret |= static_cast<int64_t>(static_cast<uint8_t>(readByte()));
+        break;
+    default:
+        ret = 0;
+        break;
     }
     return ret;
 }
@@ -492,10 +508,32 @@ uint64_t RleDecoderV2::nextShortRepeats(int64_t* const data, uint64_t offset, ui
             }
         }
     } else {
-        for (uint64_t pos = offset; pos < offset + nRead; ++pos) {
-            data[pos] = literals[0];
-            ++runRead;
+        int64_t value = literals[0];
+        switch (nRead) {
+        case 10:
+            data[offset + 9] = value;
+        case 9:
+            data[offset + 8] = value;
+        case 8:
+            data[offset + 7] = value;
+        case 7:
+            data[offset + 6] = value;
+        case 6:
+            data[offset + 5] = value;
+        case 5:
+            data[offset + 4] = value;
+        case 4:
+            data[offset + 3] = value;
+        case 3:
+            data[offset + 2] = value;
+            data[offset + 1] = value;
+            data[offset + 0] = value;
+            break;
+        default:
+            std::fill_n(data + offset, nRead, value);
+            break;
         }
+        runRead += nRead;
     }
 
     return nRead;
@@ -516,9 +554,7 @@ uint64_t RleDecoderV2::nextDirect(int64_t* const data, uint64_t offset, uint64_t
 
         readLongsFully(literals.data(), runLength, bitSize);
         if (isSigned) {
-            for (uint64_t i = 0; i < runLength; ++i) {
-                literals[i] = unZigZag(static_cast<uint64_t>(literals[i]));
-            }
+            unZigZagSimd(literals.data(), runLength);
         }
     }
 
