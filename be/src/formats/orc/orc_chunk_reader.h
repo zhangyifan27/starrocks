@@ -62,6 +62,10 @@ public:
     Status read_next(orc::RowReader::ReadPosition* pos = nullptr);
     // create sample chunk
     ChunkPtr create_chunk();
+    // create sample chunk for unit test
+    ChunkPtr create_chunk_ut();
+    // init sample chunk
+    void init_chunk();
     // copy from cvb to chunk
     Status fill_chunk(ChunkPtr* chunk);
     // some type cast & conversion.
@@ -120,6 +124,7 @@ public:
     void set_lazy_load_context(LazyLoadContext* ctx) { _lazy_load_ctx = ctx; }
     bool has_lazy_load_context() { return _lazy_load_ctx != nullptr; }
     StatusOr<ChunkPtr> get_chunk();
+    ChunkPtr get_bound_chunk() { return _chunk; }
     StatusOr<ChunkPtr> get_active_chunk();
     Status lazy_read_next(size_t numValues);
     Status lazy_seek_to(uint64_t rowInStripe);
@@ -195,6 +200,8 @@ private:
     cctz::time_zone _tzinfo;
     int64_t _tzoffset_in_seconds;
     bool _drop_nanoseconds_in_datetime;
+    ChunkPtr _chunk;
+    ChunkPtr _lazy_chunk;
 
     // Only used for UT, used after init reader
     const std::vector<bool>& TEST_get_selected_column_id_list();

@@ -80,6 +80,8 @@ public:
                                                                                    OrcChunkReader* reader);
     const orc::Type* get_orc_type() { return _orc_type; }
 
+    const bool is_nullable() { return _nullable; }
+
 protected:
     inline void handle_null(orc::ColumnVectorBatch* cvb, NullableColumn* col, size_t column_from, size_t cvb_from,
                             size_t size, bool need_update_has_null = true) {
@@ -247,6 +249,8 @@ public:
         _child_readers = std::move(child_readers);
     }
     ~ComplexColumnReader() override = default;
+
+    const std::vector<std::unique_ptr<ORCColumnReader>>& child_readers() const { return _child_readers; }
 
 protected:
     static void copy_array_offset(orc::DataBuffer<int64_t>& src, int from, int size, UInt32Column* dst) {

@@ -23,6 +23,7 @@
 #include <vector>
 
 #include "column/struct_column.h"
+#include "common/config.h"
 #include "common/object_pool.h"
 #include "exprs/is_null_predicate.h"
 #include "formats/orc/memory_stream/MemoryInputStream.hh"
@@ -191,12 +192,15 @@ SlotDesc default_slot_descs[] = {
 static uint64_t get_hit_rows(OrcChunkReader* reader) {
     uint64_t records = 0;
     for (;;) {
+        if (config::enable_orc_mem_copy_optimization) {
+            reader->init_chunk();
+        }
         Status st = reader->read_next();
         if (st.is_end_of_file()) {
             break;
         }
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader->create_chunk();
+        ChunkPtr ckptr = reader->create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader->fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -559,6 +563,9 @@ std::vector<DecimalV2Value> convert_orc_to_starrocks_decimalv2(RuntimeState* sta
 
     OrcChunkReader reader(state->chunk_size(), slots);
     reader.init(std::move(reader0));
+    if (config::enable_orc_mem_copy_optimization) {
+        reader.init_chunk();
+    }
     Status st = reader.read_next();
     CHECK(st.ok()) << st.to_string();
 
@@ -896,6 +903,9 @@ std::vector<TimestampValue> convert_orc_to_starrocks_timestamp(RuntimeState* sta
     OrcChunkReader reader(state->chunk_size(), slots);
     reader.set_timezone(reader_tz);
     reader.init(std::move(reader0));
+    if (config::enable_orc_mem_copy_optimization) {
+        reader.init_chunk();
+    }
     Status st = reader.read_next();
     CHECK(st.ok()) << st.to_string();
 
@@ -1010,10 +1020,13 @@ TEST_F(OrcChunkReaderTest, TestReadPositionalColumn) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1039,10 +1052,13 @@ TEST_F(OrcChunkReaderTest, TestReadPositionalColumn) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1117,10 +1133,13 @@ TEST_F(OrcChunkReaderTest, TestReadBinaryColumn) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1170,10 +1189,13 @@ TEST_F(OrcChunkReaderTest, TestReadVarcharColumn) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1206,10 +1228,13 @@ TEST_F(OrcChunkReaderTest, TestReadVarcharColumn) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1241,10 +1266,13 @@ TEST_F(OrcChunkReaderTest, TestReadVarcharColumn) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1304,10 +1332,13 @@ TEST_F(OrcChunkReaderTest, TestReadArrayBasic) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1352,10 +1383,13 @@ TEST_F(OrcChunkReaderTest, TestReadArrayDecimal) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1420,10 +1454,13 @@ TEST_F(OrcChunkReaderTest, TestReadPaddingChar) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1497,10 +1534,13 @@ TEST_F(OrcChunkReaderTest, TestColumnWithUpperCase) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1554,13 +1594,16 @@ TEST_F(OrcChunkReaderTest, TestReadStructBasic) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         std::vector<bool> selectd_column_id = {true, true, true, true, true};
         EXPECT_EQ(selectd_column_id, reader.TEST_get_selected_column_id_list());
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1596,13 +1639,16 @@ TEST_F(OrcChunkReaderTest, TestReadStructBasic) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         std::vector<bool> selectd_column_id = {true, true, true, false, true};
         EXPECT_EQ(selectd_column_id, reader.TEST_get_selected_column_id_list());
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1653,13 +1699,16 @@ TEST_F(OrcChunkReaderTest, TestReadStructUnorderedField) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         std::vector<bool> selectd_column_id = {true, true, true, true, true};
         EXPECT_EQ(selectd_column_id, reader.TEST_get_selected_column_id_list());
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1700,13 +1749,16 @@ TEST_F(OrcChunkReaderTest, TestReadStructUnorderedField) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         std::vector<bool> selectd_column_id = {true, true, true, true, true};
         EXPECT_EQ(selectd_column_id, reader.TEST_get_selected_column_id_list());
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1742,13 +1794,16 @@ TEST_F(OrcChunkReaderTest, TestReadStructUnorderedField) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         std::vector<bool> selectd_column_id = {true, true, true, true, false};
         EXPECT_EQ(selectd_column_id, reader.TEST_get_selected_column_id_list());
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1797,13 +1852,16 @@ TEST_F(OrcChunkReaderTest, TestReadStructCaseSensitiveField) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         std::vector<bool> selectd_column_id = {true, true, true, false, true};
         EXPECT_EQ(selectd_column_id, reader.TEST_get_selected_column_id_list());
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -1929,6 +1987,9 @@ TEST_F(OrcChunkReaderTest, TestReadStructArrayMap) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         std::vector<bool> selectd_column_id = {true, true, true, true, true, true, true,
                                                true, true, true, true, true, true};
@@ -1936,7 +1997,7 @@ TEST_F(OrcChunkReaderTest, TestReadStructArrayMap) {
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -2008,6 +2069,9 @@ TEST_F(OrcChunkReaderTest, TestReadStructArrayMap) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         DCHECK(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         std::vector<bool> selectd_column_id = {true, true, true, true, true,  true, true,
                                                true, true, true, true, false, true};
@@ -2015,7 +2079,7 @@ TEST_F(OrcChunkReaderTest, TestReadStructArrayMap) {
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -2075,6 +2139,9 @@ TEST_F(OrcChunkReaderTest, TestReadStructArrayMap) {
         if (!st.ok()) {
             std::cout << st.message() << std::endl;
         }
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         std::vector<bool> selectd_column_id = {true, false, false, false, false, false, false,
                                                true, true,  true,  false, false, false};
@@ -2082,7 +2149,7 @@ TEST_F(OrcChunkReaderTest, TestReadStructArrayMap) {
 
         st = reader.read_next();
         DCHECK(st.ok()) << st.message();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         DCHECK(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         DCHECK(st.ok()) << st.message();
@@ -2116,10 +2183,13 @@ TEST_F(OrcChunkReaderTest, TestOrcIcebergPositionDelete) {
     auto input_stream = orc::readLocalFile(input_orc_file);
     Status st = reader.init(std::move(input_stream));
     DCHECK(st.ok()) << st.message();
+    if (config::enable_orc_mem_copy_optimization) {
+        reader.init_chunk();
+    }
 
     st = reader.read_next();
     DCHECK(st.ok()) << st.message();
-    ChunkPtr ckptr = reader.create_chunk();
+    ChunkPtr ckptr = reader.create_chunk_ut();
     DCHECK(ckptr != nullptr);
     st = reader.fill_chunk(&ckptr);
     DCHECK(st.ok()) << st.message();
@@ -2160,10 +2230,13 @@ TEST_F(OrcChunkReaderTest, TestTypeMismatched) {
     auto input_stream = orc::readLocalFile(input_orc_file);
     Status st = reader.init(std::move(input_stream));
     DCHECK(st.ok()) << st.message();
+    if (config::enable_orc_mem_copy_optimization) {
+        reader.init_chunk();
+    }
 
     st = reader.read_next();
     DCHECK(st.ok()) << st.message();
-    ChunkPtr ckptr = reader.create_chunk();
+    ChunkPtr ckptr = reader.create_chunk_ut();
     DCHECK(ckptr != nullptr);
     st = reader.fill_chunk(&ckptr);
     DCHECK(st.ok()) << st.message();
@@ -2213,10 +2286,13 @@ TEST_F(OrcChunkReaderTest, TestTypeMismatchedString2Double) {
     auto input_stream = orc::readLocalFile(input_orc_file);
     Status st = reader.init(std::move(input_stream));
     DCHECK(st.ok()) << st.message();
+    if (config::enable_orc_mem_copy_optimization) {
+        reader.init_chunk();
+    }
 
     st = reader.read_next();
     DCHECK(st.ok()) << st.message();
-    ChunkPtr ckptr = reader.create_chunk();
+    ChunkPtr ckptr = reader.create_chunk_ut();
     DCHECK(ckptr != nullptr);
     st = reader.fill_chunk(&ckptr);
     DCHECK(st.ok()) << st.message();
@@ -2344,10 +2420,13 @@ TEST_F(OrcChunkReaderTest, TestReadTimeColumn) {
         auto input_stream = orc::readLocalFile(input_orc_file);
         Status st = reader.init(std::move(input_stream));
         EXPECT_TRUE(st.ok());
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
         EXPECT_TRUE(st.ok());
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         EXPECT_TRUE(ckptr != nullptr);
         st = reader.fill_chunk(&ckptr);
         EXPECT_TRUE(st.ok());
@@ -2378,9 +2457,12 @@ TEST_F(OrcChunkReaderTest, DatetimeMicrosecond) {
         OrcChunkReader reader(_runtime_state->chunk_size(), src_slot_descriptors);
         auto input_stream = orc::readLocalFile(input_orc_file);
         EXPECT_OK(reader.init(std::move(input_stream)));
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         EXPECT_OK(reader.read_next());
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         EXPECT_TRUE(ckptr != nullptr);
         EXPECT_OK(reader.fill_chunk(&ckptr));
         ChunkPtr result = reader.cast_chunk(&ckptr);
@@ -2868,9 +2950,12 @@ TEST_F(OrcChunkReaderTest, TestColumnMismatched) {
                 ORC_UNIQUE_PTR<orc::InputStream>(new MemoryInputStream(buffer.getData(), buffer.getLength()));
         Status st = reader.init(std::move(input_stream), nullptr);
         ASSERT_TRUE(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         st = reader.read_next();
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         st = reader.fill_chunk(&ckptr);
         ASSERT_TRUE(st.ok());
         ChunkPtr result = reader.cast_chunk(&ckptr);
@@ -3052,9 +3137,12 @@ TEST_F(OrcChunkReaderTest, TestORCIntToSRFloat) {
                 ORC_UNIQUE_PTR<orc::InputStream>(new MemoryInputStream(buffer.getData(), buffer.getLength()));
         Status st = reader.init(std::move(input_stream), nullptr);
         ASSERT_TRUE(st.ok()) << st.message();
+        if (config::enable_orc_mem_copy_optimization) {
+            reader.init_chunk();
+        }
 
         EXPECT_OK(reader.read_next());
-        ChunkPtr ckptr = reader.create_chunk();
+        ChunkPtr ckptr = reader.create_chunk_ut();
         EXPECT_TRUE(ckptr != nullptr);
         EXPECT_OK(reader.fill_chunk(&ckptr));
         ChunkPtr result = reader.cast_chunk(&ckptr);

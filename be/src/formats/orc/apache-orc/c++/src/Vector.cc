@@ -35,6 +35,7 @@
 
 #include "orc/Vector.hh"
 
+#include <cstdint>
 #include <iostream>
 #include <sstream>
 
@@ -71,7 +72,8 @@ bool ColumnVectorBatch::hasVariableLength() {
     return false;
 }
 
-void ColumnVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void ColumnVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
+    resize(f_size);
     notNull.filter(f_data, f_size, true_size);
     numElements = true_size;
     // if there is no null, then after selection, there is still no null.
@@ -120,7 +122,7 @@ void LongVectorBatch::clear() {
 
 #define DO_FILTER_FIELD(field) (field).filter(f_data, f_size, true_size)
 
-void LongVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void LongVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
     ColumnVectorBatch::filter(f_data, f_size, true_size);
     DO_FILTER_FIELD(data);
 }
@@ -159,7 +161,7 @@ uint64_t DoubleVectorBatch::getMemoryUsage() {
     return ColumnVectorBatch::getMemoryUsage() + static_cast<uint64_t>(data.capacity() * sizeof(double));
 }
 
-void DoubleVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void DoubleVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
     ColumnVectorBatch::filter(f_data, f_size, true_size);
     DO_FILTER_FIELD(data);
 }
@@ -190,13 +192,14 @@ void EncodedStringVectorBatch::resize(uint64_t cap) {
     }
 }
 
-StringVectorBatch::StringVectorBatch(uint64_t _capacity, MemoryPool& pool)
+StringVectorBatch::StringVectorBatch(uint64_t _capacity, MemoryPool& pool, char* buffer, starrocks::Bytes* bytes)
         : ColumnVectorBatch(_capacity, pool),
           data(pool, _capacity),
           length(pool, _capacity),
-          blob(pool),
+          blob(pool, 0, buffer, bytes),
           codes(pool, _capacity),
-          use_codes(false) {
+          use_dict(false),
+          has_filtered(false) {
     // PASS
 }
 
@@ -227,16 +230,22 @@ uint64_t StringVectorBatch::getMemoryUsage() {
            static_cast<uint64_t>(data.capacity() * sizeof(char*) + length.capacity() * sizeof(int64_t));
 }
 
-void StringVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void StringVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
     ColumnVectorBatch::filter(f_data, f_size, true_size);
+    if (on_lazy_load && !use_dict && !has_filtered) {
+        has_filtered = true;
+        for (uint32_t i = 0; i < f_size; ++i) {
+            data[i] = reinterpret_cast<char*>(static_cast<uintptr_t>(i));
+        }
+    }
     DO_FILTER_FIELD(data);
     DO_FILTER_FIELD(length);
-    if (use_codes) {
+    if (use_dict) {
         DO_FILTER_FIELD(codes);
     }
 }
 
-void EncodedStringVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void EncodedStringVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
     StringVectorBatch::filter(f_data, f_size, true_size);
     DO_FILTER_FIELD(index);
 }
@@ -289,10 +298,10 @@ bool StructVectorBatch::hasVariableLength() {
     return false;
 }
 
-void StructVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void StructVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
     ColumnVectorBatch::filter(f_data, f_size, true_size);
     for (ColumnVectorBatch* cvb : fields) {
-        cvb->filter(f_data, f_size, true_size);
+        cvb->filter(f_data, f_size, true_size, on_lazy_load);
     }
 }
 
@@ -310,7 +319,7 @@ void StructVectorBatch::filterOnFields(uint8_t* f_data, uint32_t f_size, uint32_
     }
     for (int p : positions) {
         ColumnVectorBatch* cvb = fields[p];
-        cvb->filter(f_data, f_size, true_size);
+        cvb->filter(f_data, f_size, true_size, onLazyLoad);
     }
 }
 
@@ -369,7 +378,7 @@ uint32_t build_filter_on_offsets(uint8_t* f_data, uint32_t f_size, DataBuffer<in
     return static_cast<uint32_t>(true_size);
 }
 
-void ListVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void ListVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
     ColumnVectorBatch::filter(f_data, f_size, true_size);
     std::vector<uint8_t> p;
     uint32_t true_count = build_filter_on_offsets(f_data, f_size, offsets, &p);
@@ -415,7 +424,7 @@ bool MapVectorBatch::hasVariableLength() {
     return true;
 }
 
-void MapVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void MapVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
     ColumnVectorBatch::filter(f_data, f_size, true_size);
     std::vector<uint8_t> p;
     uint32_t true_count = build_filter_on_offsets(f_data, f_size, offsets, &p);
@@ -487,7 +496,7 @@ bool UnionVectorBatch::hasVariableLength() {
     return false;
 }
 
-void UnionVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void UnionVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
     throw std::logic_error("UnionVectorBatch::filter not supported");
 }
 
@@ -523,7 +532,7 @@ uint64_t Decimal64VectorBatch::getMemoryUsage() {
            static_cast<uint64_t>((values.capacity() + readScales.capacity()) * sizeof(int64_t));
 }
 
-void Decimal64VectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void Decimal64VectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
     ColumnVectorBatch::filter(f_data, f_size, true_size);
     DO_FILTER_FIELD(values);
 }
@@ -560,7 +569,7 @@ uint64_t Decimal128VectorBatch::getMemoryUsage() {
            static_cast<uint64_t>(values.capacity() * sizeof(Int128) + readScales.capacity() * sizeof(int64_t));
 }
 
-void Decimal128VectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void Decimal128VectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
     ColumnVectorBatch::filter(f_data, f_size, true_size);
     DO_FILTER_FIELD(values);
 }
@@ -622,7 +631,7 @@ uint64_t TimestampVectorBatch::getMemoryUsage() {
            static_cast<uint64_t>((data.capacity() + nanoseconds.capacity()) * sizeof(int64_t));
 }
 
-void TimestampVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) {
+void TimestampVectorBatch::filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load) {
     ColumnVectorBatch::filter(f_data, f_size, true_size);
     DO_FILTER_FIELD(data);
     DO_FILTER_FIELD(nanoseconds);

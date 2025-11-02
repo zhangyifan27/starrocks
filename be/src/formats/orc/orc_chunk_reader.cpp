@@ -25,6 +25,7 @@
 #include "cctz/time_zone.h"
 #include "column/array_column.h"
 #include "column/vectorized_fwd.h"
+#include "common/config.h"
 #include "exprs/cast_expr.h"
 #include "exprs/literal.h"
 #include "formats/orc/orc_mapping.h"
@@ -446,6 +447,19 @@ Status OrcChunkReader::read_next(orc::RowReader::ReadPosition* pos) {
     if (_batch == nullptr) {
         _batch = _row_reader->createRowBatch(_read_chunk_size);
     }
+    if (config::enable_orc_mem_copy_optimization) {
+        if (!has_lazy_load_context()) {
+            _row_reader->bindSRChunkToRowBatch(_batch.get(), _chunk, &_column_readers, _root_mapping.get(),
+                                               &_src_slot_descriptors, nullptr);
+        } else {
+            _row_reader->bindSRChunkToRowBatch(_batch.get(), _chunk, &_column_readers, _root_mapping.get(),
+                                               &_lazy_load_ctx->active_load_slots,
+                                               &_lazy_load_ctx->active_load_indices);
+            _row_reader->bindSRChunkToRowBatch(_batch.get(), _lazy_chunk, &_column_readers, _root_mapping.get(),
+                                               &_lazy_load_ctx->lazy_load_slots, &_lazy_load_ctx->lazy_load_indices);
+        }
+    }
+
     try {
         if (!_row_reader->next(*_batch, pos)) {
             return Status::EndOfFile("");
@@ -583,6 +597,22 @@ StatusOr<ChunkPtr> OrcChunkReader::_cast_chunk(ChunkPtr* chunk,
 ChunkPtr OrcChunkReader::create_chunk() {
     return _create_chunk(_src_slot_descriptors, nullptr);
 }
+ChunkPtr OrcChunkReader::create_chunk_ut() {
+    if (config::enable_orc_mem_copy_optimization) {
+        return _chunk;
+    }
+    return _create_chunk(_src_slot_descriptors, nullptr);
+}
+void OrcChunkReader::init_chunk() {
+    _chunk.reset();
+    _lazy_chunk.reset();
+    if (!has_lazy_load_context()) {
+        _chunk = create_chunk();
+    } else {
+        _chunk = _create_chunk(_lazy_load_ctx->active_load_slots, &_lazy_load_ctx->active_load_indices);
+        _lazy_chunk = _create_chunk(_lazy_load_ctx->lazy_load_slots, &_lazy_load_ctx->lazy_load_indices);
+    }
+}
 Status OrcChunkReader::fill_chunk(ChunkPtr* chunk) {
     return _fill_chunk(chunk, _src_slot_descriptors, nullptr);
 }
@@ -592,13 +622,23 @@ StatusOr<ChunkPtr> OrcChunkReader::cast_chunk_checked(ChunkPtr* chunk) {
 }
 
 StatusOr<ChunkPtr> OrcChunkReader::get_chunk() {
-    ChunkPtr ptr = create_chunk();
+    ChunkPtr ptr = nullptr;
+    if (config::enable_orc_mem_copy_optimization) {
+        ptr = _chunk;
+    } else {
+        ptr = create_chunk();
+    }
     RETURN_IF_ERROR(fill_chunk(&ptr));
     return cast_chunk_checked(&ptr);
 }
 
 StatusOr<ChunkPtr> OrcChunkReader::get_active_chunk() {
-    ChunkPtr ptr = _create_chunk(_lazy_load_ctx->active_load_slots, &_lazy_load_ctx->active_load_indices);
+    ChunkPtr ptr = nullptr;
+    if (config::enable_orc_mem_copy_optimization) {
+        ptr = _chunk;
+    } else {
+        ptr = _create_chunk(_lazy_load_ctx->active_load_slots, &_lazy_load_ctx->active_load_indices);
+    }
     RETURN_IF_ERROR(_fill_chunk(&ptr, _lazy_load_ctx->active_load_slots, &_lazy_load_ctx->active_load_indices));
     return _cast_chunk(&ptr, _lazy_load_ctx->active_load_slots, &_lazy_load_ctx->active_load_indices);
 }
@@ -612,7 +652,12 @@ void OrcChunkReader::lazy_filter_on_cvb(Filter* filter) {
 }
 
 StatusOr<ChunkPtr> OrcChunkReader::get_lazy_chunk() {
-    ChunkPtr ptr = _create_chunk(_lazy_load_ctx->lazy_load_slots, &_lazy_load_ctx->lazy_load_indices);
+    ChunkPtr ptr = nullptr;
+    if (config::enable_orc_mem_copy_optimization) {
+        ptr = _lazy_chunk;
+    } else {
+        ptr = _create_chunk(_lazy_load_ctx->lazy_load_slots, &_lazy_load_ctx->lazy_load_indices);
+    }
     RETURN_IF_ERROR(_fill_chunk(&ptr, _lazy_load_ctx->lazy_load_slots, &_lazy_load_ctx->lazy_load_indices));
     return _cast_chunk(&ptr, _lazy_load_ctx->lazy_load_slots, &_lazy_load_ctx->lazy_load_indices);
 }

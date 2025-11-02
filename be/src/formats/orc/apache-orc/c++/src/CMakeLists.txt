@@ -255,6 +255,7 @@ configure_file (
   endif(BUILD_LIBHDFSPP)
   
   add_library (orc STATIC ${SOURCE_FILES})
+  target_compile_options(orc PRIVATE -fno-strict-aliasing)
   
   if (NOT DEFINED ENV{STARROCKS_HOME}) # starrocks: no need to link liborc.a with other libs and install
   

@@ -615,6 +615,9 @@ StatusOr<size_t> HdfsOrcScanner::_do_get_next(ChunkPtr* chunk) {
         bool has_used_dict_filter = false;
         ColumnPtr row_delete_filter = BooleanColumn::create();
         {
+            if (config::enable_orc_mem_copy_optimization) {
+                _orc_reader->init_chunk();
+            }
             SCOPED_RAW_TIMER(&_app_stats.column_read_ns);
             RETURN_IF_ERROR(_orc_reader->read_next(&position));
 
@@ -710,6 +713,14 @@ StatusOr<size_t> HdfsOrcScanner::_do_get_next(ChunkPtr* chunk) {
 
         {
             SCOPED_RAW_TIMER(&_app_stats.column_read_ns);
+            // To avoid copying data from original cvb to filtered chunk, we perform filtering on the cvb first,
+            // which allows us to completely skip the copy operation during ORC reading
+            if (config::enable_orc_mem_copy_optimization) {
+                if (has_used_dict_filter) {
+                    _orc_reader->lazy_filter_on_cvb(&_dict_filter);
+                }
+                _orc_reader->lazy_filter_on_cvb(&_chunk_filter);
+            }
             RETURN_IF_ERROR(_orc_reader->lazy_seek_to(position.row_in_stripe));
             RETURN_IF_ERROR(_orc_reader->lazy_read_next(read_num_values));
         }

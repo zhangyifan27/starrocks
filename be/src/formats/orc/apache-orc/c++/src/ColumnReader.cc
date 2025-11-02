@@ -122,7 +122,7 @@ void ColumnReader::next(ColumnVectorBatch& rowBatch, uint64_t numValues, char* i
     } else if (incomingMask) {
         // If we don't have a notNull stream, copy the incomingMask
         rowBatch.hasNulls = true;
-        memcpy(rowBatch.notNull.data(), incomingMask, numValues);
+        memcpy_inlined(rowBatch.notNull.data(), incomingMask, numValues);
         return;
     }
     rowBatch.hasNulls = false;
@@ -489,7 +489,7 @@ private:
             for (;;) {
                 size_t bufSize = bufferSize();
                 size_t readSize = std::min(bufSize, needSize);
-                memcpy(sbdata, bufferPointer, readSize);
+                memcpy_inlined(sbdata, bufferPointer, readSize);
                 bufferForward(readSize);
                 sbdata += readSize;
                 needSize -= readSize;
@@ -511,7 +511,7 @@ private:
         localDoubleBuffer.reserve(n);
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
-        memcpy(localDoubleBuffer.data(), data, n * 8);
+        memcpy_inlined(localDoubleBuffer.data(), data, n * 8);
 #else
         for (int i = 0; i < n; i++) {
             int64_t bits = 0;
@@ -519,7 +519,7 @@ private:
                 bits |= static_cast<int64_t>(uint8_t(data[j])) << (j * 8);
             }
             data += 8;
-            memcpy(localDoubleBuffer.data() + i, &bits, 8);
+            memcpy_inlined(localDoubleBuffer.data() + i, &bits, 8);
         }
 #endif
     }
@@ -538,7 +538,7 @@ private:
 #endif
             data += 4;
             float t = 0;
-            memcpy(&t, &bits, sizeof(t));
+            memcpy_inlined(&t, &bits, sizeof(t));
             localDoubleBuffer[i] = t;
         }
     }
@@ -569,7 +569,7 @@ private:
         }
         bufferPointer += 8;
         double result;
-        memcpy(&result, &bits, sizeof(result));
+        memcpy_inlined(&result, &bits, sizeof(result));
         return result;
     }
 
@@ -581,7 +581,7 @@ private:
         }
         bufferPointer += 4;
         float result;
-        memcpy(&result, &bits, sizeof(result));
+        memcpy_inlined(&result, &bits, sizeof(result));
         return result;
     }
 };
@@ -717,7 +717,7 @@ void DoubleColumnReader::next(ColumnVectorBatch& rowBatch, uint64_t numValues, c
             }
         }
     } else {
-        memcpy(outArray, localDoubleBuffer.data(), sizeof(outArray[0]) * numValues);
+        memcpy_inlined(outArray, localDoubleBuffer.data(), sizeof(outArray[0]) * numValues);
     }
 }
 
@@ -734,7 +734,7 @@ void readFully(char* buffer, int64_t bufferSize, SeekableInputStream* stream) {
         if (posn + length > bufferSize) {
             throw ParseError("Corrupt dictionary blob in StringDictionaryColumn");
         }
-        memcpy(buffer + posn, chunk, static_cast<size_t>(length));
+        memcpy_inlined(buffer + posn, chunk, static_cast<size_t>(length));
         posn += length;
     }
 }
@@ -836,13 +836,13 @@ void StringDictionaryColumnReader::next(ColumnVectorBatch& rowBatch, uint64_t nu
     // update the notNull from the parent class
     notNull = rowBatch.hasNulls ? rowBatch.notNull.data() : nullptr;
     auto& byteBatch = dynamic_cast<StringVectorBatch&>(rowBatch);
+    byteBatch.use_dict = true;
     char* blob = dictionary->dictionaryBlob.data();
     int64_t* dictionaryOffsets = dictionary->dictionaryOffset.data();
     char** outputStarts = byteBatch.data.data();
     int64_t* outputLengths = byteBatch.length.data();
     rle->next(outputLengths, numValues, notNull);
     uint64_t dictionaryCount = dictionary->dictionaryOffset.size() - 1;
-    byteBatch.use_codes = true;
     if (byteBatch.codes.capacity() < numValues) {
         byteBatch.codes.reserve(numValues);
     }
@@ -901,6 +901,7 @@ private:
     std::unique_ptr<SeekableInputStream> blobStream;
     const char* lastBuffer;
     size_t lastBufferLength;
+    bool typeIsChar;
 
     /**
      * Compute the total length of the values.
@@ -919,6 +920,8 @@ public:
 
     void next(ColumnVectorBatch& rowBatch, uint64_t numValues, char* notNull) override;
 
+    void lazyLoadNext(ColumnVectorBatch& rowBatch, uint64_t numValues, char* notNull) override;
+
     void seekToRowGroup(PositionProviderMap* positions) override;
 };
 
@@ -932,6 +935,7 @@ StringDirectColumnReader::StringDirectColumnReader(const Type& type, StripeStrea
     if (blobStream == nullptr) throw ParseError("DATA stream not found in StringDirectColumn");
     lastBuffer = nullptr;
     lastBufferLength = 0;
+    typeIsChar = (type.getKind() == CHAR);
 }
 
 StringDirectColumnReader::~StringDirectColumnReader() {
@@ -1003,11 +1007,13 @@ void StringDirectColumnReader::next(ColumnVectorBatch& rowBatch, uint64_t numVal
     // Load data from the blob stream into our buffer until we have enough
     // to get the rest directly out of the stream's buffer.
     size_t bytesBuffered = 0;
-    byteBatch.blob.resize(totalLength);
-    char* ptr = byteBatch.blob.data();
-    byteBatch.use_codes = false;
+    size_t prevBytesSize = byteBatch.blob.size();
+
+    byteBatch.blob.resize(prevBytesSize + totalLength);
+    char* ptr = byteBatch.blob.data() + prevBytesSize;
+    byteBatch.use_dict = false;
     while (bytesBuffered + lastBufferLength < totalLength) {
-        memcpy(ptr + bytesBuffered, lastBuffer, lastBufferLength);
+        memcpy_inlined(ptr + bytesBuffered, lastBuffer, lastBufferLength);
         bytesBuffered += lastBufferLength;
         const void* readBuffer;
         int readLength;
@@ -1020,29 +1026,117 @@ void StringDirectColumnReader::next(ColumnVectorBatch& rowBatch, uint64_t numVal
 
     if (bytesBuffered < totalLength) {
         size_t moreBytes = totalLength - bytesBuffered;
-        memcpy(ptr + bytesBuffered, lastBuffer, moreBytes);
+        memcpy_inlined(ptr + bytesBuffered, lastBuffer, moreBytes);
         lastBuffer += moreBytes;
         lastBufferLength -= moreBytes;
     }
 
     size_t filledSlots = 0;
-    ptr = byteBatch.blob.data();
-    if (notNull) {
-        while (filledSlots < numValues) {
-            startPtr[filledSlots] = const_cast<char*>(ptr);
-            if (notNull[filledSlots]) {
-                ptr += lengthPtr[filledSlots];
-            } else {
-                lengthPtr[filledSlots] = 0;
+    ptr = byteBatch.blob.data() + prevBytesSize;
+    // if blob has bound with chunk data, it's not necessary to fill startPtr for memcpy_inlined later.
+    if (typeIsChar || !byteBatch.blob.is_bound()) {
+        if (notNull) {
+            while (filledSlots < numValues) {
+                startPtr[filledSlots] = const_cast<char*>(ptr);
+                if (notNull[filledSlots]) {
+                    ptr += lengthPtr[filledSlots];
+                } else {
+                    lengthPtr[filledSlots] = 0;
+                }
+                filledSlots += 1;
             }
-            filledSlots += 1;
+        } else {
+            while (filledSlots < numValues) {
+                startPtr[filledSlots] = const_cast<char*>(ptr);
+                ptr += lengthPtr[filledSlots];
+                filledSlots += 1;
+            }
         }
-    } else {
-        while (filledSlots < numValues) {
-            startPtr[filledSlots] = const_cast<char*>(ptr);
-            ptr += lengthPtr[filledSlots];
-            filledSlots += 1;
+    }
+}
+
+void StringDirectColumnReader::lazyLoadNext(ColumnVectorBatch& rowBatch, uint64_t numValues, char* notNull) {
+    ColumnReader::next(rowBatch, numValues, notNull);
+    // update the notNull from the parent class
+    notNull = rowBatch.hasNulls ? rowBatch.notNull.data() : nullptr;
+    auto& byteBatch = dynamic_cast<StringVectorBatch&>(rowBatch);
+    char** startPtr = byteBatch.data.data();
+    int64_t* lengthPtr = byteBatch.length.data();
+
+    // read the length vector
+    lengthRle->next(lengthPtr, numValues, notNull);
+
+    std::vector<int> needIdx(byteBatch.data.size(), 0);
+    int slotIdx = 0;
+    for (size_t filledSlots = 0; filledSlots < byteBatch.data.size(); ++filledSlots) {
+        slotIdx = static_cast<int>(reinterpret_cast<uintptr_t>(startPtr[filledSlots]));
+        needIdx[filledSlots] = slotIdx;
+    }
+
+    int prevPos = 0;
+    size_t curOff = 0;
+    size_t totalNeedLen = 0;
+    std::vector<size_t> lengths(byteBatch.data.size(), 0);
+    std::vector<size_t> offsets(byteBatch.data.size(), 0);
+    for (size_t i = 0; i < offsets.size(); ++i) {
+        int pos = needIdx[i];
+        for (; prevPos < pos; ++prevPos) {
+            curOff += lengthPtr[prevPos];
         }
+        offsets[i] = curOff;
+        lengths[i] = lengthPtr[pos];
+        prevPos = pos;
+        totalNeedLen += lengthPtr[pos];
+    }
+
+    // Load data from the blob stream into our buffer until we have enough
+    // to get the rest directly out of the stream's buffer.
+    size_t prevBytesSize = byteBatch.blob.size();
+
+    byteBatch.blob.resize(prevBytesSize + totalNeedLen);
+    char* ptr = byteBatch.blob.data() + prevBytesSize;
+    byteBatch.use_dict = false;
+
+    size_t copied = 0;
+    size_t bytesHandled = 0;
+    auto blobRead = [&]() {
+        bytesHandled += lastBufferLength;
+        const void* readBuffer;
+        int readLength;
+        if (!blobStream->Next(&readBuffer, &readLength)) {
+            throw ParseError("failed to read in StringDirectColumnReader.next");
+        }
+        lastBuffer = static_cast<const char*>(readBuffer);
+        lastBufferLength = static_cast<size_t>(readLength);
+    };
+
+    auto copySingleString = [&](uint64_t off, uint64_t len) {
+        while (bytesHandled + lastBufferLength < off) {
+            blobRead();
+        }
+
+        uint64_t relOff = off - bytesHandled;
+        size_t canCopy = std::min(len, lastBufferLength - relOff);
+        memcpy_inlined(ptr + copied, lastBuffer + relOff, canCopy);
+        copied += canCopy;
+        len -= canCopy;
+        while (len > 0) {
+            blobRead();
+            canCopy = std::min(len, lastBufferLength);
+            memcpy_inlined(ptr + copied, lastBuffer, canCopy);
+            copied += canCopy;
+            len -= canCopy;
+        }
+    };
+
+    for (size_t offIdx = 0; offIdx < offsets.size(); ++offIdx) {
+        copySingleString(offsets[offIdx], lengthPtr[needIdx[offIdx]]);
+    }
+
+    for (size_t filledSlots = 0; filledSlots < byteBatch.data.size(); ++filledSlots) {
+        startPtr[filledSlots] = const_cast<char*>(ptr);
+        ptr += lengthPtr[needIdx[filledSlots]];
+        lengthPtr[filledSlots] = lengths[filledSlots];
     }
 }
 

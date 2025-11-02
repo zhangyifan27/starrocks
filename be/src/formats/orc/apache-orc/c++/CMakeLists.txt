@@ -16,11 +16,13 @@ if (DEFINED ENV{STARROCKS_HOME}) # starrocks: orc prioritize project search path
 include_directories (
   BEFORE
   ${CMAKE_CURRENT_BINARY_DIR}/include
+  ${STARROCKS_HOME}/be/src
   "include"
   )
 else()
 include_directories (
   ${CMAKE_CURRENT_BINARY_DIR}/include
+  ${STARROCKS_HOME}/be/src
   "include"
   )
 endif()

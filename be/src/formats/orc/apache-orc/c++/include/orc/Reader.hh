@@ -49,7 +49,15 @@
 #include <set>
 #include <string>
 #include <vector>
+
+#include "column/vectorized_fwd.h"
+#include "runtime/descriptors.h"
 // clang-format on
+
+namespace starrocks {
+class OrcMapping;
+class ORCColumnReader;
+}
 
 namespace orc {
 
@@ -613,6 +621,12 @@ public:
      * @return a new ColumnVectorBatch to read into
      */
     virtual ORC_UNIQUE_PTR<ColumnVectorBatch> createRowBatch(uint64_t size) const = 0;
+
+    virtual void bindSRChunkToRowBatch(ColumnVectorBatch* batch, starrocks::ChunkPtr chunk,
+                                       const std::vector<ORC_UNIQUE_PTR<starrocks::ORCColumnReader>>* columnReaders,
+                                       starrocks::OrcMapping* rootMapping,
+                                       const std::vector<starrocks::SlotDescriptor*>* srcSlotDescriptors,
+                                       const std::vector<int>* indices) const = 0;
 
     /**
      * Read the next row batch from the current position.

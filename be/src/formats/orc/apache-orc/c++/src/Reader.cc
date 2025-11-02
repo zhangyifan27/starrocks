@@ -50,6 +50,18 @@
 #include "Statistics.hh"
 #include "StripeStream.hh"
 #include "Utils.hh"
+#include "column/array_column.h"
+#include "column/chunk.h"
+#include "column/column_helper.h"
+#include "column/struct_column.h"
+#include "column/vectorized_fwd.h"
+#include "formats/orc/column_reader.h"
+#include "formats/orc/orc_mapping.h"
+#include "gutil/casts.h"
+#include "orc/Vector.hh"
+#include "runtime/descriptors.h"
+#include "runtime/types.h"
+#include "types/logical_type.h"
 #include "wrap/coded-stream-wrapper.h"
 
 namespace orc {
@@ -1434,6 +1446,154 @@ std::unique_ptr<ColumnVectorBatch> RowReaderImpl::createRowBatch(uint64_t capaci
     return getSelectedType().createRowBatch(capacity, *contents->pool, enableEncodedBlock);
 }
 
+void RowReaderImpl::bindElementRecursively(ColumnVectorBatch* cvb, starrocks::ColumnPtr& col,
+                                           const starrocks::TypeDescriptor& type, starrocks::OrcMapping* mapping,
+                                           starrocks::ORCColumnReader* reader, const std::vector<int>* indices) const {
+    auto* complexReader = dynamic_cast<starrocks::ComplexColumnReader*>(reader);
+    switch (type.type) {
+    case starrocks::LogicalType::TYPE_STRUCT: {
+        auto* svb = down_cast<StructVectorBatch*>(cvb);
+        auto* structCol = down_cast<starrocks::StructColumn*>(starrocks::ColumnHelper::get_data_column(col.get()));
+        bindSRColumnToRowBatch(svb, structCol->fields_column(), &complexReader->child_readers(), mapping,
+                               &type.children, indices);
+        break;
+    }
+    case starrocks::LogicalType::TYPE_ARRAY: {
+        auto* lvb = down_cast<ListVectorBatch*>(cvb);
+        auto* arrayCol = down_cast<starrocks::ArrayColumn*>(starrocks::ColumnHelper::get_data_column(col.get()));
+        auto* nestedMapping = mapping->get_orc_type_child_mapping(0).orc_mapping.get();
+        bindElementRecursively(lvb->elements.get(), arrayCol->elements_column(), type.children[0], nestedMapping,
+                               complexReader->child_readers().at(0).get(), indices);
+        break;
+    }
+    case starrocks::LogicalType::TYPE_MAP: {
+        auto* mvb = down_cast<MapVectorBatch*>(cvb);
+        auto* mapCol = down_cast<starrocks::MapColumn*>(starrocks::ColumnHelper::get_data_column(col.get()));
+        auto* keyMapping = mapping->get_orc_type_child_mapping(0).orc_mapping.get();
+        auto* valMapping = mapping->get_orc_type_child_mapping(1).orc_mapping.get();
+        bindElementRecursively(mvb->keys.get(), mapCol->keys_column(), type.children[0], keyMapping,
+                               complexReader->child_readers().at(0).get(), indices);
+        bindElementRecursively(mvb->elements.get(), mapCol->values_column(), type.children[1], valMapping,
+                               complexReader->child_readers().at(1).get(), indices);
+        break;
+    }
+    default: {
+        if (auto* svb = dynamic_cast<StringVectorBatch*>(cvb)) {
+            auto* values = starrocks::ColumnHelper::cast_to_raw<starrocks::TYPE_VARCHAR>(
+                    starrocks::ColumnHelper::get_data_column(col.get()));
+            auto* vb = values->get_bytes_ptr();
+            if (values == nullptr || vb == nullptr) {
+                throw std::runtime_error("invalid chunk data");
+            }
+            svb->blob.bind(reinterpret_cast<char*>(vb->data()), reinterpret_cast<starrocks::Bytes*>(vb));
+        }
+        break;
+    }
+    }
+}
+
+void RowReaderImpl::bindSRColumnToRowBatch(ColumnVectorBatch* batch, starrocks::Columns columns,
+                                           const std::vector<ORC_UNIQUE_PTR<starrocks::ORCColumnReader>>* columnReaders,
+                                           starrocks::OrcMapping* rootMapping,
+                                           const std::vector<starrocks::TypeDescriptor>* srcTypeDescriptors,
+                                           const std::vector<int>* indices) const {
+    int columnSize = srcTypeDescriptors->size();
+    const auto& batchVec = down_cast<StructVectorBatch*>(batch);
+    for (int columnPos = 0; columnPos < columnSize; ++columnPos) {
+        starrocks::TypeDescriptor typeDesc = (*srcTypeDescriptors)[columnPos];
+        ColumnVectorBatch* cvb = nullptr;
+        starrocks::ColumnPtr& col = columns[columnPos];
+        starrocks::OrcMapping* mapping = rootMapping->get_orc_type_child_mapping(columnPos).orc_mapping.get();
+
+        switch (typeDesc.type) {
+        case starrocks::LogicalType::TYPE_STRUCT:
+        case starrocks::LogicalType::TYPE_ARRAY:
+        case starrocks::LogicalType::TYPE_MAP: {
+            auto* columnReader = dynamic_cast<starrocks::ComplexColumnReader*>((*columnReaders)[columnPos].get());
+            cvb = batchVec->fieldsColumnIdMap[columnReader->get_orc_type()->getColumnId()];
+            starrocks::ColumnPtr& col_to_bind =
+                    columnReader->is_nullable() ? down_cast<starrocks::NullableColumn*>(col.get())->data_column() : col;
+            bindElementRecursively(cvb, col_to_bind, typeDesc, mapping, columnReader, indices);
+            break;
+        }
+
+        default: {
+            cvb = batchVec->fieldsColumnIdMap[rootMapping->get_orc_type_child_mapping(columnPos)
+                                                      .orc_type->getColumnId()];
+            StringVectorBatch* svb = nullptr;
+            svb = dynamic_cast<StringVectorBatch*>(cvb);
+            if (svb != nullptr) {
+                auto* values = starrocks::ColumnHelper::cast_to_raw<starrocks::TYPE_VARCHAR>(
+                        starrocks::ColumnHelper::get_data_column(col.get()));
+                auto* vb = values->get_bytes_ptr();
+                if (values == nullptr || vb == nullptr) {
+                    throw std::runtime_error("invalid chunk data");
+                }
+                svb->blob.bind(reinterpret_cast<char*>(vb->data()), reinterpret_cast<starrocks::Bytes*>(vb));
+            }
+            break;
+        }
+        }
+    }
+}
+
+void RowReaderImpl::bindSRChunkToRowBatch(ColumnVectorBatch* batch, starrocks::ChunkPtr chunk,
+                                          const std::vector<ORC_UNIQUE_PTR<starrocks::ORCColumnReader>>* columnReaders,
+                                          starrocks::OrcMapping* rootMapping,
+                                          const std::vector<starrocks::SlotDescriptor*>* srcSlotDescriptors,
+                                          const std::vector<int>* indices) const {
+    int columnSize = srcSlotDescriptors->size();
+    const auto& batchVec = down_cast<StructVectorBatch*>(batch);
+    for (int columnPos = 0; columnPos < columnSize; ++columnPos) {
+        starrocks::SlotDescriptor* slotDesc = (*srcSlotDescriptors)[columnPos];
+        if (slotDesc == nullptr) {
+            continue;
+        }
+        int srcIndex = columnPos;
+        if (indices != nullptr) {
+            srcIndex = (*indices)[columnPos];
+        }
+
+        ColumnVectorBatch* cvb = nullptr;
+        if (rootMapping->contains(srcIndex)) {
+            cvb = batchVec->fieldsColumnIdMap[rootMapping->get_orc_type_child_mapping(srcIndex)
+                                                      .orc_type->getColumnId()];
+        }
+        if (cvb == nullptr) {
+            continue;
+        }
+
+        starrocks::ColumnPtr& col = chunk->get_column_by_slot_id(slotDesc->id());
+        switch (slotDesc->type().type) {
+        case starrocks::LogicalType::TYPE_STRUCT:
+        case starrocks::LogicalType::TYPE_ARRAY:
+        case starrocks::LogicalType::TYPE_MAP: {
+            auto* columnReader = down_cast<starrocks::ComplexColumnReader*>((*columnReaders)[srcIndex].get());
+            starrocks::ColumnPtr& col_to_bind =
+                    columnReader->is_nullable() ? down_cast<starrocks::NullableColumn*>(col.get())->data_column() : col;
+            starrocks::OrcMapping* mapping = rootMapping->get_orc_type_child_mapping(srcIndex).orc_mapping.get();
+            bindElementRecursively(cvb, col_to_bind, slotDesc->type(), mapping, columnReader, indices);
+            break;
+        }
+
+        default: {
+            StringVectorBatch* svb = nullptr;
+            svb = dynamic_cast<StringVectorBatch*>(cvb);
+            if (svb != nullptr) {
+                auto* values = starrocks::ColumnHelper::cast_to_raw<starrocks::TYPE_VARCHAR>(
+                        starrocks::ColumnHelper::get_data_column(col.get()));
+                auto* vb = values->get_bytes_ptr();
+                if (values == nullptr || vb == nullptr) {
+                    throw std::runtime_error("invalid chunk data");
+                }
+                svb->blob.bind(reinterpret_cast<char*>(vb->data()), reinterpret_cast<starrocks::Bytes*>(vb));
+            }
+            break;
+        }
+        }
+    }
+}
+
 void ensureOrcFooter(InputStream* stream, DataBuffer<char>* buffer, uint64_t postscriptLength) {
     const std::string MAGIC("ORC");
     const uint64_t magicLength = MAGIC.length();
@@ -1673,8 +1833,8 @@ Reader::~Reader() {
     // PASS
 }
 
-InputStream::~InputStream(){
-        // PASS
+InputStream::~InputStream() {
+    // PASS
 };
 
 uint64_t InputStream::getNaturalReadSizeAfterSeek() const {

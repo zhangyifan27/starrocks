@@ -204,6 +204,12 @@ private:
 
     void buildIORanges(std::vector<InputStream::IORange>* io_ranges);
 
+    void bindSRColumnToRowBatch(ColumnVectorBatch* batch, starrocks::Columns columns,
+                                const std::vector<ORC_UNIQUE_PTR<starrocks::ORCColumnReader>>* columnReaders,
+                                starrocks::OrcMapping* rootMapping,
+                                const std::vector<starrocks::TypeDescriptor>* srcTypeDescriptors,
+                                const std::vector<int>* indices) const;
+
 public:
     /**
     * Constructor that lets the user specify additional options.
@@ -219,6 +225,16 @@ public:
     const Type& getSelectedType() const override;
 
     std::unique_ptr<ColumnVectorBatch> createRowBatch(uint64_t size) const override;
+
+    void bindElementRecursively(ColumnVectorBatch* cvb, starrocks::ColumnPtr& col,
+                                const starrocks::TypeDescriptor& type, starrocks::OrcMapping* mapping,
+                                starrocks::ORCColumnReader* readers, const std::vector<int>* indices) const;
+
+    void bindSRChunkToRowBatch(ColumnVectorBatch* batch, starrocks::ChunkPtr chunk,
+                               const std::vector<ORC_UNIQUE_PTR<starrocks::ORCColumnReader>>* columnReaders,
+                               starrocks::OrcMapping* rootMapping,
+                               const std::vector<starrocks::SlotDescriptor*>* srcSlotDescriptors,
+                               const std::vector<int>* indices) const override;
 
     bool next(ColumnVectorBatch& data, ReadPosition* pos) override;
     void lazyLoadSeekTo(uint64_t rowInStripe) override;
@@ -240,6 +256,7 @@ public:
     int32_t getForcedScaleOnHive11Decimal() const;
     bool getUseWriterTimezone() const;
     DataBuffer<char>* getSharedBuffer() const;
+
     uint64_t getSkipFileNumber() const override;
     uint64_t getSelectedStripeNumber() const override;
     uint64_t getSelectedStripeSize() const override;
@@ -267,7 +284,7 @@ private:
     void checkOrcVersion();
     void getRowIndexStatistics(const proto::StripeInformation& stripeInfo, uint64_t stripeIndex,
                                const proto::StripeFooter& currentStripeFooter,
-                               std::vector<std::vector<proto::ColumnStatistics> >* indexStats) const;
+                               std::vector<std::vector<proto::ColumnStatistics>>* indexStats) const;
 
     // metadata
     mutable bool isMetadataLoaded;

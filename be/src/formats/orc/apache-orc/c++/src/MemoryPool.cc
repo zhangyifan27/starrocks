@@ -37,7 +37,9 @@
 
 #include <cstdlib>
 #include <cstring>
+#include <stdexcept>
 
+#include "Utils.hh"
 #include "orc/Int128.hh"
 
 namespace orc {
@@ -67,8 +69,13 @@ MemoryPoolImpl::~MemoryPoolImpl() {
 }
 
 template <class T>
-DataBuffer<T>::DataBuffer(MemoryPool& pool, uint64_t newSize)
-        : memoryPool(pool), buf(nullptr), currentSize(0), currentCapacity(0) {
+DataBuffer<T>::DataBuffer(MemoryPool& pool, uint64_t newSize, T* initBuf, starrocks::Bytes* initBytes)
+        : memoryPool(pool),
+          buf(initBuf),
+          currentSize(0),
+          currentCapacity(0),
+          ownMemory(initBytes == nullptr),
+          bytes(initBytes) {
     resize(newSize);
 }
 
@@ -77,7 +84,9 @@ DataBuffer<T>::DataBuffer(DataBuffer<T>&& buffer) noexcept
         : memoryPool(buffer.memoryPool),
           buf(buffer.buf),
           currentSize(buffer.currentSize),
-          currentCapacity(buffer.currentCapacity) {
+          currentCapacity(buffer.currentCapacity),
+          ownMemory(buffer.ownMemory),
+          bytes(buffer.bytes) {
     buffer.buf = nullptr;
     buffer.currentSize = 0;
     buffer.currentCapacity = 0;
@@ -85,6 +94,9 @@ DataBuffer<T>::DataBuffer(DataBuffer<T>&& buffer) noexcept
 
 template <class T>
 DataBuffer<T>::~DataBuffer() {
+    if (!ownMemory) {
+        return;
+    }
     for (uint64_t i = currentSize; i > 0; --i) {
         (buf + i - 1)->~T();
     }
@@ -95,6 +107,11 @@ DataBuffer<T>::~DataBuffer() {
 
 template <class T>
 void DataBuffer<T>::resize(uint64_t newSize) {
+    if (!ownMemory) {
+        // throw std::logic_error("cannot resize a non-owned DataBuffer");
+        bytes->resize(newSize);
+        return;
+    }
     reserve(newSize);
     if (currentSize > newSize) {
         for (uint64_t i = currentSize; i > newSize; --i) {
@@ -110,11 +127,16 @@ void DataBuffer<T>::resize(uint64_t newSize) {
 
 template <class T>
 void DataBuffer<T>::reserve(uint64_t newCapacity) {
+    if (!ownMemory) {
+        // throw std::logic_error("cannot reserve a non-owned DataBuffer");
+        bytes->reserve(newCapacity);
+        return;
+    }
     if (newCapacity > currentCapacity || !buf) {
         if (buf) {
             T* buf_old = buf;
             buf = reinterpret_cast<T*>(memoryPool.malloc(sizeof(T) * newCapacity));
-            memcpy(buf, buf_old, sizeof(T) * currentSize);
+            memcpy_inlined(buf, buf_old, sizeof(T) * currentSize);
             memoryPool.free(reinterpret_cast<char*>(buf_old));
         } else {
             buf = reinterpret_cast<T*>(memoryPool.malloc(sizeof(T) * newCapacity));
@@ -183,17 +205,56 @@ void DataBuffer<T>::filter(const uint8_t* f_data, size_t f_size, size_t true_siz
     currentSize = true_size;
 }
 
+template <class T>
+void DataBuffer<T>::bind(T* _buf, starrocks::Bytes* _bytes) {
+    buf = _buf;
+    bytes = _bytes;
+    ownMemory = false;
+}
+
 // Specializations for char
 
 template <>
+DataBuffer<char>::DataBuffer(MemoryPool& pool, uint64_t newSize, char* initBuf, starrocks::Bytes* _bytes)
+        : memoryPool(pool),
+          buf(initBuf),
+          currentSize(0),
+          currentCapacity(0),
+          ownMemory(_bytes == nullptr),
+          bytes(_bytes) {
+    resize(newSize);
+}
+
+template <>
 DataBuffer<char>::~DataBuffer() {
-    if (buf) {
+    if (buf && ownMemory) {
         memoryPool.free(reinterpret_cast<char*>(buf));
     }
 }
 
 template <>
+char* DataBuffer<char>::data() {
+    if (ownMemory) {
+        return buf;
+    }
+    return reinterpret_cast<char*>(bytes->data());
+}
+
+template <>
+const char* DataBuffer<char>::data() const {
+    if (ownMemory) {
+        return buf;
+    }
+    return reinterpret_cast<const char*>(bytes->data());
+}
+
+template <>
 void DataBuffer<char>::resize(uint64_t newSize) {
+    if (!ownMemory) {
+        // throw std::logic_error("Can't resize a non-owned buffer");
+        bytes->resize(newSize);
+        return;
+    }
     reserve(newSize);
     if (newSize > currentSize) {
         memset(buf + currentSize, 0, newSize - currentSize);
@@ -201,17 +262,76 @@ void DataBuffer<char>::resize(uint64_t newSize) {
     currentSize = newSize;
 }
 
+template <>
+void DataBuffer<char>::filter(const uint8_t* f_data, size_t f_size, size_t true_size) {
+    size_t src = 0;
+    size_t dst = 0;
+    size_t end = src + f_size;
+
+    char* data = buf;
+    if (!ownMemory) {
+        data = reinterpret_cast<char*>(bytes->data());
+    }
+
+#ifdef __AVX2__
+    const int simd_bits = 256;
+    const int batch_nums = simd_bits / (8 * (int)sizeof(uint8_t));
+    __m256i all0 = _mm256_setzero_si256();
+
+    while (src + batch_nums < end) {
+        __m256i f = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(f_data + src));
+        uint32_t mask = _mm256_movemask_epi8(_mm256_cmpgt_epi8(f, all0));
+
+        if (mask == 0) {
+            // all no hit, pass
+        } else if (mask == 0xffffffff) {
+            // all hit, copy all
+            memmove(data + dst, data + src, batch_nums * sizeof(char));
+            dst += batch_nums;
+        } else {
+            // skip not hit row, it's will reduce compare when filter layout is sparse,
+            // like "00010001...", but is ineffective when the filter layout is dense.
+
+            do {
+                uint32_t i = CountTrailingZerosNonZero32(mask);
+                memmove(data + dst, data + src + i, sizeof(char));
+                dst += 1;
+                mask &= ~(1 << i);
+            } while (mask);
+        }
+        src += batch_nums;
+    }
+#endif
+    for (size_t i = src; i < end; ++i) {
+        if (f_data[i]) {
+            *(data + dst) = *(data + i);
+            dst++;
+        }
+    }
+
+    // set current size directly instead of calling resize.
+    // it's noted that currentSize will not be be updated when data is written
+    // and if new size is larger than old size
+    // the larger area will be initialized to 0
+    if (ownMemory) {
+        currentSize = true_size;
+    }
+}
+
 // Specializations for char*
 
 template <>
 DataBuffer<char*>::~DataBuffer() {
-    if (buf) {
+    if (buf && ownMemory) {
         memoryPool.free(reinterpret_cast<char*>(buf));
     }
 }
 
 template <>
 void DataBuffer<char*>::resize(uint64_t newSize) {
+    if (!ownMemory) {
+        throw std::logic_error("Can't resize a non-owned buffer");
+    }
     reserve(newSize);
     if (newSize > currentSize) {
         memset(buf + currentSize, 0, (newSize - currentSize) * sizeof(char*));
@@ -223,13 +343,16 @@ void DataBuffer<char*>::resize(uint64_t newSize) {
 
 template <>
 DataBuffer<double>::~DataBuffer() {
-    if (buf) {
+    if (buf && ownMemory) {
         memoryPool.free(reinterpret_cast<char*>(buf));
     }
 }
 
 template <>
 void DataBuffer<double>::resize(uint64_t newSize) {
+    if (!ownMemory) {
+        throw std::logic_error("Can't resize a non-owned buffer");
+    }
     reserve(newSize);
     if (newSize > currentSize) {
         memset(buf + currentSize, 0, (newSize - currentSize) * sizeof(double));
@@ -241,13 +364,16 @@ void DataBuffer<double>::resize(uint64_t newSize) {
 
 template <>
 DataBuffer<int64_t>::~DataBuffer() {
-    if (buf) {
+    if (buf && ownMemory) {
         memoryPool.free(reinterpret_cast<char*>(buf));
     }
 }
 
 template <>
 void DataBuffer<int64_t>::resize(uint64_t newSize) {
+    if (!ownMemory) {
+        throw std::logic_error("Can't resize a non-owned buffer");
+    }
     reserve(newSize);
     if (newSize > currentSize) {
         memset(buf + currentSize, 0, (newSize - currentSize) * sizeof(int64_t));
@@ -259,13 +385,16 @@ void DataBuffer<int64_t>::resize(uint64_t newSize) {
 
 template <>
 DataBuffer<uint64_t>::~DataBuffer() {
-    if (buf) {
+    if (buf && ownMemory) {
         memoryPool.free(reinterpret_cast<char*>(buf));
     }
 }
 
 template <>
 void DataBuffer<uint64_t>::resize(uint64_t newSize) {
+    if (!ownMemory) {
+        throw std::logic_error("Can't resize a non-owned buffer");
+    }
     reserve(newSize);
     if (newSize > currentSize) {
         memset(buf + currentSize, 0, (newSize - currentSize) * sizeof(uint64_t));
@@ -277,13 +406,18 @@ void DataBuffer<uint64_t>::resize(uint64_t newSize) {
 
 template <>
 DataBuffer<unsigned char>::~DataBuffer() {
-    if (buf) {
+    if (buf && ownMemory) {
         memoryPool.free(reinterpret_cast<char*>(buf));
     }
 }
 
 template <>
 void DataBuffer<unsigned char>::resize(uint64_t newSize) {
+    if (!ownMemory) {
+        // throw std::logic_error("Can't resize a non-owned buffer");
+        bytes->resize(newSize);
+        return;
+    }
     reserve(newSize);
     if (newSize > currentSize) {
         memset(buf + currentSize, 0, newSize - currentSize);
