@@ -148,6 +148,7 @@ private:
 
     // row index of current stripe with column id as the key
     std::unordered_map<uint64_t, proto::RowIndex> rowIndexes;
+    std::unordered_map<uint64_t, uint64_t> minRowGroupSizes;
     std::map<uint32_t, BloomFilterIndex> bloomFilterIndex;
     std::shared_ptr<SearchArgument> sargs;
     std::unique_ptr<SargsApplier> sargsApplier;
@@ -230,6 +231,8 @@ public:
     uint64_t getRowNumber() const override;
 
     void seekToRow(uint64_t rowNumber) override;
+
+    uint64_t getMinRowGroupSize(uint64_t columnId) const;
 
     const FileContents& getFileContents() const;
     bool getThrowOnHive11DecimalOverflow() const;
