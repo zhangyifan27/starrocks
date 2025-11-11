@@ -34,6 +34,7 @@
 
 package com.starrocks.qe;
 
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.analysis.LimitElement;
 import com.starrocks.common.Config;
@@ -76,13 +77,23 @@ public class QueryMemoryRecorder {
     @SerializedName(value = "memoryRecordMap")
     private final Map<String, MemoryRecord> memoryRecordMap;
     private final Map<UUID, QueryInfo> idMap;
-    private final ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor();
+    private transient ScheduledExecutorService cleaner;
 
     public QueryMemoryRecorder() {
         memoryRecordMap = new ConcurrentHashMap<>();
         idMap = new ConcurrentHashMap<>();
-        // clear expire record every day
-        cleaner.scheduleAtFixedRate(this::cleanExpiredKeys, 1, 1, TimeUnit.DAYS);
+    }
+
+    public void initialize() {
+        // Do not initialize the thread pool in the constructor parameters
+        // to prevent thread leaks caused by creating a thread pool using load.
+        if (cleaner == null) {
+            cleaner = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setDaemon(true)
+                    .setNameFormat("query-memory-recorder-cleaner-%d")
+                    .build());
+            // clear expire record every day
+            cleaner.scheduleAtFixedRate(this::cleanExpiredKeys, 1, 1, TimeUnit.DAYS);
+        }
     }
 
     public void recordDigestWithFlowIdByQueryId(UUID queryId, QueryInfo queryInfo) {

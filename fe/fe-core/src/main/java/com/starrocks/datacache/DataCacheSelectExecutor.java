@@ -17,6 +17,7 @@ package com.starrocks.datacache;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Splitter;
 import com.google.common.collect.Lists;
+import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.analysis.TableName;
 import com.starrocks.common.UserException;
@@ -65,10 +66,17 @@ public class DataCacheSelectExecutor {
     @SerializedName(value = "dataCacheRecords")
     private final Map<Long, Map<TableName, List<DataCacheRecord>>> dataCacheRecords = new ConcurrentHashMap<>();
 
-    private final ScheduledExecutorService cleaner = Executors.newSingleThreadScheduledExecutor();
+    private transient ScheduledExecutorService cleaner;
 
-    public DataCacheSelectExecutor() {
-        cleaner.scheduleAtFixedRate(this::cleanExpiredRecords, 30, 30, TimeUnit.SECONDS);
+    public void initialize() {
+        // Do not initialize the thread pool in the constructor parameters
+        // to prevent thread leaks caused by creating a thread pool using load.
+        if (cleaner == null) {
+            cleaner = Executors.newSingleThreadScheduledExecutor(new ThreadFactoryBuilder().setDaemon(true)
+                    .setNameFormat("data-cache-recorder-cleaner-%d")
+                    .build());
+            cleaner.scheduleAtFixedRate(this::cleanExpiredRecords, 30, 30, TimeUnit.SECONDS);
+        }
     }
 
     public DataCacheSelectMetrics cacheSelect(DataCacheSelectStatement statement,
@@ -272,6 +280,10 @@ public class DataCacheSelectExecutor {
                 list.removeIf(dataCacheRecord -> dataCacheRecord.getTtlTime() < now);
             });
         });
+    }
+
+    public void shutdown() {
+        cleaner.shutdown();
     }
 
     public void save(ImageWriter imageWriter) throws IOException, SRMetaBlockException {

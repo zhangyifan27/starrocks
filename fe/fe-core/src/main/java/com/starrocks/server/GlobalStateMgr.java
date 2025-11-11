@@ -1179,6 +1179,10 @@ public class GlobalStateMgr {
             // 5. create txn timeout checker thread
             createTxnTimeoutChecker();
 
+            // init data cache select executor and query memory recorder
+            dataCacheSelectExecutor.initialize();
+            queryMemoryRecorder.initialize();
+
             // 6. start task cleaner thread
             createTaskCleaner();
             createTableKeeper();
