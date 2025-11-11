@@ -347,7 +347,7 @@ public class HDFSBackendSelector implements BackendSelector {
         // force enable needRebalance when enable_remote_node_cache && using non-default warehouse as executors
         if (Config.enable_remote_node_cache && 
                 assignedScansPerComputeNode.keySet().stream().anyMatch(
-                    node -> node.getWarehouseId() != WarehouseManager.DEFAULT_WAREHOUSE_ID)) {
+                    node -> node.getWarehouseId() != WarehouseManager.DATACACHE_WAREHOUSE_ID)) {
             needRebalance = true;
         }
 
@@ -362,12 +362,13 @@ public class HDFSBackendSelector implements BackendSelector {
         HashRing<TScanRangeLocations, ComputeNode> hashRing = makeHashRing(
                 assignedScansPerComputeNode.keySet(), mainRingFilePathOnly);
         // cache previous backends list to avoid multiple defensive copies
-        Collection<ComputeNode> backendsBeforeRaw = workerProvider.getAllBackendBefore();
+        // previous cache nodes (datacache warehouse compute nodes snapshot)
+        Collection<ComputeNode> previousCacheNodesSnapshot = workerProvider.getAllPreviousCacheNodes();
         // Previous ring still uses the raw flag (it was the original scope of this feature)
         HashRing<TScanRangeLocations, ComputeNode> hashRingBefore = makeHashRing(
-                new HashSet<>(backendsBeforeRaw), filePathOnlyFlag);
+                new HashSet<>(previousCacheNodesSnapshot), filePathOnlyFlag);
         // previous Backends should be fixed, no need to rebalance
-        // long avgNodeScanRangeBytesBefore = totalSize / Math.max(backendsBeforeRaw.size(), 1) + 1;
+        // long avgNodeScanRangeBytesBefore = totalSize / Math.max(previousCacheNodesSnapshot.size(), 1) + 1;
         if (connectContext.getSessionVariable().getHDFSBackendSelectorScanRangeShuffle()) {
             Collections.shuffle(remoteScanRangeLocations);
         }
@@ -381,7 +382,8 @@ public class HDFSBackendSelector implements BackendSelector {
             if (node == null) {
                 throw new RuntimeException("Failed to find backend to execute");
             }
-            if (Config.enable_remote_node_cache) {
+            if (Config.enable_remote_node_cache && previousCacheNodesSnapshot != null &&
+                    !previousCacheNodesSnapshot.isEmpty()) {
                 List<ComputeNode> backendsBefore = hashRingBefore.get(scanRangeLocations, 1);
                 if (!backendsBefore.isEmpty()) {
                     ComputeNode nodeBefore = backendsBefore.get(0);

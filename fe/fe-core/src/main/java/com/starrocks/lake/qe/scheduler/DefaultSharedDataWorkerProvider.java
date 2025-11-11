@@ -20,7 +20,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
-import com.starrocks.common.Config;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReportException;
 import com.starrocks.common.FeConstants;
@@ -90,14 +89,7 @@ public class DefaultSharedDataWorkerProvider implements WorkerProvider {
                 throw ErrorReportException.report(ErrorCode.ERR_NO_NODES_IN_WAREHOUSE, warehouse.getName());
             }
 
-            ImmutableMap<Long, ComputeNode> id2BackendBefore = ImmutableMap.copyOf(systemInfoService.getIdToBackend());
-            if (systemInfoService.getBackendChangeTime().get() + Config.previous_backend_cache_keep_time
-                    > System.currentTimeMillis()) {
-                id2BackendBefore = ImmutableMap.copyOf(systemInfoService.getIdToBackendRefBefore());
-            }
-
-            LOG.info("id2BackendBefore : {}", id2BackendBefore);
-            return new DefaultSharedDataWorkerProvider(idToComputeNode, availableComputeNodes, id2BackendBefore);
+            return new DefaultSharedDataWorkerProvider(idToComputeNode, availableComputeNodes, availableComputeNodes);
         }
     }
 
@@ -116,18 +108,18 @@ public class DefaultSharedDataWorkerProvider implements WorkerProvider {
      */
     private ImmutableList<Long> allComputeNodeIds;
 
-    private final ImmutableMap<Long, ComputeNode> id2BackendBefore;
+    private final ImmutableMap<Long, ComputeNode> previousCacheComputeNodes;
 
     private final Set<Long> selectedWorkerIds;
 
     @VisibleForTesting
     public DefaultSharedDataWorkerProvider(ImmutableMap<Long, ComputeNode> id2ComputeNode,
                                            ImmutableMap<Long, ComputeNode> availableID2ComputeNode,
-                                           ImmutableMap<Long, ComputeNode> id2BackendBefore
+                                           ImmutableMap<Long, ComputeNode> previousCacheComputeNodes
     ) {
         this.id2ComputeNode = id2ComputeNode;
         this.availableID2ComputeNode = availableID2ComputeNode;
-        this.id2BackendBefore = id2BackendBefore;
+        this.previousCacheComputeNodes = previousCacheComputeNodes;
         this.selectedWorkerIds = Sets.newConcurrentHashSet();
         this.allComputeNodeIds = null;
     }
@@ -168,8 +160,8 @@ public class DefaultSharedDataWorkerProvider implements WorkerProvider {
     }
 
     @Override
-    public Collection<ComputeNode> getAllBackendBefore() {
-        return ImmutableList.copyOf(id2BackendBefore.values());
+    public Collection<ComputeNode> getAllPreviousCacheNodes() {
+        return ImmutableList.copyOf(previousCacheComputeNodes.values());
     }
 
     @Override

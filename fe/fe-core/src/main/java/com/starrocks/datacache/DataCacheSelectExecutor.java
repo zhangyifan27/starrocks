@@ -20,6 +20,7 @@ import com.google.common.collect.Lists;
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
 import com.google.gson.annotations.SerializedName;
 import com.starrocks.analysis.TableName;
+import com.starrocks.common.Config;
 import com.starrocks.common.UserException;
 import com.starrocks.common.util.DateUtils;
 import com.starrocks.common.util.TimeUtils;
@@ -37,6 +38,8 @@ import com.starrocks.qe.SessionVariable;
 import com.starrocks.qe.StmtExecutor;
 import com.starrocks.qe.scheduler.Coordinator;
 import com.starrocks.server.GlobalStateMgr;
+import com.starrocks.server.RunMode;
+import com.starrocks.server.WarehouseManager;
 import com.starrocks.sql.ast.DataCacheSelectStatement;
 import com.starrocks.sql.ast.InsertStmt;
 import com.starrocks.system.ComputeNode;
@@ -98,6 +101,10 @@ public class DataCacheSelectExecutor {
         tmpSessionVariable.setDataCachePriority(statement.getPriority());
         tmpSessionVariable.setDatacacheTTLSeconds(statement.getTTLSeconds());
         tmpSessionVariable.setEnableCacheSelect(true);
+        if (RunMode.getCurrentRunMode() != RunMode.SHARED_DATA &&
+                Config.cache_node_mode.equalsIgnoreCase("cn")) {
+            tmpSessionVariable.setWarehouseName(WarehouseManager.DATACACHE_WAREHOUSE_NAME);
+        }
         if (statement.isDelete()) {
             tmpSessionVariable.setCacheSelectMode(TCacheSelectMode.DELETE.getValue());
         } else if (statement.isDesc()) {

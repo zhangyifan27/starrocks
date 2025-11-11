@@ -154,6 +154,8 @@ Status HiveDataSource::open(RuntimeState* state) {
                                      .datacache_priority = datacache_priority,
                                      .datacache_ttl_seconds = datacache_ttl_seconds};
         }
+    } else if (state->query_options().__isset.enable_cache_select && state->query_options().enable_cache_select) {
+        return Status::InternalError("DataCache is not enabled.");
     }
 
     if (_scan_range.__isset.previous_cache_node && _datacache_options.enable_datacache == false) {
@@ -469,8 +471,7 @@ void HiveDataSource::_init_counter(RuntimeState* state) {
                 ADD_CHILD_COUNTER(_runtime_profile, "SharedIOLargeRangeCount", TUnit::UNIT, prefix);
         _profile.shared_io_peak_range_bytes = _runtime_profile->AddHighWaterMarkCounter(
                 "SharedIOPeakRangeBytes", TUnit::BYTES,
-                RuntimeProfile::Counter::create_strategy(TUnit::BYTES, TCounterMergeType::SKIP_ALL),
-                prefix);
+                RuntimeProfile::Counter::create_strategy(TUnit::BYTES, TCounterMergeType::SKIP_ALL), prefix);
     }
 
     if (_datacache_options.enable_datacache || _scan_range.__isset.previous_cache_node) {
