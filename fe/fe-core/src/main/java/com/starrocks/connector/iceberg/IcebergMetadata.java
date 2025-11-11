@@ -1188,7 +1188,8 @@ public class IcebergMetadata implements ConnectorMetadata {
             if (parts[1].equals("null")) {
                 data.set(i, null);
             } else {
-                data.set(i, Conversions.fromPartitionString(sourceType, parts[1]));
+                String partitionValue = IcebergTable.getPartitionTransformValue(field, parts[1]);
+                data.set(i, Conversions.fromPartitionString(sourceType, partitionValue));
             }
         }
         return data;

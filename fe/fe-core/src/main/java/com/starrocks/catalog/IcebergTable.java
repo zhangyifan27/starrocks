@@ -57,8 +57,18 @@ import org.apache.thrift.TException;
 import org.apache.thrift.TSerializer;
 
 import java.io.IOException;
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.Year;
+import java.time.YearMonth;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
+import java.time.temporal.TemporalUnit;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,6 +85,27 @@ public class IcebergTable extends Table {
 
     private static final String PARQUET_FORMAT = "parquet";
     private static final String ORC_FORMAT = "orc";
+    private static final ZoneId DEFAULT_ZONE = ZoneId.of("UTC");
+    private static final Instant EPOCH = Instant.EPOCH;
+    private static final YearMonth EPOCH_YEAR_MONTH = YearMonth.of(1970, 1);
+    private static final Year EPOCH_YEAR = Year.of(1970);
+
+    private static final Map<String, TimeTransformSpec> TRANSFORM_SPECS = new HashMap<>();
+    static {
+        TRANSFORM_SPECS.put("hour", new TimeTransformSpec("yyyy-MM-dd-HH", ChronoUnit.HOURS));
+        TRANSFORM_SPECS.put("month", new TimeTransformSpec("yyyy-MM", ChronoUnit.MONTHS));
+        TRANSFORM_SPECS.put("year", new TimeTransformSpec("yyyy", ChronoUnit.YEARS));
+    }
+
+    static class TimeTransformSpec {
+        private final String pattern;
+        private final TemporalUnit unit;
+
+        public TimeTransformSpec(String pattern, TemporalUnit unit) {
+            this.pattern = pattern;
+            this.unit = unit;
+        }
+    }
 
     private String catalogName;
     @SerializedName(value = "dn")
@@ -423,12 +454,44 @@ public class IcebergTable extends Table {
         return tTableDescriptor;
     }
 
+    public static String getPartitionTransformValue(PartitionField field, String value) {
+        String transformName = field.transform().toString().split("\\[")[0];
+        TimeTransformSpec spec = TRANSFORM_SPECS.get(transformName);
+        if (spec == null) {
+            return value;
+        }
+
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern(spec.pattern);
+
+        Long totalUnits = null;
+        if (spec.unit == ChronoUnit.HOURS) {
+            ZonedDateTime zdt = LocalDateTime.parse(value, formatter).atZone(DEFAULT_ZONE);
+            totalUnits = ChronoUnit.HOURS.between(EPOCH, zdt.toInstant());
+        } else if (spec.unit == ChronoUnit.MONTHS) {
+            YearMonth ym = YearMonth.parse(value, formatter);
+            totalUnits = ChronoUnit.MONTHS.between(EPOCH_YEAR_MONTH, ym);
+        } else if (spec.unit == ChronoUnit.YEARS) {
+            Year year = Year.parse(value, formatter);
+            totalUnits = ChronoUnit.YEARS.between(EPOCH_YEAR, year);
+        }
+        return Long.toString(totalUnits);
+    }
+
     public static String generatePartitionFieldName(PartitionField field, Column originalColumn) {
         String transformName = field.transform().toString().split("\\[")[0];
         String fieldName;
         switch (transformName) {
+            case "hour":
+                fieldName = originalColumn.getName() + "_hour";
+                break;
             case "day":
                 fieldName = originalColumn.getName() + "_day";
+                break;
+            case "month":
+                fieldName = originalColumn.getName() + "_month";
+                break;
+            case "year":
+                fieldName = originalColumn.getName() + "_year";
                 break;
             case "identity":
                 fieldName = originalColumn.getName() + "_identity";
@@ -457,9 +520,24 @@ public class IcebergTable extends Table {
             Column originColumn = this.getColumn(this.getPartitionSourceName(schema, partitionField));
             String transformName = partitionField.transform().toString().split("\\[")[0];
             String partitionExpr;
+            org.apache.iceberg.types.Type partitionType = schema.findType(partitionField.sourceId());
+            if (partitionType instanceof Types.TimestampType) {
+                if (((Types.TimestampType) partitionType).shouldAdjustToUTC()) {
+                    throw new RuntimeException("Unsupported partition column timestamp with zone");
+                }
+            }
             switch (transformName) {
+                case "hour":
+                    partitionExpr = "date_format(`" + originColumn.getName() + "`, \"%Y-%m-%d-%H\")";
+                    break;
                 case "day":
                     partitionExpr = "date_format(`" + originColumn.getName() + "`, \"%Y-%m-%d\")";
+                    break;
+                case "month":
+                    partitionExpr = "date_format(`" + originColumn.getName() + "`, \"%Y-%m\")";
+                    break;
+                case "year":
+                    partitionExpr = "date_format(`" + originColumn.getName() + "`, \"%Y\")";
                     break;
                 case "identity":
                     partitionExpr = "`" + originColumn.getName() + "`";
