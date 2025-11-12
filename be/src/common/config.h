@@ -917,7 +917,6 @@ CONF_mBool(io_coalesce_lake_read_enable, "false");
 // orc reader
 CONF_Bool(enable_orc_late_materialization, "true");
 CONF_Bool(enable_orc_libdeflate_decompression, "true");
-CONF_mBool(enable_orc_mem_copy_optimization, "true");
 CONF_Int32(orc_natural_read_size, "8388608");
 CONF_mBool(orc_coalesce_read_enable, "true");
 // used for track memory usage when shared buffer is released in starcache

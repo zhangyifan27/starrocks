@@ -707,14 +707,14 @@ void BlockDecompressionStream::NextDecompress(const void** data, int* size, size
         if (inputDataBuffer.capacity() < remainingLength) {
             inputDataBuffer.resize(remainingLength);
         }
-        memcpy_inlined(inputDataBuffer.data(), inputBuffer, availableSize);
+        ::memcpy(inputDataBuffer.data(), inputBuffer, availableSize);
         inputBuffer += availableSize;
         compressed = inputDataBuffer.data();
 
         for (size_t pos = availableSize; pos < remainingLength;) {
             readBuffer(true);
             size_t avail = std::min(static_cast<size_t>(inputBufferEnd - inputBuffer), remainingLength - pos);
-            memcpy_inlined(inputDataBuffer.data() + pos, inputBuffer, avail);
+            ::memcpy(inputDataBuffer.data() + pos, inputBuffer, avail);
             pos += avail;
             inputBuffer += avail;
         }

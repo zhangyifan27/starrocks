@@ -157,20 +157,13 @@ StatusOr<ChunkPtr> ORCScanner::_transfer_chunk(starrocks::ChunkPtr& src) {
 
 ChunkPtr ORCScanner::_create_src_chunk() {
     SCOPED_RAW_TIMER(&_counter->init_chunk_ns);
-    ChunkPtr chunk = nullptr;
-    if (config::enable_orc_mem_copy_optimization) {
-        chunk = _orc_reader->get_bound_chunk();
-    }
-    chunk = _orc_reader->create_chunk();
+    ChunkPtr chunk = _orc_reader->create_chunk();
     return chunk;
 }
 
 StatusOr<ChunkPtr> ORCScanner::_next_orc_batch() {
     {
         SCOPED_RAW_TIMER(&_counter->read_batch_ns);
-        if (config::enable_orc_mem_copy_optimization) {
-            _orc_reader->init_chunk();
-        }
         Status status = _orc_reader->read_next();
         while (status.is_end_of_file()) {
             RETURN_IF_ERROR(_open_next_orc_reader());

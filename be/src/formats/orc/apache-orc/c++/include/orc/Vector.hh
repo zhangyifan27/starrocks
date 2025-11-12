@@ -46,7 +46,6 @@
 
 #include "Int128.hh"
 #include "MemoryPool.hh"
-#include "column/bytes.h"
 #include "orc/orc-config.hh"
 
 namespace orc {
@@ -105,7 +104,7 @@ struct ColumnVectorBatch {
     // f_data: filter data
     // f_size: filter size
     // true_size: number of ones in filter data.
-    virtual void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false);
+    virtual void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size);
     virtual void filterOnFields(uint8_t* f_data, uint32_t f_size, uint32_t true_size, const std::vector<int>& fields,
                                 bool onLazyLoad);
 
@@ -123,7 +122,7 @@ struct LongVectorBatch : public ColumnVectorBatch {
     void resize(uint64_t capacity) override;
     void clear() override;
     uint64_t getMemoryUsage() override;
-    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false) override;
+    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) override;
 };
 
 struct DoubleVectorBatch : public ColumnVectorBatch {
@@ -135,11 +134,11 @@ struct DoubleVectorBatch : public ColumnVectorBatch {
     uint64_t getMemoryUsage() override;
 
     DataBuffer<double> data;
-    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false) override;
+    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) override;
 };
 
 struct StringVectorBatch : public ColumnVectorBatch {
-    StringVectorBatch(uint64_t capacity, MemoryPool& pool, char* buffer = nullptr, starrocks::Bytes* bytes = nullptr);
+    StringVectorBatch(uint64_t capacity, MemoryPool& pool);
     ~StringVectorBatch() override;
     std::string toString() const override;
     void resize(uint64_t capacity) override;
@@ -154,9 +153,8 @@ struct StringVectorBatch : public ColumnVectorBatch {
     DataBuffer<char> blob;
     // dict codes, iff. there is dictionary.
     DataBuffer<int64_t> codes;
-    bool use_dict;
-    bool has_filtered;
-    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false) override;
+    bool use_codes;
+    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) override;
 };
 
 struct StringDictionary {
@@ -192,7 +190,7 @@ struct EncodedStringVectorBatch : public StringVectorBatch {
 
     // index for dictionary entry
     DataBuffer<int64_t> index;
-    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false) override;
+    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) override;
 };
 
 struct StructVectorBatch : public ColumnVectorBatch {
@@ -206,7 +204,7 @@ struct StructVectorBatch : public ColumnVectorBatch {
 
     std::vector<ColumnVectorBatch*> fields;
     std::unordered_map<uint64_t, ColumnVectorBatch*> fieldsColumnIdMap;
-    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false) override;
+    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) override;
     void filterOnFields(uint8_t* f_data, uint32_t f_size, uint32_t true_size, const std::vector<int>& fields,
                         bool onLazyLoad) override;
 
@@ -232,7 +230,7 @@ struct ListVectorBatch : public ColumnVectorBatch {
 
     // the concatenated elements
     ORC_UNIQUE_PTR<ColumnVectorBatch> elements;
-    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false) override;
+    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) override;
 };
 
 struct MapVectorBatch : public ColumnVectorBatch {
@@ -254,7 +252,7 @@ struct MapVectorBatch : public ColumnVectorBatch {
     ORC_UNIQUE_PTR<ColumnVectorBatch> keys;
     // the concatenated elements
     ORC_UNIQUE_PTR<ColumnVectorBatch> elements;
-    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false) override;
+    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) override;
 };
 
 struct UnionVectorBatch : public ColumnVectorBatch {
@@ -278,7 +276,7 @@ struct UnionVectorBatch : public ColumnVectorBatch {
 
     // the sub-columns
     std::vector<ColumnVectorBatch*> children;
-    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false) override;
+    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) override;
 };
 
 struct Decimal {
@@ -306,7 +304,7 @@ struct Decimal64VectorBatch : public ColumnVectorBatch {
 
     // the numeric values
     DataBuffer<int64_t> values;
-    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false) override;
+    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) override;
 
 protected:
     /**
@@ -333,7 +331,7 @@ struct Decimal128VectorBatch : public ColumnVectorBatch {
 
     // the numeric values
     DataBuffer<Int128> values;
-    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false) override;
+    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) override;
 
 protected:
     /**
@@ -368,7 +366,7 @@ struct TimestampVectorBatch : public ColumnVectorBatch {
     // the nanoseconds of each value
     DataBuffer<int64_t> nanoseconds;
 
-    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size, bool on_lazy_load = false) override;
+    void filter(uint8_t* f_data, uint32_t f_size, uint32_t true_size) override;
 };
 
 } // namespace orc

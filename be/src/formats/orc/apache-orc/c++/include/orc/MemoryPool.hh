@@ -35,11 +35,8 @@
 
 #pragma once
 
-#include <concepts>
 #include <memory>
 
-#include "column/binary_column.h"
-#include "column/bytes.h"
 #include "orc/Int128.hh"
 #include "orc/orc-config.hh"
 
@@ -63,16 +60,13 @@ private:
     uint64_t currentSize;
     // maximal capacity (actual allocated memory)
     uint64_t currentCapacity;
-    // memory copy optimization
-    bool ownMemory;
-    starrocks::Bytes* bytes;
 
     // not implemented
     DataBuffer(DataBuffer& buffer) = delete;
     DataBuffer& operator=(DataBuffer& buffer) = delete;
 
 public:
-    DataBuffer(MemoryPool& pool, uint64_t _size = 0, T* _buf = nullptr, starrocks::Bytes* _bytes = nullptr);
+    DataBuffer(MemoryPool& pool, uint64_t _size = 0);
 
     DataBuffer(DataBuffer<T>&& buffer) ORC_NOEXCEPT;
 
@@ -82,19 +76,9 @@ public:
 
     const T* data() const { return buf; }
 
-    uint64_t size() {
-        if (!ownMemory && bytes == nullptr) {
-            throw std::runtime_error("DataBuffer is not bound to bytes");
-        }
-        return !ownMemory ? bytes->size() : currentSize;
-    }
+    uint64_t size() { return currentSize; }
 
-    uint64_t capacity() {
-        if (!ownMemory && bytes == nullptr) {
-            throw std::runtime_error("DataBuffer is not bound to bytes");
-        }
-        return !ownMemory ? bytes->capacity() : currentCapacity;
-    }
+    uint64_t capacity() { return currentCapacity; }
 
     T& operator[](uint64_t i) { return buf[i]; }
 
@@ -102,31 +86,15 @@ public:
     void resize(uint64_t _size);
 
     void filter(const uint8_t* f_data, size_t f_size, size_t true_size);
-
-    void bind(T* _buf, starrocks::Bytes* _bytes);
-
-    bool is_bound() const { return !ownMemory; }
 };
 
 // Specializations for char
 
 template <>
-DataBuffer<char>::DataBuffer(MemoryPool& pool, uint64_t _size, char* _buf, starrocks::Bytes* _bytes);
-
-template <>
 DataBuffer<char>::~DataBuffer();
 
 template <>
-char* DataBuffer<char>::data();
-
-template <>
-const char* DataBuffer<char>::data() const;
-
-template <>
 void DataBuffer<char>::resize(uint64_t newSize);
-
-template <>
-void DataBuffer<char>::filter(const uint8_t* f_data, size_t f_size, size_t true_size);
 
 // Specializations for char*
 

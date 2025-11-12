@@ -287,8 +287,6 @@ public:
 
     const Bytes& get_bytes() const { return _bytes; }
 
-    Bytes* get_bytes_ptr() { return &_bytes; }
-
     const uint8_t* continuous_data() const override { return reinterpret_cast<const uint8_t*>(_bytes.data()); }
 
     Offsets& get_offset() { return _offsets; }

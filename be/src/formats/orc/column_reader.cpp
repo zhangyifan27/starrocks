@@ -14,7 +14,6 @@
 
 #include "formats/orc/column_reader.h"
 
-#include "common/config.h"
 #include "common/statusor.h"
 #include "formats/orc/orc_chunk_reader.h"
 #include "formats/orc/utils.h"
@@ -512,18 +511,13 @@ Status StringColumnReader::get_next(orc::ColumnVectorBatch* cvb, ColumnPtr& col,
 
     auto& vb = values->get_bytes();
     // Need to resize after insert, because of padding char existed
-    if (!config::enable_orc_mem_copy_optimization || data->use_dict) {
-        vb.reserve(vb.size() + len);
-    }
+    vb.reserve(vb.size() + len);
 
     auto& vo = values->get_offset();
     // We can resize directly
     raw::stl_vector_resize_uninitialized(&vo, vo.size() + size);
 
     size_t write_pos = vb.size();
-    if (config::enable_orc_mem_copy_optimization && !data->use_dict) {
-        write_pos -= len;
-    }
     if (cvb->hasNulls) {
         if (_type.type == TYPE_CHAR) {
             // Possibly there are some zero padding characters in value, we have to strip them off.
@@ -540,23 +534,15 @@ Status StringColumnReader::get_next(orc::ColumnVectorBatch* cvb, ColumnPtr& col,
                 }
             }
         } else {
-            // use direct encoding
-            if (config::enable_orc_mem_copy_optimization && !data->use_dict) {
-                for (size_t i = col_start, cvb_pos = from; i < col_start + size; ++i, ++cvb_pos) {
+            for (size_t i = col_start, cvb_pos = from; i < col_start + size; ++i, ++cvb_pos) {
+                if (cvb->notNull[cvb_pos]) {
+                    strings::memcpy_inlined(&vb[write_pos], data->data[cvb_pos], data->length[cvb_pos]);
                     write_pos += data->length[cvb_pos];
+                    // Need plus 1 for offset
                     vo[i + 1] = write_pos;
-                }
-            } else {
-                for (size_t i = col_start, cvb_pos = from; i < col_start + size; ++i, ++cvb_pos) {
-                    if (cvb->notNull[cvb_pos]) {
-                        strings::memcpy_inlined(&vb[write_pos], data->data[cvb_pos], data->length[cvb_pos]);
-                        write_pos += data->length[cvb_pos];
-                        // Need plus 1 for offset
-                        vo[i + 1] = write_pos;
-                    } else {
-                        // Need plus 1 for offset
-                        vo[i + 1] = write_pos;
-                    }
+                } else {
+                    // Need plus 1 for offset
+                    vo[i + 1] = write_pos;
                 }
             }
         }
@@ -571,30 +557,20 @@ Status StringColumnReader::get_next(orc::ColumnVectorBatch* cvb, ColumnPtr& col,
                 vo[i + 1] = write_pos;
             }
         } else {
-            // use direct encoding
-            if (config::enable_orc_mem_copy_optimization && !data->use_dict) {
-                for (size_t i = col_start, cvb_pos = from; i < col_start + size; ++i, ++cvb_pos) {
-                    write_pos += data->length[cvb_pos];
-                    vo[i + 1] = write_pos;
-                }
-            } else {
-                for (size_t i = col_start, cvb_pos = from; i < col_start + size; ++i, ++cvb_pos) {
-                    strings::memcpy_inlined(&vb[write_pos], data->data[cvb_pos], data->length[cvb_pos]);
-                    write_pos += data->length[cvb_pos];
-                    // Need plus 1 for offset
-                    vo[i + 1] = write_pos;
-                }
+            for (size_t i = col_start, cvb_pos = from; i < col_start + size; ++i, ++cvb_pos) {
+                strings::memcpy_inlined(&vb[write_pos], data->data[cvb_pos], data->length[cvb_pos]);
+                write_pos += data->length[cvb_pos];
+                // Need plus 1 for offset
+                vo[i + 1] = write_pos;
             }
         }
     }
 
-    data->use_dict = false;
     vb.resize(write_pos);
 
     // col_start == 0 and from == 0 means it's at top level of fill chunk, not in the middle of array
     // otherwise `broker_load_filter` does not work.
     if (_reader->get_broker_load_mode() && from == 0 && col_start == 0) {
-        bool should_report = _type.type == TYPE_CHAR || !config::enable_orc_mem_copy_optimization || data->use_dict;
         auto* filter = _reader->get_broker_load_fiter()->data();
         // only report once.
         bool reported = false;
@@ -606,7 +582,7 @@ Status StringColumnReader::get_next(orc::ColumnVectorBatch* cvb, ColumnPtr& col,
                     // overflow.
                     if (nulls[i] == 0 && _type.len > 0 && data->length[i] > _type.len) {
                         filter[i] = 0;
-                        if (!reported && should_report) {
+                        if (!reported) {
                             reported = true;
                             std::string raw_data(data->data[i], data->length[i]);
                             auto slot = _reader->get_current_slot();
@@ -631,7 +607,7 @@ Status StringColumnReader::get_next(orc::ColumnVectorBatch* cvb, ColumnPtr& col,
                 if (_type.len > 0 && data->length[i] > _type.len) {
                     // can not accept null, so we have to discard it.
                     filter[i] = 0;
-                    if (!reported && should_report) {
+                    if (!reported) {
                         reported = true;
                         std::string raw_data(data->data[i], data->length[i]);
                         auto slot = _reader->get_current_slot();
@@ -675,41 +651,29 @@ Status VarbinaryColumnReader::get_next(orc::ColumnVectorBatch* cvb, ColumnPtr& c
     size_t write_pos = vb.size();
 
     // vb is using RawVectorPad16, resize will not initialize vector
-    if (!config::enable_orc_mem_copy_optimization || data->use_dict) {
-        vb.resize(vb.size() + len);
-    }
+    vb.resize(vb.size() + len);
     raw::stl_vector_resize_uninitialized(&vo, vo.size() + size);
 
-    if (config::enable_orc_mem_copy_optimization && !data->use_dict) {
-        write_pos -= len;
+    if (cvb->hasNulls) {
         for (size_t i = col_start, cvb_pos = from; i < col_start + size; ++i, ++cvb_pos) {
-            write_pos += data->length[cvb_pos];
-            vo[i + 1] = write_pos;
-        }
-    } else {
-        if (cvb->hasNulls) {
-            for (size_t i = col_start, cvb_pos = from; i < col_start + size; ++i, ++cvb_pos) {
-                if (cvb->notNull[cvb_pos]) {
-                    strings::memcpy_inlined(&vb[write_pos], data->data[cvb_pos], data->length[cvb_pos]);
-                    write_pos += data->length[cvb_pos];
-                    // Plus 1 for offset
-                    vo[i + 1] = write_pos;
-                } else {
-                    // Plus 1 for offset
-                    vo[i + 1] = write_pos;
-                }
-            }
-        } else {
-            for (size_t i = col_start, cvb_pos = from; i < col_start + size; ++i, ++cvb_pos) {
+            if (cvb->notNull[cvb_pos]) {
                 strings::memcpy_inlined(&vb[write_pos], data->data[cvb_pos], data->length[cvb_pos]);
                 write_pos += data->length[cvb_pos];
                 // Plus 1 for offset
                 vo[i + 1] = write_pos;
+            } else {
+                // Plus 1 for offset
+                vo[i + 1] = write_pos;
             }
         }
+    } else {
+        for (size_t i = col_start, cvb_pos = from; i < col_start + size; ++i, ++cvb_pos) {
+            strings::memcpy_inlined(&vb[write_pos], data->data[cvb_pos], data->length[cvb_pos]);
+            write_pos += data->length[cvb_pos];
+            // Plus 1 for offset
+            vo[i + 1] = write_pos;
+        }
     }
-
-    data->use_dict = false;
     return Status::OK();
 }
 

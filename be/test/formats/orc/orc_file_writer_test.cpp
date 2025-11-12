@@ -25,7 +25,6 @@
 #include "column/array_column.h"
 #include "column/map_column.h"
 #include "column/struct_column.h"
-#include "common/config.h"
 #include "common/object_pool.h"
 #include "formats/orc/orc_chunk_reader.h"
 #include "fs/fs_memory.h"
@@ -118,13 +117,10 @@ protected:
         OrcChunkReader reader(_runtime_state->chunk_size(), src_slot_descs);
         auto input_stream = orc::readLocalFile(_file_path);
         EXPECT_OK(reader.init(std::move(input_stream)));
-        if (config::enable_orc_mem_copy_optimization) {
-            reader.init_chunk();
-        }
         auto st = reader.read_next();
         DCHECK(st.ok()) << st.message();
 
-        auto chunk_read = reader.create_chunk_ut();
+        auto chunk_read = reader.create_chunk();
         st = reader.fill_chunk(&chunk_read);
         DCHECK(st.ok()) << st.message();
 

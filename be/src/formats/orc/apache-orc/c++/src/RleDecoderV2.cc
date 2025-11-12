@@ -16,11 +16,6 @@
  * limitations under the License.
  */
 
-#include <cstdint>
-#ifdef __AVX2__
-#include <immintrin.h>
-#endif
-
 #include "Adaptor.hh"
 #include "Compression.hh"
 #include "RLEV2Util.hh"
@@ -719,32 +714,9 @@ uint64_t RleDecoderV2::nextDelta(int64_t* const data, uint64_t offset, uint64_t 
 
         if (bitSize == 0) {
             // add fixed deltas to adjacent values
-#ifdef __AVX2__
-            uint64_t i = 1;
-            if (runLength < 5) {
-                for (; i < runLength; ++i) {
-                    literals[i] = literals[i - 1] + deltaBase;
-                }
-            } else {
-                __m256i delta = _mm256_set1_epi64x(deltaBase * 4);
-                __m256i current_values = _mm256_set_epi64x(prevValue + 4 * deltaBase, // literals[4]
-                                                           prevValue + 3 * deltaBase, // literals[3]
-                                                           prevValue + 2 * deltaBase, // literals[2]
-                                                           prevValue + 1 * deltaBase  // literals[1]
-                );
-                for (; i + 3 < runLength; i += 4) {
-                    _mm256_storeu_si256(reinterpret_cast<__m256i*>(&literals[i]), current_values);
-                    current_values = _mm256_add_epi64(current_values, delta);
-                }
-                for (; i < runLength; ++i) {
-                    literals[i] = literals[i - 1] + deltaBase;
-                }
-            }
-#else
             for (uint64_t i = 1; i < runLength; ++i) {
                 literals[i] = literals[i - 1] + deltaBase;
             }
-#endif
         } else {
             prevValue = literals[1] = prevValue + deltaBase;
             if (runLength < 2) {
@@ -757,54 +729,12 @@ uint64_t RleDecoderV2::nextDelta(int64_t* const data, uint64_t offset, uint64_t 
             // is a decreasing sequence else an increasing sequence.
             // read deltas using the literals buffer.
             readLongs(literals.data(), 2, runLength - 2, bitSize);
-
-            const uint64_t unroll_factor = 4;
             if (deltaBase < 0) {
-                uint64_t i = 2;
-                for (; i + unroll_factor <= runLength; i += unroll_factor) {
-                    uint64_t v0 = literals[i];
-                    uint64_t v1 = literals[i + 1];
-                    uint64_t v2 = literals[i + 2];
-                    uint64_t v3 = literals[i + 3];
-
-                    v0 = prevValue - v0;
-                    v1 = v0 - v1;
-                    v2 = v1 - v2;
-                    v3 = v2 - v3;
-
-                    literals[i] = v0;
-                    literals[i + 1] = v1;
-                    literals[i + 2] = v2;
-                    literals[i + 3] = v3;
-
-                    prevValue = v3;
-                }
-
-                for (; i < runLength; ++i) {
+                for (uint64_t i = 2; i < runLength; ++i) {
                     prevValue = literals[i] = prevValue - literals[i];
                 }
             } else {
-                uint64_t i = 2;
-                for (; i + unroll_factor <= runLength; i += unroll_factor) {
-                    uint64_t v0 = literals[i];
-                    uint64_t v1 = literals[i + 1];
-                    uint64_t v2 = literals[i + 2];
-                    uint64_t v3 = literals[i + 3];
-
-                    v0 = prevValue + v0;
-                    v1 = v0 + v1;
-                    v2 = v1 + v2;
-                    v3 = v2 + v3;
-
-                    literals[i] = v0;
-                    literals[i + 1] = v1;
-                    literals[i + 2] = v2;
-                    literals[i + 3] = v3;
-
-                    prevValue = v3;
-                }
-
-                for (; i < runLength; ++i) {
+                for (uint64_t i = 2; i < runLength; ++i) {
                     prevValue = literals[i] = prevValue + literals[i];
                 }
             }
@@ -823,7 +753,7 @@ uint64_t RleDecoderV2::copyDataFromBuffer(int64_t* data, uint64_t offset, uint64
             }
         }
     } else {
-        memcpy_inlined(data + offset, literals.data() + runRead, nRead * sizeof(int64_t));
+        memcpy(data + offset, literals.data() + runRead, nRead * sizeof(int64_t));
         runRead += nRead;
     }
     return nRead;
