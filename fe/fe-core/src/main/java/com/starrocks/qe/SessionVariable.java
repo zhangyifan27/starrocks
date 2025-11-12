@@ -897,6 +897,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_PARTITION_SECONDARY_PRUNNER = "enable_partition_secondary_prunner";
 
+    public static final String OPTIMIZE_TRIVIAL_ORDER_BY_IN_SUBQUERY = "optimize_trivial_order_by_in_subquery";
+
     // --------  tq session variables start --------
 
     public static final String TQ_TAUTH_PLATFORM_TOKEN = "tq_tauth_platform_token";
@@ -4782,6 +4784,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setThiveRangePartitionStringAsDate(boolean thiveRangePartitionStringAsDate) {
         this.thiveRangePartitionStringAsDate = thiveRangePartitionStringAsDate;
+    }
+
+    @VarAttr(name = OPTIMIZE_TRIVIAL_ORDER_BY_IN_SUBQUERY)
+    private boolean optimizeTrivialOrderByInSubquery = false;
+
+    public boolean isOptimizeTrivialOrderByInSubquery() {
+        return optimizeTrivialOrderByInSubquery;
+    }
+
+    public void setOptimizeTrivialOrderByInSubquery(boolean optimizeTrivialOrderByInSubquery) {
+        this.optimizeTrivialOrderByInSubquery = optimizeTrivialOrderByInSubquery;
     }
 
     // Serialize to thrift object

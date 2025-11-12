@@ -31,6 +31,7 @@ public class MaterializedViewTextBasedRewriteTest extends MaterializedViewTestBa
     public static void beforeClass() throws Exception {
         MaterializedViewTestBase.beforeClass();
         connectContext.getSessionVariable().setEnableMaterializedViewTextMatchRewrite(true);
+        connectContext.getSessionVariable().setOptimizeTrivialOrderByInSubquery(true);
         starRocksAssert.useDatabase(MATERIALIZED_DB_NAME);
         QueryDebugOptions debugOptions = new QueryDebugOptions();
         debugOptions.setEnableQueryTraceLog(true);

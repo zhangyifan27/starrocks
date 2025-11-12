@@ -48,6 +48,7 @@ public class TransformerTest {
 
         // create connect context
         connectContext = UtFrameUtils.createDefaultCtx();
+        connectContext.getSessionVariable().setOptimizeTrivialOrderByInSubquery(true);
         starRocksAssert = new StarRocksAssert(connectContext);
         starRocksAssert.withDatabase(DB_NAME).useDatabase(DB_NAME);
 

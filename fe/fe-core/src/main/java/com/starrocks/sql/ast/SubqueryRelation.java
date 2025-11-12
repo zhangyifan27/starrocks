@@ -15,6 +15,7 @@
 package com.starrocks.sql.ast;
 
 import com.starrocks.analysis.Expr;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.analyzer.FieldId;
 import com.starrocks.sql.parser.NodePosition;
 
@@ -31,10 +32,40 @@ public class SubqueryRelation extends QueryRelation {
     public SubqueryRelation(QueryStatement queryStatement, NodePosition pos) {
         super(pos);
         this.queryStatement = queryStatement;
+
+        // Get the query relation object from the subquery
         QueryRelation queryRelation = this.queryStatement.getQueryRelation();
-        // The order by is meaningless in subquery
+
+        /*
+         * Subquery Optimization: Remove meaningless ORDER BY clause
+         *
+         * Rationale:
+         * In SQL standard, ORDER BY clause in subquery is usually meaningless because:
+         * 1. The outer query may re-sort the result set
+         * 2. The subquery result is treated as an unordered intermediate result set
+         * 3. ORDER BY adds unnecessary sorting overhead
+         *
+         * Exception - ORDER BY should be preserved when:
+         * 1. The subquery itself contains a LIMIT clause
+         *    Example: SELECT * FROM (SELECT * FROM t ORDER BY id LIMIT 10) a
+         *    In this case, ORDER BY determines which 10 records are returned by LIMIT
+         *
+         * 2. The outer query has LIMIT but the subquery doesn't
+         *    Example: SELECT * FROM (SELECT * FROM t ORDER BY id) a LIMIT 10
+         *    In this case, ORDER BY determines which 10 records are returned by outer LIMIT
+         *    Note: This case is currently NOT handled by this code, which may lead to incorrect results
+         *
+         * Optimization Strategy:
+         * - TODO If the subquery has no LIMIT, clear ORDER BY to improve performance
+         * - TODO If the subquery has LIMIT, keep ORDER BY to ensure semantic correctness
+         * - TODO: Should also preserve ORDER BY when outer query has LIMIT
+         */
         if (!queryRelation.hasLimit()) {
-            queryRelation.clearOrder();
+            ConnectContext connectContext = ConnectContext.get();
+            if (connectContext != null && connectContext.getSessionVariable() != null &&
+                    connectContext.getSessionVariable().isOptimizeTrivialOrderByInSubquery()) {
+                queryRelation.clearOrder();
+            }
         }
     }
 

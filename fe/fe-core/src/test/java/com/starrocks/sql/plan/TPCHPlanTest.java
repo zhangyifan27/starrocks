@@ -39,6 +39,7 @@ public class TPCHPlanTest extends PlanTestBase {
         connectContext.getSessionVariable().setEnableViewBasedMvRewrite(false);
         connectContext.getSessionVariable().setCboEqBaseType(SessionVariableConstants.DOUBLE);
         connectContext.getSessionVariable().setEnableScanPredicateExprReuse(true);
+        connectContext.getSessionVariable().setOptimizeTrivialOrderByInSubquery(true);
     }
 
     @Test
