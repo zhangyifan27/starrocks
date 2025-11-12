@@ -27,6 +27,7 @@ import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AlreadyExistsException;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
@@ -208,6 +209,9 @@ public class IcebergMetadata implements ConnectorMetadata {
 
     @Override
     public void createDb(String dbName, Map<String, String> properties) throws AlreadyExistsException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("create Database %s not supported", dbName);
+        }
         if (dbExists(dbName)) {
             throw new AlreadyExistsException("Database Already Exists");
         }
@@ -217,6 +221,9 @@ public class IcebergMetadata implements ConnectorMetadata {
 
     @Override
     public void dropDb(String dbName, boolean isForceDrop) throws MetaNotFoundException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("drop Database %s not supported", dbName);
+        }
         if (listTableNames(dbName).size() != 0) {
             throw new StarRocksConnectorException("Database %s not empty", dbName);
         }
@@ -249,6 +256,9 @@ public class IcebergMetadata implements ConnectorMetadata {
 
     @Override
     public boolean createTable(CreateTableStmt stmt) throws DdlException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("create Table %s not supported", stmt.getDbTbl().toString());
+        }
         String dbName = stmt.getDbName();
         String tableName = stmt.getTableName();
 
@@ -270,6 +280,9 @@ public class IcebergMetadata implements ConnectorMetadata {
 
     @Override
     public void createView(CreateViewStmt stmt) throws DdlException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("create View %s not supported", stmt.getTableName().toString());
+        }
         String dbName = stmt.getDbName();
         String viewName = stmt.getTable();
 
@@ -295,6 +308,9 @@ public class IcebergMetadata implements ConnectorMetadata {
 
     @Override
     public void alterTable(ConnectContext context, AlterTableStmt stmt) throws UserException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("alter Table %s not supported", stmt.getTbl().toString());
+        }
         String dbName = stmt.getDbName();
         String tableName = stmt.getTableName();
         org.apache.iceberg.Table table = icebergCatalog.getTable(dbName, tableName);
@@ -321,6 +337,9 @@ public class IcebergMetadata implements ConnectorMetadata {
 
     @Override
     public void dropTable(DropTableStmt stmt) {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("drop Table %s not supported", stmt.getTbl().toString());
+        }
         Table icebergTable = getTable(stmt.getDbName(), stmt.getTableName());
 
         if (icebergTable != null && icebergTable.isIcebergView()) {

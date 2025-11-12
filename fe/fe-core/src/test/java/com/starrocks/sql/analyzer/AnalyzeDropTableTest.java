@@ -18,6 +18,7 @@ import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.Table;
+import com.starrocks.common.Config;
 import com.starrocks.common.ExceptionChecker;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.HiveMetadata;
@@ -87,6 +88,7 @@ public class AnalyzeDropTableTest {
 
     @Test
     public void testDropHiveNonManagedTable(@Mocked HiveTable hiveTable) {
+        Config.disable_external_table_ddl = false;
         MetadataMgr metadata = AnalyzeTestUtil.getConnectContext().getGlobalStateMgr().getMetadataMgr();
 
         new Expectations(hiveTable) {

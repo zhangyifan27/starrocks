@@ -121,6 +121,7 @@ import org.apache.iceberg.types.Types;
 import org.apache.iceberg.view.BaseView;
 import org.apache.iceberg.view.ImmutableSQLViewRepresentation;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -169,6 +170,11 @@ public class IcebergMetadataTest extends TableTestBase {
     public IcebergMetadataTest() {
         warehouseManager = new WarehouseManager();
         warehouseManager.initDefaultWarehouse();
+    }
+
+    @Before
+    public void setUp() throws Exception {
+        Config.disable_external_table_ddl = false;
     }
 
     @Test

@@ -24,6 +24,7 @@ import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AlreadyExistsException;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.profile.Timer;
@@ -111,6 +112,9 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public void createDb(String dbName, Map<String, String> properties) throws AlreadyExistsException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("create Database %s not supported", dbName);
+        }
         dbName = convertToLowerCaseIfNeed(dbName);
         if (dbExists(dbName)) {
             throw new AlreadyExistsException("Database Already Exists");
@@ -120,6 +124,9 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public void dropDb(String dbName, boolean isForceDrop) throws MetaNotFoundException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("drop Database %s not supported", dbName);
+        }
         dbName = convertToLowerCaseIfNeed(dbName);
         if (listTableNames(dbName).size() != 0) {
             throw new StarRocksConnectorException("Database %s not empty", dbName);
@@ -150,16 +157,25 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public boolean createTable(CreateTableStmt stmt) throws DdlException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("create Table %s not supported", stmt.getTableName());
+        }
         return hmsOps.createTable(stmt);
     }
 
     @Override
     public void createTableLike(CreateTableLikeStmt stmt) throws DdlException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("create Table Like %s not supported", stmt.getTableName());
+        }
         hmsOps.createTableLike(stmt);
     }
 
     @Override
     public void dropTable(DropTableStmt stmt) throws DdlException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("drop Table %s not supported", stmt.getTableName());
+        }
         String dbName = stmt.getDbName();
         String tableName = stmt.getTableName();
         dbName = convertToLowerCaseIfNeed(dbName);

@@ -3638,4 +3638,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static int previous_backend_cache_keep_time = 1000 * 60 * 60; // 1h
+
+    @ConfField(mutable = true)
+    public static boolean disable_external_table_ddl = true;
 }

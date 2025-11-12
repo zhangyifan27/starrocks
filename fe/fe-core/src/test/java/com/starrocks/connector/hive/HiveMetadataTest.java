@@ -105,6 +105,7 @@ public class HiveMetadataTest {
     public void setUp() throws Exception {
         FeConstants.runningUnitTest = true;
         Config.report_table_statistics = false;
+        Config.disable_external_table_ddl = false;
         executorForHmsRefresh = Executors.newFixedThreadPool(5);
         executorForRemoteFileRefresh = Executors.newFixedThreadPool(5);
         executorForPullFiles = Executors.newFixedThreadPool(5);
