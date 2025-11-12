@@ -404,7 +404,7 @@ public class HiveMetaClient {
             }
         } catch (Exception e) {
             throw new StarRocksConnectorException("Failed to getPartitionsNames on [%s.%s], msg: %s",
-                    dbName, tableName, e.getMessage());
+                    dbName, tableName, Util.getRealMessage(e));
         } finally {
             if (client != null) {
                 client.close();
@@ -432,7 +432,7 @@ public class HiveMetaClient {
             } catch (Exception e) {
                 LOG.error("Failed to get partitionStats on {}.{}", dbName, tblName, e);
                 connectionException = new StarRocksConnectorException("Failed to get partitionStats on [%s.%s]" +
-                        " from meta store: %s", dbName, tblName, e.getMessage());
+                        " from meta store: %s", dbName, tblName, Util.getRealMessage(e));
                 throw connectionException;
             } finally {
                 if (client == null && connectionException != null) {
@@ -484,7 +484,7 @@ public class HiveMetaClient {
             }
         } catch (Exception e) {
             throw new StarRocksConnectorException("Failed to getPartitionColumnStatistics on [%s.%s], msg: %s",
-                    dbName, tableName, e.getMessage());
+                    dbName, tableName, Util.getRealMessage(e));
         } finally {
             if (client != null) {
                 client.close();
@@ -549,7 +549,7 @@ public class HiveMetaClient {
                 LOG.error("Failed to listPartitionValues on {}.{}.{}", dbName, tblName, partitionColumn, e);
                 connectionException =
                         new StarRocksConnectorException("Failed to listPartitionValues on [%s.%s.%s] to meta store: %s",
-                                dbName, tblName, partitionColumn, e.getMessage());
+                                dbName, tblName, partitionColumn, Util.getRealMessage(e));
                 throw connectionException;
             } finally {
                 if (client == null && connectionException != null) {
