@@ -40,25 +40,6 @@ void bit_unpack_tail(const uint8_t* in, int fb, int64_t* data, int nums) {
     }
 }
 
-template <int FB>
-void bit_unpack_tail_optimized(const uint8_t* in, int64_t* data, int nums) {
-    if (nums == 0) return;
-
-    uint64_t buffer = 0;
-    int valid_bits = 0;
-    const uint64_t mask = (FB == 64) ? ~0ULL : (1ULL << FB) - 1;
-
-    for (int i = 0; i < nums; ++i) {
-        while (valid_bits < FB) {
-            buffer = (buffer << 8) | *in++;
-            valid_bits += 8;
-        }
-
-        *data++ = (buffer >> (valid_bits - FB)) & mask;
-        valid_bits -= FB;
-    }
-}
-
 #include "bit_packing_gen.inc"
 
 } // namespace orc

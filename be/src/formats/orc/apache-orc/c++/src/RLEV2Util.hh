@@ -18,8 +18,6 @@
 
 #pragma once
 
-#include <immintrin.h>
-
 #include "RLEv2.hh"
 
 namespace orc {
@@ -76,75 +74,5 @@ inline bool isSafeSubtract(int64_t left, int64_t right) {
 
 inline uint32_t RleEncoderV2::getOpCode(EncodingType encoding) {
     return static_cast<uint32_t>(encoding << 6);
-}
-
-inline void unZigZagSimd(int64_t* buffer, size_t length) {
-    size_t i = 0;
-    [[maybe_unused]] tail : if (length < 8) {
-        for (size_t idx = 0; idx < length; ++idx, ++i) {
-            buffer[i] = unZigZag(static_cast<uint64_t>(buffer[i]));
-        }
-    }
-    else {
-#ifdef __AVX2__
-        const __m256i one = _mm256_set1_epi64x(0x1);
-        const __m256i zero = _mm256_setzero_si256();
-        if (length <= 16) {
-            while (length >= 4) {
-                __m256i values = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(buffer + i));
-                __m256i mask = _mm256_and_si256(values, one);
-                __m256i negMask = _mm256_sub_epi64(zero, mask);
-                __m256i shifted = _mm256_srli_epi64(values, 1);
-                __m256i res = _mm256_xor_si256(shifted, negMask);
-                _mm256_storeu_si256(reinterpret_cast<__m256i*>(buffer + i), res);
-                i += 4;
-                length -= 4;
-            }
-        } else {
-            while (length >= 16) {
-                __m256i values = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(buffer + i));
-                __m256i mask = _mm256_and_si256(values, one);
-                __m256i negMask = _mm256_sub_epi64(zero, mask);
-                __m256i shifted = _mm256_srli_epi64(values, 1);
-                __m256i res = _mm256_xor_si256(shifted, negMask);
-                _mm256_storeu_si256(reinterpret_cast<__m256i*>(buffer + i), res);
-                i += 4;
-                length -= 4;
-
-                values = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(buffer + i));
-                mask = _mm256_and_si256(values, one);
-                negMask = _mm256_sub_epi64(zero, mask);
-                shifted = _mm256_srli_epi64(values, 1);
-                res = _mm256_xor_si256(shifted, negMask);
-                _mm256_storeu_si256(reinterpret_cast<__m256i*>(buffer + i), res);
-                i += 4;
-                length -= 4;
-
-                values = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(buffer + i));
-                mask = _mm256_and_si256(values, one);
-                negMask = _mm256_sub_epi64(zero, mask);
-                shifted = _mm256_srli_epi64(values, 1);
-                res = _mm256_xor_si256(shifted, negMask);
-                _mm256_storeu_si256(reinterpret_cast<__m256i*>(buffer + i), res);
-                i += 4;
-                length -= 4;
-
-                values = _mm256_loadu_si256(reinterpret_cast<const __m256i*>(buffer + i));
-                mask = _mm256_and_si256(values, one);
-                negMask = _mm256_sub_epi64(zero, mask);
-                shifted = _mm256_srli_epi64(values, 1);
-                res = _mm256_xor_si256(shifted, negMask);
-                _mm256_storeu_si256(reinterpret_cast<__m256i*>(buffer + i), res);
-                i += 4;
-                length -= 4;
-            }
-        }
-        goto tail;
-#else
-        for (i = 0; i < length; ++i) {
-            buffer[i] = unZigZag(static_cast<uint64_t>(buffer[i]));
-        }
-#endif
-    }
 }
 } // namespace orc
