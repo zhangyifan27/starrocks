@@ -768,10 +768,14 @@ public class StmtExecutor {
                                 String digestWithFlowId = context.getDigestWithFlowId();
                                 Set<TNetworkAddress> workers = new HashSet<>();
                                 int instanceNum = 0;
-                                for (QueryStatisticsItem.FragmentInstanceInfo fragmentInstanceInfo :
-                                        coord.getFragmentInstanceInfos()) {
-                                    workers.add(fragmentInstanceInfo.getAddress());
-                                    instanceNum++;
+                                if (coord.getFragmentInstanceInfos() != null) {
+                                    for (QueryStatisticsItem.FragmentInstanceInfo fragmentInstanceInfo :
+                                            coord.getFragmentInstanceInfos()) {
+                                        if (fragmentInstanceInfo.getAddress() != null) {
+                                            workers.add(fragmentInstanceInfo.getAddress());
+                                            instanceNum++;
+                                        }
+                                    }
                                 }
                                 QueryInfo queryInfo = new QueryInfo(queryId, digestWithFlowId, workers.size(), instanceNum);
                                 GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()
@@ -2312,9 +2316,13 @@ public class StmtExecutor {
                     String digestWithFlowId = context.getDigestWithFlowId();
                     Set<TNetworkAddress> workers = new HashSet<>();
                     int instanceNum = 0;
-                    for (QueryStatisticsItem.FragmentInstanceInfo fragmentInstanceInfo : coord.getFragmentInstanceInfos()) {
-                        workers.add(fragmentInstanceInfo.getAddress());
-                        instanceNum++;
+                    if (coord.getFragmentInstanceInfos() != null) {
+                        for (QueryStatisticsItem.FragmentInstanceInfo fragmentInstanceInfo : coord.getFragmentInstanceInfos()) {
+                            if (fragmentInstanceInfo.getAddress() != null) {
+                                workers.add(fragmentInstanceInfo.getAddress());
+                                instanceNum++;
+                            }
+                        }
                     }
                     QueryInfo queryInfo = new QueryInfo(queryId, digestWithFlowId, workers.size(), instanceNum);
                     GlobalStateMgr.getCurrentState().getQueryMemoryRecorder()

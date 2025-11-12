@@ -1006,11 +1006,16 @@ public class ConnectProcessor {
                     String digestWithFlowId = digest + ":" + flowId;
                     Set<TNetworkAddress> workers = new HashSet<>();
                     int instanceNum = 0;
-                    for (QueryStatisticsItem.FragmentInstanceInfo fragmentInstanceInfo :
-                            executor.getCoordinator().getFragmentInstanceInfos()) {
-                        workers.add(fragmentInstanceInfo.getAddress());
-                        instanceNum++;
+                    if (executor.getCoordinator() != null && executor.getCoordinator().getFragmentInstanceInfos() != null) {
+                        for (QueryStatisticsItem.FragmentInstanceInfo fragmentInstanceInfo :
+                                executor.getCoordinator().getFragmentInstanceInfos()) {
+                            if (fragmentInstanceInfo.getAddress() != null) {
+                                workers.add(fragmentInstanceInfo.getAddress());
+                                instanceNum++;
+                            }
+                        }
                     }
+
                     double cost = GlobalStateMgr.getCurrentState().getQueryMemoryRecorder().recordQueryMemory(ctx.queryId,
                             digestWithFlowId, workers.size(), instanceNum, audit.getMemCostBytes(), ctx);
                     audit.setFeedbackMemCostBytes(cost);
