@@ -25,7 +25,7 @@
 HADOOP_DOWNLOAD="https://mirrors.tencent.com/repository/generic/tq-hadoop/hadoop-3.2.1-tq-1.2.10.tar.gz"
 HADOOP_NAME="hadoop-3.2.1-tq-1.2.10.tar.gz"
 HADOOP_SOURCE="hadoop-3.2.1-tq-1.2.10"
-HADOOP_MD5SUM="af55a05fac6ade76036d325cf96eae08"
+HADOOP_MD5SUM="82e5e1d3c291b8086580e186c6563b40"
 
 # OPEN JDK
 JDK_DOWNLOAD="https://cdn-thirdparty.starrocks.com/java-se-8u41-ri.tar.gz"
