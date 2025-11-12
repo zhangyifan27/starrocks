@@ -115,11 +115,7 @@ std::unique_ptr<SeekableInputStream> StripeStreamsImpl::getStream(uint64_t colum
             uint64_t streamLength = stream.length();
             uint64_t myBlock = shouldStream ? input.getNaturalReadSize() : streamLength;
             // if we don't need that much data, why we read it?
-            // block size should be min(min_row_group_size, natural read size) when reading data stream
-            if (stream.kind() == proto::Stream_Kind_DATA) {
-                uint64_t minRowGroupSize = reader.getMinRowGroupSize(columnId);
-                myBlock = minRowGroupSize > 0 ? std::min(minRowGroupSize, myBlock) : myBlock;
-            } else if (streamLength < myBlock) {
+            if (streamLength < myBlock) {
                 myBlock = streamLength;
             }
             if (offset + streamLength > dataEnd) {

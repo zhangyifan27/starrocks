@@ -429,7 +429,6 @@ void RowReaderImpl::seekToRow(uint64_t rowNumber) {
 void RowReaderImpl::loadStripeIndex() {
     // reset all previous row indexes
     rowIndexes.clear();
-    minRowGroupSizes.clear();
     bloomFilterIndex.clear();
 
     // obtain row indexes for selected columns
@@ -488,13 +487,6 @@ void RowReaderImpl::seekToRowGroup(uint32_t rowGroupEntryId) {
     PositionProviderMap map;
     getRowGroupPosition(rowGroupEntryId, &map);
     reader->seekToRowGroup(&map);
-}
-
-uint64_t RowReaderImpl::getMinRowGroupSize(uint64_t columnId) const {
-    if (minRowGroupSizes.count(columnId) > 0) {
-        return minRowGroupSizes.at(columnId);
-    }
-    return 0;
 }
 
 const FileContents& RowReaderImpl::getFileContents() const {
@@ -1063,67 +1055,7 @@ void RowReaderImpl::buildIORanges(std::vector<InputStream::IORange>* io_ranges) 
             if (!is_stripe_index && lazyLoadColumns[columnId]) {
                 is_active = false;
             }
-
-            std::vector<InputStream::IORange> rg_io_ranges;
-            if (sargsApplier && (stream.has_kind() && stream.kind() == proto::Stream_Kind_DATA) &&
-                rowIndexes.find(columnId) != rowIndexes.end()) {
-                bool shouldBuildByRowGroup = false;
-                const proto::RowIndex& rowIndex = rowIndexes.find(columnId)->second;
-                uint64_t slotId = 0;
-                uint64_t streamSlotId = 0;
-                uint64_t lengthDiff = stream.length();
-                uint64_t rgStart = 0;
-                uint64_t rgEnd = 0;
-                uint64_t minRowGroupSize = stream.length();
-                const proto::RowIndexEntry* lastEntry = nullptr;
-                if (rowIndex.entry_size() == 0) {
-                    goto END;
-                }
-
-                lastEntry = &rowIndex.entry(rowIndex.entry_size() - 1);
-                for (slotId = 0; slotId < lastEntry->positions_size(); slotId++) {
-                    if (lastEntry->positions(slotId) > stream.length()) {
-                        continue;
-                    }
-                    if (stream.length() - lastEntry->positions(slotId) < lengthDiff) {
-                        lengthDiff = stream.length() - lastEntry->positions(slotId);
-                        streamSlotId = slotId;
-                        shouldBuildByRowGroup = true;
-                    }
-                }
-
-                for (int i = 0; i < rowIndex.entry_size() - 1; i++) {
-                    auto& rgEntry = rowIndex.entry(i);
-                    auto& nextRgEntry = rowIndex.entry(i + 1);
-                    rgStart = rgEntry.positions(streamSlotId);
-                    rgEnd = nextRgEntry.positions(streamSlotId);
-                    minRowGroupSize = std::min(minRowGroupSize, rgEnd - rgStart);
-                    rg_io_ranges.emplace_back(InputStream::IORange{
-                            .offset = offset + rgStart, .size = rgEnd - rgStart, .is_active = is_active});
-                }
-
-                // last row group
-                if (shouldBuildByRowGroup) {
-                    rgStart = lastEntry->positions(streamSlotId);
-                    minRowGroupSize = std::min(minRowGroupSize, stream.length() - rgStart);
-                    minRowGroupSizes[columnId] = minRowGroupSize;
-                    rg_io_ranges.emplace_back(InputStream::IORange{
-                            .offset = offset + rgStart, .size = stream.length() - rgStart, .is_active = is_active});
-                }
-
-            END:
-                if (!shouldBuildByRowGroup) {
-                    rg_io_ranges.clear();
-                }
-            }
-
-            if (rg_io_ranges.empty()) {
-                io_ranges->emplace_back(InputStream::IORange{.offset = offset, .size = length, .is_active = is_active});
-            } else {
-                for (const auto& rg_io_range : rg_io_ranges) {
-                    io_ranges->emplace_back(rg_io_range);
-                }
-            }
+            io_ranges->emplace_back(InputStream::IORange{.offset = offset, .size = length, .is_active = is_active});
         }
         if (stream.has_kind() && stream.kind() == proto::Stream_Kind_DATA) {
             dataStreamOffsets[columnId] = offset;
@@ -1195,11 +1127,6 @@ void RowReaderImpl::startNextStripe() {
             contents->stream->releaseToOffset(currentStripeInfo.offset());
         }
         currentStripeFooter = getStripeFooter(currentStripeInfo, *contents);
-
-        if (sargsApplier) {
-            loadStripeIndex();
-        }
-
         // We need to check this stripe is already set in shared buffer(tiny stripe optimize) to avoid shared buffer overlap
         if (isIOCoalesceEnabled &&
             !contents->stream->isAlreadyCollectedInSharedBuffer(currentStripeInfo.offset(), stripeSize)) {
@@ -1210,7 +1137,7 @@ void RowReaderImpl::startNextStripe() {
 
         if (sargsApplier) {
             // read row group statistics and bloom filters of current stripe
-            // loadStripeIndex();
+            loadStripeIndex();
 
             if (sargsApplier->getRowReaderFilter()) {
                 sargsApplier->getRowReaderFilter()->setWriterTimezone(
