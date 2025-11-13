@@ -911,6 +911,26 @@ build_hadoop() {
     cp -r $TP_SOURCE_DIR/$HADOOP_SOURCE $TP_INSTALL_DIR/hadoop
     # remove unnecessary doc and logs
     rm -rf $TP_INSTALL_DIR/hadoop/logs/* $TP_INSTALL_DIR/hadoop/share/doc/hadoop
+    if [ -f $TP_INSTALL_DIR/hadoop/share/hadoop/common/lib/slf4j-log4j12-1.7.25.jar ];then
+        rm -rf $TP_INSTALL_DIR/hadoop/share/hadoop/common/lib/slf4j-log4j12-1.7.25.jar
+    fi
+    rm -rf $TP_INSTALL_DIR/hadoop/lib/native/libisal*
+    cp -r $TP_DIR/hadoopso/lib* $TP_INSTALL_DIR/hadoop/lib/native/
+    # create symbolic links for libz.so\libzstd.so\libgplcompression.so
+    cd $TP_INSTALL_DIR/hadoop/lib/native/
+    if [ -f libz.so.1.2.9 ]; then
+        ln -sf libz.so.1.2.9 libz.so.1
+        ln -sf libz.so.1.2.9 libz.so
+    fi
+    if [ -f libzstd.so.1.5.0 ]; then
+        ln -sf libzstd.so.1.5.0 libzstd.so
+        ln -sf libzstd.so.1.5.0 libzstd.so.1
+    fi
+    if [ -f libgplcompression.so.0.0.0 ]; then
+        ln -sf libgplcompression.so.0.0.0 libgplcompression.so
+        ln -sf libgplcompression.so.0.0.0 libgplcompression.so.0
+    fi
+    cd $TP_DIR
     mkdir -p $TP_INSTALL_DIR/include/hdfs
     cp $TP_SOURCE_DIR/$HADOOP_SOURCE/include/hdfs.h $TP_INSTALL_DIR/include/hdfs
     cp $TP_SOURCE_DIR/$HADOOP_SOURCE/lib/native/libhdfs.a $TP_INSTALL_DIR/lib
