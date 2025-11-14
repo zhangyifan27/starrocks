@@ -16,6 +16,8 @@
 
 #include <arrow/type.h>
 
+#include "exec/pipeline/pipeline_driver_executor.h"
+#include "exec/workgroup/work_group.h"
 #include "exprs/expr.h"
 #include "runtime/arrow_result_writer.h"
 #include "runtime/buffer_control_block.h"
@@ -82,6 +84,10 @@ void ResultSinkOperator::close(RuntimeState* state) {
 
     // Close the shared sender when the last result sink operator is closing.
     if (_num_sinkers.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        // Report audit statistics when the last sinker is closing
+        _fragment_ctx->workgroup()->executors()->driver_executor()->report_audit_statistics(state->query_ctx(),
+                                                                                            state->fragment_ctx());
+
         if (_sender != nullptr) {
             // Incrementing and reading _num_written_rows needn't memory barrier, because
             // the visibility of _num_written_rows is guaranteed by _num_sinkers.fetch_sub().

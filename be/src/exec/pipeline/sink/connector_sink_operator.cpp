@@ -49,6 +49,11 @@ Status ConnectorSinkOperator::prepare(RuntimeState* state) {
 }
 
 void ConnectorSinkOperator::close(RuntimeState* state) {
+    // Report audit statistics when the last sinker is closing
+    if (_num_sinkers.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        _fragment_context->workgroup()->executors()->driver_executor()->report_audit_statistics(state->query_ctx(),
+                                                                                                state->fragment_ctx());
+    }
     if (_is_cancelled) {
         _connector_chunk_sink->rollback();
     }
@@ -87,10 +92,6 @@ bool ConnectorSinkOperator::is_finished() const {
 
 Status ConnectorSinkOperator::set_finishing(RuntimeState* state) {
     _no_more_input = true;
-    if (_num_sinkers.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-        _fragment_context->workgroup()->executors()->driver_executor()->report_audit_statistics(state->query_ctx(),
-                                                                                                state->fragment_ctx());
-    }
     RETURN_IF_ERROR(_connector_chunk_sink->finish());
     return Status::OK();
 }

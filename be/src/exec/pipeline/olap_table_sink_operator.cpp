@@ -39,6 +39,11 @@ Status OlapTableSinkOperator::prepare(RuntimeState* state) {
 }
 
 void OlapTableSinkOperator::close(RuntimeState* state) {
+    // Report audit statistics when the last sinker is closing
+    if (_num_sinkers.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        _fragment_ctx->workgroup()->executors()->driver_executor()->report_audit_statistics(state->query_ctx(),
+                                                                                            state->fragment_ctx());
+    }
     Operator::close(state);
 }
 
@@ -104,10 +109,6 @@ Status OlapTableSinkOperator::set_cancelled(RuntimeState* state) {
 Status OlapTableSinkOperator::set_finishing(RuntimeState* state) {
     _is_finished = true;
 
-    if (_num_sinkers.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-        _fragment_ctx->workgroup()->executors()->driver_executor()->report_audit_statistics(state->query_ctx(),
-                                                                                            state->fragment_ctx());
-    }
     if (_is_open_done && !_automatic_partition_chunk) {
         // sink's open already finish, we can try_close
         return _sink->try_close(state);

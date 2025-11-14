@@ -83,6 +83,11 @@ Status JDBCTableSinkOperator::prepare(RuntimeState* state) {
 }
 
 void JDBCTableSinkOperator::close(RuntimeState* state) {
+    // Report audit statistics when the last sinker is closing
+    if (_num_sinkers.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        state->fragment_ctx()->workgroup()->executors()->driver_executor()->report_audit_statistics(state->query_ctx(),
+                                                                                                    state->fragment_ctx());
+    }
     Operator::close(state);
 }
 
@@ -95,10 +100,6 @@ bool JDBCTableSinkOperator::is_finished() const {
 }
 
 Status JDBCTableSinkOperator::set_finishing(RuntimeState* state) {
-    if (_num_sinkers.fetch_sub(1, std::memory_order_acq_rel) == 1) {
-        state->fragment_ctx()->workgroup()->executors()->driver_executor()->report_audit_statistics(state->query_ctx(),
-                                                                                                    state->fragment_ctx());
-    }
     return _sink_io_buffer->set_finishing();
 }
 
