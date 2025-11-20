@@ -63,4 +63,10 @@ public class GCPCloudConfiguration extends CloudConfiguration {
         return String.format("GCPCloudConfiguration{%s, cred=%s}", getCommonFieldsString(),
                 gcpCloudCredential.toCredString());
     }
+
+    @Override
+    public CloudConfiguration cloneWithNewUsername() {
+        // not really clone
+        return this;
+    }
 }

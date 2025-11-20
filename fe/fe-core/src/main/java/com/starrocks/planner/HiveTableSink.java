@@ -81,8 +81,7 @@ public class HiveTableSink extends DataSink {
                 String.format("connector of catalog %s should not be null", catalogName));
 
         this.cloudConfiguration = connector.getMetadata().getCloudConfiguration();
-        String username = TdwUtil.getTdwUserName();
-        this.cloudConfiguration = this.cloudConfiguration.cloneWithNewUsername(username);
+        this.cloudConfiguration = this.cloudConfiguration.cloneWithNewUsername();
 
         Preconditions.checkState(cloudConfiguration != null,
                 String.format("cloudConfiguration of catalog %s should not be null", catalogName));

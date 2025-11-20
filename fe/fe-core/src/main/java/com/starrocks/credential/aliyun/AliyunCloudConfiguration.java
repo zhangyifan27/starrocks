@@ -69,4 +69,10 @@ public class AliyunCloudConfiguration extends CloudConfiguration {
         return String.format("AliyunCloudConfiguration{%s, cred=%s}", getCommonFieldsString(),
                 aliyunCloudCredential.toCredString());
     }
+
+    @Override
+    public CloudConfiguration cloneWithNewUsername() {
+        // not really clone
+        return this;
+    }
 }

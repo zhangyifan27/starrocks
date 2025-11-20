@@ -20,6 +20,7 @@ import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.credential.CloudType;
 import com.starrocks.thrift.TCloudConfiguration;
 import com.starrocks.thrift.TCloudType;
+import com.starrocks.utils.TdwUtil;
 import org.apache.hadoop.conf.Configuration;
 
 import java.util.Map;
@@ -65,5 +66,11 @@ public class HDFSCloudConfiguration extends CloudConfiguration {
     @Override
     public FileStoreInfo toFileStoreInfo() {
         return hdfsCloudCredential.toFileStoreInfo();
+    }
+
+    @Override
+    public CloudConfiguration cloneWithNewUsername() {
+        CloudConfiguration clone = new CloudConfiguration(this.configResources, this.runtimeJars, TdwUtil.getTdwUserName());
+        return clone;
     }
 }

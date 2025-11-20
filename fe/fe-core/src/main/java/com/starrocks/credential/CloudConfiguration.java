@@ -18,6 +18,7 @@ import com.staros.proto.FileStoreInfo;
 import com.starrocks.connector.hadoop.HadoopExt;
 import com.starrocks.thrift.TCloudConfiguration;
 import com.starrocks.thrift.TCloudType;
+import com.starrocks.utils.TdwUtil;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -28,9 +29,18 @@ import java.util.Map;
 public class CloudConfiguration {
     private static final Logger LOG = LogManager.getLogger(CloudConfiguration.class);
 
-    private String configResources;
-    private String runtimeJars;
-    private String hadoopUsername;
+    protected String configResources;
+    protected String runtimeJars;
+    protected String hadoopUsername;
+
+    public CloudConfiguration() {
+    }
+
+    public CloudConfiguration(String configResources, String runtimeJars, String hadoopUsername) {
+        this.configResources = configResources;
+        this.runtimeJars = runtimeJars;
+        this.hadoopUsername = hadoopUsername;
+    }
 
     public void toThrift(TCloudConfiguration tCloudConfiguration) {
         tCloudConfiguration.cloud_type = TCloudType.DEFAULT;
@@ -83,11 +93,8 @@ public class CloudConfiguration {
         return String.format("resources='%s', jars='%s', hdpuser='%s'", configResources, runtimeJars, hadoopUsername);
     }
 
-    public CloudConfiguration cloneWithNewUsername(String hadoopUsername) {
-        CloudConfiguration clone = new CloudConfiguration();
-        clone.configResources = this.configResources;
-        clone.runtimeJars = this.runtimeJars;
-        clone.hadoopUsername = hadoopUsername;
+    public CloudConfiguration cloneWithNewUsername() {
+        CloudConfiguration clone = new CloudConfiguration(this.configResources, this.runtimeJars, TdwUtil.getTdwUserName());
         return clone;
     }
 }

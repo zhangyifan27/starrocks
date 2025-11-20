@@ -106,8 +106,7 @@ public class HdfsScanNode extends ScanNode {
         Preconditions.checkState(connector != null,
                 String.format("connector of catalog %s should not be null", catalog));
         cloudConfiguration = connector.getMetadata().getCloudConfiguration();
-        String username = TdwUtil.getTdwUserName();
-        cloudConfiguration = cloudConfiguration.cloneWithNewUsername(username);
+        cloudConfiguration = cloudConfiguration.cloneWithNewUsername();
         Preconditions.checkState(cloudConfiguration != null,
                 String.format("cloudConfiguration of catalog %s should not be null", catalog));
     }

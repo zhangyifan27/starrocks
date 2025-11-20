@@ -64,4 +64,10 @@ public class TencentCloudConfiguration extends CloudConfiguration {
         return String.format("TencentCloudConfiguration{%s, cred=%s}", getCommonFieldsString(),
                 tencentCloudCredential.toCredString());
     }
+
+    @Override
+    public CloudConfiguration cloneWithNewUsername() {
+        // not really clone
+        return this;
+    }
 }

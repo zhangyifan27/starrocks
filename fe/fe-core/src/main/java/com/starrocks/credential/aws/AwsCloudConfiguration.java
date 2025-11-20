@@ -154,4 +154,10 @@ public class AwsCloudConfiguration extends CloudConfiguration {
                 ", enableSSL=" + enableSSL +
                 '}';
     }
+
+    @Override
+    public CloudConfiguration cloneWithNewUsername() {
+        // not really clone
+        return this;
+    }
 }

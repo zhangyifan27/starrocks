@@ -61,4 +61,10 @@ public class AzureCloudConfiguration extends CloudConfiguration {
         return String.format("AzureCloudConfiguration{%s, cred=%s}", getCommonFieldsString(),
                 azureStorageCloudCredential.toCredString());
     }
+
+    @Override
+    public CloudConfiguration cloneWithNewUsername() {
+        // not really clone
+        return this;
+    }
 }
