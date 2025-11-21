@@ -160,17 +160,11 @@ public class AuthorizationMgr {
             rolePrivilegeCollection = initBuiltinRoleUnlocked(PrivilegeBuiltinConstants.DB_ADMIN_ROLE_ID,
                     PrivilegeBuiltinConstants.DB_ADMIN_ROLE_NAME, "built-in database administration role");
             // System grant belong to db_admin
+            // Note: OPERATE privilege is removed to prevent db_admin from modifying cluster parameters (SET GLOBAL)
             List<PrivilegeType> dbAdminSystemGrant = Lists.newArrayList(
-                    PrivilegeType.CREATE_RESOURCE,
-                    PrivilegeType.PLUGIN,
-                    PrivilegeType.FILE,
                     PrivilegeType.BLACKLIST,
-                    PrivilegeType.OPERATE,
-                    PrivilegeType.CREATE_EXTERNAL_CATALOG,
-                    PrivilegeType.REPOSITORY,
                     PrivilegeType.CREATE_RESOURCE_GROUP,
-                    PrivilegeType.CREATE_GLOBAL_FUNCTION,
-                    PrivilegeType.CREATE_STORAGE_VOLUME);
+                    PrivilegeType.CREATE_GLOBAL_FUNCTION);
             initPrivilegeCollections(rolePrivilegeCollection, ObjectType.SYSTEM, dbAdminSystemGrant, null, false);
 
             for (ObjectType t : Arrays.asList(
