@@ -80,10 +80,12 @@ import org.apache.logging.log4j.Logger;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static com.starrocks.connector.PartitionUtil.createPartitionKeyWithType;
@@ -257,7 +259,7 @@ public class IcebergScanNode extends ScanNode {
         // this partition list filtered out based on logical partition secondary pruner
         boolean enableSecondaryPrunner = icebergTable.isAllIdentityTransform() &&
                 ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnablePartitionSecondaryPrunner();
-        List<PartitionKey> selectedPartitionKeys = new ArrayList<>(scanNodePredicates.getIdToPartitionKey().values());
+        Set<PartitionKey> selectedPartitionKeys = new HashSet<>(scanNodePredicates.getIdToPartitionKey().values());
         Map<StructLike, Long> partitionKeyToId = Maps.newHashMap();
         Map<Long, List<Integer>> idToPartitionSlots = Maps.newHashMap();
         Map<String, Long> scanFileSizes = Maps.newHashMap();
@@ -386,7 +388,7 @@ public class IcebergScanNode extends ScanNode {
         scanFileNum = scanFileSizes.size();
     }
 
-    private boolean partitionKeyContains(List<PartitionKey> selectedPartitionKeys, PartitionKey partitionKey,
+    private boolean partitionKeyContains(Set<PartitionKey> selectedPartitionKeys, PartitionKey partitionKey,
                                          StructLike partitionData, PartitionSpec spec) {
         try {
             if (partitionKey.isEmpty() || selectedPartitionKeys.contains(partitionKey)) {
