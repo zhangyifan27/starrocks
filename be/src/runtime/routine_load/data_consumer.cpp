@@ -746,6 +746,13 @@ Status PulsarDataConsumer::get_last_message_id(pulsar::MessageId& msg_id) {
                      << ", err: " << result;
         return Status::InternalError("Failed to get broker consumer stats: " + std::string(pulsar::strResult(result)));
     }
+
+    if (config::enable_routine_load_last_msg_log) {
+        // if ledgerID and entryId = -1, the topic may be empty, meaning no data exists.
+        LOG(INFO) << "Get last message id, consumer: " << _id << ", grp: " << _grp_id
+                  << ", pulsar topic: " << _p_reader.getTopic()
+                  << ", message id: " << msg_id;
+    }
     StarRocksMetrics::instance()->get_pulsar_last_message_id_cost_time_ms.set_value(UnixMillis() - start_time);
 
     return Status::OK();

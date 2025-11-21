@@ -1812,6 +1812,12 @@ public class Config extends ConfigBase {
     public static boolean routine_load_check_pulsar_token_format = false;
 
     /**
+     * whether to print topic position when scheduling routine load task, used for debug
+     */
+    @ConfField(mutable = true)
+    public static boolean enable_routine_load_position_log = false;
+
+    /**
      * iceberg routine load job check split interval
      */
     @ConfField(mutable = true)

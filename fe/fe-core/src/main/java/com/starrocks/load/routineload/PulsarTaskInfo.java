@@ -47,7 +47,10 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
     private static final Logger LOG = LogManager.getLogger(PulsarTaskInfo.class);
     private RoutineLoadMgr routineLoadManager = GlobalStateMgr.getCurrentState().getRoutineLoadMgr();
 
+    // partition -> the current consumed message ID, which can reflect the consumption progress of each partition
     private Map<String, MessageId> initialPositions = Maps.newHashMap();
+
+    // partition -> the latest message ID
     private Map<String, MessageId> latestPartPositions = Maps.newHashMap();
 
     public PulsarTaskInfo(UUID id, RoutineLoadJob job, long taskScheduleIntervalMs, long timeToExecuteMs,
@@ -102,6 +105,14 @@ public class PulsarTaskInfo extends RoutineLoadTaskInfo {
             } else if (initialPositions.get(partition).compareTo(latestPosition) < 0) {
                 ready = true;
                 latestPartPositions.put(partition, latestPosition);
+            }
+
+            if (Config.enable_routine_load_position_log) {
+                String msg = String.format(
+                        "partition = %s, latestPosition = %s, initialPosition = %s, ready = %s",
+                        partition, latestPosition, initialPositions.get(partition), ready
+                );
+                LOG.info(msg);
             }
         }
 

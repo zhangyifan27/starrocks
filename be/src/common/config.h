@@ -624,6 +624,9 @@ CONF_Int32(routine_load_pulsar_timeout_second, "10");
 // pulsar reader receiver queue size
 CONF_mInt32(routine_load_pulsar_reader_receiver_queue_size, "10000");
 
+// whether to print last message id, used for debug
+CONF_mBool(enable_routine_load_last_msg_log ,"false");
+
 // Is set to true, index loading failure will not cause BE exit,
 // and the tablet will be marked as bad, so that FE will try to repair it.
 // CONF_Bool(auto_recover_index_loading_failure, "false");
