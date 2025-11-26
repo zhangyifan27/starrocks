@@ -43,7 +43,6 @@ import com.starrocks.analysis.ArithmeticExpr;
 import com.starrocks.analysis.FunctionName;
 import com.starrocks.builtins.VectorizedBuiltinFunctions;
 import com.starrocks.sql.analyzer.PolymorphicFunctionAnalyzer;
-import com.starrocks.sql.analyzer.SemanticException;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -143,6 +142,16 @@ public class FunctionSet {
     public static final String TDW_ADD_MONTHS = "tdw_add_months";
     public static final String TDW_TO_DATE = "tdw_to_date";
     public static final String TDW_TO_CHAR = "tdw_to_char";
+
+    public static final String TDW_BOOLEAN = "tdw_boolean";
+    public static final String TDW_TINYINT = "tdw_tinyint";
+    public static final String TDW_SMALLINT = "tdw_smallint";
+    public static final String TDW_INT = "tdw_int";
+    public static final String TDW_BIGINT = "tdw_bigint";
+    public static final String TDW_FLOAT = "tdw_float";
+    public static final String TDW_DOUBLE = "tdw_double";
+    public static final String TDW_STRING = "tdw_string";
+    public static final String TDW_TIMESTAMP = "tdw_timestamp";
 
     // Encryption functions:
     public static final String AES_DECRYPT = "aes_decrypt";
@@ -567,7 +576,7 @@ public class FunctionSet {
                     .addAll(Type.FLOAT_TYPES)
                     .addAll(Type.INTEGER_TYPES)
                     .build();
-    
+
     private static final Set<Type> SKEWNESS_ARG_TYPE =
             ImmutableSet.<Type>builder()
                     .addAll(Type.FLOAT_TYPES)
@@ -1111,7 +1120,6 @@ public class FunctionSet {
             addBuiltin(AggregateFunction.createBuiltin(MIN,
                     Lists.newArrayList(t), t, t, true, true, false));
 
-
             // MAX_BY
             for (Type t1 : Type.getSupportedTypes()) {
                 if (t1.isFunctionType() || t1.isNull() || t1.isChar() || t1.isPseudoType()) {
@@ -1250,7 +1258,6 @@ public class FunctionSet {
         // Retention
         addBuiltin(AggregateFunction.createBuiltin(RETENTION, Lists.newArrayList(Type.ARRAY_BOOLEAN),
                 Type.ARRAY_BOOLEAN, Type.BIGINT, false, false, false));
-
 
         // Type.DATE must before Type.DATATIME, because DATE could be considered as DATETIME.
         addBuiltin(AggregateFunction.createBuiltin(WINDOW_FUNNEL,
@@ -1469,7 +1476,6 @@ public class FunctionSet {
         }
     }
 
-
     private void registerBuiltinAvgAggFunction() {
         // TODO: switch to CHAR(sizeof(AvgIntermediateType) when that becomes available
         for (ScalarType type : Type.FLOAT_TYPES) {
@@ -1531,43 +1537,43 @@ public class FunctionSet {
                 false));
 
         addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
-                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR, 
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR,
                         Type.DOUBLE, Type.ARRAY_VARCHAR), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
-                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR, 
-                        Type.DOUBLE, Type.ARRAY_VARCHAR, Type.DOUBLE, Type.DOUBLE), 
-                        Type.JSON, Type.VARBINARY, false, true, false));
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR,
+                        Type.DOUBLE, Type.ARRAY_VARCHAR, Type.DOUBLE, Type.DOUBLE),
+                Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(TTEST_2SAMP,
-                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR, 
-                        Type.DOUBLE, Type.ARRAY_VARCHAR, Type.DOUBLE, Type.DOUBLE, Type.BIGINT), 
-                        Type.JSON, Type.VARBINARY, false, true, false));
-        
+                Lists.newArrayList(Type.VARCHAR, Type.VARCHAR, Type.BOOLEAN, Type.ARRAY_DOUBLE, Type.VARCHAR,
+                        Type.DOUBLE, Type.ARRAY_VARCHAR, Type.DOUBLE, Type.DOUBLE, Type.BIGINT),
+                Type.JSON, Type.VARBINARY, false, true, false));
+
         // Y, treatment, percentiles, uin[, num_bootstrap=500[, alpha=0.05[, power=0.8[, mde=0.01,[ hash_type]]]]]]
         addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
-                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT, 
-                        Type.DOUBLE, Type.DOUBLE, Type.DOUBLE, Type.INT), 
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT,
+                        Type.DOUBLE, Type.DOUBLE, Type.DOUBLE, Type.INT),
                 Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
-                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT, 
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT,
                         Type.DOUBLE, Type.DOUBLE, Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
-                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT, 
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT,
                         Type.DOUBLE, Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
-                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT, 
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT,
                         Type.DOUBLE), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
-                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT), 
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT, Type.BIGINT),
                 Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(QUANTILE_TEST,
-                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT), 
+                Lists.newArrayList(Type.DOUBLE, Type.VARCHAR, Type.ARRAY_DOUBLE, Type.BIGINT),
                 Type.JSON, Type.VARBINARY, false, true, false));
 
         // expression, side, treatment, data, [cuped, alpha]
@@ -1636,7 +1642,7 @@ public class FunctionSet {
 
         addBuiltin(AggregateFunction.createBuiltin(WLS,
                 Lists.newArrayList(Type.DOUBLE, Type.ARRAY_DOUBLE, Type.DOUBLE, Type.BOOLEAN, Type.VARCHAR, Type.JSON,
-                Type.JSON), Type.JSON, Type.VARBINARY, false, true, false));
+                        Type.JSON), Type.JSON, Type.VARBINARY, false, true, false));
 
         addBuiltin(AggregateFunction.createBuiltin(MATRIX_MULTIPLICATION,
                 Lists.newArrayList(Type.ARRAY_DOUBLE, Type.BOOLEAN, Type.BOOLEAN), Type.JSON,
@@ -1676,7 +1682,7 @@ public class FunctionSet {
         addBuiltin(AggregateFunction.createBuiltin(CAUSAL_FOREST,
                 Lists.newArrayList(Type.JSON, Type.DOUBLE, Type.BOOLEAN, Type.DOUBLE, Type.ARRAY_DOUBLE, Type.BOOLEAN),
                 Type.JSON, Type.VARBINARY, false, true, false));
-        
+
         addBuiltin(AggregateFunction.createBuiltin(KOLMOGOROV_SMIRNOV_TEST,
                 Lists.newArrayList(Type.DOUBLE, Type.BOOLEAN, Type.VARCHAR, Type.VARCHAR), Type.JSON,
                 Type.VARBINARY, false, true, false));

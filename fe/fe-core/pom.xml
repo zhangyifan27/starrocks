@@ -44,8 +44,7 @@ under the License.
         <staros.version>3.3.0</staros.version>
         <python>python</python>
         <hive.version>2.3.9-tq-0.1.0-SNAPSHOT</hive.version>
-        <thive-udf.version>2.3.7-tq-1.0.1-SNAPSHOT</thive-udf.version>
-        <!--<thive-udf.version>2.3.7-tq-1.0.0</thive-udf.version>-->
+        <thive-udf.version>2.3.7-tq-1.0.0</thive-udf.version>
     </properties>
 
     <profiles>

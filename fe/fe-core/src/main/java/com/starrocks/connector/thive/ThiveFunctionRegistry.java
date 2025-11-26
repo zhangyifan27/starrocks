@@ -28,12 +28,21 @@ import com.tencent.tdw_udf_cloud.hive.udf.LogicGradeToUpperGrade;
 import com.tencent.tdw_udf_cloud.hive.udf.PIIHash;
 import com.tencent.tdw_udf_cloud.hive.udf.RcmdidDecoder;
 import com.tencent.tdw_udf_cloud.hive.udf.SCCDateAdd;
+import com.tencent.tdw_udf_cloud.hive.udf.SgameDoubleDropoverStatUDAF;
 import com.tencent.tdw_udf_cloud.hive.udf.SgameEmbededArrayDecode;
 import com.tencent.tdw_udf_cloud.hive.udf.SgameEmbededArrayGetField;
 import com.tencent.tdw_udf_cloud.hive.udf.SgameEmbendedArray;
 import com.tencent.tdw_udf_cloud.hive.udf.SgameEmbendedArray30s;
 import com.tencent.tdw_udf_cloud.hive.udf.SgameStat30s2;
 import com.tencent.tdw_udf_cloud.hive.udf.ShowGradeToLogicGrade;
+import com.tencent.tdw_udf_cloud.hive.udf.UDF1ToBoolean;
+import com.tencent.tdw_udf_cloud.hive.udf.UDF1ToByte;
+import com.tencent.tdw_udf_cloud.hive.udf.UDF1ToDouble;
+import com.tencent.tdw_udf_cloud.hive.udf.UDF1ToFloat;
+import com.tencent.tdw_udf_cloud.hive.udf.UDF1ToInteger;
+import com.tencent.tdw_udf_cloud.hive.udf.UDF1ToLong;
+import com.tencent.tdw_udf_cloud.hive.udf.UDF1ToShort;
+import com.tencent.tdw_udf_cloud.hive.udf.UDF1ToString;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFADD_MONTHS;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFAbs;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFAcos;
@@ -49,6 +58,7 @@ import com.tencent.tdw_udf_cloud.hive.udf.UDFCeil;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFCollectDbTableInfo;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFCommonStr;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFComparison;
+import com.tencent.tdw_udf_cloud.hive.udf.UDFConcat;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFConv;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFConvert;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFCos;
@@ -162,9 +172,17 @@ import com.tencent.tdw_udf_cloud.hive.udf.UDFSysTimestamp;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFSysdate;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFTRUNC;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFThiveJson;
+import com.tencent.tdw_udf_cloud.hive.udf.UDFToBoolean;
+import com.tencent.tdw_udf_cloud.hive.udf.UDFToByte;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFToChar;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFToDate2;
+import com.tencent.tdw_udf_cloud.hive.udf.UDFToDouble;
+import com.tencent.tdw_udf_cloud.hive.udf.UDFToFloat;
+import com.tencent.tdw_udf_cloud.hive.udf.UDFToInteger;
+import com.tencent.tdw_udf_cloud.hive.udf.UDFToLong;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFToNumber;
+import com.tencent.tdw_udf_cloud.hive.udf.UDFToShort;
+import com.tencent.tdw_udf_cloud.hive.udf.UDFToString;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFTrim;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFTz_Offset;
 import com.tencent.tdw_udf_cloud.hive.udf.UDFUinChange;
@@ -218,6 +236,8 @@ import com.tencent.tdw_udf_cloud.hive.udf.generic.GenericUDFStringToMap;
 import com.tencent.tdw_udf_cloud.hive.udf.generic.GenericUDFStruct;
 import com.tencent.tdw_udf_cloud.hive.udf.generic.GenericUDFSubstringIndex;
 import com.tencent.tdw_udf_cloud.hive.udf.generic.GenericUDFTestGBK;
+import com.tencent.tdw_udf_cloud.hive.udf.generic.GenericUDFTimestamp;
+import com.tencent.tdw_udf_cloud.hive.udf.generic.GenericUDFToBinary;
 import com.tencent.tdw_udf_cloud.hive.udf.generic.GenericUDFToUtcTimestamp;
 import com.tencent.tdw_udf_cloud.hive.udf.generic.GenericUDFUnBase64;
 import com.tencent.tdw_udf_cloud.hive.udf.generic.GenericUDFUnicode;
@@ -232,6 +252,7 @@ import org.apache.hadoop.hive.ql.exec.FunctionInfo;
 import org.apache.hadoop.hive.ql.exec.Registry;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDFCharacterLength;
 import org.apache.hadoop.hive.ql.udf.generic.GenericUDFHash;
+import org.apache.hadoop.hive.serde.Constants;
 
 import java.util.Set;
 
@@ -302,6 +323,59 @@ public class ThiveFunctionRegistry {
         SYSTEM.registerUDF("systimestamp", UDFSysTimestamp.class, true, "systimestamp");
         SYSTEM.registerGenericUDF("hash", GenericUDFHash.class);
         SYSTEM.registerGenericUDF("oneBetween", GenericUDFOneBetween.class);
+
+        SYSTEM.registerUDF(Constants.BOOLEAN_TYPE_NAME, UDFToBoolean.class, false,
+                UDFToBoolean.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.TINYINT_TYPE_NAME, UDFToByte.class, false,
+                UDFToByte.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.SMALLINT_TYPE_NAME, UDFToShort.class, false,
+                UDFToShort.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.INT_TYPE_NAME, UDFToInteger.class, false,
+                UDFToInteger.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.BIGINT_TYPE_NAME, UDFToLong.class, false,
+                UDFToLong.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.FLOAT_TYPE_NAME, UDFToFloat.class, false,
+                UDFToFloat.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.DOUBLE_TYPE_NAME, UDFToDouble.class, false,
+                UDFToDouble.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.STRING_TYPE_NAME, UDFToString.class, false,
+                UDFToString.class.getSimpleName());
+
+        SYSTEM.registerUDF(Constants.BOOLEAN_TYPE_NAME + "2", UDFToBoolean.class, false,
+                UDFToBoolean.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.TINYINT_TYPE_NAME + "2", UDFToByte.class, false,
+                UDFToByte.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.SMALLINT_TYPE_NAME + "2", UDFToShort.class, false,
+                UDFToShort.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.INT_TYPE_NAME + "2", UDFToInteger.class, false,
+                UDFToInteger.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.BIGINT_TYPE_NAME + "2", UDFToLong.class, false,
+                UDFToLong.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.FLOAT_TYPE_NAME + "2", UDFToFloat.class, false,
+                UDFToFloat.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.DOUBLE_TYPE_NAME + "2", UDFToDouble.class, false,
+                UDFToDouble.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.STRING_TYPE_NAME + "2", UDFToString.class, false,
+                UDFToString.class.getSimpleName());
+
+        SYSTEM.registerUDF(Constants.BOOLEAN_TYPE_NAME + "1", UDF1ToBoolean.class, false,
+                UDF1ToBoolean.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.TINYINT_TYPE_NAME + "1", UDF1ToByte.class, false,
+                UDF1ToByte.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.SMALLINT_TYPE_NAME + "1", UDF1ToShort.class, false,
+                UDF1ToShort.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.INT_TYPE_NAME + "1", UDF1ToInteger.class, false,
+                UDF1ToInteger.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.BIGINT_TYPE_NAME + "1", UDF1ToLong.class, false,
+                UDF1ToLong.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.FLOAT_TYPE_NAME + "1", UDF1ToFloat.class, false,
+                UDF1ToFloat.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.DOUBLE_TYPE_NAME + "1", UDF1ToDouble.class, false,
+                UDF1ToDouble.class.getSimpleName());
+        SYSTEM.registerUDF(Constants.STRING_TYPE_NAME + "1", UDF1ToString.class, false,
+                UDF1ToString.class.getSimpleName());
+        SYSTEM.registerGenericUDF(Constants.TIMESTAMP_TYPE_NAME, GenericUDFTimestamp.class);
+        SYSTEM.registerGenericUDF(Constants.BINARY_TYPE_NAME, GenericUDFToBinary.class);
         SYSTEM.registerUDF("uinchange", UDFUinChange.class, false);
         SYSTEM.registerUDF("ipchange", UDFIPChange.class, false);
         SYSTEM.registerUDF("md5", UDFMd5Hash.class, false);
@@ -323,6 +397,11 @@ public class ThiveFunctionRegistry {
         SYSTEM.registerUDF("fit_decrypt1", UDFFitDecrypt1.class, false);
         SYSTEM.registerUDF("fit_encrypt2", UDFFitEncrypt2.class, false);
         SYSTEM.registerUDF("fit_decrypt2", UDFFitDecrypt2.class, false);
+        // TODO: thive udf cloud 已更新，但未正式发布版本，暂时注释
+        //        SYSTEM.registerUDF("fit_sign2", UDFFitSign2.class, false);
+        //        SYSTEM.registerUDF("fit_encrypt_std", UDFFitEncryptStd.class, false);
+        //        SYSTEM.registerUDF("fit_decrypt_std", UDFFitDecryptStd.class, false);
+        //        SYSTEM.registerUDF("fit_sign_std", UDFFitSignStd.class, false);
         SYSTEM.registerUDF("fit_cbc_decrypt", UDFFitCbcDecrypt.class, false);
         SYSTEM.registerUDF("fit_cbc_decrypt2", UDFFitCbcDecrypt2.class, false);
         SYSTEM.registerUDF("fit_cbc_encrypt", UDFFitCbcEncrypt.class, false);
@@ -339,6 +418,8 @@ public class ThiveFunctionRegistry {
         SYSTEM.registerGenericUDF("sm4_GCMEncryptNoPadding", SM4GCMEncryptNoPadding.class);
         SYSTEM.registerGenericUDF("sentences", GenericUDFSentences.class);
         SYSTEM.registerGenericUDF("create_union", GenericUDFUnion.class);
+        SYSTEM.registerUDF("concat", UDFConcat.class, false);
+        SYSTEM.registerUDF("||", UDFConcat.class, true, "concat");
         SYSTEM.registerUDF("substr", UDFSubstr.class, false);
         SYSTEM.registerUDF("substring", UDFSubstr.class, false);
         SYSTEM.registerUDF("space", UDFSpace.class, false);
@@ -361,7 +442,7 @@ public class ThiveFunctionRegistry {
         SYSTEM.registerUDF("tz_offset", UDFTz_Offset.class, false);
         SYSTEM.registerUDF("chr", UDFCHR.class, false);
         SYSTEM.registerUDF("between", UDFBetween.class, true);
-
+        SYSTEM.registerGenericUDF("least", GenericUDFLeast.class);
         SYSTEM.registerGenericUDF("decode", GenericUDFDecode.class);
         SYSTEM.registerUDF("round", UDFRound.class, false);
         SYSTEM.registerUDF("floor", UDFFloor.class, false);
@@ -471,6 +552,37 @@ public class ThiveFunctionRegistry {
         SYSTEM.registerUDF("intersect_count", UDFIntersect.class, true);
         SYSTEM.registerUDF("rcmdid_decoder", UDFRcmdidDecoder.class, false);
         SYSTEM.registerGenericUDF("if", GenericUDFIf.class);
+
+        SYSTEM.registerUDAF("SgameDoubleDropoverStatUDAF", SgameDoubleDropoverStatUDAF.class);
+
+        // UDAF 暂不支持(wrapper 框架能力限制)
+        // SYSTEM.registerGenericUDAF("SgameDoubleDropoverStatUDAF2", new SgameDoubleDropoverStatUDAF2());
+        // SYSTEM.registerGenericUDAF("SortAndMerge", new SortAndMerge());
+        // SYSTEM.registerGenericUDAF("percentile", new GenericUDAFPercentile());
+        // SYSTEM.registerGenericUDAF("percentile_approx", new GenericUDAFPercentileApprox());
+        // SYSTEM.registerGenericUDAF("sum", new GenericUDAFSum());
+        // SYSTEM.registerGenericUDAF("count", new GenericUDAFCount());
+        // SYSTEM.registerGenericUDAF("avg", new GenericUDAFAverage());
+        // SYSTEM.registerGenericUDAF("bit_aggr_or", new GenericUDAFBitor());
+        // SYSTEM.registerGenericUDAF("std", new GenericUDAFStd());
+        // SYSTEM.registerGenericUDAF("stddev", new GenericUDAFStd());
+        // SYSTEM.registerGenericUDAF("stddev_pop", new GenericUDAFStd());
+        // SYSTEM.registerGenericUDAF("stddev_samp", new GenericUDAFStdSample());
+        // SYSTEM.registerGenericUDAF("variance", new GenericUDAFVariance());
+        // SYSTEM.registerGenericUDAF("var_pop", new GenericUDAFVariance());
+        // SYSTEM.registerGenericUDAF("var_samp", new GenericUDAFVarianceSample());
+        // SYSTEM.registerGenericUDAF("ngrams", new GenericUDAFnGrams());
+        // SYSTEM.registerGenericUDAF("corr", new GenericUDAFCorrelation());
+        // SYSTEM.registerGenericUDAF("covar_pop", new GenericUDAFCovariance());
+        // SYSTEM.registerGenericUDAF("covar_samp", new GenericUDAFCovarianceSample());
+        // SYSTEM.registerGenericUDAF("context_ngrams", new GenericUDAFContextNGrams());
+        // //SYSTEM.registerGenericUDAF("est_distinct", new GenericUDAFCardinalityEstimation());
+        // SYSTEM.registerGenericUDAF("wm_concat", new GenericUDAFWm_concat());
+        // SYSTEM.registerGenericUDAF("max", new GenericUDAFMax());
+        // SYSTEM.registerGenericUDAF("min", new GenericUDAFMin());
+        // SYSTEM.registerGenericUDAF("collect_set", new GenericUDAFCollectSet());
+        // SYSTEM.registerGenericUDAF("collect_list", new GenericUDAFCollectList());
+        // SYSTEM.registerGenericUDAF("histogram_numeric", new GenericUDAFHistogramNumeric());
     }
 
     public static FunctionInfo getFunctionInfo(String functionName) {

@@ -2222,7 +2222,7 @@ replicaList
  * -, +
  * &
  * |
- * = (comparison), <=>, >=, >, <=, <, <>, !=, IS, LIKE, REGEXP
+ * = (comparison), <=>, >=, >, <=, <, <>, !=, IS, LIKE, REGEXP, REGEXP_LIKE
  * BETWEEN, CASE WHEN
  * NOT
  * AND, &&
@@ -2282,7 +2282,7 @@ predicateOperations [ParserRuleContext value]
     : NOT? IN '(' queryRelation ')'                                                       #inSubquery
     | NOT? IN '(' expressionList ')'                                                      #inList
     | NOT? BETWEEN lower = valueExpression AND upper = predicate                          #between
-    | NOT? (LIKE | RLIKE | REGEXP) pattern=valueExpression                                #like
+    | NOT? (LIKE | RLIKE | REGEXP | REGEXP_LIKE) pattern=valueExpression                  #like
     ;
 
 valueExpression
@@ -2371,6 +2371,7 @@ aggregationFunction
     | ARRAY_AGG '(' setQuantifier? expression (ORDER BY sortItem (',' sortItem)*)? ')'
     | ARRAY_AGG_DISTINCT '(' expression (ORDER BY sortItem (',' sortItem)*)? ')'
     | GROUP_CONCAT '(' setQuantifier? expression (',' expression)* (ORDER BY sortItem (',' sortItem)*)? (SEPARATOR expression)? ')'
+    | WM_CONCAT '(' setQuantifier? expression (',' expression)* (ORDER BY sortItem (',' sortItem)*)? (SEPARATOR expression)? ')'
     ;
 
 userVariable
@@ -2414,6 +2415,7 @@ specialFunctionExpression
     | MONTH '(' expression ')'
     | QUARTER '(' expression ')'
     | REGEXP '(' expression ',' expression ')'
+    | REGEXP_LIKE '(' expression ',' expression ')'
     | REPLACE '(' (expression (',' expression)*)? ')'
     | RIGHT '(' expression ',' expression ')'
     | RLIKE '(' expression ',' expression ')'
@@ -2798,7 +2800,7 @@ nonReserved
     | ENABLE | END | ENGINE | ENGINES | ERRORS | EVENTS | EXECUTE | EXTERNAL | EXTRACT | EVERY | ENCLOSE | ESCAPE | EXPORT
     | FAILPOINT | FAILPOINTS | FIELDS | FILE | FILTER | FIRST | FLOOR | FOLLOWING | FORMAT | FN | FRONTEND | FRONTENDS | FOLLOWER | FREE
     | FUNCTIONS
-    | GLOBAL | GRANTS | GROUP_CONCAT
+    | GLOBAL | GRANTS | GROUP_CONCAT | WM_CONCAT
     | HASH | HISTOGRAM | HELP | HLL_UNION | HOST | HOUR | HUB
     | IDENTIFIED | IMAGE | IMPERSONATE | INACTIVE | INCREMENTAL | INDEXES | INSTALL | INTEGRATION | INTEGRATIONS | INTERMEDIATE
     | INTERVAL | ISOLATION

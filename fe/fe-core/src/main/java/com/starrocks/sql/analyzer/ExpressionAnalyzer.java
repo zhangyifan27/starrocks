@@ -85,6 +85,7 @@ import com.starrocks.cluster.ClusterNamespace;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
+import com.starrocks.connector.thive.Thive2SRFunctionCallTransformer;
 import com.starrocks.privilege.AuthorizationMgr;
 import com.starrocks.privilege.PrivilegeException;
 import com.starrocks.privilege.RolePrivilegeCollectionV2;
@@ -813,22 +814,17 @@ public class ExpressionAnalyzer {
         public Void visitTimestampArithmeticExpr(TimestampArithmeticExpr node, Scope scope) {
             Type[] argumentTypes = node.getChildren().stream().map(Expr::getType).toArray(Type[]::new);
             Function fn = null;
-
-            if (session.getSessionVariable().isEnableThiveFunction() &&
-                    session.getSessionVariable().isPreferThiveFunctions() &&
-                    node.getFnName() != null) {
+            if (node.getFnName() != null && session.getSessionVariable().isPreferThiveFunctions()) {
                 String fnName = node.getFnName().getFunction();
                 // Prefer to find the corresponding thive udf
                 Set<String> preferThiveFunctionNames = getPreferThiveFunctionNames();
-                for (String thiveFnName : preferThiveFunctionNames) {
-                    if (fnName.equals(thiveFnName)) {
-                        fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                if (preferThiveFunctionNames.contains(fnName)) {
+                    fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                    if (fn != null) {
+                        node.setType(fn.getReturnType());
+                        node.setFn(fn);
+                        return null;
                     }
-                }
-                if (fn != null) {
-                    node.setType(fn.getReturnType());
-                    node.setFn(fn);
-                    return null;
                 }
                 // Fail to find the corresponding thive udf, fall back to starrocks builtin function
             }
@@ -864,9 +860,35 @@ public class ExpressionAnalyzer {
 
             fn = Expr.getBuiltinFunction(funcOpName.toLowerCase(), argumentTypes,
                     Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
+            if (fn == null && session.getSessionVariable().isEnableHiveMode() && node.getFnName() != null) {
+                String transformFnName = null;
+                if (!node.getFnName().isThiveFunction()) {
+                    FunctionName fnName = node.getFnName();
+                    transformFnName = Thive2SRFunctionCallTransformer.transformFunction(fnName);
+                }
 
-            if (fn == null && session.getSessionVariable().isEnableThiveFunction() && (node.getFnName() != null)) {
-                fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                if (transformFnName == null || transformFnName.startsWith(FunctionName.THIVE_UDF_DB)) {
+                    fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+
+                    // 用户指定的thive udf不存在
+                    if (node.getFnName().isThiveFunction() && fn == null) {
+                        String msg = String.format("No matching function in thive udf with signature: %s(%s)",
+                                node.getFnName().getFunction(),
+                                Arrays.stream(argumentTypes).map(Type::toSql).collect(Collectors.joining(", ")));
+                        throw new SemanticException(msg, node.getPos());
+                    }
+
+                    if (fn != null) {
+                        Expr child = node.getChild(0);
+                        if (child instanceof CastExpr) {
+                            child = child.getChild(0);
+                            node.setChild(0, child);
+                        }
+                        node.setType(fn.getReturnType());
+                        node.setFn(fn);
+                        return null;
+                    }
+                }
             }
 
             if (fn == null) {
@@ -1087,29 +1109,32 @@ public class ExpressionAnalyzer {
             Function fn = null;
             String fnName = node.getFnName().getFunction();
 
-            // throw exception direct
-            checkFunction(fnName, node, argumentTypes);
-
-            if (session.getSessionVariable().isEnableThiveFunction() &&
-                    session.getSessionVariable().isPreferThiveFunctions()) {
-                // Prefer to find the corresponding thive udf
+            if (session.getSessionVariable().isPreferThiveFunctions()) {
                 Set<String> preferThiveFunctionNames = getPreferThiveFunctionNames();
-                for (String thiveFnName : preferThiveFunctionNames) {
-                    if (fnName.equals(thiveFnName)) {
-                        fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                if (preferThiveFunctionNames.contains(fnName)) {
+                    fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                    if (fn != null) {
+                        node.setFn(fn);
+                        node.setType(fn.getReturnType());
+                        FunctionAnalyzer.analyze(node);
+                        return null;
                     }
                 }
-                if (fn != null) {
-                    node.setFn(fn);
-                    node.setType(fn.getReturnType());
-                    FunctionAnalyzer.analyze(node);
-                    return null;
-                }
-                // Fail to find the corresponding thive udf, fall back to starrocks builtin function
             }
 
-            if (node.getFnName().isThiveFunction()) {
-                fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+            // get function by function expression and argument types
+            if (node.getFnName() != null && session.getSessionVariable().isEnableHiveMode()) {
+                String transformFnName = null;
+                if (!node.getFnName().isThiveFunction()) {
+                    transformFnName = Thive2SRFunctionCallTransformer.transformFunction(node.getFnName());
+                }
+
+                if (transformFnName != null) {
+                    fnName = transformFnName;
+                }
+            }
+
+            if (node.getFnName() != null && node.getFnName().isThiveFunction()) {
                 if (fn == null) {
                     String msg = String.format("No matching function in thive udf with signature: %s(%s)", fnName,
                             node.getParams().isStar() ? "*" :
@@ -1121,6 +1146,10 @@ public class ExpressionAnalyzer {
                 FunctionAnalyzer.analyze(node);
                 return null;
             }
+
+            // throw exception direct
+            checkFunction(fnName, node, argumentTypes);
+
             if (fnName.equalsIgnoreCase("typeof") && argumentTypes.length == 1) {
                 // For the typeof function, the parameter type of the function is the result of this function.
                 // At this time, the parameter type has been obtained. You can directly replace the current
@@ -1324,9 +1353,30 @@ public class ExpressionAnalyzer {
             if (fn == null) {
                 fn = ScalarOperatorEvaluator.INSTANCE.getMetaFunction(node.getFnName(), argumentTypes);
             }
+            if (fn == null && session.getSessionVariable().isEnableHiveMode()) {
+                String transformFnName = null;
+                if (!node.getFnName().isThiveFunction()) {
+                    FunctionName functionName = node.getFnName();
+                    transformFnName = Thive2SRFunctionCallTransformer.transformFunction(functionName);
+                }
 
-            if (fn == null && session.getSessionVariable().isEnableThiveFunction()) {
-                fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                if (transformFnName == null || transformFnName.startsWith(FunctionName.THIVE_UDF_DB)) {
+                    fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                    // 用户指定的thive udf不存在
+                    if (node.getFnName().isThiveFunction() && fn == null) {
+                        String msg = String.format("No matching function in thive udf with signature: %s(%s)",
+                                node.getFnName().getFunction(),
+                                Arrays.stream(argumentTypes).map(Type::toSql).collect(Collectors.joining(", ")));
+                        throw new SemanticException(msg, node.getPos());
+                    }
+
+                    if (fn != null) {
+                        node.setType(fn.getReturnType());
+                        node.setFn(fn);
+                        FunctionAnalyzer.analyze(node);
+                        return null;
+                    }
+                }
             }
 
             if (fn == null) {
@@ -1979,7 +2029,7 @@ public class ExpressionAnalyzer {
                 nullIfNotFoundIdx = params.size() - 1;
             } else {
                 throw new SemanticException(String.format("dict_mapping function param size should be %d - %d",
-                    keyColumns.size() + 1, keyColumns.size() + 3));
+                        keyColumns.size() + 1, keyColumns.size() + 3));
             }
 
             String valueField;
@@ -2043,7 +2093,7 @@ public class ExpressionAnalyzer {
                         List<String> actualTypeNames = actualTypes.stream().map(Type::canonicalName).collect(Collectors.toList());
                         throw new SemanticException(
                                 String.format("dict_mapping function params not match expected,\nExpect: %s\nActual: %s",
-                                    String.join(", ", expectTypeNames), String.join(", ", actualTypeNames)));
+                                        String.join(", ", expectTypeNames), String.join(", ", actualTypeNames)));
                     }
 
                     Expr castExpr = new CastExpr(expectedType, actual);
@@ -2118,19 +2168,19 @@ public class ExpressionAnalyzer {
             int paramDictionaryKeysSize = params.size() - 1;
             if (!(paramDictionaryKeysSize == dictionaryKeysSize || paramDictionaryKeysSize == dictionaryKeysSize + 1)) {
                 throw new SemanticException("dictionary: " + dictionaryName + " has expected keys size: " +
-                                            Integer.toString(dictionaryKeysSize) + " keys: " +
-                                            "[" + String.join(", ", dictionaryKeys) + "]" +
-                                            " plus null_if_not_exist flag(optional)" +
-                                            " but param given: " + Integer.toString(paramDictionaryKeysSize));
+                        Integer.toString(dictionaryKeysSize) + " keys: " +
+                        "[" + String.join(", ", dictionaryKeys) + "]" +
+                        " plus null_if_not_exist flag(optional)" +
+                        " but param given: " + Integer.toString(paramDictionaryKeysSize));
             }
 
             if (paramDictionaryKeysSize == dictionaryKeysSize + 1 && !(params.get(params.size() - 1) instanceof BoolLiteral)) {
                 throw new SemanticException("dictionary: " + dictionaryName + " has invalid parameter for `null_if_not_exist` "
-                                            + "invalid parameter: " + params.get(params.size() - 1).toString());
+                        + "invalid parameter: " + params.get(params.size() - 1).toString());
             }
 
             Table table = GlobalStateMgr.getCurrentState().getMetadataMgr().getTable(
-                                    dictionary.getCatalogName(), dictionary.getDbName(), dictionary.getQueryableObject());
+                    dictionary.getCatalogName(), dictionary.getDbName(), dictionary.getQueryableObject());
             if (table == null) {
                 throw new SemanticException("dict table %s is not found", table.getName());
             }
@@ -2174,7 +2224,7 @@ public class ExpressionAnalyzer {
             }
 
             boolean nullIfNotExist = (paramDictionaryKeysSize == dictionaryKeysSize + 1) ?
-                                     ((BoolLiteral) params.get(params.size() - 1)).getValue() : false;
+                    ((BoolLiteral) params.get(params.size() - 1)).getValue() : false;
             node.setNullIfNotExist(nullIfNotExist);
             node.setDictionaryId(dictionary.getDictionaryId());
             node.setDictionaryTxnId(GlobalStateMgr.getCurrentState().getDictionaryMgr().

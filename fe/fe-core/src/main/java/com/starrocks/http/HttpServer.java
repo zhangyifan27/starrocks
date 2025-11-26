@@ -78,9 +78,11 @@ import com.starrocks.http.rest.MigrationAction;
 import com.starrocks.http.rest.ProfileAction;
 import com.starrocks.http.rest.QueryDetailAction;
 import com.starrocks.http.rest.QueryDumpAction;
+import com.starrocks.http.rest.ReloadFunctionTransformerAction;
 import com.starrocks.http.rest.RowCountAction;
 import com.starrocks.http.rest.SetConfigAction;
 import com.starrocks.http.rest.ShowDataAction;
+import com.starrocks.http.rest.ShowFunctionTransformerAction;
 import com.starrocks.http.rest.ShowMetaInfoAction;
 import com.starrocks.http.rest.ShowProcAction;
 import com.starrocks.http.rest.ShowRuntimeInfoAction;
@@ -196,6 +198,8 @@ public class HttpServer {
         QueryDumpAction.registerAction(controller);
         SyncCloudTableMetaAction.registerAction(controller);
         IdleAction.registerAction(controller);
+        ReloadFunctionTransformerAction.registerAction(controller);
+        ShowFunctionTransformerAction.registerAction(controller);
         // for stop FE
         StopFeAction.registerAction(controller);
         ExecuteSqlAction.registerAction(controller);

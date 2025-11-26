@@ -12,7 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
 package com.starrocks.sql.optimizer.rewrite;
 
 import com.google.common.base.Joiner;
@@ -192,8 +191,9 @@ public enum ScalarOperatorEvaluator {
             if (FunctionSet.nonDeterministicFunctions.contains(fn.getFunctionName().getFunction().toLowerCase())) {
                 return root;
             }
+
             boolean enableThiveFunction =
-                    ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableThiveFunction();
+                    ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableHiveMode();
             if (fn.getFunctionName().isThiveFunction() || enableThiveFunction) {
                 ScalarOperator thiveUdfResult = evaluationThiveUdf(fn, root);
                 if (thiveUdfResult != null) {
@@ -292,6 +292,7 @@ public enum ScalarOperatorEvaluator {
 
         return true;
     }
+
     private Optional<String> stripFormatValue(String pattern) {
         StringBuilder builder = new StringBuilder();
         boolean unsupportedFormat = false;

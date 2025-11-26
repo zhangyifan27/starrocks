@@ -104,6 +104,7 @@ import com.starrocks.common.Pair;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.common.util.DateUtils;
 import com.starrocks.common.util.TimeUtils;
+import com.starrocks.connector.thive.Thive2SRFunctionCallTransformer;
 import com.starrocks.mysql.MysqlPassword;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SqlModeHelper;
@@ -546,7 +547,6 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             "parse_datetime", FunctionSet.STR_TO_JODATIME,
             "regexp_like", FunctionSet.REGEXP
     );
-
 
     protected AstBuilder(long sqlMode) {
         this(sqlMode, new IdentityHashMap<>());
@@ -1961,7 +1961,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             }
         }
 
-        return new CreateCatalogStmt(catalogName, comment, properties,  ifNotExists, createPos(context));
+        return new CreateCatalogStmt(catalogName, comment, properties, ifNotExists, createPos(context));
     }
 
     @Override
@@ -3060,7 +3060,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
     public ParseNode visitShowProcesslistStatement(StarRocksParser.ShowProcesslistStatementContext context) {
         String forUser = null;
         if (context.FOR() != null) {
-            forUser =  ((StringLiteral) visit(context.string())).getValue();
+            forUser = ((StringLiteral) visit(context.string())).getValue();
         }
         boolean isShowFull = context.FULL() != null;
         return new ShowProcesslistStmt(isShowFull, forUser, createPos(context));
@@ -3483,7 +3483,6 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         }
         return new DataCacheSelectStatement(mode, insertStmt, properties, createPos(ctx));
     }
-
 
     @Override
     public ParseNode visitCreateDataCacheJobStatement(StarRocksParser.CreateDataCacheJobStatementContext ctx) {
@@ -5216,16 +5215,15 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
 
     private QueryPeriod.PeriodType getPeriodType(Token token) {
         switch (token.getType()) {
-            case StarRocksLexer.TIMESTAMP :
+            case StarRocksLexer.TIMESTAMP:
             case StarRocksLexer.SYSTEM_TIME:
                 return QueryPeriod.PeriodType.TIMESTAMP;
-            case StarRocksLexer.VERSION :
+            case StarRocksLexer.VERSION:
                 return QueryPeriod.PeriodType.VERSION;
             default:
                 throw new ParsingException("Unsupported query period type: " + token.getText());
         }
     }
-
 
     // only used for mysql external table
     private String buildQueryPeriodString(StarRocksParser.QueryPeriodContext context) {
@@ -6235,7 +6233,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
     public ParseNode visitLike(StarRocksParser.LikeContext context) {
         LikePredicate likePredicate;
         NodePosition pos = createPos(context);
-        if (context.REGEXP() != null || context.RLIKE() != null) {
+        if (context.REGEXP() != null || context.RLIKE() != null || context.REGEXP_LIKE() != null) {
             likePredicate = new LikePredicate(LikePredicate.Operator.REGEXP,
                     (Expr) visit(context.value),
                     (Expr) visit(context.pattern),
@@ -6392,30 +6390,52 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
     public ParseNode visitSimpleFunctionCall(StarRocksParser.SimpleFunctionCallContext context) {
         String fullFunctionName = getQualifiedName(context.qualifiedName()).toString();
         NodePosition pos = createPos(context);
-
         FunctionName fnName = FunctionName.createFnName(fullFunctionName);
         String functionName = fnName.getFunction();
+
         if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableHiveMode()) {
-            if (fullFunctionName.equalsIgnoreCase(FunctionSet.DATE_ADD)) {
-                fullFunctionName = FunctionSet.TDW_DATE_ADD;
-                fnName = FunctionName.createFnName(fullFunctionName);
+            String transformFnName = null;
+            if (!fnName.isThiveFunction()) {
+                transformFnName = Thive2SRFunctionCallTransformer.transformFunction(fnName);
+            }
+
+            if (transformFnName != null) {
                 functionName = fnName.getFunction();
-            } else if (fullFunctionName.equalsIgnoreCase(FunctionSet.DATE_SUB)) {
-                fullFunctionName = FunctionSet.TDW_DATE_SUB;
-                fnName = FunctionName.createFnName(fullFunctionName);
-                functionName = fnName.getFunction();
-            } else if (fullFunctionName.equalsIgnoreCase(FunctionSet.ADD_MONTHS)) {
-                fullFunctionName = FunctionSet.TDW_ADD_MONTHS;
-                fnName = FunctionName.createFnName(fullFunctionName);
-                functionName = fnName.getFunction();
-            } else if (fullFunctionName.equalsIgnoreCase(FunctionSet.TO_DATE)) {
-                fullFunctionName = FunctionSet.TDW_TO_DATE;
-                fnName = FunctionName.createFnName(fullFunctionName);
-                functionName = fnName.getFunction();
-            } else if (fullFunctionName.equalsIgnoreCase("to_char")) {
-                fullFunctionName = FunctionSet.TDW_TO_CHAR;
-                fnName = FunctionName.createFnName(fullFunctionName);
-                functionName = fnName.getFunction();
+            }
+        }
+
+        if (functionName.toLowerCase().startsWith("tdw_")) {
+            // 处理TDW函数名称转换
+            final String lowerCaseFunctionName = functionName.toLowerCase();
+
+            switch (lowerCaseFunctionName) {
+                case FunctionSet.TDW_DATE_ADD:
+                case FunctionSet.TDW_DATE_SUB:
+                case FunctionSet.TDW_ADD_MONTHS:
+                case FunctionSet.TDW_TO_DATE:
+                case FunctionSet.TDW_TO_CHAR:
+                    fnName = FunctionName.createFnName(functionName);
+                    functionName = fnName.getFunction();
+                    break;
+                case FunctionSet.TDW_BOOLEAN:
+                    return new CastExpr(Type.BOOLEAN, (Expr) visit(context.expression(0)), pos);
+                case FunctionSet.TDW_TINYINT:
+                    return new CastExpr(Type.TINYINT, (Expr) visit(context.expression(0)), pos);
+                case FunctionSet.TDW_SMALLINT:
+                    return new CastExpr(Type.SMALLINT, (Expr) visit(context.expression(0)), pos);
+                case FunctionSet.TDW_INT:
+                    return new CastExpr(Type.INT, (Expr) visit(context.expression(0)), pos);
+                case FunctionSet.TDW_BIGINT:
+                    return new CastExpr(Type.BIGINT, (Expr) visit(context.expression(0)), pos);
+                case FunctionSet.TDW_FLOAT:
+                    return new CastExpr(Type.FLOAT, (Expr) visit(context.expression(0)), pos);
+                case FunctionSet.TDW_DOUBLE:
+                    return new CastExpr(Type.DOUBLE, (Expr) visit(context.expression(0)), pos);
+                case FunctionSet.TDW_STRING:
+                    return new CastExpr(Type.STRING, (Expr) visit(context.expression(0)), pos);
+                default:
+                    // 其他TDW函数不做处理
+                    break;
             }
         }
         if (HIVE2SR_FUNCTION_MAPPINGS.containsKey(functionName.toLowerCase())) {
@@ -6491,7 +6511,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                 if (e1 instanceof StringLiteral) {
                     // select date_add('day', 1, '2025-06-27');
                     IntervalLiteral intervalLiteral =
-                                new IntervalLiteral(e2, new UnitIdentifier(((StringLiteral) e1).getValue()));
+                            new IntervalLiteral(e2, new UnitIdentifier(((StringLiteral) e1).getValue()));
                     return new TimestampArithmeticExpr(fnName, e3, intervalLiteral.getValue(),
                             intervalLiteral.getUnitIdentifier().getDescription());
                 } else {
@@ -6631,16 +6651,6 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             return new DictQueryExpr(params);
         }
 
-        if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableHiveMode()) {
-            if (functionName.equals(FunctionSet.LENGTH)) {
-                fnName = FunctionName.createFnName(FunctionSet.CHAR_LENGTH);
-            }
-
-            if (functionName.equals(FunctionSet.NVL)) {
-                fnName = FunctionName.createFnName(FunctionSet.IFNULL);
-            }
-        }
-
         FunctionCallExpr functionCallExpr = new FunctionCallExpr(fnName,
                 new FunctionParams(false, visit(context.expression(), Expr.class)), pos);
         if (context.over() != null) {
@@ -6680,7 +6690,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         } else if (context.aggregationFunction().ARRAY_AGG_DISTINCT() != null) { // alias to ARRAY_AGG
             functionName = FunctionSet.ARRAY_AGG;
             isDistinct = true;
-        } else if (context.aggregationFunction().GROUP_CONCAT() != null) {
+        } else if (context.aggregationFunction().GROUP_CONCAT() != null || context.aggregationFunction().WM_CONCAT() != null) {
             functionName = FunctionSet.GROUP_CONCAT;
             isGroupConcat = true;
             isLegacyGroupConcat = SqlModeHelper.check(sqlMode, SqlModeHelper.MODE_GROUP_CONCAT_LEGACY);
@@ -6840,7 +6850,7 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
             return new FunctionCallExpr("month", visit(context.expression(), Expr.class), pos);
         } else if (context.QUARTER() != null) {
             return new FunctionCallExpr("quarter", visit(context.expression(), Expr.class), pos);
-        } else if (context.REGEXP() != null) {
+        } else if (context.REGEXP() != null || context.REGEXP_LIKE() != null) {
             return new FunctionCallExpr("regexp", visit(context.expression(), Expr.class), pos);
         } else if (context.REPLACE() != null) {
             return new FunctionCallExpr("replace", visit(context.expression(), Expr.class), pos);

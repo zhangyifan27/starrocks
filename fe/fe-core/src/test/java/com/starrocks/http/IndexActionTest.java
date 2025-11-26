@@ -43,7 +43,7 @@ public class IndexActionTest extends StarRocksHttpTestCase {
     public void testGetSystemInfo() throws IOException {
         Config.http_web_page_display_hardware = true;
         String before = sendHttp();
-        Assert.assertTrue(before.contains("Uptime"));
+        Assert.assertTrue(before.contains("Hardware Info"));
         Config.http_web_page_display_hardware = false;
         String after = sendHttp();
         Assert.assertTrue(after.contains("Hardware info is disabled"));
