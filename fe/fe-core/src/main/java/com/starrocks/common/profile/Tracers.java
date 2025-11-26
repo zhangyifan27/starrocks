@@ -280,4 +280,9 @@ public class Tracers {
                 return "";
         }
     }
+
+    public static String getSlowOperationsSummary() {
+        Tracers tracers = THREAD_LOCAL.get();
+        return tracers.allTracer[1].getSlowOperationsSummary();
+    }
 }

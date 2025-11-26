@@ -248,4 +248,18 @@ class TracerImpl extends Tracer {
     public Optional<Timer> getSpecifiedTimer(String name) {
         return watcher.getTimer(name);
     }
+
+    private static final long SLOW_OPERATION_THRESHOLD_MS = 1000;
+
+    @Override
+    public String getSlowOperationsSummary() {
+        StringBuilder sb = new StringBuilder();
+        for (Timer timer : watcher.getAllTimerWithOrder()) {
+            if (timer.getTotalTime() > SLOW_OPERATION_THRESHOLD_MS) {
+                sb.append(timer);
+                sb.append("\n");
+            }
+        }
+        return sb.toString();
+    }
 }

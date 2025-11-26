@@ -76,4 +76,8 @@ public abstract class Tracer {
     public Optional<Timer> getSpecifiedTimer(String name) {
         return Optional.empty();
     }
+
+    public String getSlowOperationsSummary() {
+        return "";
+    }
 }
