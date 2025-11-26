@@ -1078,6 +1078,7 @@ public class StmtExecutor {
         coord.setTopProfileSupplier(null);
 
         if (coord.getQueryProfile() == null) {
+            processProfileForNormalExplain(plan, retryIndex);
             return false;
         }
 
@@ -1132,7 +1133,9 @@ public class StmtExecutor {
     }
 
     private void processProfileForNormalExplain(ExecPlan plan, int retryIndex) {
-        recordDetailInfoInProfile(plan);
+        if (plan != null) {
+            recordDetailInfoInProfile(plan);
+        }
 
         // This process will get information from the context, so it must be executed synchronously.
         // Otherwise, the context may be changed, for example, containing the wrong query id.
