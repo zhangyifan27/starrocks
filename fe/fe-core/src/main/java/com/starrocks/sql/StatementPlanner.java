@@ -162,7 +162,7 @@ public class StatementPlanner {
             if (needWholePhaseLock) {
                 unLock(plannerMetaLocker);
             }
-            GlobalStateMgr.getCurrentState().getMetadataMgr().removeQueryMetadata();
+            //GlobalStateMgr.getCurrentState().getMetadataMgr().removeQueryMetadata();
         }
 
         return null;

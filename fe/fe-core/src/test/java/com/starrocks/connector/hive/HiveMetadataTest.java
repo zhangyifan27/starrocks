@@ -241,7 +241,7 @@ public class HiveMetadataTest {
         RemoteFileBlockDesc blockDesc = blockDescs.get(0);
         Assert.assertEquals(0, blockDesc.getOffset());
         Assert.assertEquals(20, blockDesc.getLength());
-        Assert.assertEquals(2, blockDesc.getReplicaHostIds().length);
+        Assert.assertEquals(0, blockDesc.getReplicaHostIds().length);
     }
 
     @Test

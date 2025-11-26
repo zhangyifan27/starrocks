@@ -26,6 +26,8 @@ import com.starrocks.connector.hive.HiveWriteUtils;
 import com.starrocks.connector.hive.MockedRemoteFileSystem;
 import com.starrocks.connector.hive.Partition;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import mockit.Mock;
 import mockit.MockUp;
 import org.apache.hadoop.conf.Configuration;
@@ -285,5 +287,143 @@ public class RemoteFileOperationsTest {
                 StarRocksConnectorException.class,
                 "file name or query id is invalid",
                 () -> ops.removeNotCurrentQueryFiles(targetPath, "aaa"));
+    }
+
+    @Test
+    public void testGetHiveRemoteFilesWithAsyncDisabled() {
+        HiveRemoteFileIO hiveRemoteFileIO = new HiveRemoteFileIO(new Configuration());
+        FileSystem fs = new MockedRemoteFileSystem(HDFS_HIVE_TABLE);
+        hiveRemoteFileIO.setFileSystem(fs);
+        FeConstants.runningUnitTest = true;
+        ExecutorService executorToRefresh = Executors.newFixedThreadPool(5);
+        ExecutorService executorToLoad = Executors.newFixedThreadPool(5);
+
+        CachingRemoteFileIO cachingFileIO = new CachingRemoteFileIO(hiveRemoteFileIO, executorToRefresh, 10, 10, 10);
+        RemoteFileOperations ops = new RemoteFileOperations(cachingFileIO, executorToLoad, executorToLoad,
+                false, true, new Configuration());
+
+        // Mock ConnectContext and SessionVariable to disable async pull
+        ConnectContext connectContext = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setEnableAsyncPullRemoteFile(false);
+        connectContext.setSessionVariable(sessionVariable);
+
+        new MockUp<ConnectContext>() {
+            @Mock
+            public ConnectContext get() {
+                return connectContext;
+            }
+        };
+
+        HiveMetaClient client = new HiveMetastoreTest.MockedHiveMetaClient();
+        HiveMetastore metastore = new HiveMetastore(client, "hive_catalog", MetastoreType.HMS);
+        List<String> partitionNames = Lists.newArrayList("col1=1", "col1=2");
+        Map<String, Partition> partitions = metastore.getPartitionsByNames("db1", "table1", partitionNames);
+
+        // Test synchronous mode (enable_async_pull_remote_file = false)
+        List<RemoteFileInfo> remoteFileInfos = ops.getRemoteFiles(Lists.newArrayList(partitions.values()));
+
+        // Verify results are the same as async mode
+        Assert.assertEquals(2, remoteFileInfos.size());
+        Assert.assertTrue(remoteFileInfos.get(0).toString().contains("emoteFileInfo{format=ORC, files=["));
+
+        RemoteFileInfo fileInfo = remoteFileInfos.get(0);
+        Assert.assertEquals(RemoteFileInputFormat.ORC, fileInfo.getFormat());
+        Assert.assertEquals("hdfs://127.0.0.1:10000/hive.db/hive_tbl/col1=1", fileInfo.getFullPath());
+
+        List<RemoteFileDesc> fileDescs = remoteFileInfos.get(0).getFiles();
+        Assert.assertNotNull(fileDescs);
+        Assert.assertEquals(1, fileDescs.size());
+
+        RemoteFileDesc fileDesc = fileDescs.get(0);
+        Assert.assertNotNull(fileDesc);
+        Assert.assertNotNull(fileDesc.getTextFileFormatDesc());
+        Assert.assertEquals("", fileDesc.getCompression());
+        Assert.assertEquals(20, fileDesc.getLength());
+        Assert.assertTrue(fileDesc.isSplittable());
+
+        List<RemoteFileBlockDesc> blockDescs = fileDesc.getBlockDescs();
+        Assert.assertEquals(1, blockDescs.size());
+        RemoteFileBlockDesc blockDesc = blockDescs.get(0);
+        Assert.assertEquals(0, blockDesc.getOffset());
+        Assert.assertEquals(20, blockDesc.getLength());
+        Assert.assertEquals(0, blockDesc.getReplicaHostIds().length);
+    }
+
+    @Test
+    public void testGetHiveRemoteFilesWithAsyncEnabled() {
+        HiveRemoteFileIO hiveRemoteFileIO = new HiveRemoteFileIO(new Configuration());
+        FileSystem fs = new MockedRemoteFileSystem(HDFS_HIVE_TABLE);
+        hiveRemoteFileIO.setFileSystem(fs);
+        FeConstants.runningUnitTest = true;
+        ExecutorService executorToRefresh = Executors.newFixedThreadPool(5);
+        ExecutorService executorToLoad = Executors.newFixedThreadPool(5);
+
+        CachingRemoteFileIO cachingFileIO = new CachingRemoteFileIO(hiveRemoteFileIO, executorToRefresh, 10, 10, 10);
+        RemoteFileOperations ops = new RemoteFileOperations(cachingFileIO, executorToLoad, executorToLoad,
+                false, true, new Configuration());
+
+        // Mock ConnectContext and SessionVariable to enable async pull (default behavior)
+        ConnectContext connectContext = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setEnableAsyncPullRemoteFile(true);
+        connectContext.setSessionVariable(sessionVariable);
+
+        new MockUp<ConnectContext>() {
+            @Mock
+            public ConnectContext get() {
+                return connectContext;
+            }
+        };
+
+        HiveMetaClient client = new HiveMetastoreTest.MockedHiveMetaClient();
+        HiveMetastore metastore = new HiveMetastore(client, "hive_catalog", MetastoreType.HMS);
+        List<String> partitionNames = Lists.newArrayList("col1=1", "col1=2");
+        Map<String, Partition> partitions = metastore.getPartitionsByNames("db1", "table1", partitionNames);
+
+        // Test asynchronous mode (enable_async_pull_remote_file = true)
+        List<RemoteFileInfo> remoteFileInfos = ops.getRemoteFiles(Lists.newArrayList(partitions.values()));
+
+        // Verify results
+        Assert.assertEquals(2, remoteFileInfos.size());
+        Assert.assertTrue(remoteFileInfos.get(0).toString().contains("emoteFileInfo{format=ORC, files=["));
+
+        RemoteFileInfo fileInfo = remoteFileInfos.get(0);
+        Assert.assertEquals(RemoteFileInputFormat.ORC, fileInfo.getFormat());
+        Assert.assertEquals("hdfs://127.0.0.1:10000/hive.db/hive_tbl/col1=1", fileInfo.getFullPath());
+    }
+
+    @Test
+    public void testGetHiveRemoteFilesWithNullConnectContext() {
+        HiveRemoteFileIO hiveRemoteFileIO = new HiveRemoteFileIO(new Configuration());
+        FileSystem fs = new MockedRemoteFileSystem(HDFS_HIVE_TABLE);
+        hiveRemoteFileIO.setFileSystem(fs);
+        FeConstants.runningUnitTest = true;
+        ExecutorService executorToRefresh = Executors.newFixedThreadPool(5);
+        ExecutorService executorToLoad = Executors.newFixedThreadPool(5);
+
+        CachingRemoteFileIO cachingFileIO = new CachingRemoteFileIO(hiveRemoteFileIO, executorToRefresh, 10, 10, 10);
+        RemoteFileOperations ops = new RemoteFileOperations(cachingFileIO, executorToLoad, executorToLoad,
+                false, true, new Configuration());
+
+        // Mock ConnectContext to return null (default to async mode)
+        new MockUp<ConnectContext>() {
+            @Mock
+            public ConnectContext get() {
+                return null;
+            }
+        };
+
+        HiveMetaClient client = new HiveMetastoreTest.MockedHiveMetaClient();
+        HiveMetastore metastore = new HiveMetastore(client, "hive_catalog", MetastoreType.HMS);
+        List<String> partitionNames = Lists.newArrayList("col1=1", "col1=2");
+        Map<String, Partition> partitions = metastore.getPartitionsByNames("db1", "table1", partitionNames);
+
+        // Test with null ConnectContext (should default to async mode)
+        List<RemoteFileInfo> remoteFileInfos = ops.getRemoteFiles(Lists.newArrayList(partitions.values()));
+
+        // Verify results
+        Assert.assertEquals(2, remoteFileInfos.size());
+        Assert.assertTrue(remoteFileInfos.get(0).toString().contains("emoteFileInfo{format=ORC, files=["));
     }
 }

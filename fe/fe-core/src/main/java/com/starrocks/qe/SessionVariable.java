@@ -909,6 +909,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String REMOTE_FILE_PULL_TIMEOUT = "remote_file_pull_timeout";
 
+    public static final String ENABLE_ASYNC_PULL_REMOTE_FILE = "enable_async_pull_remote_file";
+
     public static final String ENABLE_REPLACE_PARTITION_FIELD_NAME = "enable_replace_partition_field_name";
 
     // --------  tq session variables end --------
@@ -4672,6 +4674,17 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setRemoteFilePullTimeout(long remoteFilePullTimeout) {
         this.remoteFilePullTimeout = remoteFilePullTimeout;
+    }
+
+    @VariableMgr.VarAttr(name = ENABLE_ASYNC_PULL_REMOTE_FILE)
+    private boolean enableAsyncPullRemoteFile = true;
+
+    public boolean isEnableAsyncPullRemoteFile() {
+        return enableAsyncPullRemoteFile;
+    }
+
+    public void setEnableAsyncPullRemoteFile(boolean enableAsyncPullRemoteFile) {
+        this.enableAsyncPullRemoteFile = enableAsyncPullRemoteFile;
     }
 
     @VarAttr(name = ENABLE_DISTINCT_WITH_GROUPBY)

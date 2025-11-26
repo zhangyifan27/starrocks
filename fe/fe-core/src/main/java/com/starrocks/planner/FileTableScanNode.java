@@ -24,6 +24,8 @@ import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteScanRangeLocations;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.credential.CloudConfigurationFactory;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import com.starrocks.sql.common.ErrorType;
 import com.starrocks.sql.common.StarRocksPlannerException;
 import com.starrocks.sql.plan.HDFSScanNodePredicates;
@@ -74,12 +76,17 @@ public class FileTableScanNode extends ScanNode {
 
     public void setupScanRangeLocations() throws Exception {
         List<RemoteFileDesc> files = fileTable.getFileDescs();
+        boolean forceScheduleLocal = false;
+        if (ConnectContext.get() != null && (ConnectContext.get().getSessionVariable() != null)) {
+            SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
+            forceScheduleLocal = sessionVariable.getForceScheduleLocal();
+        }
         for (RemoteFileDesc file : files) {
-            addScanRangeLocations(file);
+            addScanRangeLocations(file, forceScheduleLocal);
         }
     }
 
-    private void addScanRangeLocations(RemoteFileDesc file) {
+    private void addScanRangeLocations(RemoteFileDesc file, boolean forceScheduleLocal) {
         for (RemoteFileBlockDesc blockDesc : file.getBlockDescs()) {
             TScanRangeLocations scanRangeLocs = new TScanRangeLocations();
 
@@ -109,15 +116,22 @@ public class FileTableScanNode extends ScanNode {
             scanRange.setHdfs_scan_range(hdfsScanRange);
             scanRangeLocs.setScan_range(scanRange);
 
-            if (blockDesc.getReplicaHostIds().length == 0) {
-                String message = String.format("hdfs file block has no host. file = %s/%s",
-                        fileTable.getTableLocation(), file.getFileName());
-                throw new StarRocksPlannerException(message, ErrorType.INTERNAL_ERROR);
-            }
-            for (long hostId : blockDesc.getReplicaHostIds()) {
-                String host = blockDesc.getDataNodeIp(hostId);
-                TScanRangeLocation scanRangeLocation = new TScanRangeLocation(new TNetworkAddress(host, -1));
-                scanRangeLocs.addToLocations(scanRangeLocation);
+            if (forceScheduleLocal) {
+                if (blockDesc.getReplicaHostIds().length == 0) {
+                    String message = String.format("hdfs file block has no host. file = %s/%s",
+                            fileTable.getTableLocation(), file.getFileName());
+                    throw new StarRocksPlannerException(message, ErrorType.INTERNAL_ERROR);
+                }
+                for (long hostId : blockDesc.getReplicaHostIds()) {
+                    String host = blockDesc.getDataNodeIp(hostId);
+                    TScanRangeLocation scanRangeLocation = new TScanRangeLocation(new TNetworkAddress(host, -1));
+                    scanRangeLocs.addToLocations(scanRangeLocation);
+                }
+            } else {
+                TScanRangeLocation scanRangeLocation = new TScanRangeLocation(new TNetworkAddress("-1", -1));
+                ArrayList<TScanRangeLocation> locations = new ArrayList<>(1);
+                locations.add(scanRangeLocation);
+                scanRangeLocs.setLocations(locations);
             }
             scanRangeLocationsList.add(scanRangeLocs);
         }

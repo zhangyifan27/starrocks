@@ -66,8 +66,8 @@ public class RemoteFileBlockDesc {
             sb.append('[');
             for (int i = 0; i < replicaHostIds.length; ++i) {
                 sb.append(i == 0 ? "" : ", ").append(replicaHostIds[i]);
-                sb.append(']');
             }
+            sb.append(']');
         }
         sb.append(", diskIds=");
         if (diskIds == null) {
@@ -76,8 +76,8 @@ public class RemoteFileBlockDesc {
             sb.append('[');
             for (int i = 0; i < diskIds.length; ++i) {
                 sb.append(i == 0 ? "" : ", ").append(diskIds[i]);
-                sb.append(']');
             }
+            sb.append(']');
         }
         sb.append(", remoteFileIO=").append(remoteFileIO);
         sb.append('}');

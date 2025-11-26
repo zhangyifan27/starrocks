@@ -57,6 +57,10 @@ public class MockedRemoteFileSystem extends FileSystem {
                 locatedFileStatus(new Path(HDFS_HIVE_TABLE + "/000000_0"), false)
                 );
         hiveEntries.put(HDFS_HIVE_TABLE, tblDirs);
+        // Also add entry for parent directory to support recursive listing
+        hiveEntries.put(HDFS_HOST + "/hive.db", ImmutableList.of(
+                locatedFileStatus(new Path(HDFS_HIVE_TABLE), true)
+        ));
 
         return hiveEntries;
     }
@@ -108,8 +112,8 @@ public class MockedRemoteFileSystem extends FileSystem {
         return new LocatedFileStatus(
                 fileLength,
                 isDir,
-                0,
-                0L,
+                1,
+                64 * 1024 * 1024L,
                 modificationTime,
                 0L,
                 null,
@@ -156,10 +160,10 @@ public class MockedRemoteFileSystem extends FileSystem {
         FileStatus fileStatus = null;
         if (this.hdfsTable.equals(HDFS_HIVE_TABLE)) {
             fileStatus = new FileStatus(
-                    0, false, 0, 0, 0, new Path(HDFS_HIVE_TABLE));
+                    0, false, 0, 64 * 1024 * 1024L, 0, new Path(HDFS_HIVE_TABLE));
         } else if (this.hdfsTable.equals(HDFS_RECURSIVE_TABLE)) {
             fileStatus = new FileStatus(
-                    0, false, 0, 0, 0, new Path(HDFS_RECURSIVE_TABLE));
+                    0, false, 0, 64 * 1024 * 1024L, 0, new Path(HDFS_RECURSIVE_TABLE));
         }
 
         return new FileStatus[] {fileStatus};
@@ -204,6 +208,37 @@ public class MockedRemoteFileSystem extends FileSystem {
     @Override
     public FileStatus[] listStatus(Path path) {
         throw new UnsupportedOperationException();
+    }
+
+    @Override
+    public RemoteIterator<FileStatus> listStatusIterator(Path f) {
+        return new RemoteIterator<FileStatus>() {
+            private final Iterator<LocatedFileStatus> iterator = locatedFileList(f).iterator();
+
+            @Override
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
+
+            @Override
+            public FileStatus next() {
+                return iterator.next();
+            }
+
+            public List<LocatedFileStatus> locatedFileList(Path f) {
+                String key = formatFilePath(f.toString());
+                List<LocatedFileStatus> entries = fileEntries.get(key);
+                if (entries == null && hdfsTable == HDFS_HIVE_TABLE) {
+                    // Fallback to HDFS_HIVE_TABLE for backward compatibility
+                    entries = fileEntries.get(HDFS_HIVE_TABLE);
+                }
+                if (entries == null && hdfsTable == HDFS_RECURSIVE_TABLE) {
+                    // Fallback to HDFS_RECURSIVE_TABLE for backward compatibility
+                    entries = fileEntries.get(HDFS_RECURSIVE_TABLE);
+                }
+                return entries != null ? entries : ImmutableList.of();
+            }
+        };
     }
 
     @Override

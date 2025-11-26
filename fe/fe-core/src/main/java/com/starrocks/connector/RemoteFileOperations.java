@@ -24,7 +24,9 @@ import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.HiveWriteUtils;
 import com.starrocks.connector.hive.Partition;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
+import com.starrocks.metric.MetricRepo;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import com.starrocks.utils.TdwUtil;
 import com.tencent.tdw.security.exceptions.SecureException;
 import jline.internal.Log;
@@ -114,6 +116,14 @@ public class RemoteFileOperations {
     }
 
     public List<RemoteFileInfo> getRemoteFiles(List<Partition> partitions, Optional<String> hudiTableLocation, boolean useCache) {
+        // Record start time for latency metrics
+        long startTime = System.currentTimeMillis();
+
+        // Record total getRemoteFiles calls
+        if (MetricRepo.hasInit) {
+            MetricRepo.COUNTER_REMOTE_FILE_GET_ALL.increase(1L);
+        }
+
         Map<RemotePathKey, Partition> pathKeyToPartition = Maps.newHashMap();
         for (Partition partition : partitions) {
             RemotePathKey key = RemotePathKey.of(partition.getFullPath(), isRecursive, hudiTableLocation);
@@ -124,6 +134,32 @@ public class RemoteFileOperations {
         if (enableCatalogLevelCache && useCache) {
             cacheMissSize = cacheMissSize - remoteFileIO.getPresentRemoteFiles(
                     Lists.newArrayList(pathKeyToPartition.keySet())).size();
+        }
+
+        // Check if async pull is enabled (read from SessionVariable)
+        boolean enableAsyncPull = true;
+        if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable() != null) {
+            enableAsyncPull = ConnectContext.get().getSessionVariable().isEnableAsyncPullRemoteFile();
+        }
+
+        // If async pull is disabled, use synchronous mode
+        if (!enableAsyncPull) {
+            if (MetricRepo.hasInit) {
+                MetricRepo.COUNTER_REMOTE_FILE_GET_SYNC.increase(1L);
+            }
+            List<RemoteFileInfo> result = getRemoteFilesSynchronously(partitions, hudiTableLocation, useCache,
+                    pathKeyToPartition, cacheMissSize);
+            if (MetricRepo.hasInit) {
+                // Record latency for synchronous mode
+                long elapseMs = System.currentTimeMillis() - startTime;
+                MetricRepo.HISTO_REMOTE_FILE_OPERATIONS_LATENCY.update(elapseMs);
+            }
+            return result;
+        }
+
+        // Record async mode calls
+        if (MetricRepo.hasInit) {
+            MetricRepo.COUNTER_REMOTE_FILE_GET_ASYNC.increase(1L);
         }
 
         List<RemoteFileInfo> resultRemoteFiles = Lists.newArrayList();
@@ -166,10 +202,10 @@ public class RemoteFileOperations {
                 }
             }
 
-            long startTime = System.currentTimeMillis();
+            long futureStartTime = System.currentTimeMillis();
             for (Future<Map<RemotePathKey, List<RemoteFileDesc>>> future : futures) {
                 try {
-                    long timeout = remoteFilePullTimeout - (System.currentTimeMillis() - startTime);
+                    long timeout = remoteFilePullTimeout - (System.currentTimeMillis() - futureStartTime);
                     if (timeout > 0) {
                         result.add(future.get(timeout, TimeUnit.MILLISECONDS));
                     } else {
@@ -190,10 +226,22 @@ public class RemoteFileOperations {
                     throw new StarRocksConnectorException("Failed to get remote files, msg: %s", errMsg);
                 }
             }
+        } catch (Throwable e) {
+            if (MetricRepo.hasInit) {
+                MetricRepo.COUNTER_REMOTE_FILE_GET_ERR.increase(1L);
+            }
+            throw e;
         }
 
         for (Map<RemotePathKey, List<RemoteFileDesc>> pathToDesc : result) {
             resultRemoteFiles.addAll(fillFileInfo(pathToDesc, pathKeyToPartition));
+        }
+
+        if (MetricRepo.hasInit) {
+            MetricRepo.COUNTER_REMOTE_FILE_GET_SUCCESS.increase(1L);
+            // Record latency for asynchronous mode
+            long elapseMs = System.currentTimeMillis() - startTime;
+            MetricRepo.HISTO_REMOTE_FILE_OPERATIONS_LATENCY.update(elapseMs);
         }
 
         return resultRemoteFiles;
@@ -225,7 +273,7 @@ public class RemoteFileOperations {
     }
 
     public void refreshPartitionFilesCache(Path path) {
-        RemotePathKey remotePathKey = RemotePathKey.of(path.toString(), isRecursive);
+        RemotePathKey remotePathKey = RemotePathKey.of(path.toString(), isRecursive, Optional.empty(), getProperties());
         remoteFileIO.updateRemoteFiles(remotePathKey);
     }
 
@@ -413,6 +461,52 @@ public class RemoteFileOperations {
         if (StringUtils.isNotEmpty(username)) {
             properties.put(USER_NAME_KEY, username);
         }
+        if (ConnectContext.get() != null && (ConnectContext.get().getSessionVariable() != null)) {
+            SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
+            properties.put("forceScheduleLocal", String.valueOf(sessionVariable.getForceScheduleLocal()));
+        }
         return properties;
+    }
+
+    /**
+     * Synchronously get remote files without using thread pool.
+     * This method is used when enable_async_pull_remote_file is set to false.
+     */
+    private List<RemoteFileInfo> getRemoteFilesSynchronously(
+            List<Partition> partitions,
+            Optional<String> hudiTableLocation,
+            boolean useCache,
+            Map<RemotePathKey, Partition> pathKeyToPartition,
+            int cacheMissSize) {
+        List<RemoteFileInfo> resultRemoteFiles = Lists.newArrayList();
+        List<Map<RemotePathKey, List<RemoteFileDesc>>> result = Lists.newArrayList();
+
+        RemotePathKey.HudiContext hudiContext = new RemotePathKey.HudiContext();
+
+        Tracers.count(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES, cacheMissSize);
+        try (Timer ignored = Tracers.watchScope(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES)) {
+            for (Partition partition : partitions) {
+                RemotePathKey pathKey =
+                        RemotePathKey.of(partition.getFullPath(), isRecursive, hudiTableLocation, getProperties());
+                pathKey.setHudiContext(hudiContext);
+                // Directly call getRemoteFiles without thread pool
+                Map<RemotePathKey, List<RemoteFileDesc>> files = remoteFileIO.getRemoteFiles(pathKey, useCache);
+                result.add(files);
+            }
+        } catch (Throwable e) {
+            if (MetricRepo.hasInit) {
+                MetricRepo.COUNTER_REMOTE_FILE_GET_ERR.increase(1L);
+            }
+            throw e;
+        }
+
+        for (Map<RemotePathKey, List<RemoteFileDesc>> pathToDesc : result) {
+            resultRemoteFiles.addAll(fillFileInfo(pathToDesc, pathKeyToPartition));
+        }
+
+        if (MetricRepo.hasInit) {
+            MetricRepo.COUNTER_REMOTE_FILE_GET_SUCCESS.increase(1L);
+        }
+        return resultRemoteFiles;
     }
 }

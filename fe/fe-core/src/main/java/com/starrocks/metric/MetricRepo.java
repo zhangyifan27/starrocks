@@ -236,6 +236,14 @@ public final class MetricRepo {
     public static Histogram HISTO_HMS_REQUEST_LATENCY;
     public static Histogram HISTO_GET_REMOTE_FILES_LATENCY;
 
+    // Remote file operations metrics
+    public static LongCounterMetric COUNTER_REMOTE_FILE_GET_ALL;
+    public static LongCounterMetric COUNTER_REMOTE_FILE_GET_SYNC;
+    public static LongCounterMetric COUNTER_REMOTE_FILE_GET_ASYNC;
+    public static LongCounterMetric COUNTER_REMOTE_FILE_GET_SUCCESS;
+    public static LongCounterMetric COUNTER_REMOTE_FILE_GET_ERR;
+    public static Histogram HISTO_REMOTE_FILE_OPERATIONS_LATENCY;
+
     public static GaugeMetricImpl<Long> COUNTER_TOTAL_DISK_CAPACITYB;
     public static GaugeMetricImpl<Long> COUNTER_DISK_AVAILABLE_CAPACITYB;
     public static GaugeMetricImpl<Long> COUNTER_TOTAL_TABLET_NUM;
@@ -753,6 +761,25 @@ public final class MetricRepo {
         COUNTER_HMS_SLOW_QUERY = new LongCounterMetric("hivemetastore_slow_query", MetricUnit.REQUESTS,
                 "total slow hivemetastore query");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_HMS_SLOW_QUERY);
+
+        COUNTER_REMOTE_FILE_GET_ALL = new LongCounterMetric("remote_file_get_total", MetricUnit.REQUESTS,
+                "total remote file get requests");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REMOTE_FILE_GET_ALL);
+        COUNTER_REMOTE_FILE_GET_SYNC = new LongCounterMetric("remote_file_get_sync", MetricUnit.REQUESTS,
+                "total synchronous remote file get requests");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REMOTE_FILE_GET_SYNC);
+        COUNTER_REMOTE_FILE_GET_ASYNC = new LongCounterMetric("remote_file_get_async", MetricUnit.REQUESTS,
+                "total asynchronous remote file get requests");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REMOTE_FILE_GET_ASYNC);
+        COUNTER_REMOTE_FILE_GET_SUCCESS = new LongCounterMetric("remote_file_get_success", MetricUnit.REQUESTS,
+                "total successful remote file get requests");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REMOTE_FILE_GET_SUCCESS);
+        COUNTER_REMOTE_FILE_GET_ERR = new LongCounterMetric("remote_file_get_err", MetricUnit.REQUESTS,
+                "total failed remote file get requests");
+        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REMOTE_FILE_GET_ERR);
+
+        HISTO_REMOTE_FILE_OPERATIONS_LATENCY = METRIC_REGISTER.histogram(
+                MetricRegistry.name("remote", "file", "operations", "latency", "ms"));
 
         COUNTER_TOTAL_DISK_CAPACITYB = new GaugeMetricImpl<>("system_statistics_total_disk_capacity", MetricUnit.BYTES,
                 "cluster total disk capacity") {

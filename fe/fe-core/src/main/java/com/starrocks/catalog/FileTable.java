@@ -32,16 +32,23 @@ import com.starrocks.connector.hive.HiveStorageFormat;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
 import com.starrocks.connector.hive.TextFileFormatDesc;
 import com.starrocks.credential.azure.AzureCloudConfigurationProvider;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import com.starrocks.thrift.TColumn;
 import com.starrocks.thrift.TFileTable;
 import com.starrocks.thrift.TTableDescriptor;
 import com.starrocks.thrift.TTableType;
+import com.starrocks.utils.TdwUtil;
+import org.apache.commons.lang3.StringUtils;
 import org.apache.hadoop.conf.Configuration;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
+
+import static com.starrocks.fs.hdfs.HdfsFsManager.USER_NAME_KEY;
 
 public class FileTable extends Table {
     public static final String JSON_KEY_FILE_PATH = "path";
@@ -118,12 +125,26 @@ public class FileTable extends Table {
         return fileProperties;
     }
 
+    private Map<String, String> getRemoteFileAccessProperties() {
+        String username = TdwUtil.getTdwUserName();
+        Map<String, String> properties = new HashMap<>();
+        if (StringUtils.isNotEmpty(username)) {
+            properties.put(USER_NAME_KEY, username);
+        }
+        if (ConnectContext.get() != null && (ConnectContext.get().getSessionVariable() != null)) {
+            SessionVariable sessionVariable = ConnectContext.get().getSessionVariable();
+            properties.put("forceScheduleLocal", String.valueOf(sessionVariable.getForceScheduleLocal()));
+        }
+        return properties;
+    }
+
     public List<RemoteFileDesc> getFileDescsFromHdfs() throws DdlException {
         HdfsEnvironment hdfsEnvironment = new HdfsEnvironment(fileProperties);
         Configuration configuration = hdfsEnvironment.getConfiguration();
         HiveRemoteFileIO remoteFileIO = new HiveRemoteFileIO(configuration);
         boolean recursive = Boolean.parseBoolean(fileProperties.getOrDefault(JSON_RECURSIVE_DIRECTORIES, "false"));
-        RemotePathKey pathKey = new RemotePathKey(getTableLocation(), recursive, Optional.empty());
+        RemotePathKey pathKey = new RemotePathKey(getTableLocation(), recursive, Optional.empty(),
+                getRemoteFileAccessProperties());
         boolean enableWildCards = Boolean.parseBoolean(fileProperties.getOrDefault(JSON_ENABLE_WILDCARDS, "false"));
 
         try {
