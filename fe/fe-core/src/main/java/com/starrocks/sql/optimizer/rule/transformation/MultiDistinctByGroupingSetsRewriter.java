@@ -235,7 +235,7 @@ public class MultiDistinctByGroupingSetsRewriter {
         Map<ColumnRefOperator, ScalarOperator> columnRefAggrMap = new LinkedHashMap<>();
         columnRefAggrMap.putAll(project.getColumnRefMap());
         columnRefAggrMap.putAll(cloneColumnRefMap);
-        OptExpression newProjectOpt = OptExpression.create(new LogicalProjectOperator(columnRefAggrMap), projectOpt.getInputs());
+        OptExpression newProjectOpt = OptExpression.create(new LogicalProjectOperator(columnRefAggrMap), projectOpt);
         return Lists.newArrayList(newProjectOpt);
     }
 

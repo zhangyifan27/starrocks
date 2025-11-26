@@ -656,5 +656,59 @@ public class RewriteMultiDistinctPlanTest extends PlanTestBase {
                 "  1:REPEAT_NODE\n" +
                         "  |  repeat: repeat 1 lines [[2, 3], [2, 4]]");
     }
+
+    @Test
+    public void testMultiDistinctUserCase7() throws Exception {
+        String sql = "SELECT \n" +
+                "COUNT(CASE WHEN `deptno` = 'dt_pgin_02' THEN `emp_id` ELSE NULL END) AS `pgin_pv_1`, \n" +
+                "COUNT(CASE WHEN `deptno` = 'dt_pgin' THEN `emp_id` ELSE NULL END) AS `pgin_pv_2`, \n" +
+                "COUNT(DISTINCT CASE WHEN `deptno` = 'dt_pgin' THEN `emp_id` ELSE NULL END) AS `pgin_uv`, \n" +
+                "COUNT(DISTINCT CASE WHEN `deptno` = 'dt_clck' THEN `emp_id` ELSE NULL END) AS `clck_uv`\n" +
+                "FROM ( SELECT `emp_id`, `deptno` FROM emps\n" +
+                "UNION ALL\n" +
+                "SELECT `emp_id`, `deptno` FROM emps\n" +
+                ") AS `t3`";
+        String plan = getFragmentPlan(sql);
+        assertContains(plan,
+                "  6:REPEAT_NODE\n" +
+                        "  |  repeat: repeat 2 lines [[], [14], [15]]\n" +
+                        "  |  \n" +
+                        "  5:Project\n" +
+                        "  |  <slot 13> : if(33: cast = 'dt_pgin_02', 11: emp_id, NULL)\n" +
+                        "  |  <slot 14> : if(CAST(12: deptno AS VARCHAR(1048576)) = 'dt_pgin', 11: emp_id, NULL)\n" +
+                        "  |  <slot 15> : if(33: cast = 'dt_clck', 11: emp_id, NULL)\n" +
+                        "  |  <slot 21> : 35: if\n" +
+                        "  |  common expressions:\n" +
+                        "  |  <slot 33> : CAST(12: deptno AS VARCHAR(1048576))\n" +
+                        "  |  <slot 34> : 33: cast = 'dt_pgin'\n" +
+                        "  |  <slot 35> : if(34: expr, 11: emp_id, NULL)");
+    }
+
+    @Test
+    public void testMultiDistinctUserCase8() throws Exception {
+        String sql = "SELECT \n" +
+                "COUNT(CASE WHEN `deptno` = 'dt_pgin_02' THEN `emp_id` ELSE NULL END) AS `pgin_pv_1`, \n" +
+                "COUNT(CASE WHEN `deptno` = 'dt_pgin' THEN `emp_id` ELSE NULL END) AS `pgin_pv_2`, \n" +
+                "COUNT(DISTINCT CASE WHEN `deptno` = 'dt_pgin' THEN `emp_id` ELSE NULL END) AS `pgin_uv`, \n" +
+                "COUNT(DISTINCT CASE WHEN `deptno` = 'dt_clck' THEN `emp_id` ELSE NULL END) AS `clck_uv`\n" +
+                "FROM ( select t1.emp_id, t2.deptno from \n" +
+                "(SELECT `emp_id`, `deptno` FROM emps) t1 join \n" +
+                "(SELECT `emp_id`, `deptno` FROM emps) t2 on t1.emp_id = t2.emp_id\n" +
+                ") AS `t3`";
+        String plan = getFragmentPlan(sql);
+        assertContains(plan,
+                "  5:REPEAT_NODE\n" +
+                        "  |  repeat: repeat 2 lines [[13], [], [12]]\n" +
+                        "  |  \n" +
+                        "  4:Project\n" +
+                        "  |  <slot 11> : if(31: cast = 'dt_pgin_02', 1: emp_id, NULL)\n" +
+                        "  |  <slot 12> : if(CAST(7: deptno AS VARCHAR(1048576)) = 'dt_pgin', 1: emp_id, NULL)\n" +
+                        "  |  <slot 13> : if(31: cast = 'dt_clck', 1: emp_id, NULL)\n" +
+                        "  |  <slot 19> : 33: if\n" +
+                        "  |  common expressions:\n" +
+                        "  |  <slot 32> : 31: cast = 'dt_pgin'\n" +
+                        "  |  <slot 33> : if(32: expr, 1: emp_id, NULL)\n" +
+                        "  |  <slot 31> : CAST(7: deptno AS VARCHAR(1048576))");
+    }
 }
 
