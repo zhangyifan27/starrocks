@@ -3647,4 +3647,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean disable_external_table_ddl = true;
+
+    @ConfField(mutable = true)
+    public static String cache_node_mode = "default";
 }

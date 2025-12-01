@@ -117,8 +117,14 @@ public class SystemInfoService implements GsonPostProcessable {
     @SerializedName(value = "pre_be")
     protected volatile ConcurrentHashMap<Long, Backend> idToBackendRefBefore;
 
+    @SerializedName(value = "pre_ce")
+    protected volatile ConcurrentHashMap<Long, ComputeNode> idToComputeNodeRefBefore;
+
     @SerializedName(value = "time")
     protected volatile AtomicLong backendChangeTime;
+
+    @SerializedName(value = "cache_time")
+    protected volatile AtomicLong cacheNodeChangeTime;
 
     protected volatile ImmutableMap<Long, AtomicLong> idToReportVersionRef;
     private volatile ImmutableMap<Long, DiskInfo> pathHashToDishInfoRef;
@@ -129,7 +135,9 @@ public class SystemInfoService implements GsonPostProcessable {
         idToBackendRef = new ConcurrentHashMap<>();
         idToComputeNodeRef = new ConcurrentHashMap<>();
         idToBackendRefBefore = new ConcurrentHashMap<>();
+        idToComputeNodeRefBefore = new ConcurrentHashMap<>();
         backendChangeTime = new AtomicLong(System.currentTimeMillis());
+        cacheNodeChangeTime = new AtomicLong(System.currentTimeMillis());
 
         idToReportVersionRef = ImmutableMap.of();
         pathHashToDishInfoRef = ImmutableMap.of();
@@ -185,6 +193,13 @@ public class SystemInfoService implements GsonPostProcessable {
         ComputeNode newComputeNode = new ComputeNode(GlobalStateMgr.getCurrentState().getNextId(), host, heartbeatPort);
         setComputeNodeOwner(newComputeNode);
         addComputeNodeToWarehouse(newComputeNode, warehouse);
+
+        if (newComputeNode.getWarehouseId() == WarehouseManager.DATACACHE_WAREHOUSE_ID) {
+            ImmutableMap<Long, ComputeNode> datacacheSnapshot =
+                    GlobalStateMgr.getCurrentState().getWarehouseMgr().buildDatacacheSnapshot();
+            idToComputeNodeRefBefore = new ConcurrentHashMap<>(datacacheSnapshot);
+            cacheNodeChangeTime = new AtomicLong(System.currentTimeMillis());
+        }
 
         idToComputeNodeRef.put(newComputeNode.getId(), newComputeNode);
 
@@ -409,7 +424,14 @@ public class SystemInfoService implements GsonPostProcessable {
                     "] does not exist in warehouse " + warehouse);
         }
 
-        // update idToComputeNode
+        if (dropComputeNode.getWarehouseId() == WarehouseManager.DATACACHE_WAREHOUSE_ID) {
+            ImmutableMap<Long, ComputeNode> datacacheSnapshot =
+                    GlobalStateMgr.getCurrentState().getWarehouseMgr().buildDatacacheSnapshot();
+            idToComputeNodeRefBefore = new ConcurrentHashMap<>(datacacheSnapshot);
+            cacheNodeChangeTime = new AtomicLong(System.currentTimeMillis());
+        }
+
+        // update idToComputeNode (publish removal)
         idToComputeNodeRef.remove(dropComputeNode.getId());
 
         // remove from BackendCoreStat
@@ -1004,6 +1026,15 @@ public class SystemInfoService implements GsonPostProcessable {
 
     public ImmutableMap<Long, ComputeNode> getIdComputeNode() {
         return ImmutableMap.copyOf(idToComputeNodeRef);
+    }
+
+    // Previous snapshot of compute nodes for topology change handling
+    public ImmutableMap<Long, ComputeNode> getIdComputeNodeRefBefore() {
+        return ImmutableMap.copyOf(idToComputeNodeRefBefore);
+    }
+
+    public AtomicLong getCacheNodeChangeTime() {
+        return cacheNodeChangeTime;
     }
 
     public long getBackendReportVersion(long backendId) {

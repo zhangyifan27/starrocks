@@ -71,7 +71,11 @@ public interface WorkerProvider {
 
     Collection<ComputeNode> getAllWorkers();
 
-    Collection<ComputeNode> getAllBackendBefore();
+    /**
+     * Previously returned the snapshot of backends before a topology change. After data cache integration it now
+     * returns the snapshot of compute nodes in the datacache warehouse captured prior to (or at) scheduling.
+     */
+    Collection<ComputeNode> getAllPreviousCacheNodes();
 
     ComputeNode getWorkerById(long workerId);
 

@@ -15,6 +15,7 @@
 package com.starrocks.server;
 
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Sets;
 import com.staros.client.StarClientException;
 import com.staros.proto.ShardInfo;
@@ -53,9 +54,11 @@ import org.apache.logging.log4j.Logger;
 import java.io.DataOutput;
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -68,6 +71,9 @@ public class WarehouseManager implements Writable {
 
     public static final String DEFAULT_WAREHOUSE_NAME = "default_warehouse";
     public static final long DEFAULT_WAREHOUSE_ID = 0L;
+
+    public static final String DATACACHE_WAREHOUSE_NAME = "datacachewarehouse";
+    public static final long DATACACHE_WAREHOUSE_ID = -1000L;
 
     protected final Map<Long, Warehouse> idToWh = new HashMap<>();
     protected final Map<String, Warehouse> nameToWh = new HashMap<>();
@@ -83,7 +89,37 @@ public class WarehouseManager implements Writable {
             Warehouse wh = new DefaultWarehouse(DEFAULT_WAREHOUSE_ID, DEFAULT_WAREHOUSE_NAME);
             nameToWh.put(wh.getName(), wh);
             idToWh.put(wh.getId(), wh);
+
+            Warehouse datacacheWh = new LocalWarehouse(DATACACHE_WAREHOUSE_ID,
+                    DATACACHE_WAREHOUSE_NAME, DATACACHE_WAREHOUSE_ID, "An internal datacache warehouse");
+            nameToWh.put(datacacheWh.getName(), datacacheWh);
+            idToWh.put(datacacheWh.getId(), datacacheWh);
         }
+    }
+
+    public static ImmutableMap<Long, ComputeNode> filterDatacacheComputeNodes(Collection<ComputeNode> computeNodes) {
+        if (computeNodes == null || computeNodes.isEmpty()) {
+            return ImmutableMap.of();
+        }
+
+        return ImmutableMap.copyOf(
+                computeNodes.stream()
+                        .filter(node -> node.getWarehouseId() == DATACACHE_WAREHOUSE_ID)
+                        .collect(Collectors.toMap(ComputeNode::getId, node -> node)));
+    }
+
+    public ImmutableMap<Long, ComputeNode> buildDatacacheSnapshot() {
+        List<Long> computeNodeIds = getAllComputeNodeIds(DATACACHE_WAREHOUSE_ID);
+        if (computeNodeIds.isEmpty()) {
+            return ImmutableMap.of();
+        }
+
+        SystemInfoService systemInfoService = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo();
+        return ImmutableMap.copyOf(
+                computeNodeIds.stream()
+                        .map(systemInfoService::getBackendOrComputeNode)
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toMap(ComputeNode::getId, node -> node)));
     }
 
     public List<Warehouse> getAllWarehouses() {
