@@ -54,6 +54,10 @@ public class QueryQueueManager {
     }
 
     public void maybeWait(ConnectContext context, DefaultCoordinator coord) throws UserException, InterruptedException {
+        if (context.getSessionVariable().isSkipQueryQueue()) {
+            return;
+        }
+
         SlotProvider slotProvider = coord.getJobSpec().getSlotProvider();
         long startMs = System.currentTimeMillis();
         boolean isPending = false;

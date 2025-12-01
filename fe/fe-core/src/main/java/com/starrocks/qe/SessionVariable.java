@@ -719,6 +719,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String ENABLE_PLAN_VALIDATION = "enable_plan_validation";
 
     public static final String ENABLE_STRICT_TYPE = "enable_strict_type";
+    public static final String SKIP_QUERY_QUEUE = "skip_query_queue";
 
     public static final String PARTIAL_UPDATE_MODE = "partial_update_mode";
 
@@ -2235,6 +2236,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VarAttr(name = ENABLE_CONNECTOR_SINK_WRITER_SCALING)
     private boolean enableConnectorSinkWriterScaling = true;
+
+    @VarAttr(name = SKIP_QUERY_QUEUE, flag = VariableMgr.INVISIBLE)
+    private boolean skipQueryQueue = false;
 
     private int exprChildrenLimit = -1;
 
@@ -4808,6 +4812,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setOptimizeTrivialOrderByInSubquery(boolean optimizeTrivialOrderByInSubquery) {
         this.optimizeTrivialOrderByInSubquery = optimizeTrivialOrderByInSubquery;
+    }
+
+    public boolean isSkipQueryQueue() {
+        return skipQueryQueue;
+    }
+
+    public void setSkipQueryQueue(boolean val) {
+        this.skipQueryQueue = val;
     }
 
     // Serialize to thrift object
