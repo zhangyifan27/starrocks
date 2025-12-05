@@ -111,6 +111,7 @@ import com.starrocks.sql.optimizer.rule.tree.SubfieldExprNoCopyRule;
 import com.starrocks.sql.optimizer.rule.tree.lowcardinality.LowCardinalityRewriteRule;
 import com.starrocks.sql.optimizer.rule.tree.prunesubfield.PruneSubfieldRule;
 import com.starrocks.sql.optimizer.rule.tree.prunesubfield.PushDownSubfieldRule;
+import com.starrocks.sql.optimizer.statistics.HboUtils;
 import com.starrocks.sql.optimizer.task.OptimizeGroupTask;
 import com.starrocks.sql.optimizer.task.PrepareCollectMetaTask;
 import com.starrocks.sql.optimizer.task.RewriteAtMostOnceTask;
@@ -259,6 +260,9 @@ public class Optimizer {
         if (context.getQueryMaterializationContext() != null) {
             // LogicalTreeWithView is logically equivalent to logicOperatorTree
             addViewBasedPlanIntoMemo(context.getQueryMaterializationContext().getQueryOptPlanWithView());
+        }
+        if (connectContext.getSessionVariable().isEnableHboOptimization()) {
+            HboUtils.collectPredicateOnScan(logicOperatorTree, context);
         }
         OptimizerTraceUtil.log("after logical rewrite, root group:\n%s", memo.getRootGroup());
 
@@ -846,15 +850,27 @@ public class Optimizer {
         context.setInMemoPhase(true);
         OptExpression tree = memo.getRootGroup().extractLogicalTree();
         SessionVariable sessionVariable = connectContext.getSessionVariable();
+        int pruneJoinTypeNodeSize = Utils.countJoinNodeSize(tree, CboTablePruneRule.JOIN_TYPES);
+        int innerCrossJoinNode = Utils.countJoinNodeSize(tree, JoinOperator.innerCrossJoinSet());
+        int maxNodeUseExhaustive = sessionVariable.getCboMaxReorderNodeUseExhaustive();
+        boolean isEnableHboOptimation = sessionVariable.isEnableHboOptimization();
         // add CboTablePruneRule
-        if (Utils.countJoinNodeSize(tree, CboTablePruneRule.JOIN_TYPES) < 10 &&
-                sessionVariable.isEnableCboTablePrune()) {
+        if (sessionVariable.isEnableCboTablePrune() && pruneJoinTypeNodeSize < 10) {
             context.getRuleSet().addCboTablePruneRule();
         }
         // Join reorder
-        int innerCrossJoinNode = Utils.countJoinNodeSize(tree, JoinOperator.innerCrossJoinSet());
         if (!sessionVariable.isDisableJoinReorder() && innerCrossJoinNode < sessionVariable.getCboMaxReorderNode()) {
-            if (innerCrossJoinNode > sessionVariable.getCboMaxReorderNodeUseExhaustive()) {
+            if (innerCrossJoinNode <= maxNodeUseExhaustive) {
+                if (Utils.countJoinNodeSize(tree, JoinOperator.semiAntiJoinSet()) <
+                        sessionVariable.getCboMaxReorderNodeUseExhaustive()) {
+                    context.getRuleSet().getTransformRules().add(JoinLeftAsscomRule.INNER_JOIN_LEFT_ASSCOM_RULE);
+                }
+                context.getRuleSet().addJoinTransformationRules();
+            } else if (isEnableHboOptimation && innerCrossJoinNode <= 2 * maxNodeUseExhaustive
+                    && pruneJoinTypeNodeSize > innerCrossJoinNode) {
+                CTEUtils.collectForceCteStatistics(memo, context);
+                context.getRuleSet().addInnerOnlyJoinTransformationRules();
+            } else {
                 CTEUtils.collectForceCteStatistics(memo, context);
 
                 OptimizerTraceUtil.logOptExpression("before ReorderJoinRule:\n%s", tree);
@@ -862,12 +878,6 @@ public class Optimizer {
                 OptimizerTraceUtil.logOptExpression("after ReorderJoinRule:\n%s", tree);
 
                 context.getRuleSet().addJoinCommutativityWithoutInnerRule();
-            } else {
-                if (Utils.countJoinNodeSize(tree, JoinOperator.semiAntiJoinSet()) <
-                        sessionVariable.getCboMaxReorderNodeUseExhaustive()) {
-                    context.getRuleSet().getTransformRules().add(JoinLeftAsscomRule.INNER_JOIN_LEFT_ASSCOM_RULE);
-                }
-                context.getRuleSet().addJoinTransformationRules();
             }
         }
 

@@ -177,6 +177,10 @@ public abstract class ScalarOperator implements Cloneable {
         return operator;
     }
 
+    public String getFingerprint() {
+        return "NOT_IMPLEMENTED_EXPR_FP";
+    }
+
     /**
      * Return the columns that this scalar operator used.
      * For a + b, the used columns are a and b.

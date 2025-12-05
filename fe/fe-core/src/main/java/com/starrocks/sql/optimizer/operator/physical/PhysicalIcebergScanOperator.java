@@ -17,11 +17,15 @@ package com.starrocks.sql.optimizer.operator.physical;
 import com.starrocks.catalog.Table;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
+import com.starrocks.sql.optimizer.Utils;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.OperatorVisitor;
 import com.starrocks.sql.optimizer.operator.ScanOperatorPredicates;
 import com.starrocks.sql.optimizer.operator.logical.LogicalIcebergScanOperator;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class PhysicalIcebergScanOperator extends PhysicalScanOperator {
     private ScanOperatorPredicates predicates;
@@ -68,5 +72,23 @@ public class PhysicalIcebergScanOperator extends PhysicalScanOperator {
 
     public Table getHybridScanTable() {
         return hybridScanTable;
+    }
+
+    @Override
+    public String getFingerprint() {
+        String partitions = "";
+        int partitionCount = this.table.getPartitions().size();
+        if (table.isUnPartitioned()) {
+            partitionCount = 1;
+        }
+        List<Long> selectedPartitionIds = this.getScanOperatorPredicates().getSelectedPartitionIds()
+                .stream().collect(Collectors.toList());
+        if (selectedPartitionIds.size() != partitionCount) {
+            partitions = " partitions(" + selectedPartitionIds.size() + "/" + partitionCount + ")";
+        }
+        // NOTE: embed version info avoid mismatching under data maintaining
+        // TODO: more efficient way to ignore the ignorable data maintaining
+        return Utils.toSqlString("IcebergScan[" +
+                Utils.getQualifiedTableName(table) + partitions + "]" + "#" + Utils.getQualifiedTableKey(table));
     }
 }

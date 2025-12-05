@@ -21,6 +21,7 @@ import com.starrocks.sql.optimizer.operator.logical.LogicalCTEAnchorOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalCTEConsumeOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalCTEProduceOperator;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
+import com.starrocks.sql.optimizer.statistics.HboStatsCalculator;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 import com.starrocks.sql.optimizer.statistics.StatisticsCalculator;
 
@@ -113,8 +114,14 @@ public class CTEUtils {
         }
 
         ExpressionContext expressionContext = new ExpressionContext(expr);
-        StatisticsCalculator statisticsCalculator = new StatisticsCalculator(
-                expressionContext, context.getColumnRefFactory(), context);
+        StatisticsCalculator statisticsCalculator;
+        if (context.getSessionVariable().isEnableHboOptimization()) {
+            statisticsCalculator = new HboStatsCalculator(
+                    expressionContext, context.getColumnRefFactory(), context);
+        } else {
+            statisticsCalculator = new StatisticsCalculator(
+                    expressionContext, context.getColumnRefFactory(), context);
+        }
         statisticsCalculator.estimatorStats();
 
         if (OperatorType.LOGICAL_OLAP_SCAN.equals(expr.getOp().getOpType()) &&

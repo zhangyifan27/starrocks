@@ -200,6 +200,8 @@ public class PlanFragment extends TreeNode<PlanFragment> {
         setCost(root.getCost());
     }
 
+    private List<Integer> collectExecStatsIds;
+
     /**
      * Assigns 'this' as fragment of all PlanNodes in the plan tree rooted at node.
      * Does not traverse the children of ExchangeNodes because those must belong to a
@@ -447,6 +449,14 @@ public class PlanFragment extends TreeNode<PlanFragment> {
 
     public int getParallelExecNum() {
         return parallelExecNum;
+    }
+
+    public List<Integer> getCollectExecStatsIds() {
+        return collectExecStatsIds;
+    }
+
+    public void setCollectExecStatsIds(List<Integer> collectExecStatsIds) {
+        this.collectExecStatsIds = collectExecStatsIds;
     }
 
     public TPlanFragment toThrift() {

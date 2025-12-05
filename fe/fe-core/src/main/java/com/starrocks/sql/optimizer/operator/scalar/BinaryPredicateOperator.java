@@ -17,11 +17,14 @@ package com.starrocks.sql.optimizer.operator.scalar;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.starrocks.analysis.BinaryType;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class BinaryPredicateOperator extends PredicateOperator {
     private static final Map<BinaryType, BinaryType> BINARY_COMMUTATIVE_MAP =
@@ -114,7 +117,19 @@ public class BinaryPredicateOperator extends PredicateOperator {
 
     @Override
     public String toString() {
-        return getChild(0).toString() + " " + type.toString() + " " + getChild(1).toString();
+        if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable().isEnableHboOptimization()) {
+            List<ScalarOperator> sortedChildren = getChildren().stream().sorted(
+                    new Comparator<ScalarOperator>() {
+                        @Override
+                        public int compare(ScalarOperator t1, ScalarOperator t2) {
+                            return t1.toString().compareTo(t2.toString());
+                        }
+                    }
+            ).collect(Collectors.toList());
+            return sortedChildren.get(0).toString() + " " + type.toString() + " " + sortedChildren.get(1).toString();
+        } else {
+            return getChild(0).toString() + " " + type.toString() + " " + getChild(1).toString();
+        }
     }
 
     @Override
@@ -140,6 +155,29 @@ public class BinaryPredicateOperator extends PredicateOperator {
     @Override
     public int hashCode() {
         return Objects.hash(super.hashCode(), type);
+    }
+
+    @Override
+    public String getFingerprint() {
+        List<ScalarOperator> sortedChildren = getChildren().stream().sorted(
+                new Comparator<ScalarOperator>() {
+                    @Override
+                    public int compare(ScalarOperator t1, ScalarOperator t2) {
+                        return t1.toString().compareTo(t2.toString());
+                    }
+                }
+        ).collect(Collectors.toList());
+        ScalarOperator left = sortedChildren.get(0);
+        ScalarOperator right = sortedChildren.get(1);
+        String leftFingerprint = left.getFingerprint();
+        String rightFingerprint = right.getFingerprint();
+        if (left instanceof ConstantOperator) {
+            leftFingerprint = ((ConstantOperator) left).getFingerprint();
+        }
+        if (right instanceof ConstantOperator) {
+            rightFingerprint = ((ConstantOperator) right).getFingerprint();
+        }
+        return "(" + leftFingerprint + " " + type.toString() + " " + rightFingerprint + ")";
     }
 
     @Override

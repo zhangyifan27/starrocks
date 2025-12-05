@@ -46,6 +46,7 @@ import com.starrocks.cluster.ClusterNamespace;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ErrorCode;
 import com.starrocks.common.ErrorReport;
+import com.starrocks.common.IdGenerator;
 import com.starrocks.common.util.SqlUtils;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.UUIDUtil;
@@ -81,6 +82,7 @@ import com.starrocks.sql.ast.UserVariable;
 import com.starrocks.sql.optimizer.QueryMaterializationContext;
 import com.starrocks.sql.optimizer.dump.DumpInfo;
 import com.starrocks.sql.optimizer.dump.QueryDumpInfo;
+import com.starrocks.sql.optimizer.operator.ObjectId;
 import com.starrocks.sql.parser.SqlParser;
 import com.starrocks.thrift.TPipelineProfileLevel;
 import com.starrocks.thrift.TUniqueId;
@@ -246,6 +248,8 @@ public class ConnectContext {
 
     private final Map<String, PrepareStmtContext> preparedStmtCtxs = Maps.newHashMap();
 
+    private final IdGenerator<ObjectId> objectIdGenerator = ObjectId.createGenerator();
+
     private UUID sessionId;
 
     private String proxyHostName;
@@ -269,6 +273,10 @@ public class ConnectContext {
 
     public static ConnectContext get() {
         return threadLocalInfo.get();
+    }
+
+    public ObjectId getNextObjectId() {
+        return objectIdGenerator.getNextId();
     }
 
     public static void remove() {

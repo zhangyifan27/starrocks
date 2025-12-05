@@ -1,0 +1,70 @@
+-- name: test_hbo
+create database if not exists hbo_test;
+-- result:
+-- !result
+use hbo_test;
+-- result:
+-- !result
+drop table if exists hbo_join_side_opt_test1;
+-- result:
+-- !result
+drop table if exists hbo_join_side_opt_test2;
+-- result:
+-- !result
+create table hbo_join_side_opt_test1(a int, b int) distributed by hash(a) buckets 32 properties("replication_num"="1");
+-- result:
+-- !result
+insert into hbo_join_side_opt_test1 select generate_series, generate_series from TABLE(generate_series(1, 10000));
+-- result:
+-- !result
+insert into hbo_join_side_opt_test1 select 1,1 from TABLE(generate_series(1, 10000000));
+-- result:
+-- !result
+analyze full table hbo_join_side_opt_test1 with sync mode;
+-- result:
+hbo_test.hbo_join_side_opt_test1	analyze	status	OK
+-- !result
+create table hbo_join_side_opt_test2(a int, b int) distributed by hash(a) buckets 32 properties("replication_num"="1");
+-- result:
+-- !result
+insert into hbo_join_side_opt_test2 select generate_series, generate_series from TABLE(generate_series(1, 10000));
+-- result:
+-- !result
+analyze full table hbo_join_side_opt_test2 with sync mode;
+-- result:
+hbo_test.hbo_join_side_opt_test2	analyze	status	OK
+-- !result
+set enable_hbo_optimization=false;
+-- result:
+-- !result
+set global enable_hbo_info_collection=false;
+-- result:
+-- !result
+function: assert_explain_logical_contains("select count(1) from hbo_join_side_opt_test1 s1, hbo_join_side_opt_test2 s2 where s1.b = s2.b and s1.a = 1;", "row: 1000,")
+-- result:
+None
+-- !result
+function: assert_explain_logical_not_contains("select count(1) from hbo_join_side_opt_test1 s1, hbo_join_side_opt_test2 s2 where s1.b = s2.b and s1.a = 1;", "[hbo]row: 10000001")
+-- result:
+None
+-- !result
+ADMIN SET FRONTEND CONFIG ("slow_query_analyze_threshold" = "10");
+-- result:
+-- !result
+set enable_hbo_optimization=true;
+-- result:
+-- !result
+set global enable_hbo_info_collection=true;
+-- result:
+-- !result
+select count(1) from hbo_join_side_opt_test1 s1, hbo_join_side_opt_test2 s2 where s1.b = s2.b and s1.a = 1;
+-- result:
+10000001
+-- !result
+function: assert_explain_logical_contains("select count(1) from hbo_join_side_opt_test1 s1, hbo_join_side_opt_test2 s2 where s1.b = s2.b and s1.a = 1;", "[hbo]row: 10000001")
+-- result:
+None
+-- !result
+ADMIN SET FRONTEND CONFIG ("slow_query_analyze_threshold" = "5000");
+-- result:
+-- !result

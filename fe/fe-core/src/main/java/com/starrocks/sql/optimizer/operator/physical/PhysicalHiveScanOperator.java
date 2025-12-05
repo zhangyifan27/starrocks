@@ -16,11 +16,15 @@ package com.starrocks.sql.optimizer.operator.physical;
 
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
+import com.starrocks.sql.optimizer.Utils;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.OperatorVisitor;
 import com.starrocks.sql.optimizer.operator.ScanOperatorPredicates;
 import com.starrocks.sql.optimizer.operator.logical.LogicalHiveScanOperator;
+
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class PhysicalHiveScanOperator extends PhysicalScanOperator {
     private ScanOperatorPredicates predicates;
@@ -58,5 +62,23 @@ public class PhysicalHiveScanOperator extends PhysicalScanOperator {
         predicates.getMinMaxConjuncts().forEach(d -> refs.union(d.getUsedColumns()));
         predicates.getMinMaxColumnRefMap().keySet().forEach(refs::union);
         return refs;
+    }
+
+    @Override
+    public String getFingerprint() {
+        String partitions = "";
+        int partitionCount = this.table.getPartitions().size();
+        if (table.isUnPartitioned()) {
+            partitionCount = 1;
+        }
+        List<Long> selectedPartitionIds = this.getScanOperatorPredicates().getSelectedPartitionIds()
+                .stream().collect(Collectors.toList());
+        if (selectedPartitionIds.size() != partitionCount) {
+            partitions = " partitions(" + selectedPartitionIds.size() + "/" + partitionCount + ")";
+        }
+        // NOTE: embed version info avoid mismatching under data maintaining
+        // TODO: more efficient way to ignore the ignorable data maintaining
+        return Utils.toSqlString("HiveScan[" +
+                Utils.getQualifiedTableName(table) + partitions + "]" + "#" + Utils.getQualifiedTableKey(table));
     }
 }

@@ -19,6 +19,7 @@ import com.google.common.collect.Lists;
 import com.starrocks.analysis.JoinOperator;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.RowOutputInfo;
+import com.starrocks.sql.optimizer.Utils;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.operator.ColumnOutputInfo;
 import com.starrocks.sql.optimizer.operator.OperatorType;
@@ -137,5 +138,14 @@ public abstract class PhysicalJoinOperator extends PhysicalOperator {
 
     public boolean getOutputRequireHashPartition() {
         return outputRequireHashPartition;
+    }
+
+    @Override
+    public String getFingerprint() {
+        List<Object> args = Lists.newArrayList(
+                "type", joinType,
+                "onPredicate", onPredicate,
+                "predicate", predicate);
+        return Utils.toSqlString("JOIN", args.toArray());
     }
 }

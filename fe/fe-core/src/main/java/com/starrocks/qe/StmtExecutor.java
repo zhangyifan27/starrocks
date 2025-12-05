@@ -37,6 +37,7 @@ package com.starrocks.qe;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
+import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
@@ -115,12 +116,14 @@ import com.starrocks.planner.HiveTableSink;
 import com.starrocks.planner.IcebergScanNode;
 import com.starrocks.planner.OlapScanNode;
 import com.starrocks.planner.PlanFragment;
+import com.starrocks.planner.PlanNodeAndHash;
 import com.starrocks.planner.PlanNodeId;
 import com.starrocks.planner.ScanNode;
 import com.starrocks.privilege.AccessDeniedException;
 import com.starrocks.privilege.ObjectType;
 import com.starrocks.privilege.PrivilegeException;
 import com.starrocks.privilege.PrivilegeType;
+import com.starrocks.proto.NodeExecStatsItemPB;
 import com.starrocks.proto.PPlanFragmentCancelReason;
 import com.starrocks.proto.PQueryStatistics;
 import com.starrocks.proto.QueryStatisticsItemPB;
@@ -193,8 +196,19 @@ import com.starrocks.sql.common.MetaUtils;
 import com.starrocks.sql.common.StarRocksPlannerException;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.dump.QueryDumpInfo;
+import com.starrocks.sql.optimizer.operator.physical.PhysicalOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalValuesOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
+import com.starrocks.sql.optimizer.statistics.HboPlanInfoProvider;
+import com.starrocks.sql.optimizer.statistics.HboPlanStatisticsManager;
+import com.starrocks.sql.optimizer.statistics.HboUtils;
+import com.starrocks.sql.optimizer.statistics.MemoryHboPlanStatisticsProvider;
+import com.starrocks.sql.optimizer.statistics.hbo.InputTableStatisticsInfo;
+import com.starrocks.sql.optimizer.statistics.hbo.PlanStatistics;
+import com.starrocks.sql.optimizer.statistics.hbo.PlanStatisticsMatchStrategy;
+import com.starrocks.sql.optimizer.statistics.hbo.PlanStatisticsWithInputInfo;
+import com.starrocks.sql.optimizer.statistics.hbo.RecentRunsPlanStatistics;
+import com.starrocks.sql.optimizer.statistics.hbo.RecentRunsPlanStatisticsEntry;
 import com.starrocks.sql.plan.ExecPlan;
 import com.starrocks.statistic.AnalyzeJob;
 import com.starrocks.statistic.AnalyzeMgr;
@@ -246,6 +260,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
@@ -1496,6 +1511,8 @@ public class StmtExecutor {
                 return;
             }
 
+            publishHboPlanStatistics(execPlan);
+
             if (coord != null) {
                 coord.setQueryProgressFinished(true);
                 coord.resetProgressMaxTotalTime();
@@ -1594,6 +1611,103 @@ public class StmtExecutor {
         }
 
         sendShowResult(resultSet);
+    }
+
+    public void publishHboPlanStatistics(ExecPlan execPlan) {
+        SessionVariable sessionVariable = context.getSessionVariable();
+        if (!sessionVariable.isEnableHboOptimization() ||
+                CollectionUtils.isEmpty(statisticsForAuditLog.getNodeExecStatsItems())) {
+            return;
+        }
+        long elapseMs = System.currentTimeMillis() - context.getStartTime();
+        if (sessionVariable.isEnableHboOptimization() || elapseMs > Config.slow_query_analyze_threshold) {
+            try (Timer ignored = Tracers.watchScope(Tracers.Module.OPTIMIZER, "AnalyzeExecStats")) {
+                List<NodeExecStatsItemPB> nodeExecStatsItems = statisticsForAuditLog.getNodeExecStatsItems();
+                if (GlobalVariable.isEnableHboInfoCollection()) {
+                    String queryId = DebugUtil.printId(context.getQueryId());
+                    publishHboPlanStatistics(queryId, execPlan, nodeExecStatsItems);
+                }
+            }
+        }
+    }
+
+    public void publishHboPlanStatistics(String queryId, ExecPlan execPlan,
+                                         List<NodeExecStatsItemPB> curPlanNodeRuntimeStats) {
+        try {
+            HboPlanStatisticsManager hboManager = GlobalStateMgr.getCurrentState().getHboPlanStatisticsManager();
+            MemoryHboPlanStatisticsProvider hboPlanStatisticsProvider = (MemoryHboPlanStatisticsProvider)
+                    hboManager.getHboPlanStatisticsProvider();
+            HboPlanInfoProvider planInfoProvider = hboManager.getHboPlanInfoProvider();
+
+            if (hboPlanStatisticsProvider != null && planInfoProvider != null) {
+                ConcurrentHashMap<Integer, PhysicalOperator> idToPlanMap = planInfoProvider.getIdToPlanMap(queryId);
+                ConcurrentHashMap<PhysicalOperator, Integer> planToIdMap = planInfoProvider.getPlanToIdMap(queryId);
+                ConcurrentHashMap<String, ScalarOperator> scanToFilterMap = planInfoProvider.getScanToFilterMap(queryId);
+
+                if (!idToPlanMap.isEmpty() && idToPlanMap.size() == planToIdMap.size()) {
+                    Map<PlanNodeAndHash, PlanStatisticsWithInputInfo> curPlanStatistics = HboUtils.genPlanStatisticsMap(
+                            execPlan, idToPlanMap, planToIdMap, scanToFilterMap, curPlanNodeRuntimeStats);
+                    Map<PlanNodeAndHash, RecentRunsPlanStatistics> recentRunsPlanStatisticsMap =
+                            hboPlanStatisticsProvider.getHboPlanStats(
+                                    curPlanStatistics.keySet().stream().collect(Collectors.toList()));
+
+                    // update plan statistics
+                    Map<PlanNodeAndHash, RecentRunsPlanStatistics> newPlanStatistics = curPlanStatistics.entrySet().stream()
+                            .filter(entry -> entry.getKey().getHash().isPresent()
+                                    && entry.getValue().getInputTableInfo().getInputTableStatistics().isPresent())
+                            .collect(Collectors.toMap(
+                                    Map.Entry::getKey,
+                                    entry -> {
+                                        RecentRunsPlanStatistics recentRunsPlanStatistics = Optional.ofNullable(
+                                                        recentRunsPlanStatisticsMap.get(entry.getKey()))
+                                                .orElseGet(RecentRunsPlanStatistics::empty);
+                                        InputTableStatisticsInfo curInputTableStatisticsInfo = entry
+                                                .getValue().getInputTableInfo();
+                                        // find the most matching entry to do the refreshment.
+                                        return updatePlanStatistics(
+                                                recentRunsPlanStatistics,
+                                                curInputTableStatisticsInfo.getInputTableStatistics().get(),
+                                                entry.getValue().getPlanStatistics());
+                                    }));
+
+                    // publish stats and refresh cache on current matching key hashing
+                    if (!newPlanStatistics.isEmpty()) {
+                        hboPlanStatisticsProvider.putHboPlanStats(ImmutableMap.copyOf(newPlanStatistics));
+                        //for (Entry<PlanNodeAndHash, RecentRunsPlanStatistics> entry : newPlanStatistics.entrySet()) {
+                        //    PlanNodeAndHash planHash = entry.getKey();
+                        //    RecentRunsPlanStatistics planEntries = entry.getValue();
+                        //    hboPlanStatisticsProvider.syncHboPlanStats(planHash, planEntries);
+                        //}
+                    }
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("failed to do hbo information publishing {}", DebugUtil.getStackTrace(e));
+        }
+    }
+
+    private RecentRunsPlanStatistics updatePlanStatistics(
+            RecentRunsPlanStatistics recentRunsPlanStatistics,
+            List<PlanStatistics> curInputTableStatistics,
+            PlanStatistics newPlanStatistics) {
+        List<RecentRunsPlanStatisticsEntry> recentRunsStatistics = recentRunsPlanStatistics.getRecentRunsStatistics();
+        List<RecentRunsPlanStatisticsEntry> newRecentRunsStatistics = new ArrayList<>(recentRunsStatistics);
+
+        Optional<Integer> accurateStatsIndex = HboUtils.getAccurateStatsIndex(
+                recentRunsPlanStatistics, curInputTableStatistics, -1, false,
+                PlanStatisticsMatchStrategy.FULL_MATCH);
+        if (accurateStatsIndex.isPresent()) {
+            newRecentRunsStatistics.remove(accurateStatsIndex.get().intValue());
+        }
+        // the newRecentRunsStatistics performs as FIFO way
+        newRecentRunsStatistics.add(new RecentRunsPlanStatisticsEntry(newPlanStatistics, curInputTableStatistics));
+        int maxEntryNumber = curInputTableStatistics.isEmpty() ? 1 : Config.hbo_plan_stats_cache_recent_runs_entry_num;
+        if (newRecentRunsStatistics.size() > maxEntryNumber) {
+            // entry 0 means the FIFO list's earliest entry.
+            newRecentRunsStatistics.remove(0);
+        }
+
+        return new RecentRunsPlanStatistics(newRecentRunsStatistics);
     }
 
     private void handleAnalyzeProfileStmt() throws IOException, UserException {

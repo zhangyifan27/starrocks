@@ -22,6 +22,7 @@ import com.starrocks.catalog.Column;
 import com.starrocks.catalog.OlapTable;
 import com.starrocks.catalog.Table;
 import com.starrocks.sql.ast.PartitionNames;
+import com.starrocks.sql.optimizer.Utils;
 import com.starrocks.sql.optimizer.base.DistributionSpec;
 import com.starrocks.sql.optimizer.operator.Operator;
 import com.starrocks.sql.optimizer.operator.OperatorType;
@@ -192,6 +193,23 @@ public final class LogicalOlapScanOperator extends LogicalScanOperator {
     public int hashCode() {
         return Objects.hash(super.hashCode(), selectedIndexId, selectedPartitionId,
                 selectedTabletId, hintsTabletIds, hintsReplicaIds);
+    }
+
+    @Override
+    public String getFingerprint() {
+        String partitions = "";
+        int partitionCount = this.table.getPartitions().size();
+        if (this.table.isUnPartitioned()) {
+            partitionCount = 1;
+        }
+        List<Long> selectedPartitionIds = this.getSelectedPartitionId();
+        if (selectedPartitionIds != null && selectedPartitionIds.size() != partitionCount) {
+            partitions = " partitions(" + selectedPartitionIds.size() + "/" + partitionCount + ")";
+        }
+        // NOTE: embed version info avoid mismatching under data maintaining
+        // TODO: more efficient way to ignore the ignorable data maintaining
+        return Utils.toSqlString("OlapScan[" +
+                Utils.getQualifiedTableName(table) + partitions + "]" + "#" + Utils.getQualifiedTableKey(table));
     }
 
     public static Builder builder() {

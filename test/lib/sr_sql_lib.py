@@ -2693,6 +2693,27 @@ out.append("${{dictMgr.NO_DICT_STRING_COLUMNS.contains(cid)}}")
         res2 = self.execute_sql(sql2, True)
         tools.assert_true(res1 == res2, "assert two plans are different, plan1: {}, plan2: {}".format(res1["result"], res2["result"]))
 
+    def assert_explain_logical_contains(self, query, *expects):
+        """
+        assert explain result contains expect string
+        """
+        sql = "explain logical %s" % query
+        res = self.execute_sql(sql, True)
+        for expect in expects:
+            tools.assert_true(
+                str(res["result"]).find(expect) > 0,
+                "assert expect {} is not found in plan {}".format(expect, res["result"]),
+            )
+
+    def assert_explain_logical_not_contains(self, query, *expects):
+        """
+        assert explain result contains expect string
+        """
+        sql = "explain logical %s" % query
+        res = self.execute_sql(sql, True)
+        for expect in expects:
+            tools.assert_true(str(res["result"]).find(expect) == -1, "assert expect %s is found in plan" % (expect))
+
     def assert_explain_contains(self, query, *expects):
         """
         assert explain result contains expect string

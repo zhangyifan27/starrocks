@@ -491,6 +491,12 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String PARSE_TOKENS_LIMIT = "parse_tokens_limit";
 
+    public static final String ENABLE_HBO_OPTIMIZATION = "enable_hbo_optimization";
+    public static final String ENABLE_HBO_NONSTRICT_MATCHING_MODE = "enable_hbo_nonstrict_matching_mode";
+    public static final String HBO_RFSAFE_THRESHOLD = "hbo_rfsafe_threshold";
+    public static final String HBO_ROW_MATCHING_THRESHOLD = "hbo_row_matching_threshold";
+    public static final String HBO_SKEW_RATIO_THRESHOLD = "hbo_skew_ratio_threshold";
+
     public static final String ENABLE_SORT_AGGREGATE = "enable_sort_aggregate";
     public static final String ENABLE_PER_BUCKET_OPTIMIZE = "enable_per_bucket_optimize";
     public static final String ENABLE_PARTITION_BUCKET_OPTIMIZE = "enable_partition_bucket_optimize";
@@ -971,6 +977,45 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = LOG_REJECTED_RECORD_NUM)
     private long logRejectedRecordNum = 0;
+
+    public boolean isEnableHboOptimization() {
+        return enableHboOptimization;
+    }
+
+    public void setEnableHboOptimization(boolean isEnableHbo) {
+        enableHboOptimization = isEnableHbo;
+    }
+
+    public double getHboRfSafeThreshold() {
+        return hboRfSafeThreshold;
+    }
+
+    public double getHboRowMatchingThreshold() {
+        return hboRowMatchingThreshold;
+    }
+
+    public int getHboSkewRatioThreshold() {
+        return hboSkewRatioThreshold;
+    }
+
+    @VariableMgr.VarAttr(name = ENABLE_HBO_OPTIMIZATION)
+    private boolean enableHboOptimization = false;
+
+    public boolean isEnableHboNonStrictMatchingMode() {
+        return enableHboNonStrictMatchingMode;
+    }
+
+    @VariableMgr.VarAttr(name = ENABLE_HBO_NONSTRICT_MATCHING_MODE)
+    private boolean enableHboNonStrictMatchingMode = false;
+
+    @VariableMgr.VarAttr(name = HBO_RFSAFE_THRESHOLD)
+    private double hboRfSafeThreshold = 0.5;
+
+    @VariableMgr.VarAttr(name = HBO_ROW_MATCHING_THRESHOLD)
+    private double hboRowMatchingThreshold = 0.1;
+
+    @VariableMgr.VarAttr(name = HBO_SKEW_RATIO_THRESHOLD)
+    private int hboSkewRatioThreshold = 5;
 
     /**
      * Determines whether to enable query tablet affinity. When enabled, attempts to schedule

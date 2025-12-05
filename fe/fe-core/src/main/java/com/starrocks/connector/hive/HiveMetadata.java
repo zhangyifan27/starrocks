@@ -323,8 +323,8 @@ public class HiveMetadata implements ConnectorMetadata {
             Map<ColumnRefOperator, ColumnStatistic> columnStatistics = statistics.getColumnStatistics();
             if (columnStatistics.isEmpty()) {
                 double outputRowNums = statistics.getOutputRowCount();
-                statistics = statisticsProvider.createUnknownStatistics(table, columnRefOperators, partitionKeys,
-                        outputRowNums, statistics.isTableRowCountMayInaccurate());
+                statistics = statisticsProvider.createUnknownStatistics(table, columnRefOperators,
+                        partitionKeys, outputRowNums, statistics.isTableRowCountMayInaccurate());
             }
         }
 

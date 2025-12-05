@@ -15,6 +15,7 @@
 package com.starrocks.sql.optimizer.operator;
 
 import com.google.common.collect.Lists;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
 import com.starrocks.sql.optimizer.RowOutputInfo;
@@ -77,15 +78,25 @@ public abstract class Operator {
     // eg: LogicalViewScanOperator is logically equivalent to the operator build from the view
     protected Operator equivalentOp;
 
+    protected int planNodeId = -1;
+
+    protected final ObjectId id;
+
     public Operator(OperatorType opType) {
         this.opType = opType;
+        this.id = ConnectContext.get() != null ? ConnectContext.get().getNextObjectId()
+                : ObjectId.createGenerator().getNextId();
     }
 
     public Operator(OperatorType opType, long limit, ScalarOperator predicate, Projection projection) {
-        this.opType = opType;
+        this(opType);
         this.limit = limit;
         this.predicate = predicate;
         this.projection = projection;
+    }
+
+    public int getId() {
+        return id.asInt();
     }
 
     @SuppressWarnings("unchecked")
@@ -206,6 +217,14 @@ public abstract class Operator {
         rowOutputInfo = null;
     }
 
+    public int getPlanNodeId() {
+        return planNodeId;
+    }
+
+    public void setPlanNodeId(int planNodeId) {
+        this.planNodeId = planNodeId;
+    }
+
     protected RowOutputInfo deriveRowOutputInfo(List<OptExpression> inputs) {
         throw new UnsupportedOperationException();
     }
@@ -231,6 +250,10 @@ public abstract class Operator {
         return opType.name();
     }
 
+    public String getFingerprint() {
+        return "";
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -243,12 +266,13 @@ public abstract class Operator {
         return limit == operator.limit && opType == operator.opType &&
                 Objects.equals(predicate, operator.predicate) &&
                 Objects.equals(projection, operator.projection) &&
-                Objects.equals(salt, operator.salt);
+                Objects.equals(salt, operator.salt) &&
+                Objects.equals(planNodeId, operator.planNodeId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(opType.ordinal(), limit, predicate, projection, salt);
+        return Objects.hash(opType.ordinal(), limit, predicate, projection, salt, planNodeId);
     }
 
     public abstract static class Builder<O extends Operator, B extends Builder> {

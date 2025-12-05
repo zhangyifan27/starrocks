@@ -39,6 +39,7 @@ import com.starrocks.sql.optimizer.operator.scalar.BinaryPredicateOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.rewrite.ReplaceColumnRefRewriter;
+import com.starrocks.sql.optimizer.statistics.HboStatsCalculator;
 import com.starrocks.sql.optimizer.statistics.StatisticsCalculator;
 import com.starrocks.sql.optimizer.statistics.StatisticsEstimateCoefficient;
 import org.apache.logging.log4j.LogManager;
@@ -276,8 +277,14 @@ public abstract class JoinOrder {
         }
 
         ExpressionContext expressionContext = new ExpressionContext(expr);
-        StatisticsCalculator statisticsCalculator = new StatisticsCalculator(
-                expressionContext, context.getColumnRefFactory(), context);
+        StatisticsCalculator statisticsCalculator;
+        if (context.getSessionVariable().isEnableHboOptimization()) {
+            statisticsCalculator = new HboStatsCalculator(
+                    expressionContext, context.getColumnRefFactory(), context);
+        } else {
+            statisticsCalculator = new StatisticsCalculator(
+                    expressionContext, context.getColumnRefFactory(), context);
+        }
         statisticsCalculator.estimatorStats();
         expr.setStatistics(expressionContext.getStatistics());
     }

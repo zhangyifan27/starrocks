@@ -194,6 +194,16 @@ public class HiveTable extends Table implements HiveMetaStoreTable {
         return hiveTableName;
     }
 
+    @Override
+    public String getCatalogDBName() {
+        return hiveDbName;
+    }
+
+    @Override
+    public String getCatalogTableName() {
+        return hiveTableName;
+    }
+
     public HiveStorageFormat getStorageFormat() {
         return storageFormat;
     }

@@ -24,6 +24,7 @@ import com.starrocks.qe.SessionVariableConstants;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
 import com.starrocks.sql.optimizer.RowOutputInfo;
+import com.starrocks.sql.optimizer.Utils;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.operator.AggType;
 import com.starrocks.sql.optimizer.operator.ColumnOutputInfo;
@@ -293,6 +294,17 @@ public class PhysicalHashAggregateOperator extends PhysicalOperator {
                 }
             }
         }
+    }
+
+    @Override
+    public String getFingerprint() {
+        StringBuilder builder = new StringBuilder();
+        // logical agg is mapped to physical GLOBAL
+        String aggPhase = "Aggregate" + "(GLOBAL)";
+        builder.append(Utils.toSqlString(aggPhase, "groupBys", groupBys,
+                "partitionByColumns", partitionByColumns,
+                "aggregations", aggregations));
+        return builder.toString();
     }
 
 }

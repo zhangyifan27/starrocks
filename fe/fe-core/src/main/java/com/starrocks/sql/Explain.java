@@ -962,14 +962,14 @@ public class Explain {
 
     static void buildCostEstimate(StringBuilder sb, OptExpression optExpression, int step) {
         CostEstimate cost = CostModel.calculateCostEstimate(new ExpressionContext(optExpression));
-
+        String hboHint = optExpression.getStatistics().isFromHbo() ? "[hbo]" : "";
         if (optExpression.getStatistics().getColumnStatistics().values().stream()
                 .allMatch(ColumnStatistic::isUnknown)) {
-            buildOperatorProperty(sb, "Estimates: {" +
+            buildOperatorProperty(sb, "Estimates: {" + hboHint +
                     "row: " + (long) optExpression.getStatistics().getOutputRowCount() +
                     ", cpu: ?, memory: ?, network: ?, cost: " + optExpression.getCost() + "}", step);
         } else {
-            buildOperatorProperty(sb, "Estimates: {" +
+            buildOperatorProperty(sb, "Estimates: {" + hboHint +
                     "row: " + (long) optExpression.getStatistics().getOutputRowCount() +
                     ", cpu: " + String.format("%.2f", cost.getCpuCost()) +
                     ", memory: " + String.format("%.2f", cost.getMemoryCost()) +

@@ -67,6 +67,7 @@ import com.starrocks.common.DdlException;
 import com.starrocks.common.IdGenerator;
 import com.starrocks.common.Pair;
 import com.starrocks.common.UserException;
+import com.starrocks.common.util.DebugUtil;
 import com.starrocks.connector.metadata.MetadataTable;
 import com.starrocks.load.BrokerFileGroup;
 import com.starrocks.planner.AggregationNode;
@@ -106,6 +107,7 @@ import com.starrocks.planner.OlapTableSink;
 import com.starrocks.planner.PaimonScanNode;
 import com.starrocks.planner.PlanFragment;
 import com.starrocks.planner.PlanNode;
+import com.starrocks.planner.PlanNodeId;
 import com.starrocks.planner.ProjectNode;
 import com.starrocks.planner.RepeatNode;
 import com.starrocks.planner.RuntimeFilterId;
@@ -119,6 +121,7 @@ import com.starrocks.planner.UnionNode;
 import com.starrocks.planner.stream.StreamAggNode;
 import com.starrocks.planner.stream.StreamJoinNode;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.GlobalVariable;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.server.LocalMetastore;
@@ -174,6 +177,7 @@ import com.starrocks.sql.optimizer.operator.physical.PhysicalMetaScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalMysqlScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalOdpsScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalOlapScanOperator;
+import com.starrocks.sql.optimizer.operator.physical.PhysicalOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalPaimonScanOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalProjectOperator;
 import com.starrocks.sql.optimizer.operator.physical.PhysicalRepeatOperator;
@@ -222,6 +226,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 import static com.starrocks.catalog.Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF;
@@ -246,7 +251,43 @@ public class PlanFragmentBuilder {
         createOutputFragment(new PhysicalPlanTranslator(columnRefFactory).translate(plan, execPlan), execPlan,
                 outputColumns, hasOutputFragment);
         execPlan.setPlanCount(plan.getPlanCount());
+
+        // hbo info collection
+        if (GlobalVariable.isEnableHboInfoCollection() && connectContext != null
+                && connectContext.getQueryId() != null) {
+            String queryId = DebugUtil.printId(connectContext.getQueryId());
+            collectHboPlanInfo(queryId, execPlan.getPhysicalPlan(), execPlan);
+        }
         return finalizeFragments(execPlan, resultSinkType);
+    }
+
+    /**
+     * Collect plan info for hbo usage.
+     * @param queryId queryId
+     * @param root physical plan
+     */
+    private static void collectHboPlanInfo(String queryId, OptExpression root, ExecPlan context) {
+        for (Object child : root.getInputs()) {
+            collectHboPlanInfo(queryId, (OptExpression) child, context);
+        }
+        int nodeId = root.getOp().getId();
+        PlanNodeId planId = context.getNereidsIdToPlanNodeIdMap().get(nodeId);
+        if (planId != null) {
+            ConcurrentHashMap<Integer, PhysicalOperator> idToPlanMap = GlobalStateMgr.getCurrentState()
+                    .getHboPlanStatisticsManager().getHboPlanInfoProvider().getIdToPlanMap(queryId);
+            if (idToPlanMap.isEmpty()) {
+                GlobalStateMgr.getCurrentState().getHboPlanStatisticsManager()
+                        .getHboPlanInfoProvider().putIdToPlanMap(queryId, idToPlanMap);
+            }
+            idToPlanMap.put(planId.asInt(), (PhysicalOperator) root.getOp());
+            ConcurrentHashMap<PhysicalOperator, Integer> planToIdMap = GlobalStateMgr.getCurrentState()
+                    .getHboPlanStatisticsManager().getHboPlanInfoProvider().getPlanToIdMap(queryId);
+            if (planToIdMap.isEmpty()) {
+                GlobalStateMgr.getCurrentState().getHboPlanStatisticsManager()
+                        .getHboPlanInfoProvider().putPlanToIdMap(queryId, planToIdMap);
+            }
+            planToIdMap.put((PhysicalOperator) root.getOp(), planId.asInt());
+        }
     }
 
     public static ExecPlan createPhysicalPlanForMV(ConnectContext connectContext,
@@ -370,6 +411,7 @@ public class PlanFragmentBuilder {
         List<PlanFragment> fragments = execPlan.getFragments();
         for (PlanFragment fragment : fragments) {
             fragment.createDataSink(resultSinkType);
+            fragment.setCollectExecStatsIds(execPlan.getCollectExecStatsIds());
         }
         Collections.reverse(fragments);
         // assign colocate groups to plan fragment
@@ -421,6 +463,8 @@ public class PlanFragmentBuilder {
         private final ColumnRefFactory columnRefFactory;
         private final IdGenerator<RuntimeFilterId> runtimeFilterIdIdGenerator = RuntimeFilterId.createGenerator();
         private final ExecGroupSets execGroups = new ExecGroupSets();
+
+        private final List<Integer> collectExecStatsIds = Lists.newArrayList();
         private ExecGroup currentExecGroup = execGroups.newExecGroup();
 
         private boolean canUseLocalShuffleAgg = true;
@@ -432,8 +476,22 @@ public class PlanFragmentBuilder {
         public PlanFragment translate(OptExpression optExpression, ExecPlan context) {
             PlanFragment fragment = visit(optExpression, context);
             computeFragmentCost(context, fragment);
+            collectExecStatsIds(fragment.getPlanRoot());
             context.setExecGroups(execGroups.getExecGroups());
+            context.setCollectExecStatsIds(collectExecStatsIds);
             return fragment;
+        }
+
+        private void collectExecStatsIds(PlanNode root) {
+            if (!GlobalVariable.isEnableHboInfoCollection()) {
+                return;
+            }
+            for (PlanNode child : root.getChildren()) {
+                collectExecStatsIds(child);
+            }
+            if (root.needCollectExecStats()) {
+                collectExecStatsIds.add(root.getId().asInt());
+            }
         }
 
         private void computeFragmentCost(ExecPlan context, PlanFragment fragment) {
@@ -595,6 +653,7 @@ public class PlanFragmentBuilder {
                             projectMap,
                             commonSubOperatorMap);
 
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), projectNode.getId());
             projectNode.setHasNullableGenerateChild();
             projectNode.computeStatistics(optExpr.getStatistics());
             currentExecGroup.add(projectNode);
@@ -739,6 +798,7 @@ public class PlanFragmentBuilder {
                     tupleDescriptor,
                     inputFragment.getPlanRoot(),
                     node.getDictIdToStringsId(), projectMap, slotRefMap);
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), decodeNode.getId());
             decodeNode.computeStatistics(optExpression.getStatistics());
             decodeNode.setLimit(node.getLimit());
             decodeNode.setCost(optExpression.getOwnCost());
@@ -799,6 +859,7 @@ public class PlanFragmentBuilder {
 
             OlapScanNode scanNode = new OlapScanNode(context.getNextNodeId(), tupleDescriptor, "OlapScanNode",
                     context.getConnectContext().getCurrentWarehouseId());
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), scanNode.getId());
             scanNode.setLimit(node.getLimit());
             scanNode.computeStatistics(optExpr.getStatistics());
             scanNode.setScanOptimzeOption(node.getScanOptimzeOption());
@@ -961,6 +1022,7 @@ public class PlanFragmentBuilder {
             MetaScanNode scanNode = new MetaScanNode(context.getNextNodeId(),
                     tupleDescriptor, (OlapTable) scan.getTable(), scan.getAggColumnIdToNames(),
                     context.getConnectContext().getCurrentWarehouseId());
+            context.getNereidsIdToPlanNodeIdMap().put(scan.getId(), scanNode.getId());
             scanNode.computeRangeLocations();
             scanNode.computeStatistics(optExpression.getStatistics());
             currentExecGroup.add(scanNode, true);
@@ -1070,6 +1132,7 @@ public class PlanFragmentBuilder {
 
             HudiScanNode hudiScanNode =
                     new HudiScanNode(context.getNextNodeId(), tupleDescriptor, "HudiScanNode");
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), hudiScanNode.getId());
             hudiScanNode.computeStatistics(optExpression.getStatistics());
             hudiScanNode.setScanOptimzeOption(node.getScanOptimzeOption());
             currentExecGroup.add(hudiScanNode, true);
@@ -1114,6 +1177,7 @@ public class PlanFragmentBuilder {
 
             HdfsScanNode hdfsScanNode =
                     new HdfsScanNode(context.getNextNodeId(), tupleDescriptor, "HdfsScanNode");
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), hdfsScanNode.getId());
             hdfsScanNode.setScanOptimzeOption(node.getScanOptimzeOption());
             hdfsScanNode.computeStatistics(optExpression.getStatistics());
             currentExecGroup.add(hdfsScanNode, true);
@@ -1173,7 +1237,7 @@ public class PlanFragmentBuilder {
                 LOG.warn("Hdfs scan node get scan range locations failed : ", e);
                 throw new StarRocksPlannerException(e.getMessage(), INTERNAL_ERROR);
             }
-
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), fileTableScanNode.getId());
             fileTableScanNode.setLimit(node.getLimit());
             fileTableScanNode.setDataCacheOptions(node.getDataCacheOptions());
             fileTableScanNode.setCost(optExpression.getOwnCost());
@@ -1200,6 +1264,7 @@ public class PlanFragmentBuilder {
 
             DeltaLakeScanNode deltaLakeScanNode =
                     new DeltaLakeScanNode(context.getNextNodeId(), tupleDescriptor, "DeltaLakeScanNode");
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), deltaLakeScanNode.getId());
             deltaLakeScanNode.computeStatistics(optExpression.getStatistics());
             deltaLakeScanNode.setScanOptimzeOption(node.getScanOptimzeOption());
             currentExecGroup.add(deltaLakeScanNode, true);
@@ -1256,6 +1321,7 @@ public class PlanFragmentBuilder {
 
             PaimonScanNode paimonScanNode =
                     new PaimonScanNode(context.getNextNodeId(), tupleDescriptor, "PaimonScanNode");
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), paimonScanNode.getId());
             paimonScanNode.setScanOptimzeOption(node.getScanOptimzeOption());
             currentExecGroup.add(paimonScanNode, true);
             try {
@@ -1302,6 +1368,7 @@ public class PlanFragmentBuilder {
 
             OdpsScanNode odpsScanNode =
                     new OdpsScanNode(context.getNextNodeId(), tupleDescriptor, "OdpsScanNode");
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), odpsScanNode.getId());
             odpsScanNode.setScanOptimzeOption(node.getScanOptimzeOption());
             currentExecGroup.add(odpsScanNode, true);
             try {
@@ -1351,6 +1418,7 @@ public class PlanFragmentBuilder {
 
             KuduScanNode kuduScanNode =
                     new KuduScanNode(context.getNextNodeId(), tupleDescriptor, "KuduScanNode");
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), kuduScanNode.getId());
             kuduScanNode.setScanOptimzeOption(node.getScanOptimzeOption());
             try {
                 // set predicate
@@ -1403,6 +1471,7 @@ public class PlanFragmentBuilder {
                             equalityDeleteTupleDesc);
             icebergScanNode.computeStatistics(optExpression.getStatistics());
             icebergScanNode.setScanOptimzeOption(node.getScanOptimzeOption());
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), icebergScanNode.getId());
             currentExecGroup.add(icebergScanNode, true);
             try {
                 if (node.getHybridScanTable() != null) {
@@ -1476,6 +1545,7 @@ public class PlanFragmentBuilder {
             IcebergMetadataScanNode metadataScanNode =
                     new IcebergMetadataScanNode(context.getNextNodeId(), tupleDescriptor,
                             "IcebergMetadataScanNode", node.getTableVersionRange());
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), metadataScanNode.getId());
             try {
                 ScalarOperatorToExpr.FormatterContext formatterContext =
                         new ScalarOperatorToExpr.FormatterContext(context.getColRefToExpr());
@@ -1535,7 +1605,7 @@ public class PlanFragmentBuilder {
             tupleDescriptor.computeMemLayout();
 
             SchemaScanNode scanNode = new SchemaScanNode(context.getNextNodeId(), tupleDescriptor);
-
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), scanNode.getId());
             scanNode.setCatalogName(table.getCatalogName());
             scanNode.setFrontendIP(FrontendOptions.getLocalHostAddress());
             scanNode.setFrontendPort(Config.rpc_port);
@@ -1735,6 +1805,7 @@ public class PlanFragmentBuilder {
 
             MysqlScanNode scanNode = new MysqlScanNode(context.getNextNodeId(), tupleDescriptor,
                     (MysqlTable) node.getTable());
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), scanNode.getId());
             currentExecGroup.add(scanNode, true);
 
             if (node.getTemporalClause() != null) {
@@ -1781,6 +1852,7 @@ public class PlanFragmentBuilder {
             tupleDescriptor.computeMemLayout();
 
             EsScanNode scanNode = new EsScanNode(context.getNextNodeId(), tupleDescriptor, "EsScanNode");
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), scanNode.getId());
             currentExecGroup.add(scanNode, true);
             // set predicate
             List<ScalarOperator> predicates = Utils.extractConjuncts(node.getPredicate());
@@ -1828,6 +1900,7 @@ public class PlanFragmentBuilder {
 
             JDBCScanNode scanNode = new JDBCScanNode(context.getNextNodeId(), tupleDescriptor,
                     (JDBCTable) node.getTable());
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), scanNode.getId());
             currentExecGroup.add(scanNode, true);
 
             // set predicate
@@ -1894,6 +1967,7 @@ public class PlanFragmentBuilder {
 
                 unionNode.setMaterializedConstExprLists_(consts);
                 unionNode.computeStatistics(optExpr.getStatistics());
+                context.getNereidsIdToPlanNodeIdMap().put(valuesOperator.getId(), unionNode.getId());
                 unionNode.setCost(optExpr.getOwnCost());
                 /*
                  * TODO(lhy):
@@ -2247,6 +2321,7 @@ public class PlanFragmentBuilder {
                 throw unsupportedException("Not support aggregate type : " + node.getType());
             }
 
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), aggregationNode.getId());
             aggregationNode.setUseSortAgg(node.isUseSortAgg());
             aggregationNode.setUsePerBucketOptimize(node.isUsePerBucketOptmize());
             aggregationNode.setStreamingPreaggregationMode(node.getNeededPreaggregationMode());
@@ -2274,6 +2349,7 @@ public class PlanFragmentBuilder {
             }
             currentExecGroup.add(aggregationNode);
             inputFragment.setPlanRoot(aggregationNode);
+            inputFragment.getPlanRoot().forceCollectExecStats();
             inputFragment.mergeQueryDictExprs(originalInputFragment.getQueryGlobalDictExprs());
             inputFragment.mergeQueryGlobalDicts(originalInputFragment.getQueryGlobalDicts());
             inputFragment.setCost(aggregationNode.getCost() + inputFragment.getCost());
@@ -2390,6 +2466,7 @@ public class PlanFragmentBuilder {
             }
             exchangeNode.setDataPartition(dataPartition);
             exchangeNode.setCost(optExpr.getOwnCost());
+            context.getNereidsIdToPlanNodeIdMap().put(distribution.getId(), exchangeNode.getId());
 
             PlanFragment fragment =
                     new PlanFragment(context.getNextFragmentId(), exchangeNode, dataPartition);
@@ -2440,6 +2517,7 @@ public class PlanFragmentBuilder {
             exchangeNode.computeStatistics(optExpr.getStatistics());
             currentExecGroup.add(exchangeNode, true);
 
+            context.getNereidsIdToPlanNodeIdMap().put(optExpr.getOp().getId(), exchangeNode.getId());
             if (TopNType.ROW_NUMBER.equals(topNType)) {
                 exchangeNode.setLimit(limit);
             } else {
@@ -2536,6 +2614,7 @@ public class PlanFragmentBuilder {
             sortNode.resolvedTupleExprs = resolvedTupleExprs;
             sortNode.setHasNullableGenerateChild();
             sortNode.computeStatistics(optExpr.getStatistics());
+            context.getNereidsIdToPlanNodeIdMap().put(optExpr.getOp().getId(), sortNode.getId());
             currentExecGroup.add(sortNode, true);
             if (shouldBuildGlobalRuntimeFilter()) {
                 sortNode.buildRuntimeFilters(runtimeFilterIdIdGenerator, context.getDescTbl(), execGroups);
@@ -2569,9 +2648,11 @@ public class PlanFragmentBuilder {
         @Override
         public PlanFragment visitPhysicalHashJoin(OptExpression optExpr, ExecPlan context) {
             PlanFragment leftFragment = visit(optExpr.inputAt(0), context);
+            leftFragment.getPlanRoot().forceCollectExecStats();
             ExecGroup leftExecGroup = this.currentExecGroup;
             this.currentExecGroup = execGroups.newExecGroup();
             PlanFragment rightFragment = visit(optExpr.inputAt(1), context);
+            rightFragment.getPlanRoot().forceCollectExecStats();
             return visitPhysicalJoin(leftFragment, rightFragment, leftExecGroup, currentExecGroup, optExpr, context);
         }
 
@@ -2606,9 +2687,11 @@ public class PlanFragmentBuilder {
         public PlanFragment visitPhysicalNestLoopJoin(OptExpression optExpr, ExecPlan context) {
             PhysicalJoinOperator node = (PhysicalJoinOperator) optExpr.getOp();
             PlanFragment leftFragment = visit(optExpr.inputAt(0), context);
+            leftFragment.getPlanRoot().forceCollectExecStats();
             ExecGroup leftExecGroup = this.currentExecGroup;
             this.currentExecGroup = execGroups.newExecGroup();
             PlanFragment rightFragment = visit(optExpr.inputAt(1), context);
+            rightFragment.getPlanRoot().forceCollectExecStats();
             this.currentExecGroup = leftExecGroup;
 
             List<Expr> conjuncts = extractConjuncts(node.getPredicate(), context);
@@ -2629,6 +2712,7 @@ public class PlanFragmentBuilder {
                     leftFragment.getPlanRoot(), rightFragment.getPlanRoot(),
                     null, node.getJoinType(), Lists.newArrayList(), joinOnConjuncts);
 
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), joinNode.getId());
             joinNode.setLimit(node.getLimit());
             joinNode.computeStatistics(optExpr.getStatistics());
             joinNode.addConjuncts(conjuncts);
@@ -2784,6 +2868,7 @@ public class PlanFragmentBuilder {
             if (!node.getOutputRequireHashPartition()) {
                 joinNode.setCanLocalShuffle(true);
             }
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), joinNode.getId());
 
             // Build outputColumns
             fillSlotsInfo(node.getProjection(), joinNode, optExpr);
@@ -2945,6 +3030,7 @@ public class PlanFragmentBuilder {
             }
 
             node.computeStatistics(optExpression.getStatistics());
+            context.getNereidsIdToPlanNodeIdMap().put(assertOneRow.getId(), node.getId());
             node.setCost(optExpression.getOwnCost());
             currentExecGroup.add(node);
             inputFragment.setPlanRoot(node);
@@ -2995,6 +3081,7 @@ public class PlanFragmentBuilder {
                     node.isSkewed(),
                     null, outputTupleDesc, null, null,
                     context.getDescTbl().createTupleDescriptor());
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), analyticEvalNode.getId());
             analyticEvalNode.setSubstitutedPartitionExprs(partitionExprs);
             analyticEvalNode.setLimit(node.getLimit());
             analyticEvalNode.setHasNullableGenerateChild();
@@ -3225,6 +3312,7 @@ public class PlanFragmentBuilder {
                     outputGroupingTuple,
                     repeatSlotIdList,
                     repeatOperator.getGroupingIds());
+            context.getNereidsIdToPlanNodeIdMap().put(repeatOperator.getId(), repeatNode.getId());
             List<ScalarOperator> predicates = Utils.extractConjuncts(repeatOperator.getPredicate());
             ScalarOperatorToExpr.FormatterContext formatterContext =
                     new ScalarOperatorToExpr.FormatterContext(context.getColRefToExpr());
@@ -3273,6 +3361,7 @@ public class PlanFragmentBuilder {
 
             SelectNode selectNode =
                     new SelectNode(context.getNextNodeId(), inputFragment.getPlanRoot(), predicates);
+            context.getNereidsIdToPlanNodeIdMap().put(filter.getId(), selectNode.getId());
             selectNode.setLimit(filter.getLimit());
             selectNode.computeStatistics(optExpr.getStatistics());
             selectNode.setCommonSlotMap(commonSubOperatorMap);
@@ -3313,6 +3402,7 @@ public class PlanFragmentBuilder {
             );
             tableFunctionNode.computeStatistics(optExpression.getStatistics());
             tableFunctionNode.setLimit(physicalTableFunction.getLimit());
+            context.getNereidsIdToPlanNodeIdMap().put(physicalTableFunction.getId(), tableFunctionNode.getId());
             currentExecGroup.add(tableFunctionNode);
             tableFunctionNode.setCost(optExpression.getOwnCost());
             inputFragment.setPlanRoot(tableFunctionNode);
@@ -3366,9 +3456,10 @@ public class PlanFragmentBuilder {
                 } else if (exchangeNode.getOffset() > 0) {
                     exchangeNode.setOffset(limit.getOffset() + exchangeNode.getOffset());
                 }
-
+                context.getNereidsIdToPlanNodeIdMap().put(limit.getId(), exchangeNode.getId());
                 exchangeNode.computeStatistics(optExpression.getStatistics());
             }
+
 
             if (limit.hasLimit()) {
                 child.getPlanRoot().setLimit(limit.getLimit());
@@ -3388,6 +3479,7 @@ public class PlanFragmentBuilder {
             exchangeNode.setReceiveColumns(consume.getCteOutputColumnRefMap().values().stream()
                     .map(ColumnRefOperator::getId).distinct().collect(Collectors.toList()));
             exchangeNode.setDataPartition(cteFragment.getDataPartition());
+            exchangeNode.forceCollectExecStats();
 
             exchangeNode.setNumInstances(cteFragment.getPlanRoot().getNumInstances());
             exchangeNode.setCost(cteFragment.getCost());
@@ -3421,6 +3513,7 @@ public class PlanFragmentBuilder {
                 consumeFragment.getPlanRoot().setLimit(consume.getLimit());
             }
 
+            context.getNereidsIdToPlanNodeIdMap().put(consume.getId(), exchangeNode.getId());
             cteFragment.getDestNodeList().add(exchangeNode);
             consumeFragment.addChild(cteFragment);
             consumeFragment.setCost(optExpression.getOwnCost());
@@ -3431,6 +3524,7 @@ public class PlanFragmentBuilder {
         @Override
         public PlanFragment visitPhysicalCTEProduce(OptExpression optExpression, ExecPlan context) {
             PlanFragment child = visit(optExpression.inputAt(0), context);
+            child.getPlanRoot().forceCollectExecStats();
             int cteId = ((PhysicalCTEProduceOperator) optExpression.getOp()).getCteId();
             context.getFragments().remove(child);
             MultiCastPlanFragment cteProduce = new MultiCastPlanFragment(child);
@@ -3441,6 +3535,7 @@ public class PlanFragmentBuilder {
 
             cteProduce.setOutputExprs(outputs);
             cteProduce.setCost(optExpression.getOwnCost() + child.getCost());
+            context.getNereidsIdToPlanNodeIdMap().put(optExpression.getOp().getId(), child.getPlanRoot().getId());
             context.getCteProduceFragments().put(cteId, cteProduce);
             context.getFragments().add(cteProduce);
             return child;
@@ -3570,6 +3665,7 @@ public class PlanFragmentBuilder {
             JoinNode joinNode =
                     new StreamJoinNode(context.getNextNodeId(), leftFragmentPlanRoot, rightFragmentPlanRoot,
                             node.getJoinType(), eqJoinConjuncts, otherJoinConjuncts);
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), joinNode.getId());
             currentExecGroup.add(joinNode, true);
             // 4. Build outputColumns
             fillSlotsInfo(node.getProjection(), joinNode, optExpr);
@@ -3738,7 +3834,7 @@ public class PlanFragmentBuilder {
                     AggregateInfo.create(aggExpr.groupExpr, aggExpr.aggregateExpr, outputTupleDesc, outputTupleDesc,
                             AggregateInfo.AggPhase.FIRST);
             StreamAggNode aggNode = new StreamAggNode(context.getNextNodeId(), inputFragment.getPlanRoot(), aggInfo);
-
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), aggNode.getId());
             aggNode.setHasNullableGenerateChild();
             aggNode.computeStatistics(optExpr.getStatistics());
             currentExecGroup.add(aggNode, true);
@@ -3787,6 +3883,7 @@ public class PlanFragmentBuilder {
             tupleDescriptor.computeMemLayout();
 
             context.getScanNodes().add(binlogScanNode);
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), binlogScanNode.getId());
             PlanFragment fragment = new PlanFragment(context.getNextFragmentId(), binlogScanNode, DataPartition.RANDOM);
             context.getFragments().add(fragment);
             return fragment;
@@ -3864,6 +3961,7 @@ public class PlanFragmentBuilder {
             }
 
             scanNode.setLimit(node.getLimit());
+            context.getNereidsIdToPlanNodeIdMap().put(node.getId(), scanNode.getId());
             scanNode.computeStatistics(optExpression.getStatistics());
             currentExecGroup.add(scanNode, true);
 

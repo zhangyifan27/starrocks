@@ -72,6 +72,7 @@ import com.starrocks.sql.optimizer.rule.transformation.GroupByCountDistinctDataS
 import com.starrocks.sql.optimizer.rule.transformation.InlineOneCTEConsumeRule;
 import com.starrocks.sql.optimizer.rule.transformation.IntersectAddDistinctRule;
 import com.starrocks.sql.optimizer.rule.transformation.JoinAssociativityRule;
+import com.starrocks.sql.optimizer.rule.transformation.JoinCommutativityInnerOnlyRule;
 import com.starrocks.sql.optimizer.rule.transformation.JoinCommutativityRule;
 import com.starrocks.sql.optimizer.rule.transformation.JoinCommutativityWithoutInnerRule;
 import com.starrocks.sql.optimizer.rule.transformation.JoinLeftAsscomRule;
@@ -488,6 +489,11 @@ public class RuleSet {
 
     public void addJoinTransformationRules() {
         transformRules.add(JoinCommutativityRule.getInstance());
+        transformRules.add(JoinAssociativityRule.INNER_JOIN_ASSOCIATIVITY_RULE);
+    }
+
+    public void addInnerOnlyJoinTransformationRules() {
+        transformRules.add(JoinCommutativityInnerOnlyRule.getInstance());
         transformRules.add(JoinAssociativityRule.INNER_JOIN_ASSOCIATIVITY_RULE);
     }
 

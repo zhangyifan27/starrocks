@@ -1136,6 +1136,10 @@ public abstract class Expr extends TreeNode<Expr> implements ParseNode, Cloneabl
                 selectivity).add("#distinct", numDistinctValues).add("scale", outputScale).toString();
     }
 
+    public String getFingerprint() {
+        return "NOT_IMPLEMENTED_EXPR_FP";
+    }
+
     /**
      * If 'this' is a SlotRef or a Cast that wraps a SlotRef, returns that SlotRef.
      * Otherwise returns null.

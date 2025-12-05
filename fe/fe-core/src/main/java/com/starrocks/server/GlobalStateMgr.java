@@ -213,6 +213,7 @@ import com.starrocks.sql.ast.RefreshTableStmt;
 import com.starrocks.sql.ast.SetType;
 import com.starrocks.sql.ast.SystemVariable;
 import com.starrocks.sql.optimizer.statistics.CachedStatisticStorage;
+import com.starrocks.sql.optimizer.statistics.HboPlanStatisticsManager;
 import com.starrocks.sql.optimizer.statistics.StatisticStorage;
 import com.starrocks.sql.parser.AstBuilder;
 import com.starrocks.sql.parser.SqlParser;
@@ -523,6 +524,8 @@ public class GlobalStateMgr {
     private final QueryMemoryRecorder queryMemoryRecorder;
     private final SystemStatistics systemStatistics;
 
+    private final HboPlanStatisticsManager hboPlanStatisticsManager;
+
     public NodeMgr getNodeMgr() {
         return nodeMgr;
     }
@@ -772,6 +775,8 @@ public class GlobalStateMgr {
         this.globalConstraintManager = new GlobalConstraintManager();
         this.systemStatistics = new SystemStatistics();
 
+        this.hboPlanStatisticsManager = new HboPlanStatisticsManager();
+
         GlobalStateMgr gsm = this;
         this.execution = new StateChangeExecution() {
             @Override
@@ -976,6 +981,10 @@ public class GlobalStateMgr {
 
     public ConnectorMetadata getMetadata() {
         return localMetastore;
+    }
+
+    public HboPlanStatisticsManager getHboPlanStatisticsManager() {
+        return hboPlanStatisticsManager;
     }
 
     @VisibleForTesting

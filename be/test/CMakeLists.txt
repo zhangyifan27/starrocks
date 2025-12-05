@@ -46,6 +46,8 @@ set(EXEC_FILES
         ./exec/iceberg/iceberg_table_sink_operator_test.cpp
         ./exec/paimon/paimon_delete_file_builder_test.cpp
         ./exec/workgroup/scan_task_queue_test.cpp
+        ./exec/pipeline/hash_join_probe_operator_test.cpp
+        ./exec/pipeline/limit_operator_test.cpp
         ./exec/pipeline/pipeline_control_flow_test.cpp
         ./exec/pipeline/pipeline_driver_queue_test.cpp
         ./exec/pipeline/pipeline_file_scan_node_test.cpp
@@ -395,6 +397,9 @@ set(EXEC_FILES
         ./runtime/memory_scratch_sink_test.cpp
         ./runtime/command_executor_test.cpp
         ./runtime/exec_env_test.cpp
+        ./runtime/query_context_exec_stats_test.cpp
+        ./runtime/query_context_scan_stats_test.cpp
+        ./runtime/query_statistics_test.cpp
         ./serde/column_array_serde_test.cpp
         ./serde/protobuf_serde_test.cpp
         ./types/bitmap_value_test.cpp

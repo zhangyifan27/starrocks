@@ -161,6 +161,16 @@ public class IcebergTable extends Table {
     }
 
     @Override
+    public String getCatalogDBName() {
+        return remoteDbName;
+    }
+
+    @Override
+    public String getCatalogTableName() {
+        return remoteTableName;
+    }
+
+    @Override
     public String getUUID() {
         if (CatalogMgr.isExternalCatalog(catalogName)) {
             String uuid = ((BaseTable) getNativeTable()).operations().current().uuid();

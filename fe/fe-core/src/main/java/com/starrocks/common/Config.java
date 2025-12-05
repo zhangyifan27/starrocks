@@ -3393,6 +3393,43 @@ public class Config extends ConfigBase {
     public static long mv_query_context_cache_max_size = 1000;
 
     /**
+     * Analyze query which time cost exceeds *slow_query_analyze_threshold*
+     * unit ms. default value 5000 ms
+     */
+    @ConfField(mutable = true)
+    public static long slow_query_analyze_threshold = 5000;
+
+    /**
+     *  Expire hbo plan stats. cache in frontend time.
+     */
+    @ConfField(mutable = true)
+    public static int expire_hbo_plan_stats_cache_in_fe_second = 86400;
+
+    /**
+     *  Expire hbo plan info cache in frontend time.
+     */
+    @ConfField(mutable = true)
+    public static int expire_hbo_plan_info_cache_in_fe_second = 1000;
+
+    /**
+     * HBO plan stats. cache number which can be reused for the next query.
+     */
+    @ConfField(mutable = true)
+    public static int hbo_plan_stats_cache_num = 100000;
+
+    /**
+     * HBO plan recent runs entry number.
+     */
+    @ConfField(mutable = true)
+    public static int hbo_plan_stats_cache_recent_runs_entry_num = 10;
+
+    /**
+     * Plan info cache number which is used for HboPlanInfoProvider.
+     */
+    @ConfField(mutable = true)
+    public static int hbo_plan_info_cache_num = 1000;
+
+    /**
      * Checking the connectivity of port opened by FE,
      * mainly used for checking edit log port currently.
      */
@@ -3508,7 +3545,7 @@ public class Config extends ConfigBase {
     // backuped table is colocated
     @ConfField(mutable = true)
     public static boolean enable_colocate_restore = false;
-    
+
     @ConfField
     public static boolean enable_alter_struct_column = false;
 

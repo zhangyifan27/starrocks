@@ -24,6 +24,7 @@ import com.starrocks.sql.optimizer.operator.logical.LogicalIntersectOperator;
 import com.starrocks.sql.optimizer.operator.pattern.Pattern;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.rule.RuleType;
+import com.starrocks.sql.optimizer.statistics.HboStatsCalculator;
 import com.starrocks.sql.optimizer.statistics.StatisticsCalculator;
 
 import java.util.ArrayList;
@@ -75,8 +76,14 @@ public class ReorderIntersectRule extends TransformationRule {
         }
 
         ExpressionContext expressionContext = new ExpressionContext(expr);
-        StatisticsCalculator statisticsCalculator = new StatisticsCalculator(
-                expressionContext, context.getColumnRefFactory(), context);
+        StatisticsCalculator statisticsCalculator;
+        if (context.getSessionVariable().isEnableHboOptimization()) {
+            statisticsCalculator = new HboStatsCalculator(
+                    expressionContext, context.getColumnRefFactory(), context);
+        } else {
+            statisticsCalculator = new StatisticsCalculator(
+                    expressionContext, context.getColumnRefFactory(), context);
+        }
         statisticsCalculator.estimatorStats();
         expr.setStatistics(expressionContext.getStatistics());
     }

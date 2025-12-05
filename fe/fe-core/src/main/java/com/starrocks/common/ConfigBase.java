@@ -75,6 +75,17 @@ public class ConfigBase {
         String[] aliases() default {};
     }
 
+    public interface ConfHandler {
+        void handle(Field field, String confVal) throws Exception;
+    }
+
+    public static class DefaultConfHandler implements ConfHandler {
+        @Override
+        public void handle(Field field, String confVal) throws Exception {
+            setConfigField(field, confVal);
+        }
+    }
+
     protected Properties props;
     protected static Field[] configFields;
     protected static Map<String, Field> allMutableConfigs = new HashMap<>();

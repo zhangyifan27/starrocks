@@ -175,6 +175,7 @@ import static com.starrocks.common.util.PropertyAnalyzer.PROPERTIES_STORAGE_TYPE
  */
 public class OlapTable extends Table {
     private static final Logger LOG = LogManager.getLogger(OlapTable.class);
+    private static final String DEFAULT_INTERNAL_DBNAME = "default_db";
 
     public enum OlapTableState {
         NORMAL,
@@ -556,6 +557,17 @@ public class OlapTable extends Table {
             return Lists.newArrayList();
         }
         return indexes.getIndexes();
+    }
+
+    @Override
+    public String getCatalogDBName() {
+        // TODO: pass db name for OlapTable
+        return DEFAULT_INTERNAL_DBNAME;
+    }
+
+    @Override
+    public String getCatalogTableName() {
+        return name;
     }
 
     @Override

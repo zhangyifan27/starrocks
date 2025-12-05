@@ -193,4 +193,9 @@ public abstract class ScanNode extends PlanNode {
     public boolean isRunningAsConnectorOperator() {
         return true;
     }
+
+    @Override
+    public boolean needCollectExecStats() {
+        return true;
+    }
 }

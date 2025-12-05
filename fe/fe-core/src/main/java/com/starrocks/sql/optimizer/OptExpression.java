@@ -22,11 +22,19 @@ import com.starrocks.sql.optimizer.base.LogicalProperty;
 import com.starrocks.sql.optimizer.base.PhysicalPropertySet;
 import com.starrocks.sql.optimizer.operator.Operator;
 import com.starrocks.sql.optimizer.operator.UKFKConstraints;
+import com.starrocks.sql.optimizer.operator.logical.LogicalOperator;
+import com.starrocks.sql.optimizer.operator.physical.PhysicalHashAggregateOperator;
+import com.starrocks.sql.optimizer.operator.physical.PhysicalOperator;
 import com.starrocks.sql.optimizer.rule.mv.KeyInference;
 import com.starrocks.sql.optimizer.rule.mv.MVOperatorProperty;
 import com.starrocks.sql.optimizer.rule.mv.ModifyInference;
+import com.starrocks.sql.optimizer.statistics.HboUtils;
 import com.starrocks.sql.optimizer.statistics.Statistics;
+import org.apache.commons.lang3.StringUtils;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -266,6 +274,65 @@ public class OptExpression {
         }
         return sb.toString();
     }
+
+    /**
+     * Get fingerprint of plan.
+     */
+    public String getPlanTreeFingerprint() {
+        StringBuilder builder = new StringBuilder();
+        builder.append(this.getOp().getFingerprint());
+        if (this.getInputs().isEmpty()) {
+            return builder.toString();
+        } else {
+            List<OptExpression> mutableChildren = new ArrayList<>(this.getInputs());
+            // the following sorting by scans depended on will increase the plan matching possibility
+            // during hbo plan matching stage, e.g, the final physical plan is encoded as 'a join b',
+            // but the group plan is 'b join a' which can be matched also.
+            // NOTE: it will increase the risk brought from rf, as above, the physical plan 'a join b'
+            // is with rf's potential influence which will not exactly the same as 'b join a',
+            // but when we ignore the join sides as above and want to increase the hbo plan stats.'s adaptability,
+            // it may bring the unsuitable matching and increase the dependence for the rf-safe checking.
+            Collections.sort(mutableChildren, new Comparator<OptExpression>() {
+                @Override
+                public int compare(OptExpression plan1, OptExpression plan2) {
+                    List<String> scanQualifierList1 = new ArrayList<>();
+                    List<String> scanQualifierList2 = new ArrayList<>();
+                    HboUtils.collectScanQualifierList(plan1, scanQualifierList1);
+                    HboUtils.collectScanQualifierList(plan2, scanQualifierList2);
+                    Collections.sort(scanQualifierList1);
+                    Collections.sort(scanQualifierList2);
+                    String qualifiedName1 = StringUtils.join(scanQualifierList1, "");
+                    String qualifiedName2 = StringUtils.join(scanQualifierList2, "");
+                    return qualifiedName1.compareTo(qualifiedName2);
+                }
+            });
+            for (OptExpression plan : mutableChildren) {
+                if (plan.getOp() == null && plan.getGroupExpression() != null) {
+                    builder.append(plan.getGroupExpression().getPlanTreeFingerprint());
+                } else if (plan.getOp() instanceof LogicalOperator) {
+                    builder.append(plan.getPlanTreeFingerprint());
+                } else if (plan.getOp() instanceof PhysicalOperator) {
+                    if (!isLocalAggPhysicalNode((PhysicalOperator) plan.getOp())) {
+                        builder.append(plan.getPlanTreeFingerprint());
+                    } else {
+                        builder.append(((OptExpression) plan.getInputs().get(0)).getPlanTreeFingerprint());
+                    }
+                } else {
+                    builder.append("");
+                }
+            }
+            return builder.toString();
+        }
+    }
+
+    public static boolean isLocalAggPhysicalNode(PhysicalOperator plan) {
+        if (plan instanceof PhysicalHashAggregateOperator && ((PhysicalHashAggregateOperator) plan).getType().isLocal()) {
+            return true;
+        } else {
+            return false;
+        }
+    }
+
 
     public static Builder builder() {
         return new Builder();

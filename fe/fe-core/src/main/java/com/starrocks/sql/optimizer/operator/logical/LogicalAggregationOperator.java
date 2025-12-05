@@ -25,6 +25,7 @@ import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
 import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.RowOutputInfo;
+import com.starrocks.sql.optimizer.Utils;
 import com.starrocks.sql.optimizer.base.ColumnRefFactory;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.operator.AggType;
@@ -233,6 +234,17 @@ public class LogicalAggregationOperator extends LogicalOperator {
     @Override
     public int hashCode() {
         return Objects.hash(super.hashCode(), type, isSplit, aggregations, groupingKeys, partitionByColumns);
+    }
+
+    @Override
+    public String getFingerprint() {
+        StringBuilder builder = new StringBuilder();
+        // logical agg is mapped to physical GLOBAL
+        String aggPhase = "Aggregate" + "(GLOBAL)";
+        builder.append(Utils.toSqlString(aggPhase, "groupBys", groupingKeys,
+                "partitionByColumns", partitionByColumns,
+                "aggregations", aggregations));
+        return builder.toString();
     }
 
     public static Builder builder() {

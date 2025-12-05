@@ -56,6 +56,7 @@ import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.rewrite.ReplaceColumnRefRewriter;
 import com.starrocks.sql.optimizer.rewrite.ScalarOperatorRewriter;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
+import com.starrocks.sql.optimizer.statistics.HboStatsCalculator;
 import com.starrocks.sql.optimizer.statistics.StatisticsCalculator;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.SetUtils;
@@ -806,8 +807,14 @@ public class Utils {
         }
 
         ExpressionContext expressionContext = new ExpressionContext(expr);
-        StatisticsCalculator statisticsCalculator = new StatisticsCalculator(
-                expressionContext, context.getColumnRefFactory(), context);
+        StatisticsCalculator statisticsCalculator;
+        if (context.getSessionVariable().isEnableHboOptimization()) {
+            statisticsCalculator = new HboStatsCalculator(
+                    expressionContext, context.getColumnRefFactory(), context);
+        } else {
+            statisticsCalculator = new StatisticsCalculator(
+                    expressionContext, context.getColumnRefFactory(), context);
+        }
         try {
             statisticsCalculator.estimatorStats();
         } catch (Exception e) {
@@ -940,5 +947,43 @@ public class Utils {
         }
 
         return value;
+    }
+
+    public static String getQualifiedTableKey(Table table) {
+        // relation id + alias + version
+        return getQualifiedTableName(table) + "_" + table.getCreateTime();
+    }
+
+    public static String getQualifiedTableName(String catalogName, String dbName, String tableName) {
+        return catalogName + "." + dbName + "." + tableName;
+    }
+
+    public static String getQualifiedTableName(Table table) {
+        return table.getCatalogName() + "." + table.getCatalogDBName() + "." + table.getCatalogTableName();
+    }
+
+    public static String toSqlString(String planName, Object... variables) {
+        Preconditions.checkState(variables.length % 2 == 0);
+        StringBuilder stringBuilder = new StringBuilder();
+        stringBuilder.append(planName).append(" ( ");
+
+        if (variables.length == 0) {
+            return stringBuilder.append(" )").toString();
+        }
+
+        for (int i = 0; i < variables.length - 1; i += 2) {
+            if (!"".equals(toStringOrNull(variables[i + 1]))) {
+                if (i != 0) {
+                    stringBuilder.append(", ");
+                }
+                stringBuilder.append(toStringOrNull(variables[i])).append("=").append(toStringOrNull(variables[i + 1]));
+            }
+        }
+
+        return stringBuilder.append(" )").toString();
+    }
+
+    public static String toStringOrNull(Object obj) {
+        return obj == null ? "null" : obj.toString();
     }
 }

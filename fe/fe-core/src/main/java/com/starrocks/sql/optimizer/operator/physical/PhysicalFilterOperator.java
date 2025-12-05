@@ -17,6 +17,7 @@ package com.starrocks.sql.optimizer.operator.physical;
 import com.starrocks.sql.optimizer.OptExpression;
 import com.starrocks.sql.optimizer.OptExpressionVisitor;
 import com.starrocks.sql.optimizer.RowOutputInfo;
+import com.starrocks.sql.optimizer.Utils;
 import com.starrocks.sql.optimizer.operator.OperatorType;
 import com.starrocks.sql.optimizer.operator.OperatorVisitor;
 import com.starrocks.sql.optimizer.operator.Projection;
@@ -61,5 +62,10 @@ public class PhysicalFilterOperator extends PhysicalOperator {
     @Override
     public <R, C> R accept(OptExpressionVisitor<R, C> visitor, OptExpression optExpression, C context) {
         return visitor.visitPhysicalFilter(optExpression, context);
+    }
+
+    @Override
+    public String getFingerprint() {
+        return Utils.toSqlString("Filter[" + predicate.getFingerprint() + "]");
     }
 }

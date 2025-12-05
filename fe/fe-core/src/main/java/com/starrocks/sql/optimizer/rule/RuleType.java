@@ -208,6 +208,10 @@ public enum RuleType {
 
     TF_GROUP_KEY_NUMBER_CHECK_RULE,
 
+    TF_COLLECT_PREDICATE_ON_SCAN,
+
+    TF_COLLECT_PREDICATE_ON_PURE_SCAN,
+
     // The following are implementation rules:
     IMP_OLAP_LSCAN_TO_PSCAN,
     IMP_HIVE_LSCAN_TO_PSCAN,

@@ -431,6 +431,11 @@ public final class ConstantOperator extends ScalarOperator implements Comparable
     }
 
     @Override
+    public String getFingerprint() {
+        return "?";
+    }
+
+    @Override
     public <R, C> R accept(ScalarOperatorVisitor<R, C> visitor, C context) {
         return visitor.visitConstant(this, context);
     }

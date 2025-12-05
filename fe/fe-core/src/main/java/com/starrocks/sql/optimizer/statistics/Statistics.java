@@ -23,6 +23,7 @@ import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -35,6 +36,7 @@ public class Statistics {
     // Table row count in FE depends on BE reporting，but FE may not get report from BE which just started，
     // this causes the table row count stored in FE to be inaccurate.
     private final boolean tableRowCountMayInaccurate;
+    private boolean isFromHbo = false;
     private final Collection<ColumnRefOperator> shadowColumns;
 
     private Statistics(Builder builder) {
@@ -42,6 +44,7 @@ public class Statistics {
         this.columnStatistics = builder.columnStatistics;
         this.tableRowCountMayInaccurate = builder.tableRowCountMayInaccurate;
         this.shadowColumns = builder.shadowColumns;
+        this.isFromHbo = builder.isFromHbo;
     }
 
     public double getOutputRowCount() {
@@ -141,12 +144,50 @@ public class Statistics {
         return Objects.hash(outputRowCount, columnStatistics.keySet(), tableRowCountMayInaccurate);
     }
 
+    public Statistics withRowCountAndEnforceValid(double rowCount, List<ColumnRefOperator> columns) {
+        Statistics.Builder statisticsBuilder = buildFrom(this);
+        if (this.getColumnStatistics().isEmpty()) {
+            for (ColumnRefOperator columnRefOperator : columns) {
+                statisticsBuilder.addColumnStatistic(columnRefOperator, ColumnStatistic.unknown());
+            }
+        }
+        statisticsBuilder.setOutputRowCount(rowCount);
+        return statisticsBuilder.build();
+    }
+
+    public Statistics withRowCountAndEnforceValid(double rowCount) {
+        Statistics.Builder statisticsBuilder = buildFrom(this);
+        statisticsBuilder.setOutputRowCount(rowCount);
+        return statisticsBuilder.build();
+    }
+
+    public Statistics withRowCountAndHboFlag(double rowCount, List<ColumnRefOperator> columns) {
+        Statistics statistics = withRowCountAndEnforceValid(rowCount, columns);
+        statistics.setFromHbo(true);
+        return statistics;
+    }
+
+    public Statistics withRowCountAndHboFlag(double rowCount) {
+        Statistics statistics = withRowCountAndEnforceValid(rowCount);
+        statistics.setFromHbo(true);
+        return statistics;
+    }
+
+    public void setFromHbo(boolean isFromHbo) {
+        this.isFromHbo = isFromHbo;
+    }
+
+    public boolean isFromHbo() {
+        return this.isFromHbo;
+    }
+
     public static Builder buildFrom(Statistics other) {
         return new Builder(
                 other.getOutputRowCount(),
                 other.columnStatistics,
                 other.tableRowCountMayInaccurate,
-                other.shadowColumns);
+                other.shadowColumns,
+                other.isFromHbo);
     }
 
     public static Builder builder() {
@@ -157,25 +198,28 @@ public class Statistics {
         private double outputRowCount;
         private final Map<ColumnRefOperator, ColumnStatistic> columnStatistics;
         private boolean tableRowCountMayInaccurate;
+        private boolean isFromHbo;
         // columns not used to compute costs
         // which is used by mv rewrite to make the cost accurate
         private Collection<ColumnRefOperator> shadowColumns;
 
         public Builder() {
-            this(NaN, new HashMap<>(), false);
+            this(NaN, new HashMap<>(), false, false);
         }
 
         private Builder(double outputRowCount, Map<ColumnRefOperator, ColumnStatistic> columnStatistics,
-                        boolean tableRowCountMayInaccurate, Collection<ColumnRefOperator> shadowColumns) {
+                        boolean tableRowCountMayInaccurate, Collection<ColumnRefOperator> shadowColumns,
+                        boolean isFromHbo) {
             this.outputRowCount = outputRowCount;
             this.columnStatistics = new HashMap<>(columnStatistics);
             this.tableRowCountMayInaccurate = tableRowCountMayInaccurate;
             this.shadowColumns = shadowColumns;
+            this.isFromHbo = isFromHbo;
         }
 
         private Builder(double outputRowCount, Map<ColumnRefOperator, ColumnStatistic> columnStatistics,
-                        boolean tableRowCountMayInaccurate) {
-            this(outputRowCount, columnStatistics, tableRowCountMayInaccurate, Lists.newArrayList());
+                        boolean tableRowCountMayInaccurate, boolean isFromHbo) {
+            this(outputRowCount, columnStatistics, tableRowCountMayInaccurate, Lists.newArrayList(), isFromHbo);
         }
 
         public Builder setOutputRowCount(double outputRowCount) {

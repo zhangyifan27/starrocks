@@ -1,0 +1,84 @@
+-- name: test_hbo
+create database if not exists hbo_test;
+use hbo_test;
+
+drop table if exists hbo_join_side_opt_test1;
+drop table if exists hbo_join_side_opt_test2;
+
+create table hbo_join_side_opt_test1(a int, b int) distributed by hash(a) buckets 32 properties("replication_num"="1");
+insert into hbo_join_side_opt_test1 select generate_series, generate_series from TABLE(generate_series(1, 10000));
+insert into hbo_join_side_opt_test1 select 1,1 from TABLE(generate_series(1, 10000000));
+analyze full table hbo_join_side_opt_test1 with sync mode;
+
+create table hbo_join_side_opt_test2(a int, b int) distributed by hash(a) buckets 32 properties("replication_num"="1");
+insert into hbo_join_side_opt_test2 select generate_series, generate_series from TABLE(generate_series(1, 10000));
+analyze full table hbo_join_side_opt_test2 with sync mode;
+set enable_hbo_optimization=false;
+set global enable_hbo_info_collection=false;
+
+--MySQL [test]> explain logical select count(1) from hbo_join_side_opt_test1 s1, hbo_join_side_opt_test2 s2 where s1.b = s2.b and s1.a = 1;
+--+------------------------------------------------------------------------------------------------------------------------+
+--| Explain String                                                                                                         |
+--+------------------------------------------------------------------------------------------------------------------------+
+--| - Output => [5:count]                                                                                                  |
+--|     - AGGREGATE(GLOBAL) []                                                                                             |
+--|             Estimates: {row: 1, cpu: 8.00, memory: 8.00, network: 0.00, cost: 122995.89}                               |
+--|             5:count := count(5:count)                                                                                  |
+--|         - EXCHANGE(GATHER)                                                                                             |
+--|                 Estimates: {row: 1, cpu: 8.00, memory: 0.00, network: 8.00, cost: 122975.89}                           |
+--|             - AGGREGATE(LOCAL) []                                                                                      |
+--|                     Estimates: {row: 1, cpu: 900.09, memory: 0.80, network: 0.00, cost: 122959.89}                     |
+--|                     5:count := count(1)                                                                                |
+--|                 - HASH/INNER JOIN [4:b = 2:b] => [7:auto_fill_col]                                                     |
+--|                         Estimates: {row: 1000, cpu: 53001.30, memory: 4000.40, network: 0.00, cost: 122508.24}         |
+--|                         7:auto_fill_col := 1                                                                           |
+--|                     - SCAN [hbo_join_side_opt_test2] => [4:b]                                                          |
+--|                             Estimates: {row: 10000, cpu: 40000.00, memory: 0.00, network: 0.00, cost: 20000.00}        |
+--|                             partitionRatio: 1/1, tabletRatio: 32/32                                                    |
+--|                             predicate: 4:b IS NOT NULL                                                                 |
+--|                     - EXCHANGE(BROADCAST)                                                                              |
+--|                             Estimates: {row: 1000, cpu: 12001.20, memory: 12001.20, network: 12001.20, cost: 52005.20} |
+--|                         - SCAN [hbo_join_side_opt_test1] => [2:b]                                                      |
+--|                                 Estimates: {row: 1000, cpu: 8000.80, memory: 0.00, network: 0.00, cost: 4000.40}       |
+--|                                 partitionRatio: 1/1, tabletRatio: 1/32                                                 |
+--|                                 predicate: 1:a = 1                                                                     |
+--+------------------------------------------------------------------------------------------------------------------------+
+function: assert_explain_logical_contains("select count(1) from hbo_join_side_opt_test1 s1, hbo_join_side_opt_test2 s2 where s1.b = s2.b and s1.a = 1;", "row: 1000,")
+function: assert_explain_logical_not_contains("select count(1) from hbo_join_side_opt_test1 s1, hbo_join_side_opt_test2 s2 where s1.b = s2.b and s1.a = 1;", "[hbo]row: 10000001")
+
+ADMIN SET FRONTEND CONFIG ("slow_query_analyze_threshold" = "10");
+set enable_hbo_optimization=true;
+set global enable_hbo_info_collection=true;
+
+select count(1) from hbo_join_side_opt_test1 s1, hbo_join_side_opt_test2 s2 where s1.b = s2.b and s1.a = 1;
+
+--MySQL [test]> explain logical select count(1) from hbo_join_side_opt_test1 s1, hbo_join_side_opt_test2 s2 where s1.b = s2.b and s1.a = 1;
+--+----------------------------------------------------------------------------------------------------------------------------------+
+--| Explain String                                                                                                                   |
+--+----------------------------------------------------------------------------------------------------------------------------------+
+--| - Output => [5:count]                                                                                                            |
+--|     - AGGREGATE(GLOBAL) []                                                                                                       |
+--|             Estimates: {row: 1, cpu: 128.00, memory: 8.00, network: 0.00, cost: 110260372.55}                                    |
+--|             5:count := count(5:count)                                                                                            |
+--|         - EXCHANGE(GATHER)                                                                                                       |
+--|                 Estimates: {[hbo]row: 16, cpu: 128.00, memory: 0.00, network: 128.00, cost: 110260292.55}                        |
+--|             - AGGREGATE(LOCAL) []                                                                                                |
+--|                     Estimates: {[hbo]row: 16, cpu: 9000000.90, memory: 12.80, network: 0.00, cost: 110260036.55}                 |
+--|                     5:count := count(1)                                                                                          |
+--|                 - HASH/INNER JOIN [2:b = 4:b] => [7:auto_fill_col]                                                               |
+--|                         Estimates: {[hbo]row: 10000001, cpu: 130040013.00, memory: 40000.00, network: 0.00, cost: 105760010.50}  |
+--|                         7:auto_fill_col := 1                                                                                     |
+--|                     - SCAN [hbo_join_side_opt_test1] => [2:b]                                                                    |
+--|                             Estimates: {[hbo]row: 10000001, cpu: 80000008.00, memory: 0.00, network: 0.00, cost: 40000004.00}    |
+--|                             partitionRatio: 1/1, tabletRatio: 1/32                                                               |
+--|                             predicate: 1:a = 1                                                                                   |
+--|                     - EXCHANGE(BROADCAST)                                                                                        |
+--|                             Estimates: {[hbo]row: 10000, cpu: 120000.00, memory: 120000.00, network: 120000.00, cost: 500000.00} |
+--|                         - SCAN [hbo_join_side_opt_test2] => [4:b]                                                                |
+--|                                 Estimates: {[hbo]row: 10000, cpu: 40000.00, memory: 0.00, network: 0.00, cost: 20000.00}         |
+--|                                 partitionRatio: 1/1, tabletRatio: 32/32                                                          |
+--|                                 predicate: 4:b IS NOT NULL                                                                       |
+--+----------------------------------------------------------------------------------------------------------------------------------+
+function: assert_explain_logical_contains("select count(1) from hbo_join_side_opt_test1 s1, hbo_join_side_opt_test2 s2 where s1.b = s2.b and s1.a = 1;", "[hbo]row: 10000001")
+
+ADMIN SET FRONTEND CONFIG ("slow_query_analyze_threshold" = "5000");

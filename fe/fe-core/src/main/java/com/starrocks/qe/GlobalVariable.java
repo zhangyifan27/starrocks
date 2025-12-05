@@ -60,6 +60,7 @@ public final class GlobalVariable {
     public static final String QUERY_CACHE_SIZE = "query_cache_size";
     public static final String DEFAULT_ROWSET_TYPE = "default_rowset_type";
     public static final String CHARACTER_SET_DATABASE = "character_set_database";
+    public static final String ENABLE_HBO_INFO_COLLECTION = "enable_hbo_info_collection";
 
     public static final String ENABLE_QUERY_QUEUE_SELECT = "enable_query_queue_select";
     public static final String ENABLE_QUERY_QUEUE_STATISTIC = "enable_query_queue_statistic";
@@ -110,6 +111,9 @@ public final class GlobalVariable {
 
     @VariableMgr.VarAttr(name = DEFAULT_ROWSET_TYPE, flag = VariableMgr.GLOBAL)
     public static volatile String defaultRowsetType = "alpha";
+
+    @VariableMgr.VarAttr(name = ENABLE_HBO_INFO_COLLECTION, flag = VariableMgr.GLOBAL)
+    private static boolean enableHboInfoCollection = false;
 
     @VariableMgr.VarAttr(name = CHARACTER_SET_DATABASE, flag = VariableMgr.GLOBAL)
     public static volatile String characterSetDatabase = "utf8";
@@ -310,6 +314,14 @@ public final class GlobalVariable {
 
     public static void setActivateAllRolesOnLogin(boolean activateAllRolesOnLogin) {
         GlobalVariable.activateAllRolesOnLogin = activateAllRolesOnLogin;
+    }
+
+    public static boolean isEnableHboInfoCollection() {
+        return enableHboInfoCollection;
+    }
+
+    public static void setEnableHboInfoCollection(boolean enableHboInfo) {
+        enableHboInfoCollection = enableHboInfo;
     }
 
     // Don't allow create instance.

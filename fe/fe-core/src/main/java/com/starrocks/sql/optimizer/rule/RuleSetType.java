@@ -44,5 +44,6 @@ public enum RuleSetType {
 
     ELIMINATE_OP_WITH_CONSTANT,
     PUSH_DOWN_AGG_TO_UNION,
-    NUM_RULE_SET
+    NUM_RULE_SET,
+    VECTOR_REWRITE
 }

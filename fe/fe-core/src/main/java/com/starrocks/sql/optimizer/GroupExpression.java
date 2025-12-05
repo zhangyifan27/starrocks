@@ -29,8 +29,13 @@ import com.starrocks.sql.optimizer.rule.Rule;
 import com.starrocks.sql.optimizer.rule.RuleSet;
 import com.starrocks.sql.optimizer.rule.RuleSetType;
 import com.starrocks.sql.optimizer.rule.RuleType;
+import com.starrocks.sql.optimizer.statistics.HboUtils;
+import org.apache.commons.lang3.StringUtils;
 
+import java.util.ArrayList;
 import java.util.BitSet;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -353,5 +358,48 @@ public class GroupExpression {
             isAppliedMVRules = Optional.of(ALL_MV_REWRITE_RULES.stream().anyMatch(rule -> hasRuleApplied(rule)));
         }
         return isAppliedMVRules.get();
+    }
+
+    public String getPlanTreeFingerprint() {
+        StringBuilder builder = new StringBuilder();
+        builder.append(this.getOp().getFingerprint());
+        if (this.getInputs().isEmpty()) {
+            return builder.toString();
+        } else {
+            List<Group> mutableGroupChildren = new ArrayList<>(this.getInputs());
+            // the following sorting by scans depended on will increase the plan matching possibility
+            // during hbo plan matching stage, e.g, the final physical plan is encoded as 'a join b',
+            // but the group plan is 'b join a' which can be matched also.
+            // NOTE: it will increase the risk brought from rf, as above, the physical plan 'a join b'
+            // is with rf's potential influence which will not exactly the same as 'b join a',
+            // but when we ignore the join sides as above and want to increase the hbo plan stats.'s adaptability,
+            // it may bring the unsuitable matching and increase the dependence for the rf-safe checking.
+            Collections.sort(mutableGroupChildren, new Comparator<Group>() {
+                @Override
+                public int compare(Group group1, Group group2) {
+                    List<String> scanQualifierList1 = new ArrayList<>();
+                    List<String> scanQualifierList2 = new ArrayList<>();
+                    GroupExpression groupExpression1 = group1.getLogicalExpressions() != null
+                            ? group1.getFirstLogicalExpression() : group1.getPhysicalExpressions().get(0);
+                    GroupExpression groupExpression2 = group2.getLogicalExpressions() != null
+                            ? group2.getFirstLogicalExpression() : group2.getPhysicalExpressions().get(0);
+                    HboUtils.collectScanQualifierList(groupExpression1, scanQualifierList1);
+                    HboUtils.collectScanQualifierList(groupExpression2, scanQualifierList2);
+                    Collections.sort(scanQualifierList1);
+                    Collections.sort(scanQualifierList2);
+                    String qualifiedName1 = StringUtils.join(scanQualifierList1, "");
+                    String qualifiedName2 = StringUtils.join(scanQualifierList2, "");
+                    return qualifiedName1.compareTo(qualifiedName2);
+                }
+            });
+            for (Group group : mutableGroupChildren) {
+                if (group.getLogicalExpressions() != null) {
+                    builder.append(group.getLogicalExpressions().get(0).getPlanTreeFingerprint());
+                } else if (group.getPhysicalExpressions() != null) {
+                    builder.append(group.getPhysicalExpressions().get(0).getPlanTreeFingerprint());
+                }
+            }
+            return builder.toString();
+        }
     }
 }

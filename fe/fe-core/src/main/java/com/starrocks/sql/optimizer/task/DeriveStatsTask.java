@@ -22,6 +22,7 @@ import com.starrocks.sql.optimizer.GroupExpression;
 import com.starrocks.sql.optimizer.operator.logical.LogicalOlapScanOperator;
 import com.starrocks.sql.optimizer.operator.scalar.ColumnRefOperator;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
+import com.starrocks.sql.optimizer.statistics.HboStatsCalculator;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 import com.starrocks.sql.optimizer.statistics.StatisticsCalculator;
 
@@ -58,8 +59,15 @@ public class DeriveStatsTask extends OptimizerTask {
         }
 
         ExpressionContext expressionContext = new ExpressionContext(groupExpression);
-        StatisticsCalculator statisticsCalculator = new StatisticsCalculator(expressionContext,
-                context.getOptimizerContext().getColumnRefFactory(), context.getOptimizerContext());
+        StatisticsCalculator statisticsCalculator;
+        if (context.getOptimizerContext().getSessionVariable().isEnableHboOptimization()) {
+            statisticsCalculator = new HboStatsCalculator(expressionContext,
+                    context.getOptimizerContext().getColumnRefFactory(), context.getOptimizerContext());
+        } else {
+            statisticsCalculator = new StatisticsCalculator(expressionContext,
+                    context.getOptimizerContext().getColumnRefFactory(), context.getOptimizerContext());
+        }
+
         statisticsCalculator.estimatorStats();
 
         Statistics currentStatistics = groupExpression.getGroup().getStatistics();

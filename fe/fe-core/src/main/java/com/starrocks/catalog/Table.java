@@ -280,6 +280,14 @@ public class Table extends MetaObject implements Writable, GsonPostProcessable, 
         return type;
     }
 
+    public String getCatalogTableName() {
+        throw new NotImplementedException();
+    }
+
+    public String getCatalogDBName() {
+        throw new NotImplementedException();
+    }
+
     public boolean isOlapTable() {
         return type == TableType.OLAP;
     }

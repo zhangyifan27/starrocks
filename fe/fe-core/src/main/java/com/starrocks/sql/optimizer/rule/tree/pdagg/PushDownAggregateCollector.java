@@ -41,6 +41,7 @@ import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.rewrite.ReplaceColumnRefRewriter;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
 import com.starrocks.sql.optimizer.statistics.ExpressionStatisticCalculator;
+import com.starrocks.sql.optimizer.statistics.HboStatsCalculator;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 import com.starrocks.sql.optimizer.statistics.StatisticsCalculator;
 import com.starrocks.sql.optimizer.statistics.StatisticsEstimateCoefficient;
@@ -447,8 +448,12 @@ class PushDownAggregateCollector extends OptExpressionVisitor<Void, AggregatePus
         Preconditions.checkState(scanOutput.containsAll(allAggregateColumns));
 
         ExpressionContext expressionContext = new ExpressionContext(optExpression);
-        StatisticsCalculator statisticsCalculator =
-                new StatisticsCalculator(expressionContext, factory, optimizerContext);
+        StatisticsCalculator statisticsCalculator;
+        if (optimizerContext.getSessionVariable().isEnableHboOptimization()) {
+            statisticsCalculator = new HboStatsCalculator(expressionContext, factory, optimizerContext);
+        } else {
+            statisticsCalculator = new StatisticsCalculator(expressionContext, factory, optimizerContext);
+        }
         statisticsCalculator.estimatorStats();
 
         if (!checkStatistics(context, allGroupByColumns, expressionContext.getStatistics())) {

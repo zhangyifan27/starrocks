@@ -43,6 +43,7 @@ import com.starrocks.sql.optimizer.rewrite.ReplaceColumnRefRewriter;
 import com.starrocks.sql.optimizer.rule.Rule;
 import com.starrocks.sql.optimizer.rule.RuleType;
 import com.starrocks.sql.optimizer.statistics.ColumnStatistic;
+import com.starrocks.sql.optimizer.statistics.HboStatsCalculator;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 import com.starrocks.sql.optimizer.statistics.StatisticsCalculator;
 
@@ -250,9 +251,11 @@ public class ReorderJoinRule extends Rule {
      */
     public static class OutputColumnsPrune extends OptExpressionVisitor<OptExpression, ColumnRefSet> {
         private final OptimizerContext optimizerContext;
+        private final boolean isHboEnabled;
 
         public OutputColumnsPrune(OptimizerContext optimizerContext) {
             this.optimizerContext = optimizerContext;
+            this.isHboEnabled = optimizerContext.getSessionVariable().isEnableHboOptimization();
         }
 
         public OptExpression rewrite(OptExpression optExpression, ColumnRefSet requiredColumns) {
@@ -323,8 +326,16 @@ public class ReorderJoinRule extends Rule {
             joinOpt.deriveLogicalPropertyItself();
 
             ExpressionContext expressionContext = new ExpressionContext(joinOpt);
-            StatisticsCalculator statisticsCalculator = new StatisticsCalculator(
-                    expressionContext, optimizerContext.getColumnRefFactory(), optimizerContext);
+            StatisticsCalculator statisticsCalculator;
+            if (isHboEnabled) {
+                statisticsCalculator = new HboStatsCalculator(expressionContext,
+                        optimizerContext.getColumnRefFactory(),
+                        optimizerContext);
+            } else {
+                statisticsCalculator = new StatisticsCalculator(expressionContext,
+                        optimizerContext.getColumnRefFactory(),
+                        optimizerContext);
+            }
             statisticsCalculator.estimatorStats();
             joinOpt.setStatistics(expressionContext.getStatistics());
             return joinOpt;
@@ -339,8 +350,16 @@ public class ReorderJoinRule extends Rule {
 
             if (!Optional.ofNullable(optExpression.getStatistics()).isPresent()) {
                 ExpressionContext expressionContext = new ExpressionContext(optExpression);
-                StatisticsCalculator statisticsCalculator = new StatisticsCalculator(
-                        expressionContext, optimizerContext.getColumnRefFactory(), optimizerContext);
+                StatisticsCalculator statisticsCalculator;
+                if (isHboEnabled) {
+                    statisticsCalculator = new HboStatsCalculator(expressionContext,
+                            optimizerContext.getColumnRefFactory(),
+                            optimizerContext);
+                } else {
+                    statisticsCalculator = new StatisticsCalculator(expressionContext,
+                            optimizerContext.getColumnRefFactory(),
+                            optimizerContext);
+                }
                 statisticsCalculator.estimatorStats();
                 optExpression.setStatistics(expressionContext.getStatistics());
             }
@@ -420,8 +439,15 @@ public class ReorderJoinRule extends Rule {
                 joinOpt.deriveLogicalPropertyItself();
 
                 ExpressionContext expressionContext = new ExpressionContext(joinOpt);
-                StatisticsCalculator statisticsCalculator = new StatisticsCalculator(
-                        expressionContext, optimizerContext.getColumnRefFactory(), optimizerContext);
+                StatisticsCalculator statisticsCalculator;
+                boolean isHboEnabled = optimizerContext.getSessionVariable().isEnableHboOptimization();
+                if (isHboEnabled) {
+                    statisticsCalculator = new HboStatsCalculator(expressionContext,
+                            optimizerContext.getColumnRefFactory(), optimizerContext);
+                } else {
+                    statisticsCalculator = new StatisticsCalculator(expressionContext,
+                            optimizerContext.getColumnRefFactory(), optimizerContext);
+                }
                 statisticsCalculator.estimatorStats();
                 joinOpt.setStatistics(expressionContext.getStatistics());
                 return joinOpt;

@@ -70,6 +70,9 @@ public class ExecPlan {
     private LogicalPlan logicalPlan;
     private ColumnRefFactory columnRefFactory;
 
+    private List<Integer> collectExecStatsIds;
+    private final Map<Integer, PlanNodeId> nereidsIdToPlanNodeIdMap = Maps.newHashMap();
+
     @VisibleForTesting
     public ExecPlan() {
         connectContext = new ConnectContext();
@@ -94,6 +97,10 @@ public class ExecPlan {
         this.physicalPlan = null;
         this.outputColumns = new ArrayList<>();
         this.fragments.addAll(fragments);
+    }
+
+    public Map<Integer, PlanNodeId> getNereidsIdToPlanNodeIdMap() {
+        return nereidsIdToPlanNodeIdMap;
     }
 
     public ConnectContext getConnectContext() {
@@ -181,6 +188,9 @@ public class ExecPlan {
     }
 
     public void recordPlanNodeId2OptExpression(int id, OptExpression optExpression) {
+        if (connectContext.getSessionVariable().isEnableHboOptimization()) {
+            optExpression.getOp().setPlanNodeId(id);
+        }
         optExpressions.put(id, optExpression);
     }
 
@@ -304,5 +314,13 @@ public class ExecPlan {
 
     public void setColumnRefFactory(ColumnRefFactory columnRefFactory) {
         this.columnRefFactory = columnRefFactory;
+    }
+
+    public List<Integer> getCollectExecStatsIds() {
+        return collectExecStatsIds;
+    }
+
+    public void setCollectExecStatsIds(List<Integer> collectExecStatsIds) {
+        this.collectExecStatsIds = collectExecStatsIds;
     }
 }

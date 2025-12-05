@@ -243,6 +243,15 @@ public class LogicalJoinOperator extends LogicalOperator {
                 '}';
     }
 
+    @Override
+    public String getFingerprint() {
+        List<Object> args = Lists.newArrayList(
+                "type", joinType,
+                "onPredicate", onPredicate,
+                "predicate", predicate);
+        return Utils.toSqlString("JOIN", args.toArray());
+    }
+
     public static Builder builder() {
         return new Builder();
     }

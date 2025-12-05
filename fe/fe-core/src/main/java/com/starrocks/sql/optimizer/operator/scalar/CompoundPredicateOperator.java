@@ -162,6 +162,14 @@ public class CompoundPredicateOperator extends PredicateOperator {
         return Objects.hash(opType, type, h);
     }
 
+    @Override
+    public String getFingerprint() {
+        StringBuilder sb = new StringBuilder();
+        getChildren().forEach(c -> sb.append(c.getFingerprint()).append(","));
+        sb.deleteCharAt(sb.length() - 1);
+        return type.name() + "[" + sb + "]";
+    }
+
     public static ScalarOperator or(Collection<ScalarOperator> nodes) {
         return Utils.createCompound(CompoundPredicateOperator.CompoundType.OR, nodes);
     }

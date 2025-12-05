@@ -183,9 +183,9 @@ import static java.lang.Math.pow;
 public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContext> {
     private static final Logger LOG = LogManager.getLogger(StatisticsCalculator.class);
 
-    private final ExpressionContext expressionContext;
-    private final ColumnRefFactory columnRefFactory;
-    private final OptimizerContext optimizerContext;
+    protected final ExpressionContext expressionContext;
+    protected final ColumnRefFactory columnRefFactory;
+    protected final OptimizerContext optimizerContext;
 
     public StatisticsCalculator(ExpressionContext expressionContext,
                                 ColumnRefFactory columnRefFactory,
@@ -342,7 +342,7 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
                 node.getColRefToColumnMetaMap());
     }
 
-    private Void computeOlapScanNode(Operator node, ExpressionContext context, Table table,
+    public Void computeOlapScanNode(Operator node, ExpressionContext context, Table table,
                                      Collection<Long> selectedPartitionIds,
                                      Map<ColumnRefOperator, Column> colRefToColumnMetaMap) {
         Preconditions.checkState(context.arity() == 0);
@@ -392,7 +392,7 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
             return;
         }
         PartitionInfo partitionInfo = table.getPartitionInfo();
-        if (!partitionInfo.isListPartition() || CollectionUtils.isEmpty(partitions)) {
+        if (partitionInfo == null || !partitionInfo.isListPartition() || CollectionUtils.isEmpty(partitions)) {
             return;
         }
         ListPartitionInfo listPartitionInfo = (ListPartitionInfo) partitionInfo;
@@ -922,13 +922,13 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
         Preconditions.checkState(context.arity() == 1);
 
         Statistics.Builder builder = Statistics.builder();
-        Statistics inputStatistics = context.getChildStatistics(0);
-        builder.setOutputRowCount(inputStatistics.getOutputRowCount());
-
         Statistics.Builder allBuilder = Statistics.builder();
-        allBuilder.setOutputRowCount(inputStatistics.getOutputRowCount());
-        allBuilder.addColumnStatistics(inputStatistics.getColumnStatistics());
-
+        Statistics inputStatistics = context.getChildStatistics(0);
+        if (inputStatistics != null) {
+            builder.setOutputRowCount(inputStatistics.getOutputRowCount());
+            allBuilder.setOutputRowCount(inputStatistics.getOutputRowCount());
+            allBuilder.addColumnStatistics(inputStatistics.getColumnStatistics());
+        }
         for (ColumnRefOperator requiredColumnRefOperator : columnRefMap.keySet()) {
             ScalarOperator mapOperator = columnRefMap.get(requiredColumnRefOperator);
             if (mapOperator instanceof SubfieldOperator && context.getOptExpression() != null) {
@@ -959,7 +959,7 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
         return computeAggregateNode(node, context, node.getGroupBys(), node.getAggregations());
     }
 
-    private Void computeAggregateNode(Operator node, ExpressionContext context, List<ColumnRefOperator> groupBys,
+    public Void computeAggregateNode(Operator node, ExpressionContext context, List<ColumnRefOperator> groupBys,
                                       Map<ColumnRefOperator, CallOperator> aggregations) {
         Preconditions.checkState(context.arity() == 1);
         Statistics.Builder builder = Statistics.builder();
@@ -1055,7 +1055,7 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
         return computeJoinNode(context, node.getJoinType(), node.getOnPredicate());
     }
 
-    private Void computeJoinNode(ExpressionContext context, JoinOperator joinType, ScalarOperator joinOnPredicate) {
+    public Void computeJoinNode(ExpressionContext context, JoinOperator joinType, ScalarOperator joinOnPredicate) {
         Preconditions.checkState(context.arity() == 2);
 
         List<ScalarOperator> allJoinPredicate = Utils.extractConjuncts(joinOnPredicate);
@@ -1635,14 +1635,15 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
         return computeFilterNode(node, context);
     }
 
-    private Void computeFilterNode(Operator node, ExpressionContext context) {
+    public Void computeFilterNode(Operator node, ExpressionContext context) {
         Statistics inputStatistics = context.getChildStatistics(0);
+        if (inputStatistics != null) {
+            Statistics.Builder builder = Statistics.builder();
+            builder.addColumnStatistics(inputStatistics.getColumnStatistics());
+            builder.setOutputRowCount(inputStatistics.getOutputRowCount());
+            context.setStatistics(builder.build());
+        }
 
-        Statistics.Builder builder = Statistics.builder();
-        builder.addColumnStatistics(inputStatistics.getColumnStatistics());
-        builder.setOutputRowCount(inputStatistics.getOutputRowCount());
-
-        context.setStatistics(builder.build());
         return visitOperator(node, context);
     }
 
@@ -1829,7 +1830,7 @@ public class StatisticsCalculator extends OperatorVisitor<Void, ExpressionContex
         }
         LogicalOlapScanOperator scan = operator.cast();
         OlapTable table = (OlapTable) scan.getTable();
-        return table.getPartitionInfo().isListPartition();
+        return table.getPartitionInfo() != null && table.getPartitionInfo().isListPartition();
     }
 
     private boolean isPartitionCol(ScalarOperator scalarOperator, Collection<String> partitionColumns) {

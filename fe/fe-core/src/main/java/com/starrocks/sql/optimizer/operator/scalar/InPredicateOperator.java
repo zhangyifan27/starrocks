@@ -104,6 +104,20 @@ public class InPredicateOperator extends PredicateOperator {
     }
 
     @Override
+    public String getFingerprint() {
+        StringBuilder sb = new StringBuilder();
+        sb.append(getChild(0).debugString()).append(" ");
+        if (isNotIn) {
+            sb.append("NOT ");
+        }
+
+        sb.append("IN (");
+        sb.append(getChildren().stream().sorted().skip(1).map(ScalarOperator::debugString).collect(Collectors.joining(", ")));
+        sb.append(")");
+        return sb.toString();
+    }
+
+    @Override
     public boolean equals(Object o) {
         if (this == o) {
             return true;

@@ -51,12 +51,22 @@ message PQueryStatistics {
     optional double cbo_mem_cost_bytes = 16;
     optional string digest = 17;
     optional int32 use_cn_num = 18;
+    repeated NodeExecStatsItemPB node_exec_stats_items = 19;
 }
 
 message QueryStatisticsItemPB {
     optional int64 scan_rows = 1;
     optional int64 scan_bytes = 2;
     optional int64 table_id = 3;
+}
+
+message NodeExecStatsItemPB {
+    optional int64 push_rows = 1;
+    optional int64 pull_rows = 2;
+    optional int64 pred_filter_rows = 3;
+    optional int64 index_filter_rows = 4;
+    optional int64 rf_filter_rows = 5;
+    optional uint32 node_id = 20;
 }
 
 message PRowBatch {

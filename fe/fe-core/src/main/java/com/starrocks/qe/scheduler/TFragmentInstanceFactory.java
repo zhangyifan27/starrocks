@@ -35,6 +35,7 @@ import com.starrocks.thrift.TPlanFragmentDestination;
 import com.starrocks.thrift.TPlanFragmentExecParams;
 import com.starrocks.thrift.TQueryOptions;
 import com.starrocks.thrift.TQueryQueueOptions;
+import org.apache.commons.collections4.CollectionUtils;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -218,6 +219,10 @@ public class TFragmentInstanceFactory {
             result.params.setPipeline_sink_dop(instance.getTableSinkDop());
         } else {
             result.params.setSender_id(instance.getIndexInFragment());
+        }
+
+        if (CollectionUtils.isNotEmpty(fragment.getCollectExecStatsIds())) {
+            result.setExec_stats_node_ids(fragment.getCollectExecStatsIds());
         }
     }
 }

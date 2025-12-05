@@ -109,4 +109,9 @@ public class SelectNode extends PlanNode {
     public boolean canUseRuntimeAdaptiveDop() {
         return getChildren().stream().allMatch(PlanNode::canUseRuntimeAdaptiveDop);
     }
+
+    @Override
+    public boolean needCollectExecStats() {
+        return true;
+    }
 }
