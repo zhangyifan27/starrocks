@@ -2383,13 +2383,30 @@ public class Config extends ConfigBase {
      * Number of threads to load remote file's metadata concurrency.
      */
     @ConfField
-    public static int remote_file_metadata_load_concurrency = 32;
+    public static int remote_file_metadata_load_concurrency = 512;
 
     @ConfField
     public static int remote_file_metadata_load_queue_size = Integer.MAX_VALUE;
 
     @ConfField
     public static int remote_file_metadata_load_group = 1;
+
+    /**
+     * Maximum size of per-query cache for remote file metadata.
+     * This controls how many remote file metadata entries can be cached per query.
+     */
+    @ConfField(mutable = true)
+    public static int per_query_cache_max_size = 100000;
+
+    /**
+     * Enable task queue mode for remote file pulling.
+     * When enabled, uses a fixed number of workers to process partition tasks from a queue.
+     * When disabled, submits one task per partition (original mode).
+     * The number of workers is controlled by session variable 'remote_file_pull_worker_count'.
+     * Default is true.
+     */
+    @ConfField(mutable = true)
+    public static boolean enable_remote_file_task_queue_mode = true;
 
     /**
      * Hive MetaStore Client socket timeout in seconds.

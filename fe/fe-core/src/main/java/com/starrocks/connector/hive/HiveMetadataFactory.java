@@ -14,6 +14,7 @@
 
 package com.starrocks.connector.hive;
 
+import com.starrocks.common.Config;
 import com.starrocks.connector.CachingRemoteFileConf;
 import com.starrocks.connector.CachingRemoteFileIO;
 import com.starrocks.connector.HdfsEnvironment;
@@ -77,7 +78,7 @@ public class HiveMetadataFactory {
                 metastore instanceof CachingHiveMetastore,
                 hdfsEnvironment.getConfiguration(), metastoreType, catalogName);
         RemoteFileOperations remoteFileOperations = new RemoteFileOperations(
-                CachingRemoteFileIO.createQueryLevelInstance(remoteFileIO, perQueryCacheRemotePathMaxNum),
+                CachingRemoteFileIO.createQueryLevelInstance(remoteFileIO, Config.per_query_cache_max_size),
                 pullRemoteFileExecutors,
                 updateRemoteFilesExecutor,
                 isRecursive,

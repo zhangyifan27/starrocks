@@ -15,6 +15,7 @@
 package com.starrocks.connector;
 
 import com.google.common.collect.Lists;
+import com.starrocks.common.Config;
 import com.starrocks.common.ExceptionChecker;
 import com.starrocks.common.FeConstants;
 import com.starrocks.connector.exception.StarRocksConnectorException;
@@ -34,6 +35,7 @@ import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
@@ -54,6 +56,11 @@ public class RemoteFileOperationsTest {
         System.setProperty("TQ_PLATFORM_USER_NAME", "olap_metadata");
         System.setProperty("TQ_PLATFORM_USER_CMK", "xxx");
         System.setProperty("TDW_PRI_USER_NAME", "tdwadmin");
+    }
+
+    @Before
+    public void setUp() throws Exception {
+        Config.enable_remote_file_task_queue_mode = false;
     }
 
     @Test
@@ -425,5 +432,237 @@ public class RemoteFileOperationsTest {
         // Verify results
         Assert.assertEquals(2, remoteFileInfos.size());
         Assert.assertTrue(remoteFileInfos.get(0).toString().contains("emoteFileInfo{format=ORC, files=["));
+    }
+
+    @Test
+    public void testGetHiveRemoteFilesWithTaskQueueModeEnabled() {
+        // Enable task queue mode
+        Config.enable_remote_file_task_queue_mode = true;
+
+        HiveRemoteFileIO hiveRemoteFileIO = new HiveRemoteFileIO(new Configuration());
+        FileSystem fs = new MockedRemoteFileSystem(HDFS_HIVE_TABLE);
+        hiveRemoteFileIO.setFileSystem(fs);
+        FeConstants.runningUnitTest = true;
+        ExecutorService executorToRefresh = Executors.newFixedThreadPool(5);
+        ExecutorService executorToLoad = Executors.newFixedThreadPool(5);
+
+        CachingRemoteFileIO cachingFileIO = new CachingRemoteFileIO(hiveRemoteFileIO, executorToRefresh, 10, 10, 10);
+        RemoteFileOperations ops = new RemoteFileOperations(cachingFileIO, executorToLoad, executorToLoad,
+                false, true, new Configuration());
+
+        // Mock ConnectContext and SessionVariable
+        ConnectContext connectContext = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setEnableAsyncPullRemoteFile(true);
+        sessionVariable.setRemoteFilePullWorkerCount(2); // Set worker count to 2
+        connectContext.setSessionVariable(sessionVariable);
+
+        new MockUp<ConnectContext>() {
+            @Mock
+            public ConnectContext get() {
+                return connectContext;
+            }
+        };
+
+        HiveMetaClient client = new HiveMetastoreTest.MockedHiveMetaClient();
+        HiveMetastore metastore = new HiveMetastore(client, "hive_catalog", MetastoreType.HMS);
+        List<String> partitionNames = Lists.newArrayList("col1=1", "col1=2", "col1=3", "col1=4");
+        Map<String, Partition> partitions = metastore.getPartitionsByNames("db1", "table1", partitionNames);
+
+        // Test task queue mode
+        List<RemoteFileInfo> remoteFileInfos = ops.getRemoteFiles(Lists.newArrayList(partitions.values()));
+
+        // Verify results
+        Assert.assertEquals(4, remoteFileInfos.size());
+        Assert.assertTrue(remoteFileInfos.get(0).toString().contains("emoteFileInfo{format=ORC, files=["));
+
+        RemoteFileInfo fileInfo = remoteFileInfos.get(0);
+        Assert.assertEquals(RemoteFileInputFormat.ORC, fileInfo.getFormat());
+        Assert.assertTrue(fileInfo.getFullPath().contains("hive.db/hive_tbl/col1="));
+
+        // Reset config
+        Config.enable_remote_file_task_queue_mode = false;
+    }
+
+    @Test
+    public void testGetHiveRemoteFilesWithTaskQueueModeAndSingleWorker() {
+        // Enable task queue mode
+        Config.enable_remote_file_task_queue_mode = true;
+
+        HiveRemoteFileIO hiveRemoteFileIO = new HiveRemoteFileIO(new Configuration());
+        FileSystem fs = new MockedRemoteFileSystem(HDFS_HIVE_TABLE);
+        hiveRemoteFileIO.setFileSystem(fs);
+        FeConstants.runningUnitTest = true;
+        ExecutorService executorToRefresh = Executors.newFixedThreadPool(5);
+        ExecutorService executorToLoad = Executors.newFixedThreadPool(5);
+
+        CachingRemoteFileIO cachingFileIO = new CachingRemoteFileIO(hiveRemoteFileIO, executorToRefresh, 10, 10, 10);
+        RemoteFileOperations ops = new RemoteFileOperations(cachingFileIO, executorToLoad, executorToLoad,
+                false, true, new Configuration());
+
+        // Mock ConnectContext and SessionVariable with single worker
+        ConnectContext connectContext = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setEnableAsyncPullRemoteFile(true);
+        sessionVariable.setRemoteFilePullWorkerCount(1); // Set worker count to 1
+        connectContext.setSessionVariable(sessionVariable);
+
+        new MockUp<ConnectContext>() {
+            @Mock
+            public ConnectContext get() {
+                return connectContext;
+            }
+        };
+
+        HiveMetaClient client = new HiveMetastoreTest.MockedHiveMetaClient();
+        HiveMetastore metastore = new HiveMetastore(client, "hive_catalog", MetastoreType.HMS);
+        List<String> partitionNames = Lists.newArrayList("col1=1", "col1=2");
+        Map<String, Partition> partitions = metastore.getPartitionsByNames("db1", "table1", partitionNames);
+
+        // Test task queue mode with single worker
+        List<RemoteFileInfo> remoteFileInfos = ops.getRemoteFiles(Lists.newArrayList(partitions.values()));
+
+        // Verify results
+        Assert.assertEquals(2, remoteFileInfos.size());
+        Assert.assertTrue(remoteFileInfos.get(0).toString().contains("emoteFileInfo{format=ORC, files=["));
+
+        // Reset config
+        Config.enable_remote_file_task_queue_mode = false;
+    }
+
+    @Test
+    public void testGetHiveRemoteFilesWithTaskQueueModeAndZeroWorker() {
+        // Enable task queue mode
+        Config.enable_remote_file_task_queue_mode = true;
+
+        HiveRemoteFileIO hiveRemoteFileIO = new HiveRemoteFileIO(new Configuration());
+        FileSystem fs = new MockedRemoteFileSystem(HDFS_HIVE_TABLE);
+        hiveRemoteFileIO.setFileSystem(fs);
+        FeConstants.runningUnitTest = true;
+        ExecutorService executorToRefresh = Executors.newFixedThreadPool(5);
+        ExecutorService executorToLoad = Executors.newFixedThreadPool(5);
+
+        CachingRemoteFileIO cachingFileIO = new CachingRemoteFileIO(hiveRemoteFileIO, executorToRefresh, 10, 10, 10);
+        RemoteFileOperations ops = new RemoteFileOperations(cachingFileIO, executorToLoad, executorToLoad,
+                false, true, new Configuration());
+
+        // Mock ConnectContext and SessionVariable with zero worker (should default to at least 1)
+        ConnectContext connectContext = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setEnableAsyncPullRemoteFile(true);
+        sessionVariable.setRemoteFilePullWorkerCount(0); // Set worker count to 0
+        connectContext.setSessionVariable(sessionVariable);
+
+        new MockUp<ConnectContext>() {
+            @Mock
+            public ConnectContext get() {
+                return connectContext;
+            }
+        };
+
+        HiveMetaClient client = new HiveMetastoreTest.MockedHiveMetaClient();
+        HiveMetastore metastore = new HiveMetastore(client, "hive_catalog", MetastoreType.HMS);
+        List<String> partitionNames = Lists.newArrayList("col1=1", "col1=2");
+        Map<String, Partition> partitions = metastore.getPartitionsByNames("db1", "table1", partitionNames);
+
+        // Test task queue mode with zero worker (should still work with at least 1 worker)
+        List<RemoteFileInfo> remoteFileInfos = ops.getRemoteFiles(Lists.newArrayList(partitions.values()));
+
+        // Verify results
+        Assert.assertEquals(2, remoteFileInfos.size());
+        Assert.assertTrue(remoteFileInfos.get(0).toString().contains("emoteFileInfo{format=ORC, files=["));
+
+        // Reset config
+        Config.enable_remote_file_task_queue_mode = false;
+    }
+
+    @Test
+    public void testGetHiveRemoteFilesWithTaskQueueModeDisabled() {
+        // Disable task queue mode (use original mode)
+        Config.enable_remote_file_task_queue_mode = false;
+
+        HiveRemoteFileIO hiveRemoteFileIO = new HiveRemoteFileIO(new Configuration());
+        FileSystem fs = new MockedRemoteFileSystem(HDFS_HIVE_TABLE);
+        hiveRemoteFileIO.setFileSystem(fs);
+        FeConstants.runningUnitTest = true;
+        ExecutorService executorToRefresh = Executors.newFixedThreadPool(5);
+        ExecutorService executorToLoad = Executors.newFixedThreadPool(5);
+
+        CachingRemoteFileIO cachingFileIO = new CachingRemoteFileIO(hiveRemoteFileIO, executorToRefresh, 10, 10, 10);
+        RemoteFileOperations ops = new RemoteFileOperations(cachingFileIO, executorToLoad, executorToLoad,
+                false, true, new Configuration());
+
+        // Mock ConnectContext and SessionVariable
+        ConnectContext connectContext = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setEnableAsyncPullRemoteFile(true);
+        connectContext.setSessionVariable(sessionVariable);
+
+        new MockUp<ConnectContext>() {
+            @Mock
+            public ConnectContext get() {
+                return connectContext;
+            }
+        };
+
+        HiveMetaClient client = new HiveMetastoreTest.MockedHiveMetaClient();
+        HiveMetastore metastore = new HiveMetastore(client, "hive_catalog", MetastoreType.HMS);
+        List<String> partitionNames = Lists.newArrayList("col1=1", "col1=2");
+        Map<String, Partition> partitions = metastore.getPartitionsByNames("db1", "table1", partitionNames);
+
+        // Test original mode (task queue mode disabled)
+        List<RemoteFileInfo> remoteFileInfos = ops.getRemoteFiles(Lists.newArrayList(partitions.values()));
+
+        // Verify results
+        Assert.assertEquals(2, remoteFileInfos.size());
+        Assert.assertTrue(remoteFileInfos.get(0).toString().contains("emoteFileInfo{format=ORC, files=["));
+    }
+
+    @Test
+    public void testGetHiveRemoteFilesWithTaskQueueModeAndMultipleExecutors() {
+        // Enable task queue mode
+        Config.enable_remote_file_task_queue_mode = true;
+
+        HiveRemoteFileIO hiveRemoteFileIO = new HiveRemoteFileIO(new Configuration());
+        FileSystem fs = new MockedRemoteFileSystem(HDFS_HIVE_TABLE);
+        hiveRemoteFileIO.setFileSystem(fs);
+        FeConstants.runningUnitTest = true;
+        ExecutorService executorToRefresh = Executors.newFixedThreadPool(5);
+        ExecutorService executorToLoad1 = Executors.newFixedThreadPool(3);
+        ExecutorService executorToLoad2 = Executors.newFixedThreadPool(3);
+        List<ExecutorService> executors = Lists.newArrayList(executorToLoad1, executorToLoad2);
+
+        CachingRemoteFileIO cachingFileIO = new CachingRemoteFileIO(hiveRemoteFileIO, executorToRefresh, 10, 10, 10);
+        RemoteFileOperations ops = new RemoteFileOperations(cachingFileIO, executors, executorToLoad1,
+                false, true, new Configuration());
+
+        // Mock ConnectContext and SessionVariable
+        ConnectContext connectContext = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setEnableAsyncPullRemoteFile(true);
+        sessionVariable.setRemoteFilePullWorkerCount(3);
+        connectContext.setSessionVariable(sessionVariable);
+
+        new MockUp<ConnectContext>() {
+            @Mock
+            public ConnectContext get() {
+                return connectContext;
+            }
+        };
+
+        HiveMetaClient client = new HiveMetastoreTest.MockedHiveMetaClient();
+        HiveMetastore metastore = new HiveMetastore(client, "hive_catalog", MetastoreType.HMS);
+        List<String> partitionNames = Lists.newArrayList("col1=1", "col1=2", "col1=3");
+        Map<String, Partition> partitions = metastore.getPartitionsByNames("db1", "table1", partitionNames);
+
+        // Test task queue mode with multiple executors (should use round-robin)
+        List<RemoteFileInfo> remoteFileInfos = ops.getRemoteFiles(Lists.newArrayList(partitions.values()));
+
+        // Verify results
+        Assert.assertEquals(3, remoteFileInfos.size());
+        Assert.assertTrue(remoteFileInfos.get(0).toString().contains("emoteFileInfo{format=ORC, files=["));
+
+        // Reset config
+        Config.enable_remote_file_task_queue_mode = false;
     }
 }

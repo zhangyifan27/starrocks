@@ -84,8 +84,22 @@ public class HiveConnectorInternalMgr {
                 String.valueOf(Config.remote_file_metadata_load_concurrency)));
         this.loadRemoteFileMetadataGroupNum = Integer.parseInt(properties.getOrDefault("remote_file_load_group_num",
                 String.valueOf(Config.remote_file_metadata_load_group)));
+        // Validate remote_file_load_group_num: must be in range [1, 10000]
+        // Too many groups will consume excessive system resources
+        Preconditions.checkArgument(loadRemoteFileMetadataGroupNum > 0 && loadRemoteFileMetadataGroupNum <= 10000,
+                "Invalid remote_file_load_group_num: %s. Must be in range [1, 10000]. " +
+                "This parameter controls the number of thread pool groups for loading remote file metadata.",
+                loadRemoteFileMetadataGroupNum);
+
         this.updateRemoteFileMetadataThreadNum = Integer.parseInt(properties.getOrDefault("remote_file_update_thread_num",
                 String.valueOf(Config.remote_file_metadata_load_concurrency / 4)));
+        // Validate total thread count to prevent resource exhaustion
+        int totalThreads = loadRemoteFileMetadataGroupNum * loadRemoteFileMetadataThreadNum;
+        Preconditions.checkArgument(totalThreads <= 10000,
+                "Total remote file loading threads (%d groups × %d threads = %d) exceeds limit (10000). " +
+                "Please reduce remote_file_load_group_num or remote_file_load_thread_num.",
+                loadRemoteFileMetadataGroupNum, loadRemoteFileMetadataThreadNum, totalThreads);
+
         this.loadRemoteFileMetadataQueueSize = Integer.parseInt(properties.getOrDefault("remote_file_load_queue_size",
                 String.valueOf(Config.remote_file_metadata_load_queue_size)));
         this.enableHmsEventsIncrementalSync = Boolean.parseBoolean(properties.getOrDefault("enable_hms_events_incremental_sync",
