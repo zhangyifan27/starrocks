@@ -323,6 +323,8 @@ public class InsertPlanner {
                 } else {
                     partitionExpr = "'" + DEFAULT + "'";
                 }
+                // if thive table has default partition: case when `ds` in ("20251129") then "p_20251129" when `ds` in ("20251130") then "p_20251130" else "default" end
+                // if thive table has no default partition: case when `ds` in ("20251129") then "p_20251129" when `ds` in ("20251130") then "p_20251130" else "__non_exists__" end
                 LOG.info("partition expr: {}", partitionExpr);
                 Expr generatedColumnExpr = SqlParser.parseSqlToExpr(partitionExpr, SqlModeHelper.MODE_DEFAULT);
 

@@ -21,6 +21,7 @@ import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.starrocks.analysis.TableName;
 import com.starrocks.catalog.HiveTable;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.Pair;
 import com.starrocks.common.Version;
@@ -159,9 +160,8 @@ public class HiveCommitter {
             runAddPartitionsTask();
             try {
                 runUpdateStatsTasks();
-            }  catch (StarRocksConnectorException e) {
+            } catch (Throwable e) {
                 LOG.warn("Ignore hive alter error", e);
-                e.printStackTrace();
             }
         }
     }
@@ -330,6 +330,9 @@ public class HiveCommitter {
     }
 
     private void runUpdateStatsTasks() {
+        if (Config.disable_external_table_ddl) {
+            return;
+        }
         try (Timer ignored = Tracers.watchScope(EXTERNAL, "HIVE.SINK.update_statistics_tasks")) {
             ImmutableList.Builder<CompletableFuture<?>> updateStatsFutures = ImmutableList.builder();
             List<String> failedUpdateStatsTaskDescs = new ArrayList<>();
@@ -370,6 +373,9 @@ public class HiveCommitter {
     }
 
     private void undoUpdateStatsTasks() {
+        if (Config.disable_external_table_ddl) {
+            return;
+        }
         ImmutableList.Builder<CompletableFuture<?>> undoUpdateFutures = ImmutableList.builder();
         for (UpdateStatisticsTask task : updateStatisticsTasks) {
             undoUpdateFutures.add(CompletableFuture.runAsync(() -> {

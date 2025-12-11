@@ -24,7 +24,6 @@ import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
 import com.starrocks.common.AlreadyExistsException;
-import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.common.profile.Timer;
@@ -112,9 +111,6 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public void createDb(String dbName, Map<String, String> properties) throws AlreadyExistsException {
-        if (Config.disable_external_table_ddl) {
-            throw new StarRocksConnectorException("create Database %s not supported", dbName);
-        }
         dbName = convertToLowerCaseIfNeed(dbName);
         if (dbExists(dbName)) {
             throw new AlreadyExistsException("Database Already Exists");
@@ -124,9 +120,6 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public void dropDb(String dbName, boolean isForceDrop) throws MetaNotFoundException {
-        if (Config.disable_external_table_ddl) {
-            throw new StarRocksConnectorException("drop Database %s not supported", dbName);
-        }
         dbName = convertToLowerCaseIfNeed(dbName);
         if (listTableNames(dbName).size() != 0) {
             throw new StarRocksConnectorException("Database %s not empty", dbName);
@@ -157,25 +150,16 @@ public class HiveMetadata implements ConnectorMetadata {
 
     @Override
     public boolean createTable(CreateTableStmt stmt) throws DdlException {
-        if (Config.disable_external_table_ddl) {
-            throw new StarRocksConnectorException("create Table %s not supported", stmt.getTableName());
-        }
         return hmsOps.createTable(stmt);
     }
 
     @Override
     public void createTableLike(CreateTableLikeStmt stmt) throws DdlException {
-        if (Config.disable_external_table_ddl) {
-            throw new StarRocksConnectorException("create Table Like %s not supported", stmt.getTableName());
-        }
         hmsOps.createTableLike(stmt);
     }
 
     @Override
     public void dropTable(DropTableStmt stmt) throws DdlException {
-        if (Config.disable_external_table_ddl) {
-            throw new StarRocksConnectorException("drop Table %s not supported", stmt.getTableName());
-        }
         String dbName = stmt.getDbName();
         String tableName = stmt.getTableName();
         dbName = convertToLowerCaseIfNeed(dbName);
@@ -369,6 +353,10 @@ public class HiveMetadata implements ConnectorMetadata {
                 .map(TSinkCommitInfo::getHive_file_info)
                 .map(fileInfo -> PartitionUpdate.get(fileInfo, stagingDir, table.getTableLocation(), isThiveTable))
                 .collect(Collectors.collectingAndThen(Collectors.toList(), PartitionUpdate::merge));
+        // [name=ds_hive_part=__non_exists__, updateMode=null, writePath=hdfs://xxx/tmp/starrocks/71e2f9ee-8c9d-4595-93f5-320ebc03b542/ds_hive_part=__non_exists__, targetPath=hdfs://xxx/table/__non_exists__, fileNames=[3764e7bf-ce84-11f0-923d-2604bb8934b2_0_31_0.orc], rowCount=1, totalSizeInBytes=559]
+        // When a partition does not exist:
+        // If a default partition is defined, the data will be written to the default partition.
+        // If no default partition exists, the write path will include __non_exists__, and an exception will be thrown in this case.
         LOG.info("partition updates {}", partitionUpdates);
         for (PartitionUpdate partitionUpdate : partitionUpdates) {
             if (partitionUpdate.getName().contains(NON_EXISTS)) {
