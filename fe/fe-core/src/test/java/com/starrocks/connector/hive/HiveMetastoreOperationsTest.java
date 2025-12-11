@@ -75,6 +75,7 @@ public class HiveMetastoreOperationsTest {
                 metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, false);
         hmsOps = new HiveMetastoreOperations(cachingHiveMetastore, true, new Configuration(), MetastoreType.HMS, "hive_catalog");
         Config.report_table_statistics = false;
+        Config.disable_external_table_ddl = false;
     }
 
     @After

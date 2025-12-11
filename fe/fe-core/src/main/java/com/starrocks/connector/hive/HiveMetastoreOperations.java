@@ -23,6 +23,7 @@ import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
+import com.starrocks.common.Config;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.MetaNotFoundException;
 import com.starrocks.connector.ConnectorTableId;
@@ -86,6 +87,9 @@ public class HiveMetastoreOperations {
     }
 
     public void createDb(String dbName, Map<String, String> properties) {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("create Database %s not supported", dbName);
+        }
         properties = properties == null ? new HashMap<>() : properties;
         for (Map.Entry<String, String> entry : properties.entrySet()) {
             String key = entry.getKey();
@@ -108,6 +112,9 @@ public class HiveMetastoreOperations {
     }
 
     public void dropDb(String dbName, boolean force) throws MetaNotFoundException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("drop Database %s not supported", dbName);
+        }
         Database database;
         try {
             database = getDb(dbName);
@@ -144,6 +151,9 @@ public class HiveMetastoreOperations {
     }
 
     public boolean createTable(CreateTableStmt stmt, List<Column> partitionColumns) throws DdlException {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("create Table %s not supported", stmt.getTableName());
+        }
         String dbName = stmt.getDbName();
         String tableName = stmt.getTableName();
         dbName = convertToLowerCaseIfNeed(dbName);
@@ -234,6 +244,9 @@ public class HiveMetastoreOperations {
     }
 
     public void dropTable(String dbName, String tableName) {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("drop Table %s.%s not supported", dbName, tableName);
+        }
         metastore.dropTable(dbName, tableName);
     }
 
@@ -258,10 +271,16 @@ public class HiveMetastoreOperations {
     }
 
     public void addPartitions(String dbName, String tableName, List<HivePartitionWithStats> partitions) {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("add partitions to table %s.%s not supported", dbName, tableName);
+        }
         metastore.addPartitions(dbName, tableName, partitions);
     }
 
     public void dropPartition(String dbName, String tableName, List<String> partitionValues, boolean deleteData) {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("drop partitions from table %s.%s not supported", dbName, tableName);
+        }
         metastore.dropPartition(dbName, tableName, partitionValues, deleteData);
     }
 
@@ -322,11 +341,18 @@ public class HiveMetastoreOperations {
     }
 
     public void updateTableStatistics(String dbName, String tableName, Function<HivePartitionStats, HivePartitionStats> update) {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("update statistics for table %s.%s not supported", dbName, tableName);
+        }
         metastore.updateTableStatistics(dbName, tableName, update);
     }
 
     public void updatePartitionStatistics(String dbName, String tableName, String partitionName,
                                           Function<HivePartitionStats, HivePartitionStats> update) {
+        if (Config.disable_external_table_ddl) {
+            throw new StarRocksConnectorException("update statistics for partition %s.%s.%s not supported", dbName, tableName,
+                    partitionName);
+        }
         metastore.updatePartitionStatistics(dbName, tableName, partitionName, update);
     }
 
