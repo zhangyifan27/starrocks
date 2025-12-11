@@ -113,9 +113,9 @@ public class OlapTableFactory implements AbstractTableFactory {
 
         //check if reached the limit of tables in this db
         if (db.getTables().size() >= Config.max_table_count_limit_per_db) {
-            throw new DdlException("Reached the limit of table count in database " + db.getId() + ", " +
-            "please try to increace the 'max_table_count_limit_per_db' configuration in the frontend."
-            + "Current limit: " + Config.max_table_count_limit_per_db);
+            throw new DdlException("The current number of tables in the database (" + db.getFullName() +
+                    ") has exceeded the system limit of StarRocks (" + Config.max_table_count_limit_per_db + ")." +
+                    " Please consider splitting the database or cleaning up some unused tables.");
         }
 
         // create partition info

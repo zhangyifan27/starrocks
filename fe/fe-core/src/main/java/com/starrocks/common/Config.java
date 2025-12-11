@@ -2024,7 +2024,7 @@ public class Config extends ConfigBase {
      *  The maximum number of tables that can be created in a database.
      */
     @ConfField(mutable = true)
-    public static int max_table_count_limit_per_db = 500;
+    public static int max_table_count_limit_per_db = 1990;
 
     /**
      * If set to true, access hdfs use tauth Authentication

@@ -1237,8 +1237,7 @@ public class RoutineLoadManagerTest {
         try {
             ExceptionChecker.expectThrowsWithMsg(
                     DdlException.class,
-                    "Reached the limit of tablet in cluster, please try to add backends or increace the " +
-                            "'max_concurrent_routine_load_tasks' configuration in the frontend. Current limit: 0",
+                    "Reached the limit of routine load tasks in cluster, please try to add backends. Current limit: 0",
                     () -> routineLoadManager.createRoutineLoadJob(createRoutineLoadStmt)
             );
         } finally {

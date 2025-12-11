@@ -2253,8 +2253,8 @@ public class CreateTableTest {
         Config.max_table_count_limit_per_db = 0;
         try {
             ExceptionChecker.expectThrowsWithMsg(DdlException.class,
-                    "Reached the limit of table count in database 10001, " +
-                    "please try to increase the 'max_table_count_limit_per_db' configuration in the frontend.Current limit: 0",
+                    "The current number of tables in the database (test) has exceeded the system limit of StarRocks (0). " +
+                    "Please consider splitting the database or cleaning up some unused tables.",
                     () -> createTable(
                             "CREATE TABLE test.test_max_table_num_limit_check (\n" +
                                     "                    `k1`  date not null, `k2`  datetime,`k3`  char(20), " +
@@ -2279,9 +2279,8 @@ public class CreateTableTest {
         Config.max_tablet_count_limit = 0;
         try {
             ExceptionChecker.expectThrowsWithMsg(DdlException.class,
-                    "Reached the limit of tablet in cluster, " +
-                            "please try to delete some tables or increase the 'max_tablet_count_limit' configuration in the " +
-                            "frontend. Current limit: 0, current tablet count: 0",
+                    "Reached the limit of tablet in cluster, please try to delete some unused tables. Current limit: 0, " +
+                            "current tablet count: 0",
                     () -> createTable(
                             "CREATE TABLE test.test_max_tablet_count_limit_check (\n" +
                                     "                    `k1`  date not null, `k2`  datetime,`k3`  char(20), " +

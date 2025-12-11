@@ -427,10 +427,8 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
 
     protected void checkDatabaseCountLimit() throws DdlException {
         if (idToDb.size() >= Config.max_database_count_limit) {
-            throw new DdlException(
-                    "Reached the limit of database count in cluster, Current count: " + idToDb.size() + ", " +
-                            "please try to increase the 'max_database_count_limit' configuration in the frontend. " +
-                            "Current limit: " + Config.max_database_count_limit);
+            throw new DdlException("Reached the limit of database count in cluster, Current count: " + idToDb.size() + ", " +
+                    "Please consider drop some unused databases. Current limit: " + Config.max_database_count_limit);
         }
     }
 
@@ -890,9 +888,9 @@ public class LocalMetastore implements ConnectorMetadata, MVRepairHandler, Memor
         }
         //check if reached the limit of tables in this db
         if (db.getTables().size() >= Config.max_table_count_limit_per_db) {
-            throw new DdlException("Reached the limit of table count in database " + db.getId() + ", " +
-                    "please try to increase the 'max_table_count_limit_per_db' configuration in the frontend."
-                    + "Current limit: " + Config.max_table_count_limit_per_db);
+            throw new DdlException("The current number of tables in the database (" + db.getFullName() +
+                    ") has exceeded the system limit of StarRocks (" + Config.max_table_count_limit_per_db + ")." +
+                    " Please consider splitting the database or cleaning up some unused tables.");
         }
         GlobalStateMgr.getCurrentState().getSystemStatistics().checkTabletExceedLimit();
         GlobalStateMgr.getCurrentState().getSystemStatistics().checkStorageUsageExceedLimit();
