@@ -14,6 +14,7 @@
 
 package com.starrocks.scheduler;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Maps;
@@ -35,7 +36,6 @@ import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.SystemVariable;
 import com.starrocks.sql.ast.UserIdentity;
 import com.starrocks.warehouse.Warehouse;
-import org.apache.commons.lang3.StringUtils;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -249,34 +249,12 @@ public class TaskRun implements Comparable<TaskRun> {
         // Use task's definition rather than status's to avoid costing too much metadata memory.
         Preconditions.checkNotNull(task.getDefinition(), "The definition of task run should not null");
         taskRunContext.setDefinition(task.getDefinition());
-        taskRunContext.setPostRun(status.getPostRun());
 
-        runCtx = new ConnectContext(null);
-        if (parentRunCtx != null) {
-            runCtx.setParentConnectContext(parentRunCtx);
-        }
-        runCtx.setGlobalStateMgr(GlobalStateMgr.getCurrentState());
-        runCtx.setCurrentCatalog(task.getCatalogName());
-        runCtx.setDatabase(task.getDbName());
-        runCtx.setQualifiedUser(status.getUser());
-        if (status.getUserIdentity() != null) {
-            runCtx.setCurrentUserIdentity(status.getUserIdentity());
-        } else {
-            runCtx.setCurrentUserIdentity(UserIdentity.createAnalyzedUserIdentWithIp(status.getUser(), "%"));
-        }
-        runCtx.setCurrentRoleIds(runCtx.getCurrentUserIdentity());
-        runCtx.getState().reset();
-        runCtx.setQueryId(UUID.fromString(status.getQueryId()));
-        runCtx.setIsLastStmt(true);
-
-        // NOTE: Ensure the thread local connect context is always the same with the newest ConnectContext.
-        // NOTE: Ensure this thread local is removed after this method to avoid memory leak in JVM.
-        runCtx.setThreadLocalInfo();
+        runCtx = buildTaskRunConnectContext();
 
         Map<String, String> newProperties = refreshTaskProperties(runCtx);
         properties.putAll(newProperties);
         Map<String, String> taskRunContextProperties = Maps.newHashMap();
-        runCtx.resetSessionVariable();
         if (properties != null) {
             handleWarehouseProperty();
             for (String key : properties.keySet()) {
@@ -291,6 +269,9 @@ public class TaskRun implements Comparable<TaskRun> {
         LOG.info("[QueryId:{}] [ThreadLocal QueryId: {}] start to execute task run, task_id:{}, " +
                         "taskRunContextProperties:{}", runCtx.getQueryId(),
                 ConnectContext.get() == null ? "" : ConnectContext.get().getQueryId(), taskId, taskRunContextProperties);
+
+        // Set the post run action
+        taskRunContext.setPostRun(task.getPostRun());
         // If this is the first task run of the job, use its uuid as the job id.
         taskRunContext.setTaskRunId(taskRunId);
         taskRunContext.setCtx(runCtx);
@@ -318,14 +299,45 @@ public class TaskRun implements Comparable<TaskRun> {
         }
 
         // Execute post task action, but ignore any exception
-        if (StringUtils.isNotEmpty(taskRunContext.getPostRun())) {
-            try {
-                processor.postTaskRun(taskRunContext);
-            } catch (Exception ignored) {
-                LOG.warn("Execute post taskRun failed {} ", status, ignored);
-            }
+        try {
+            processor.postTaskRun(taskRunContext);
+        } catch (Exception ignored) {
+            LOG.warn("Execute post taskRun failed {} ", status, ignored);
         }
         return true;
+    }
+
+    @VisibleForTesting
+    public ConnectContext buildTaskRunConnectContext() {
+        // Create a new ConnectContext for this task run
+        final ConnectContext context = new ConnectContext(null);
+
+        if (parentRunCtx != null) {
+            context.setParentConnectContext(parentRunCtx);
+        }
+        context.setGlobalStateMgr(GlobalStateMgr.getCurrentState());
+        context.setCurrentCatalog(task.getCatalogName());
+        context.setDatabase(task.getDbName());
+        context.getState().reset();
+        context.setQueryId(UUID.fromString(status.getQueryId()));
+        context.setIsLastStmt(true);
+        context.resetSessionVariable();
+        switchUser(context);
+
+        // NOTE: Ensure the thread local connect context is always the same with the newest ConnectContext.
+        // NOTE: Ensure this thread local is removed after this method to avoid memory leak in JVM.
+        context.setThreadLocalInfo();
+        return context;
+    }
+
+    private void switchUser(ConnectContext context) {
+        context.setQualifiedUser(status.getUser());
+        if (status.getUserIdentity() != null) {
+            context.setCurrentUserIdentity(status.getUserIdentity());
+        } else {
+            context.setCurrentUserIdentity(UserIdentity.createAnalyzedUserIdentWithIp(status.getUser(), "%"));
+        }
+        context.setCurrentRoleIds(context.getCurrentUserIdentity());
     }
 
     public ConnectContext getRunCtx() {
