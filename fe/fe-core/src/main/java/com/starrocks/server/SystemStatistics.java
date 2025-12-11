@@ -169,9 +169,8 @@ public class SystemStatistics extends FrontendDaemon {
             return;
         }
         if (totalTabletNum >= Config.max_tablet_count_limit) {
-            String errorMessage = "Reached the limit of tablet in cluster, please try to delete some tables or " +
-                    "increase the 'max_tablet_count_limit' configuration in the frontend. Current limit: " +
-                    Config.max_tablet_count_limit + ", current tablet count: " + totalTabletNum;
+            String errorMessage = "Reached the limit of tablet in cluster, please try to delete some unused tables. " +
+                    "Current limit: " + Config.max_tablet_count_limit + ", current tablet count: " + totalTabletNum;
             LOG.warn(errorMessage);
             throw new DdlException(errorMessage);
         }
@@ -195,9 +194,8 @@ public class SystemStatistics extends FrontendDaemon {
             return;
         }
         if (routineLoadTotalConcurrency >= Config.max_concurrent_routine_load_tasks) {
-            String errorMessage = "Reached the limit of tablet in cluster, please try to add backends or " +
-                    "increace the 'max_concurrent_routine_load_tasks' configuration in the frontend. " + "Current limit: " +
-                    Config.max_concurrent_routine_load_tasks + ", current routine load task concurrency: " +
+            String errorMessage = "Reached the limit of routine load tasks in cluster, please try to add backends. " +
+                    "Current limit: " + Config.max_concurrent_routine_load_tasks + ", current routine load task concurrency: " +
                     routineLoadTotalConcurrency;
             LOG.warn(errorMessage);
             throw new DdlException(errorMessage);
