@@ -105,12 +105,20 @@ public class SchemaScanNodeTest {
 
     @Test
     public void testComputeNodeScanRanges() {
+
+        new MockUp<WarehouseManager>() {
+            @Mock
+            public List<Long> getAllComputeNodeIds(long warehouseId) {
+                return Lists.newArrayList(1L);
+            }
+        };
+
         new MockUp<SystemInfoService>() {
             @Mock
-            public List<ComputeNode> getComputeNodes() {
+            public ComputeNode getBackendOrComputeNode(long nodeId) {
                 ComputeNode computeNode = new ComputeNode(1L, "127.0.0.1", 9030);
                 computeNode.setAlive(true);
-                return List.of(computeNode);
+                return computeNode;
             }
         };
 

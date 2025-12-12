@@ -346,9 +346,14 @@ public class SchemaScanNode extends ScanNode {
                     .map(id -> GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendOrComputeNode(id))
                     .collect(Collectors.toList());
         } else {
-            nodeList = Lists.newArrayList();
+            long warehouseId = ConnectContext.get().getCurrentWarehouseId();
+
+            List<Long> computeNodeIds = GlobalStateMgr.getCurrentState().getWarehouseMgr().getAllComputeNodeIds(warehouseId);
+
+            nodeList = computeNodeIds.stream()
+                    .map(id -> GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackendOrComputeNode(id))
+                    .collect(Collectors.toList());
             nodeList.addAll(GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getBackends());
-            nodeList.addAll(GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo().getComputeNodes());
         }
 
         for (ComputeNode node : nodeList) {
