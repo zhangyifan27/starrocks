@@ -346,6 +346,7 @@ public class ConnectProcessor {
         ctx.getAuditEventBuilder().setEventType(EventType.BEFORE_QUERY)
                 .setState(QueryState.MysqlStateType.NOOP.toString())
                 .setStmtId(ctx.getStmtId())
+                .setFeIp(FrontendOptions.getLocalHostAddress())
                 .setQueryId(ctx.getQueryId() == null ? "NaN" : ctx.getQueryId().toString())
                 .setCatalog(ctx.getCurrentCatalog());
 
