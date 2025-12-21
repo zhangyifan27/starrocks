@@ -146,7 +146,7 @@ public abstract class CombineFileInputFormat<K, V> extends
           + minSizeRack);
     }
 
-    FileStatus[] fsStatus = listStatus(job);
+    FileStatus[] fsStatus = FileInputFormatUtils.listStatus(job);
     Path[] paths = FileUtil.stat2Paths(fsStatus);
     Map<String, FileStatus> fileNameToStatus = new HashMap<String, FileStatus>();
     int arraySize = fsStatus.length;

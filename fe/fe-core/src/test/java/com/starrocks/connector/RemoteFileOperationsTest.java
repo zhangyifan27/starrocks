@@ -309,10 +309,9 @@ public class RemoteFileOperationsTest {
         RemoteFileOperations ops = new RemoteFileOperations(cachingFileIO, executorToLoad, executorToLoad,
                 false, true, new Configuration());
 
-        // Mock ConnectContext and SessionVariable to disable async pull
+        // Mock ConnectContext and SessionVariable
         ConnectContext connectContext = new ConnectContext();
         SessionVariable sessionVariable = new SessionVariable();
-        sessionVariable.setEnableAsyncPullRemoteFile(false);
         connectContext.setSessionVariable(sessionVariable);
 
         new MockUp<ConnectContext>() {
@@ -327,10 +326,9 @@ public class RemoteFileOperationsTest {
         List<String> partitionNames = Lists.newArrayList("col1=1", "col1=2");
         Map<String, Partition> partitions = metastore.getPartitionsByNames("db1", "table1", partitionNames);
 
-        // Test synchronous mode (enable_async_pull_remote_file = false)
         List<RemoteFileInfo> remoteFileInfos = ops.getRemoteFiles(Lists.newArrayList(partitions.values()));
 
-        // Verify results are the same as async mode
+        // Verify results
         Assert.assertEquals(2, remoteFileInfos.size());
         Assert.assertTrue(remoteFileInfos.get(0).toString().contains("emoteFileInfo{format=ORC, files=["));
 
@@ -370,10 +368,9 @@ public class RemoteFileOperationsTest {
         RemoteFileOperations ops = new RemoteFileOperations(cachingFileIO, executorToLoad, executorToLoad,
                 false, true, new Configuration());
 
-        // Mock ConnectContext and SessionVariable to enable async pull (default behavior)
+        // Mock ConnectContext and SessionVariable
         ConnectContext connectContext = new ConnectContext();
         SessionVariable sessionVariable = new SessionVariable();
-        sessionVariable.setEnableAsyncPullRemoteFile(true);
         connectContext.setSessionVariable(sessionVariable);
 
         new MockUp<ConnectContext>() {
@@ -388,7 +385,6 @@ public class RemoteFileOperationsTest {
         List<String> partitionNames = Lists.newArrayList("col1=1", "col1=2");
         Map<String, Partition> partitions = metastore.getPartitionsByNames("db1", "table1", partitionNames);
 
-        // Test asynchronous mode (enable_async_pull_remote_file = true)
         List<RemoteFileInfo> remoteFileInfos = ops.getRemoteFiles(Lists.newArrayList(partitions.values()));
 
         // Verify results
@@ -453,7 +449,6 @@ public class RemoteFileOperationsTest {
         // Mock ConnectContext and SessionVariable
         ConnectContext connectContext = new ConnectContext();
         SessionVariable sessionVariable = new SessionVariable();
-        sessionVariable.setEnableAsyncPullRemoteFile(true);
         sessionVariable.setRemoteFilePullWorkerCount(2); // Set worker count to 2
         connectContext.setSessionVariable(sessionVariable);
 
@@ -503,7 +498,6 @@ public class RemoteFileOperationsTest {
         // Mock ConnectContext and SessionVariable with single worker
         ConnectContext connectContext = new ConnectContext();
         SessionVariable sessionVariable = new SessionVariable();
-        sessionVariable.setEnableAsyncPullRemoteFile(true);
         sessionVariable.setRemoteFilePullWorkerCount(1); // Set worker count to 1
         connectContext.setSessionVariable(sessionVariable);
 
@@ -549,7 +543,6 @@ public class RemoteFileOperationsTest {
         // Mock ConnectContext and SessionVariable with zero worker (should default to at least 1)
         ConnectContext connectContext = new ConnectContext();
         SessionVariable sessionVariable = new SessionVariable();
-        sessionVariable.setEnableAsyncPullRemoteFile(true);
         sessionVariable.setRemoteFilePullWorkerCount(0); // Set worker count to 0
         connectContext.setSessionVariable(sessionVariable);
 
@@ -595,7 +588,6 @@ public class RemoteFileOperationsTest {
         // Mock ConnectContext and SessionVariable
         ConnectContext connectContext = new ConnectContext();
         SessionVariable sessionVariable = new SessionVariable();
-        sessionVariable.setEnableAsyncPullRemoteFile(true);
         connectContext.setSessionVariable(sessionVariable);
 
         new MockUp<ConnectContext>() {
@@ -639,7 +631,6 @@ public class RemoteFileOperationsTest {
         // Mock ConnectContext and SessionVariable
         ConnectContext connectContext = new ConnectContext();
         SessionVariable sessionVariable = new SessionVariable();
-        sessionVariable.setEnableAsyncPullRemoteFile(true);
         sessionVariable.setRemoteFilePullWorkerCount(3);
         connectContext.setSessionVariable(sessionVariable);
 

@@ -27,6 +27,7 @@ import com.starrocks.connector.RemoteFileBlockDesc;
 import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileIO;
 import com.starrocks.connector.RemotePathKey;
+import com.starrocks.connector.StorageFormatUtils;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.fs.HdfsUtil;
 import com.starrocks.fs.hdfs.HdfsFs;
@@ -70,12 +71,16 @@ public class HiveRemoteFileIO implements RemoteFileIO {
     public Map<RemotePathKey, List<RemoteFileDesc>> getRemoteFiles(RemotePathKey pathKey) {
         Map<RemotePathKey, List<RemoteFileDesc>> result = null;
         long startTime = System.currentTimeMillis();
-
-        boolean forceScheduleLocal = isForceScheduleLocal(pathKey);
-        if (forceScheduleLocal) {
-            result = getRemoteFiles(pathKey, false);
+        if (pathKey.isSplitStorageFormat()) {
+            List<RemoteFileDesc> remoteFileDescs = StorageFormatUtils.buildRemoteFileDescsForStorageFormat(pathKey.getPath());
+            result = ImmutableMap.of(pathKey, remoteFileDescs);
         } else {
-            result = getRemoteFilesWithFileStatus(pathKey, false);
+            boolean forceScheduleLocal = isForceScheduleLocal(pathKey);
+            if (forceScheduleLocal) {
+                result = getRemoteFiles(pathKey, false);
+            } else {
+                result = getRemoteFilesWithFileStatus(pathKey, false);
+            }
         }
         long elapseMs = System.currentTimeMillis() - startTime;
         if (MetricRepo.hasInit) {

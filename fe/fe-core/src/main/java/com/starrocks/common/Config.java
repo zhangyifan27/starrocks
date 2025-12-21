@@ -2392,11 +2392,12 @@ public class Config extends ConfigBase {
     public static int remote_file_metadata_load_group = 1;
 
     /**
-     * Maximum size of per-query cache for remote file metadata.
-     * This controls how many remote file metadata entries can be cached per query.
+     * Maximum number of entries in the per-query level cache for Hive connector.
+     * This controls the cache size for both Hive Metastore metadata and remote file metadata
+     * during a single query execution.
      */
     @ConfField(mutable = true)
-    public static int per_query_cache_max_size = 100000;
+    public static int per_query_cache_max_size = 10000000;
 
     /**
      * Enable task queue mode for remote file pulling.
@@ -3579,6 +3580,10 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean enable_split_storage_format = true;
+
+    // Whether to use native split method for storage_format
+    @ConfField(mutable = true)
+    public static boolean enable_native_split_storage_format = false;
 
     @ConfField(mutable = true, comment = "Whether to use mysql's bigint type to return Starrocks's largeint type")
     public static boolean use_mysql_bigint_for_largeint = false;

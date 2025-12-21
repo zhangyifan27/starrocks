@@ -31,6 +31,8 @@ public class RemotePathKey {
     private final Optional<String> hudiTableLocation;
     private final Map<String, String> properties;
 
+    private boolean splitStorageFormat = false;
+
     public static class HudiContext {
         // ---- concurrent initialization -----
         public ReentrantLock lock = new ReentrantLock();
@@ -97,6 +99,14 @@ public class RemotePathKey {
 
     public Map<String, String> getProperties() {
         return properties;
+    }
+
+    public boolean isSplitStorageFormat() {
+        return splitStorageFormat;
+    }
+
+    public void setSplitStorageFormat(boolean splitStorageFormat) {
+        this.splitStorageFormat = splitStorageFormat;
     }
 
     @Override

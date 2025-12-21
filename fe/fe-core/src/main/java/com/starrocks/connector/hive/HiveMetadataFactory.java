@@ -74,7 +74,7 @@ public class HiveMetadataFactory {
 
     public HiveMetadata create() {
         HiveMetastoreOperations hiveMetastoreOperations = new HiveMetastoreOperations(
-                createQueryLevelInstance(metastore, perQueryMetastoreMaxNum),
+                createQueryLevelInstance(metastore, Config.per_query_cache_max_size),
                 metastore instanceof CachingHiveMetastore,
                 hdfsEnvironment.getConfiguration(), metastoreType, catalogName);
         RemoteFileOperations remoteFileOperations = new RemoteFileOperations(

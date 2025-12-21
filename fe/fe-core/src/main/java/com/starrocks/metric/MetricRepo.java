@@ -238,8 +238,6 @@ public final class MetricRepo {
 
     // Remote file operations metrics
     public static LongCounterMetric COUNTER_REMOTE_FILE_GET_ALL;
-    public static LongCounterMetric COUNTER_REMOTE_FILE_GET_SYNC;
-    public static LongCounterMetric COUNTER_REMOTE_FILE_GET_ASYNC;
     public static LongCounterMetric COUNTER_REMOTE_FILE_GET_SUCCESS;
     public static LongCounterMetric COUNTER_REMOTE_FILE_GET_ERR;
     public static Histogram HISTO_REMOTE_FILE_OPERATIONS_LATENCY;
@@ -765,12 +763,6 @@ public final class MetricRepo {
         COUNTER_REMOTE_FILE_GET_ALL = new LongCounterMetric("remote_file_get_total", MetricUnit.REQUESTS,
                 "total remote file get requests");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REMOTE_FILE_GET_ALL);
-        COUNTER_REMOTE_FILE_GET_SYNC = new LongCounterMetric("remote_file_get_sync", MetricUnit.REQUESTS,
-                "total synchronous remote file get requests");
-        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REMOTE_FILE_GET_SYNC);
-        COUNTER_REMOTE_FILE_GET_ASYNC = new LongCounterMetric("remote_file_get_async", MetricUnit.REQUESTS,
-                "total asynchronous remote file get requests");
-        STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REMOTE_FILE_GET_ASYNC);
         COUNTER_REMOTE_FILE_GET_SUCCESS = new LongCounterMetric("remote_file_get_success", MetricUnit.REQUESTS,
                 "total successful remote file get requests");
         STARROCKS_METRIC_REGISTER.addMetric(COUNTER_REMOTE_FILE_GET_SUCCESS);

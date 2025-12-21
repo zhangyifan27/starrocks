@@ -25,7 +25,6 @@ import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.HudiTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
-import com.starrocks.common.Config;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
 import com.starrocks.connector.hudi.HudiRemoteFileDesc;
@@ -539,7 +538,7 @@ public class RemoteScanRangeLocations {
                     }
                     sum += fileDesc.getLength();
                     if (remoteFileInfo.getFormat().equals(RemoteFileInputFormat.FORMATFILE)) {
-                        if (Config.enable_split_storage_format) {
+                        if (fileDesc instanceof StorageFormatRemoteFileDesc) {
                             StorageFormatRemoteFileDesc storageFormatFileDesc = (StorageFormatRemoteFileDesc) fileDesc;
                             for (CombineFileSplit split : storageFormatFileDesc.getStorageFormatSplitsInfo()) {
                                 createScanRangeLocationsForStorageFormatSplit(partitionInfos.get(i).getId(),
