@@ -17,7 +17,6 @@ package com.starrocks.planner;
 import com.google.common.base.Preconditions;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.IcebergTable;
-import com.starrocks.catalog.Type;
 import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.iceberg.rest.IcebergRESTCatalog;
 import com.starrocks.credential.CloudConfiguration;
@@ -33,10 +32,11 @@ import com.starrocks.thrift.TDataSinkType;
 import com.starrocks.thrift.TExplainLevel;
 import com.starrocks.thrift.TIcebergTableSink;
 import com.starrocks.utils.TdwUtil;
+import org.apache.iceberg.PartitionField;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.aws.AwsProperties;
-
-import java.util.Locale;
+import org.apache.iceberg.types.Type;
+import org.apache.iceberg.types.Types;
 
 import static com.starrocks.analysis.OutFileClause.PARQUET_COMPRESSION_TYPE_MAP;
 import static org.apache.iceberg.TableProperties.DEFAULT_FILE_FORMAT;
@@ -45,6 +45,7 @@ import static org.apache.iceberg.TableProperties.ORC_COMPRESSION;
 import static org.apache.iceberg.TableProperties.ORC_COMPRESSION_DEFAULT;
 import static org.apache.iceberg.TableProperties.PARQUET_COMPRESSION;
 import static org.apache.iceberg.TableProperties.PARQUET_COMPRESSION_DEFAULT;
+import com.starrocks.common.Config;
 
 public class IcebergTableSink extends DataSink {
     public final static int ICEBERG_SINK_MAX_DOP = 32;
@@ -67,6 +68,25 @@ public class IcebergTableSink extends DataSink {
         this.isStaticPartitionSink = isStaticPartitionSink;
         this.fileFormat = nativeTable.properties().getOrDefault(DEFAULT_FILE_FORMAT, DEFAULT_FILE_FORMAT_DEFAULT)
                 .toLowerCase();
+
+        if (Config.enable_iceberg_write_timestamp_check) {
+            if ("orc".equalsIgnoreCase(fileFormat)) {
+                boolean hasTimestamp = nativeTable.schema().columns().stream()
+                        .anyMatch(c -> c.type() instanceof Types.TimestampType);
+                if (hasTimestamp) {
+                    throw new SemanticException("writing to ORC format with timestamp column is temporarily disabled for iceberg table");
+                }
+            }
+
+            if ("parquet".equalsIgnoreCase(fileFormat)) {
+                boolean hasTimestampWithoutZone = nativeTable.schema().columns().stream()
+                        .anyMatch(c -> c.type() == Types.TimestampType.withoutZone());
+                if (hasTimestampWithoutZone) {
+                    throw new SemanticException("writing to Parquet format with timestamp without timezone column is temporarily disabled for Iceberg table");
+                }
+            }
+        }
+
         this.compressionType = sessionVariable.getConnectorSinkCompressionCodec();
         this.targetMaxFileSize = sessionVariable.getConnectorSinkTargetMaxFileSize();
         String catalogName = icebergTable.getCatalogName();

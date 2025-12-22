@@ -27,6 +27,7 @@ import com.google.gson.annotations.SerializedName;
 import com.starrocks.analysis.DescriptorTable;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.LiteralExpr;
+import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.Util;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.iceberg.IcebergApiConverter;
@@ -529,25 +530,27 @@ public class IcebergTable extends Table {
         for (PartitionField partitionField : partitionFields) {
             Column originColumn = this.getColumn(this.getPartitionSourceName(schema, partitionField));
             String transformName = partitionField.transform().toString().split("\\[")[0];
-            String partitionExpr;
-            org.apache.iceberg.types.Type partitionType = schema.findType(partitionField.sourceId());
-            if (partitionType instanceof Types.TimestampType) {
-                if (((Types.TimestampType) partitionType).shouldAdjustToUTC()) {
-                    throw new RuntimeException("Unsupported partition column timestamp with zone");
-                }
+            boolean isTimestampWithZone = Types.TimestampType.withZone()
+                    .equals(schema.findType(partitionField.sourceId()));
+            String transformedOriginColumn = "`" + originColumn.getName() + "`";
+            if (isTimestampWithZone) {
+                String fromTimeZone = TimeUtils.getSessionTimeZone();
+                transformedOriginColumn = "convert_tz(" + transformedOriginColumn + ", \"" + fromTimeZone
+                        + "\", \"UTC\")";
             }
+            String partitionExpr;
             switch (transformName) {
                 case "hour":
-                    partitionExpr = "date_format(`" + originColumn.getName() + "`, \"%Y-%m-%d-%H\")";
+                    partitionExpr = "date_format(" + transformedOriginColumn + ", \"%Y-%m-%d-%H\")";
                     break;
                 case "day":
-                    partitionExpr = "date_format(`" + originColumn.getName() + "`, \"%Y-%m-%d\")";
+                    partitionExpr = "date_format(" + transformedOriginColumn + ", \"%Y-%m-%d\")";
                     break;
                 case "month":
-                    partitionExpr = "date_format(`" + originColumn.getName() + "`, \"%Y-%m\")";
+                    partitionExpr = "date_format(" + transformedOriginColumn + ", \"%Y-%m\")";
                     break;
                 case "year":
-                    partitionExpr = "date_format(`" + originColumn.getName() + "`, \"%Y\")";
+                    partitionExpr = "date_format(" + transformedOriginColumn + ", \"%Y\")";
                     break;
                 case "identity":
                     partitionExpr = "`" + originColumn.getName() + "`";

@@ -42,15 +42,19 @@ import mockit.Mock;
 import mockit.MockUp;
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.Schema;
 import org.apache.iceberg.SortOrder;
 import org.apache.iceberg.Table;
 import org.apache.iceberg.hadoop.HadoopFileIO;
+import org.apache.iceberg.types.Types;
 import org.junit.Assert;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Stream;
 
 public class InsertPlanTest extends PlanTestBase {
@@ -851,6 +855,13 @@ public class InsertPlanTest extends PlanTestBase {
                 nativeTable.spec();
                 result = PartitionSpec.unpartitioned();
                 minTimes = 0;
+
+                nativeTable.schema();
+                result = new Schema(
+                        Types.NestedField.required(1, "k1", Types.IntegerType.get()),
+                        Types.NestedField.required(2, "k2", Types.IntegerType.get())
+                );
+                minTimes = 0;
             }
         };
 
@@ -899,6 +910,135 @@ public class InsertPlanTest extends PlanTestBase {
                 "     constant exprs: \n" +
                 "         NULL\n";
         Assert.assertEquals(expected, actualRes);
+    }
+
+    @Test
+    public void testInsertIcebergTableSinkWithDisabledFormats() throws Exception {
+        boolean prev = Config.enable_iceberg_write_timestamp_check;
+        Config.enable_iceberg_write_timestamp_check = true;
+        try {
+            String createIcebergCatalogStmt = "create external catalog iceberg_catalog_disabled properties " +
+                    "(\"type\"=\"iceberg\", \"hive.metastore.uris\"=\"thrift://hms:9083\", " +
+                    "\"iceberg.catalog.type\"=\"hive\")";
+            starRocksAssert.withCatalog(createIcebergCatalogStmt);
+            MetadataMgr metadata = starRocksAssert.getCtx().getGlobalStateMgr().getMetadataMgr();
+
+            Table nativeTable = new BaseTable(null, null);
+
+            Column k1 = new Column("k1", Type.INT);
+            Column k2 = new Column("k2", Type.DATETIME);
+            IcebergTable.Builder builder = IcebergTable.builder();
+            builder.setCatalogName("iceberg_catalog_disabled");
+            builder.setRemoteDbName("iceberg_db");
+            builder.setRemoteTableName("iceberg_table_disabled");
+            builder.setSrTableName("iceberg_table_disabled");
+            builder.setFullSchema(Lists.newArrayList(k1, k2));
+            builder.setNativeTable(nativeTable);
+            IcebergTable icebergTable = builder.build();
+
+            new Expectations(icebergTable) {
+                {
+                    icebergTable.getUUID();
+                    result = 12345568;
+                    minTimes = 0;
+
+                    icebergTable.isUnPartitioned();
+                    result = true;
+                    minTimes = 0;
+
+                    icebergTable.getPartitionColumnNames();
+                    result = new ArrayList<>();
+                    minTimes = 0;
+
+                    icebergTable.getGeneratedPartitionColumns();
+                    result = new ArrayList<>();
+                    minTimes = 0;
+                }
+            };
+
+            new MockUp<MetaUtils>() {
+                @Mock
+                public Database getDatabase(String catalogName, String tableName) {
+                    return new Database(12345568, "iceberg_db");
+                }
+                @Mock
+                public com.starrocks.catalog.Table getSessionAwareTable(
+                        ConnectContext context, Database database, TableName tableName) {
+                    return icebergTable;
+                }
+            };
+
+            new Expectations(metadata) {
+                {
+                    metadata.getDb("iceberg_catalog_disabled", "iceberg_db");
+                    result = new Database(12345568, "iceberg_db");
+                    minTimes = 0;
+
+                    metadata.getTable("iceberg_catalog_disabled", "iceberg_db", "iceberg_table_disabled");
+                    result = icebergTable;
+                    minTimes = 0;
+                }
+            };
+
+            Map<String, String> props = new HashMap<>();
+            props.put("write.format.default", "orc");
+
+            Schema timestampSchema = new Schema(
+                    Types.NestedField.required(1, "k1", Types.IntegerType.get()),
+                    Types.NestedField.required(2, "k2", Types.TimestampType.withZone())
+            );
+
+            Schema timestampWithoutZoneSchema = new Schema(
+                    Types.NestedField.required(1, "k1", Types.IntegerType.get()),
+                    Types.NestedField.required(2, "k2", Types.TimestampType.withoutZone())
+            );
+
+            AtomicReference<Schema> currentSchema = new AtomicReference<>(timestampSchema);
+
+            new Expectations(nativeTable) {
+                {
+                    nativeTable.location();
+                    result = "hdfs://fake_location_disabled";
+                    minTimes = 0;
+
+                    nativeTable.sortOrder();
+                    result = SortOrder.unsorted();
+                    minTimes = 0;
+
+                    nativeTable.io();
+                    result = new HadoopFileIO();
+                    minTimes = 0;
+
+                    nativeTable.properties();
+                    result = props;
+                    minTimes = 0;
+
+                    nativeTable.schema();
+                    result = new mockit.Delegate<Schema>() {
+                        Schema delegate() {
+                            return currentSchema.get();
+                        }
+                    };
+                    minTimes = 0;
+                }
+            };
+
+            Assert.assertThrows("writing to ORC format with timestamp column is temporarily disabled for iceberg table",
+                    SemanticException.class,
+                    () -> getInsertExecPlan("explain insert into iceberg_catalog_disabled.iceberg_db.iceberg_table_disabled " +
+                            "select 1, '2023-01-01 00:00:00'"));
+
+            props.put("write.format.default", "parquet");
+            currentSchema.set(timestampWithoutZoneSchema);
+
+            Assert.assertThrows("writing to Parquet format with timestamp without timezone column is temporarily disabled " +
+                            "for Iceberg table",
+                    SemanticException.class,
+                    () -> getInsertExecPlan("explain insert into iceberg_catalog_disabled.iceberg_db.iceberg_table_disabled " +
+                            "select 1, '2023-01-01 00:00:00'"));
+        } finally {
+            Config.enable_iceberg_write_timestamp_check = prev;
+        }
     }
 
     @Test

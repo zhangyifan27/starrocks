@@ -3709,4 +3709,7 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static String cache_node_mode = "default";
+
+    @ConfField(mutable = true)
+    public static boolean enable_iceberg_write_timestamp_check = false;
 }
