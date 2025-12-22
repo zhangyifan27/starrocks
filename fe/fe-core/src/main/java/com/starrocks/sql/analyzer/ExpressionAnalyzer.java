@@ -1122,29 +1122,29 @@ public class ExpressionAnalyzer {
                 }
             }
 
-            // get function by function expression and argument types
+            // deal with the thive function when enable_hive_mode = true
             if (node.getFnName() != null && session.getSessionVariable().isEnableHiveMode()) {
-                String transformFnName = null;
                 if (!node.getFnName().isThiveFunction()) {
-                    transformFnName = Thive2SRFunctionCallTransformer.transformFunction(node.getFnName());
+                    String transformFnName = Thive2SRFunctionCallTransformer.transformFunction(node.getFnName());
+                    if (transformFnName != null) {
+                        fnName = transformFnName;
+                    }
                 }
 
-                if (transformFnName != null) {
-                    fnName = transformFnName;
+                // if it is thive function, transformFunction will set isThiveFunction
+                if (node.getFnName().isThiveFunction()) {
+                    fn = getThiveUdfFunction(node.getFnName(), argumentTypes);
+                    if (fn == null) {
+                        String msg = String.format("No matching function in thive udf with signature: %s(%s)", fnName,
+                                node.getParams().isStar() ? "*" :
+                                        Arrays.stream(argumentTypes).map(Type::toSql).collect(Collectors.joining(", ")));
+                        throw new SemanticException(msg, node.getPos());
+                    }
+                    node.setFn(fn);
+                    node.setType(fn.getReturnType());
+                    FunctionAnalyzer.analyze(node);
+                    return null;
                 }
-            }
-
-            if (node.getFnName() != null && node.getFnName().isThiveFunction()) {
-                if (fn == null) {
-                    String msg = String.format("No matching function in thive udf with signature: %s(%s)", fnName,
-                            node.getParams().isStar() ? "*" :
-                                    Arrays.stream(argumentTypes).map(Type::toSql).collect(Collectors.joining(", ")));
-                    throw new SemanticException(msg, node.getPos());
-                }
-                node.setFn(fn);
-                node.setType(fn.getReturnType());
-                FunctionAnalyzer.analyze(node);
-                return null;
             }
 
             // throw exception direct
