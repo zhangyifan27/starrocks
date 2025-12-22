@@ -73,7 +73,8 @@ public class RemoteScanRangeLocations {
     private List<RemoteFileInfo> partitions = new ArrayList<>();
     private long fileNum = 0;
     private long fileSizeBytes = 0;
-    private long simpleLimitSizeBytes = Long.MAX_VALUE;
+    private long maxScanSizeBytes = Long.MAX_VALUE;
+    private long maxScanRowCount = Long.MAX_VALUE;
 
     // Scan range count and limit tracking
     private boolean isThiveTable = false;
@@ -86,8 +87,27 @@ public class RemoteScanRangeLocations {
             return;
         }
 
+        // Sort selectedPartitionIds by PartitionKey in descending order only when pruning for simple query
+        List<Long> partitionIdList = new ArrayList<>(selectedPartitionIds);
+        if (shouldPrunePartitionForSimpleQuery()) {
+            try {
+                // Only sort when partition count is less than the configured limit
+                int sortMaxNum = ConnectContext.get().getSessionVariable().getHivePartitionSortMaxNum();
+                // sortMaxNum <= 0 means no limit, always sort
+                if (sortMaxNum <= 0 || partitionIdList.size() <= sortMaxNum) {
+                    Map<Long, PartitionKey> idToPartitionKey = scanNodePredicates.getIdToPartitionKey();
+                    Collections.sort(partitionIdList, (o1, o2) -> {
+                        return idToPartitionKey.get(o2).compareTo(idToPartitionKey.get(o1));
+                    });
+                }
+            } catch (Exception e) {
+                LOG.warn("Failed to sort partition ids by partition key, skip sorting, queryId={}: {}",
+                        ConnectContext.get().getQueryId(), e.getMessage());
+            }
+        }
+
         List<PartitionKey> partitionKeys = Lists.newArrayList();
-        for (long partitionId : selectedPartitionIds) {
+        for (long partitionId : partitionIdList) {
             PartitionKey partitionKey = scanNodePredicates.getIdToPartitionKey().get(partitionId);
             DescriptorTable.ReferencedPartitionInfo partitionInfo =
                     new DescriptorTable.ReferencedPartitionInfo(partitionId, partitionKey);
@@ -110,14 +130,12 @@ public class RemoteScanRangeLocations {
                 forceScheduleLocal = sessionVariable.getForceScheduleLocal();
             }
 
-            isThiveTable = table instanceof HiveTable &&
-                    ((HiveTable) table).isThiveTable();
+            isThiveTable = table instanceof HiveTable && ((HiveTable) table).isThiveTable();
         }
 
         HiveMetaStoreTable hiveMetaStoreTable = (HiveMetaStoreTable) table;
         String catalogName = hiveMetaStoreTable.getCatalogName();
-        if (ConnectContext.get() != null && ConnectContext.get().getSessionVariable() != null &&
-                ConnectContext.get().getSimpleLimit() > 0) {
+        if (shouldPrunePartitionForSimpleQuery()) {
             tryPrunePartitionForSimpleQuery(descTbl, catalogName, table, partitionKeys);
         } else {
             try {
@@ -149,16 +167,20 @@ public class RemoteScanRangeLocations {
         }
     }
 
-    private void tryPrunePartitionForSimpleQuery(DescriptorTable descTbl, String catalogName, Table table,
+    void tryPrunePartitionForSimpleQuery(DescriptorTable descTbl, String catalogName, Table table,
                                                  List<PartitionKey> partitionKeys) {
         ConnectContext context = ConnectContext.get();
         long simpleLimit = context.getSimpleLimit();
-        if (simpleLimit < context.getSessionVariable().getPrunePartitionSimpleQueryMaxLimit()) {
+        if (simpleLimit <= context.getSessionVariable().getPrunePartitionSimpleQueryMaxLimit()) {
             long totalSize = 0;
-            long count = 0;
+            long totalFileRowCount = 0;
+            long selectedPartitionNum = 0;
+            boolean firstPartition = true;
+            boolean useRowCount = false;
+            long estimatedRowSize = context.getSessionVariable().getPrunePartitionSimpleQueryAvgRowSize();
 
             List<DescriptorTable.ReferencedPartitionInfo> tmpPartitionInfos = new ArrayList<>();
-            for (int i = partitionKeys.size() - 1; i >= 0; i--) {
+            for (int i = 0; i < partitionKeys.size(); i++) {
                 try {
                     List<RemoteFileInfo> remoteFileInfos = GlobalStateMgr.getCurrentState().getMetadataMgr()
                             .getRemoteFileInfos(catalogName, table, Lists.newArrayList(partitionKeys.get(i)));
@@ -170,19 +192,51 @@ public class RemoteScanRangeLocations {
                             }
                         }
                     }
-                    if (partitionBytes > 0) {
-                        partitions.addAll(remoteFileInfos);
-                        tmpPartitionInfos.add(partitionInfos.get(i));
-                        totalSize += partitionBytes;
-                        count++;
-                        // Assuming avg row 4KB in size, if total file size > 4KB * limit found enough files.
-                        if (totalSize >
-                                context.getSessionVariable().getPrunePartitionSimpleQueryAvgRowSize() * simpleLimit) {
-                            LOG.info("prune partition for simple query {}, limit {}, partitions {}, file sizes {}",
-                                    context.getQueryId(), simpleLimit, count, totalSize);
+                    if (partitionBytes <= 0) {
+                        continue;
+                    }
+
+                    // Determine mode on first valid partition
+                    if (firstPartition) {
+                        long fileRowCount = tryGetRowCountFromFileName(remoteFileInfos);
+                        if (fileRowCount > 0) {
+                            useRowCount = true;
+                        } else {
+                            estimatedRowSize = Math.max(estimatedRowSize, getEstimatedRowSize(table));
+                        }
+                        firstPartition = false;
+                    }
+
+                    // Add partition to result (common for both modes)
+                    partitions.addAll(remoteFileInfos);
+                    tmpPartitionInfos.add(partitionInfos.get(i));
+                    totalSize += partitionBytes;
+                    selectedPartitionNum++;
+
+                    // Check if we have enough data
+                    if (useRowCount) {
+                        long fileRowCount = tryGetRowCountFromFileName(remoteFileInfos);
+                        if (fileRowCount > 0) {
+                            totalFileRowCount += fileRowCount;
+                        }
+                        if (totalFileRowCount >= simpleLimit) {
                             partitionInfos = tmpPartitionInfos;
-                            simpleLimitSizeBytes =
-                                    context.getSessionVariable().getPrunePartitionSimpleQueryAvgRowSize() * simpleLimit;
+                            maxScanSizeBytes = Long.MAX_VALUE;
+                            maxScanRowCount = simpleLimit;
+                            LOG.info("prune partition for simple query (row count mode) {}, limit {}, partitions {}, " +
+                                            "file sizes {}, with file row count {}",
+                                    context.getQueryId(), simpleLimit, selectedPartitionNum, totalSize, totalFileRowCount);
+                            break;
+                        }
+                    } else {
+                        // File size mode: estimate based on avg row size
+                        if (totalSize > estimatedRowSize * simpleLimit) {
+                            partitionInfos = tmpPartitionInfos;
+                            maxScanSizeBytes = estimatedRowSize * simpleLimit;
+                            maxScanRowCount = Long.MAX_VALUE;
+                            LOG.info("prune partition for simple query (file size mode) {}, limit {}, partitions {}, " +
+                                            "file sizes {}, estimatedRowSize {}", context.getQueryId(), simpleLimit,
+                                    selectedPartitionNum, totalSize, estimatedRowSize);
                             break;
                         }
                     }
@@ -206,6 +260,71 @@ public class RemoteScanRangeLocations {
                 LOG.error("Failed to get remote files", e);
                 throw e;
             }
+        }
+    }
+
+    long tryGetRowCountFromFileName(List<RemoteFileInfo> remoteFileInfos) {
+        long totalRowCount = -1;
+        for (RemoteFileInfo fileInfo : remoteFileInfos) {
+            for (RemoteFileDesc fileDesc : fileInfo.getFiles()) {
+                long rowCount = getFileRowCount(fileDesc.getFileName());
+                if (rowCount >= 0) {
+                    if (totalRowCount == -1) {
+                        totalRowCount = 0;
+                    }
+                    totalRowCount += rowCount;
+                }
+            }
+        }
+        return totalRowCount;
+    }
+
+    /**
+     * Check if partition pruning should be performed for simple query.
+     * Returns true when:
+     * 1. ConnectContext exists
+     * 2. SessionVariable exists
+     * 3. SimpleLimit is greater than 0
+     */
+    boolean shouldPrunePartitionForSimpleQuery() {
+        ConnectContext context = ConnectContext.get();
+        return context != null && context.getSessionVariable() != null && context.getSimpleLimit() > 0;
+    }
+
+    long getFileRowCount(String fileName) {
+        try {
+            if (fileName.endsWith(".rcf")) {
+                int index = fileName.lastIndexOf("_");
+                String sub = fileName.substring(index + 1, fileName.length() - 4);
+                return Long.parseLong(sub);
+            } else if (fileName.endsWith(".orcf")) {
+                int index = fileName.lastIndexOf("_");
+                String sub = fileName.substring(index + 1, fileName.length() - 5);
+                return Long.parseLong(sub);
+            } else {
+                return -1;
+            }
+        } catch (Throwable e) {
+            return -1;
+        }
+    }
+
+    /**
+     * Estimate the row size in bytes based on the data columns of a HiveMetaStoreTable.
+     */
+    long getEstimatedRowSize(Table table) {
+        if (!(table instanceof HiveMetaStoreTable)) {
+            return -1;
+        }
+        try {
+            HiveMetaStoreTable hiveMetaStoreTable = (HiveMetaStoreTable) table;
+            List<String> dataColumnNames = hiveMetaStoreTable.getDataColumnNames();
+            return table.getColumns().stream()
+                    .filter(column -> dataColumnNames.contains(column.getName()))
+                    .mapToLong(column -> column.getType().getTypeSize())
+                    .sum();
+        } catch (Throwable e) {
+            return -1;
         }
     }
 
@@ -523,6 +642,8 @@ public class RemoteScanRangeLocations {
 
         if (table instanceof HiveTable) {
             long sum = 0;
+            long row = 0;
+            partitionLoop:
             for (int i = 0; i < partitions.size(); i++) {
                 DataCacheOptions dataCacheOptions = null;
                 if (dataCacheOptionsList.isPresent()) {
@@ -533,10 +654,17 @@ public class RemoteScanRangeLocations {
                     if (fileDesc.getLength() == 0) {
                         continue;
                     }
-                    if (sum > simpleLimitSizeBytes) {
-                        continue;
+                    // Check if we have reached the simple limit threshold
+                    if (sum > maxScanSizeBytes || row > maxScanRowCount) {
+                        break partitionLoop;
                     }
                     sum += fileDesc.getLength();
+                    if (maxScanRowCount != Long.MAX_VALUE) {
+                        long rowCount = getFileRowCount(fileDesc.getFileName());
+                        if (rowCount > 0) {
+                            row += rowCount;
+                        }
+                    }
                     if (remoteFileInfo.getFormat().equals(RemoteFileInputFormat.FORMATFILE)) {
                         if (fileDesc instanceof StorageFormatRemoteFileDesc) {
                             StorageFormatRemoteFileDesc storageFormatFileDesc = (StorageFormatRemoteFileDesc) fileDesc;

@@ -809,6 +809,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String SCAN_HIVE_DATAFILE_NUM_LIMIT = "scan_hive_datafile_num_limit";
 
+    public static final String HIVE_PARTITION_SORT_MAX_NUM = "hive_partition_sort_max_num";
+
     public static final String SCAN_OLAP_PARTITION_NUM_LIMIT = "scan_olap_partition_num_limit";
 
     public static final String AUDIT_EXECUTE_STMT = "audit_execute_stmt";
@@ -2260,6 +2262,11 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     // For the maximum number of partitions allowed to be scanned in a single olap table, 0 means no limit.
     @VarAttr(name = SCAN_OLAP_PARTITION_NUM_LIMIT)
     private int scanOlapPartitionNumLimit = 0;
+
+    // For the maximum number of hive partitions to sort, 0 means no limit.
+    // Default is 10000, when partition count exceeds this limit, skip sorting to improve performance.
+    @VarAttr(name = HIVE_PARTITION_SORT_MAX_NUM)
+    private int hivePartitionSortMaxNum = 10000;
 
     @VariableMgr.VarAttr(name = AUDIT_EXECUTE_STMT)
     private boolean auditExecuteStmt = false;
@@ -4461,6 +4468,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.scanOlapPartitionNumLimit = scanOlapPartitionNumLimit;
     }
 
+    public int getHivePartitionSortMaxNum() {
+        return hivePartitionSortMaxNum;
+    }
+
+    public void setHivePartitionSortMaxNum(int hivePartitionSortMaxNum) {
+        this.hivePartitionSortMaxNum = hivePartitionSortMaxNum;
+    }
+
     public boolean enableCboDeriveRangeJoinPredicate() {
         return cboDeriveRangeJoinPredicate;
     }
@@ -4759,7 +4774,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     }
 
     @VariableMgr.VarAttr(name = PRUNE_PARTITION_SIMPLE_QUERY_MAX_LIMIT)
-    private long prunePartitionSimpleQueryMaxLimit = 1000;
+    private long prunePartitionSimpleQueryMaxLimit = 10000;
 
     public long getPrunePartitionSimpleQueryMaxLimit() {
         return prunePartitionSimpleQueryMaxLimit;
@@ -4770,7 +4785,7 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     }
 
     @VariableMgr.VarAttr(name = PRUNE_PARTITION_SIMPLE_QUERY_AVG_ROW_SIZE)
-    private long prunePartitionSimpleQueryAvgRowSize = 4096;
+    private long prunePartitionSimpleQueryAvgRowSize = 10240;
 
     public long getPrunePartitionSimpleQueryAvgRowSize() {
         return prunePartitionSimpleQueryAvgRowSize;

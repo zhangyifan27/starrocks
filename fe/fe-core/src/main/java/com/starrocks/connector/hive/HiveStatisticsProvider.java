@@ -78,6 +78,13 @@ public class HiveStatisticsProvider {
             List<ColumnRefOperator> columns,
             List<PartitionKey> partitionKeys) {
         Statistics.Builder builder = Statistics.builder();
+        if (ConnectContext.get() != null && ConnectContext.get().getSimpleLimit() > 0) {
+            builder.setTableRowCountMayInaccurate(true);
+            for (ColumnRefOperator columnRefOperator : columns) {
+                builder.addColumnStatistic(columnRefOperator, ColumnStatistic.unknown());
+            }
+            return builder.build();
+        }
         HiveMetaStoreTable hmsTbl = (HiveMetaStoreTable) table;
         if (hmsTbl.isUnPartitioned()) {
             HivePartitionStats tableStats = hmsOps.getTableStatistics(hmsTbl.getDbName(), hmsTbl.getTableName());

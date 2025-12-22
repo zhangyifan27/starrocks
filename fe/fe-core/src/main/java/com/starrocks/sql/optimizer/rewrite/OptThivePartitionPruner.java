@@ -437,7 +437,7 @@ public class OptThivePartitionPruner {
         if (!partitionPruner.isPruningPredicateCanBeEvaluated()) {
             scanOperatorPredicates.setPruningPredicateCanBeEvaluated(false);
         }
-        Collection<Long> finalPartitions = processThiveDefaultParititions(selectedPartitionIds, defaultPartitionIds,
+        Collection<Long> finalPartitions = processThiveDefaultParititions(operator, selectedPartitionIds, defaultPartitionIds,
                 new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
         scanOperatorPredicates.setSelectedPartitionIds(finalPartitions);
 
@@ -758,13 +758,14 @@ public class OptThivePartitionPruner {
         if (partitionPruner.getNoEvalConjuncts().size() > 0) {
             scanOperatorPredicates.setPruningPredicateCanBeEvaluated(false);
         }
-        Collection<Long> finalPartitions = processThiveDefaultParititions(selectedPartitionIds, defaultPartitionIds,
+        Collection<Long> finalPartitions = processThiveDefaultParititions(operator, selectedPartitionIds, defaultPartitionIds,
                 new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
         scanOperatorPredicates.setSelectedPartitionIds(finalPartitions);
         //scanOperatorPredicates.getNoEvalPartitionConjuncts().addAll(partitionPruner.getNoEvalConjuncts());
     }
 
-    static Collection<Long> processThiveDefaultParititions(Collection<Long> selectedPartitionIds,
+    static Collection<Long> processThiveDefaultParititions(LogicalScanOperator operator,
+                                                           Collection<Long> selectedPartitionIds,
                                                            Set<Long> defaultPartitionIds,
                                                            Collection<Long> allPartitionIds) {
         if (selectedPartitionIds == null) {
@@ -772,7 +773,9 @@ public class OptThivePartitionPruner {
             if (ConnectContext.get().getSessionVariable().getExcludeThiveDefaultPartition()) {
                 //if excludeThiveDefaultPartition exclude default partitions
                 allPartitionIds.removeAll(defaultPartitionIds);
+                return allPartitionIds;
             }
+            disableSimpleLimitForDefaultPartition(operator, defaultPartitionIds);
             return allPartitionIds;
         } else if (selectedPartitionIds.isEmpty()) {
             // ListPartitionPruner.prune: An empty set is returned if no match partitions.
@@ -780,11 +783,31 @@ public class OptThivePartitionPruner {
                 //if excludeThiveDefaultPartition return empty set.
                 return selectedPartitionIds;
             }
+            disableSimpleLimitForDefaultPartition(operator, defaultPartitionIds);
             // return default
             return defaultPartitionIds;
         } else {
             return selectedPartitionIds;
         }
+    }
+
+    /**
+     * Disable SimpleLimit optimization when querying default partition with predicates.
+     * The default partition may contain data from multiple partitions, so we cannot
+     * safely apply the SimpleLimit optimization when filter conditions exist.
+     */
+    static void disableSimpleLimitForDefaultPartition(LogicalScanOperator operator, Set<Long> defaultPartitionIds) {
+        ConnectContext context = ConnectContext.get();
+        if (context == null || context.getSimpleLimit() <= 0) {
+            return;
+        }
+        if (defaultPartitionIds == null || defaultPartitionIds.isEmpty()) {
+            return;
+        }
+        if (operator.getPredicate() == null) {
+            return;
+        }
+        context.setSimpleLimit(-1);
     }
 
     static void thiveHivePartColumnComputePartitionInfo(LogicalScanOperator operator,
@@ -992,7 +1015,7 @@ public class OptThivePartitionPruner {
         }
 
         // add or not add thive default partitions
-        Collection<Long> finalPartitions = processThiveDefaultParititions(matches, level1ListDefaultPartitionIds,
+        Collection<Long> finalPartitions = processThiveDefaultParititions(operator, matches, level1ListDefaultPartitionIds,
                 new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
         LOG.debug(hmsTable.getTableName() + " twoLevelListRangePrunePartitions selectedPartitionIds = " + matches +
                 ", level1ListDefaultPartitionIds = " + level1ListDefaultPartitionIds + ", finalPartitions = " +
@@ -1084,7 +1107,7 @@ public class OptThivePartitionPruner {
         LOG.debug(hmsTable.getTableName() + " level1 ListPartitionPruner selectedPartitionIds = " + selectedPartitionIds);
         // process thive default parititions
         Collection<Long> finalPartitions =
-                processThiveDefaultParititions(selectedPartitionIds, level1ListDefaultPartitionIds,
+                processThiveDefaultParititions(operator, selectedPartitionIds, level1ListDefaultPartitionIds,
                         new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
         LOG.debug(hmsTable.getTableName() + " twoLevelListHashPrunePartitions selectedPartitionIds = " +
                 selectedPartitionIds + ", level1ListDefaultPartitionIds = " + level1ListDefaultPartitionIds +
@@ -1273,7 +1296,7 @@ public class OptThivePartitionPruner {
 
         // process thive default partitions
         Collection<Long> finalPartitions =
-                processThiveDefaultParititions(matches, level2ListDefaultPartitionIds,
+                processThiveDefaultParititions(operator, matches, level2ListDefaultPartitionIds,
                         new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
         LOG.debug(hmsTable.getTableName() + " twoLevelRangeListPrunePartitions selectedPartitionIds = " +
                 finalPartitions);
