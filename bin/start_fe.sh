@@ -216,6 +216,23 @@ fi
 
 LOG_FILE=$LOG_DIR/fe.out
 
+# Log rotation: when fe.out exceeds 1GB, rename it to fe.out.timestamp
+MAX_LOG_SIZE=$((1024 * 1024 * 1024))
+if [ -f "$LOG_FILE" ]; then
+    # Use -Lc%s to follow symbolic links and get the target file size (Linux only)
+    LOG_SIZE=$(stat -Lc%s "$LOG_FILE" 2>/dev/null || echo 0)
+    if [ "$LOG_SIZE" -gt "$MAX_LOG_SIZE" ]; then
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        mv "$LOG_FILE" "${LOG_FILE}.${TIMESTAMP}"
+
+        # Keep only the last 10 rotated log files to save disk space
+        LOG_DIR_PATH=$(dirname "$LOG_FILE")
+        LOG_BASE_NAME=$(basename "$LOG_FILE")
+        find "$LOG_DIR_PATH" -maxdepth 1 -name "${LOG_BASE_NAME}.*" -type f -printf '%T@\t%p\n' 2>/dev/null | \
+            sort -rn | awk -F'\t' 'NR>10 {print $2}' | xargs -r rm -f
+    fi
+fi
+
 if [ ${RUN_LOG_CONSOLE} -eq 1 ] ; then
     if [ ! -w $STARROCKS_HOME/conf/fe.conf ] ; then
         # workaround configmap readonly, can't change its content

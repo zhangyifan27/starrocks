@@ -223,6 +223,23 @@ if [ ${RUN_CN} -eq 1 ]; then
     LOG_FILE=${LOG_DIR}/cn.out
 fi
 
+# Log rotation: when log file exceeds 1GB, rename it to log_file.timestamp
+MAX_LOG_SIZE=$((1024 * 1024 * 1024))
+if [ -f "$LOG_FILE" ]; then
+    # Use -Lc%s to follow symbolic links and get the target file size (Linux only)
+    LOG_SIZE=$(stat -Lc%s "$LOG_FILE" 2>/dev/null || echo 0)
+    if [ "$LOG_SIZE" -gt "$MAX_LOG_SIZE" ]; then
+        TIMESTAMP=$(date +%Y%m%d_%H%M%S)
+        mv "$LOG_FILE" "${LOG_FILE}.${TIMESTAMP}"
+
+        # Keep only the last 10 rotated log files to save disk space
+        LOG_DIR_PATH=$(dirname "$LOG_FILE")
+        LOG_BASE_NAME=$(basename "$LOG_FILE")
+        find "$LOG_DIR_PATH" -maxdepth 1 -name "${LOG_BASE_NAME}.*" -type f -printf '%T@\t%p\n' 2>/dev/null | \
+            sort -rn | awk -F'\t' 'NR>10 {print $2}' | xargs -r rm -f
+    fi
+fi
+
 # enable DD profile
 if [ "${ENABLE_DATADOG_PROFILE}" == "true" ] && [ -f "${STARROCKS_HOME}/datadog/ddprof" ]; then
     START_BE_CMD="${STARROCKS_HOME}/datadog/ddprof -l debug ${START_BE_CMD}"
