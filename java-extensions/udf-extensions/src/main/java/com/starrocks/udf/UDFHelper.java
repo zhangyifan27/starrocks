@@ -60,6 +60,8 @@ public class UDFHelper {
     public static final int TYPE_DATETIME = 51;
 
     public static final String JAVA_OBJECT_ARRAY_TYPE = "[Ljava.lang.Object;";
+    public static final String THIVE_UDF_WRAPPER_CLASS = "com.tencent.starrocks.udf.ThiveUDFWrapper";
+    public static final String JAVA_OBJECT_2D_ARRAY_TYPE = "[[Ljava.lang.Object;";
 
     private static final byte[] emptyBytes = new byte[0];
 
@@ -921,6 +923,20 @@ public class UDFHelper {
     public static Object[] batchCall(Object o, Method method, int batchSize, Object[] column)
             throws Throwable {
         Object[][] inputs = (Object[][]) column;
+        Class<?>[] parameterTypes = method.getParameterTypes();
+
+        // Check if it's ThiveUDFWrapper class and the method parameter is Object[][] type, if so use batch call
+        if (o.getClass().getName().equals(THIVE_UDF_WRAPPER_CLASS)
+                && parameterTypes.length == 1
+                && parameterTypes[0].getName().equals(JAVA_OBJECT_2D_ARRAY_TYPE)) {
+            try {
+                // Batch call: pass the entire inputs array directly
+                return (Object[]) method.invoke(o, (Object) inputs);
+            } catch (InvocationTargetException e) {
+                throw e.getTargetException();
+            }
+        }
+
         Object[] parameter = new Object[inputs.length];
         Object[] res = (Object[]) Array.newInstance(method.getReturnType(), batchSize);
 
@@ -929,9 +945,8 @@ public class UDFHelper {
                 for (int j = 0; j < column.length; ++j) {
                     parameter[j] = inputs[j][i];
                 }
-                Class<?>[] parameters = method.getParameterTypes();
-                if (parameters.length == 1
-                        && parameters[0].getName().equals(JAVA_OBJECT_ARRAY_TYPE)) {
+                if (parameterTypes.length == 1
+                        && parameterTypes[0].getName().equals(JAVA_OBJECT_ARRAY_TYPE)) {
                     res[i] = method.invoke(o, (Object) parameter);
                 } else {
                     res[i] = method.invoke(o, parameter);
