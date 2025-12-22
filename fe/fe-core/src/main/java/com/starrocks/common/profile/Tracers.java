@@ -281,8 +281,22 @@ public class Tracers {
         }
     }
 
-    public static String getSlowOperationsSummary() {
+    /**
+     * Get top N slowest leaf operations (operations without children) sorted by total time.
+     * @param topN the number of top slowest leaf operations to return
+     * @return formatted string of top N slowest leaf operations
+     */
+    public static String getTopSlowLeafOperations(int topN) {
         Tracers tracers = THREAD_LOCAL.get();
-        return tracers.allTracer[1].getSlowOperationsSummary();
+        return tracers.allTracer[1].getTopSlowLeafOperations(topN);
+    }
+
+    /**
+     * Get all leaf timers (operations without children) sorted by total time in descending order.
+     * @return list of leaf timers sorted by total time descending
+     */
+    public static List<Timer> getLeafTimersSortedByTime() {
+        Tracers tracers = THREAD_LOCAL.get();
+        return tracers.allTracer[1].getLeafTimersSortedByTime();
     }
 }

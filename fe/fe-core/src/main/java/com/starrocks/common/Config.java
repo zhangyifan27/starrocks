@@ -3637,7 +3637,7 @@ public class Config extends ConfigBase {
     public static int print_remote_file_names_max_length = 200;
 
     @ConfField(mutable = true)
-    public static boolean use_lowercase_access_oms = false;
+    public static boolean use_lowercase_access_oms = true;
 
     @ConfField(mutable = true)
     public static boolean check_warehouse_usage_privilege = true;

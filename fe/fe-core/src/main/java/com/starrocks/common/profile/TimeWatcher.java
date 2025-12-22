@@ -104,5 +104,15 @@ public class TimeWatcher {
         public long getTotalTime() {
             return stopWatch.elapsed(TimeUnit.MILLISECONDS);
         }
+
+        @Override
+        public int getScopeLevel() {
+            return scopeLevel;
+        }
+
+        @Override
+        public int getCount() {
+            return count;
+        }
     }
 }

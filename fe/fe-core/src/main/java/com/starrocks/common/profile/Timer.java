@@ -42,4 +42,12 @@ public class Timer implements AutoCloseable {
     public List<Long> getAllTimePoint() {
         return Collections.emptyList();
     }
+
+    public int getScopeLevel() {
+        return 0;
+    }
+
+    public int getCount() {
+        return 0;
+    }
 }

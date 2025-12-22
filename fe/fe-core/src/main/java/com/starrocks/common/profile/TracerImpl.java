@@ -17,6 +17,8 @@ package com.starrocks.common.profile;
 import com.google.common.base.Stopwatch;
 import com.starrocks.common.util.RuntimeProfile;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +26,7 @@ import java.util.Optional;
 import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 class TracerImpl extends Tracer {
     private final Stopwatch tracerCost = Stopwatch.createUnstarted();
@@ -249,17 +252,49 @@ class TracerImpl extends Tracer {
         return watcher.getTimer(name);
     }
 
-    private static final long SLOW_OPERATION_THRESHOLD_MS = 1000;
-
     @Override
-    public String getSlowOperationsSummary() {
+    public String getTopSlowLeafOperations(int topN) {
+        List<Timer> leafTimers = getLeafTimersSortedByTime();
         StringBuilder sb = new StringBuilder();
-        for (Timer timer : watcher.getAllTimerWithOrder()) {
-            if (timer.getTotalTime() > SLOW_OPERATION_THRESHOLD_MS) {
-                sb.append(timer);
-                sb.append("\n");
+        sb.append("Top ").append(Math.min(topN, leafTimers.size())).append(" slowest leaf operations: ");
+        int rank = 1;
+        List<Timer> topTimers = leafTimers.stream().limit(topN).collect(Collectors.toList());
+        for (int i = 0; i < topTimers.size(); i++) {
+            Timer timer = topTimers.get(i);
+            sb.append(String.format("%d. %s: %dms (count: %d)",
+                    rank++, timer.name(), timer.getTotalTime(), timer.getCount()));
+            if (i < topTimers.size() - 1) {
+                sb.append(", ");
             }
         }
         return sb.toString();
+    }
+
+    @Override
+    public List<Timer> getLeafTimersSortedByTime() {
+        List<Timer> allTimers = watcher.getAllTimerWithOrder();
+        List<Timer> leafTimers = new ArrayList<>();
+
+        // Identify leaf timers: a timer is a leaf if the next timer has a smaller or equal scope level
+        for (int i = 0; i < allTimers.size(); i++) {
+            Timer current = allTimers.get(i);
+            boolean isLeaf = true;
+
+            // Check if next timer has a higher scope level (meaning current has children)
+            if (i + 1 < allTimers.size()) {
+                Timer next = allTimers.get(i + 1);
+                if (next.getScopeLevel() > current.getScopeLevel()) {
+                    isLeaf = false;
+                }
+            }
+
+            if (isLeaf) {
+                leafTimers.add(current);
+            }
+        }
+
+        return leafTimers.stream()
+                .sorted(Comparator.comparingLong(Timer::getTotalTime).reversed())
+                .collect(Collectors.toList());
     }
 }

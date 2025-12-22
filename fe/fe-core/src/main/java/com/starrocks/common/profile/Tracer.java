@@ -77,7 +77,21 @@ public abstract class Tracer {
         return Optional.empty();
     }
 
-    public String getSlowOperationsSummary() {
+    /**
+     * Get top N slowest leaf operations (operations without children) sorted by total time.
+     * Leaf operations are identified by having the maximum scope level among consecutive timers.
+     * @param topN the number of top slowest leaf operations to return
+     * @return formatted string of top N slowest leaf operations
+     */
+    public String getTopSlowLeafOperations(int topN) {
         return "";
+    }
+
+    /**
+     * Get all leaf timers (operations without children) sorted by total time in descending order.
+     * @return list of leaf timers sorted by total time descending
+     */
+    public List<Timer> getLeafTimersSortedByTime() {
+        return Collections.emptyList();
     }
 }

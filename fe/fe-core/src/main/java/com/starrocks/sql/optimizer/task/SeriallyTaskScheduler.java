@@ -41,7 +41,7 @@ public class SeriallyTaskScheduler implements TaskScheduler {
         while (!tasks.empty()) {
             long watch = context.getOptimizerContext().optimizerElapsedMs();
             if (timeout > 0 && watch > timeout) {
-                String slowOpsSummary = Tracers.getSlowOperationsSummary();
+                String slowOpsSummary = Tracers.getTopSlowLeafOperations(2);
                 // Should have at least one valid plan
                 // group will be null when in rewrite phase
                 // memo may be null for rule-based optimizer
@@ -62,8 +62,8 @@ public class SeriallyTaskScheduler implements TaskScheduler {
 
                     } else {
                         throw new StarRocksPlannerException("StarRocks planner use long time " + timeout +
-                                " ms in " + (group == null ? "logical" : "memo") + " phase, This probably because \n" +
-                                slowOpsSummary + "1. try query again, 2. enlarge new_planner_optimize_timeout session variable",
+                                " ms in " + (group == null ? "logical" : "memo") + " phase, " + slowOpsSummary +
+                                ". You could 1. try query again, 2. enlarge new_planner_optimize_timeout session variable",
                                 ErrorType.INTERNAL_ERROR);
                     }
                 }

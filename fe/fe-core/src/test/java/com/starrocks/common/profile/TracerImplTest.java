@@ -199,91 +199,6 @@ public class TracerImplTest {
     }
 
     @Test
-    public void testGetSlowOperationsSummary() throws InterruptedException {
-        // Test getting slow operations summary
-        try (Timer fastTimer = tracer.watchScope("FastOperation")) {
-            Thread.sleep(10);
-        }
-        
-        try (Timer slowTimer = tracer.watchScope("SlowOperation")) {
-            Thread.sleep(1100); // More than 1000ms threshold
-        }
-        
-        String summary = tracer.getSlowOperationsSummary();
-        Assert.assertFalse(summary.contains("FastOperation"));
-        Assert.assertTrue(summary.contains("SlowOperation"));
-    }
-
-    @Test
-    public void testGetSlowOperationsSummaryEmpty() throws InterruptedException {
-        // Test when no slow operations (threshold is 1000ms)
-        try (Timer timer = tracer.watchScope("FastOperation")) {
-            Thread.sleep(10); // Only 10ms, well below 1000ms threshold
-        }
-        
-        String summary = tracer.getSlowOperationsSummary();
-        // Should be empty since no operations exceed 1000ms
-        Assert.assertTrue("Summary should be empty when no slow operations", summary.isEmpty());
-    }
-
-    @Test
-    public void testGetSlowOperationsSummaryWithSlowOps() throws InterruptedException {
-        // Test with operations exceeding 1000ms threshold
-        try (Timer timer = tracer.watchScope("SlowOperation1")) {
-            Thread.sleep(1100); // Exceeds 1000ms threshold
-        }
-        Thread.sleep(5); // Avoid timestamp collision
-        try (Timer timer = tracer.watchScope("FastOperation")) {
-            Thread.sleep(10); // Below threshold
-        }
-        Thread.sleep(5);
-        try (Timer timer = tracer.watchScope("SlowOperation2")) {
-            Thread.sleep(1050); // Exceeds 1000ms threshold
-        }
-        
-        String summary = tracer.getSlowOperationsSummary();
-        // Should contain slow operations but not fast ones
-        Assert.assertTrue("Summary should contain SlowOperation1", summary.contains("SlowOperation1"));
-        Assert.assertTrue("Summary should contain SlowOperation2", summary.contains("SlowOperation2"));
-        Assert.assertFalse("Summary should not contain FastOperation", summary.contains("FastOperation"));
-        
-        // Verify format: should contain operation count and timing
-        Assert.assertTrue("Summary should contain operation count [1]", summary.contains("[1]"));
-    }
-
-    @Test
-    public void testGetSlowOperationsSummaryMultipleSlowOps() throws InterruptedException {
-        // Test with multiple slow operations
-        try (Timer timer = tracer.watchScope("SlowOp1")) {
-            Thread.sleep(1100);
-        }
-        Thread.sleep(5);
-        try (Timer timer = tracer.watchScope("SlowOp2")) {
-            Thread.sleep(1200);
-        }
-        Thread.sleep(5);
-        try (Timer timer = tracer.watchScope("SlowOp3")) {
-            Thread.sleep(1050);
-        }
-        
-        String summary = tracer.getSlowOperationsSummary();
-        // Should contain all three slow operations
-        Assert.assertTrue("Summary should contain SlowOp1", summary.contains("SlowOp1"));
-        Assert.assertTrue("Summary should contain SlowOp2", summary.contains("SlowOp2"));
-        Assert.assertTrue("Summary should contain SlowOp3", summary.contains("SlowOp3"));
-        
-        // Verify each operation is on a separate line
-        String[] lines = summary.split("\n");
-        int slowOpCount = 0;
-        for (String line : lines) {
-            if (line.contains("SlowOp")) {
-                slowOpCount++;
-            }
-        }
-        Assert.assertEquals("Should have 3 slow operations in output", 3, slowOpCount);
-    }
-
-    @Test
     public void testGetSpecifiedTimer() throws InterruptedException {
         // Test getting specific timer
         try (Timer timer = tracer.watchScope("SpecificTimer")) {
@@ -394,5 +309,124 @@ public class TracerImplTest {
         String output = tracer.printScopeTimer();
         Assert.assertTrue(output.contains("Tracer Cost:"));
         Assert.assertTrue(output.contains("us")); // microseconds
+    }
+
+    @Test
+    public void testGetLeafTimersSortedByTime() throws InterruptedException {
+        // Create nested scopes: OuterScope -> InnerScope1, InnerScope2
+        try (Timer outer = tracer.watchScope("OuterScope")) {
+            Thread.sleep(5);
+            try (Timer inner1 = tracer.watchScope("InnerScope1")) {
+                Thread.sleep(30); // Longer sleep for inner1
+            }
+            try (Timer inner2 = tracer.watchScope("InnerScope2")) {
+                Thread.sleep(10); // Shorter sleep for inner2
+            }
+        }
+
+        List<Timer> leafTimers = tracer.getLeafTimersSortedByTime();
+
+        // Should only contain leaf timers (InnerScope1, InnerScope2), not OuterScope
+        Assert.assertEquals(2, leafTimers.size());
+
+        // Should be sorted by time descending (InnerScope1 first since it took longer)
+        Assert.assertEquals("InnerScope1", leafTimers.get(0).name());
+        Assert.assertEquals("InnerScope2", leafTimers.get(1).name());
+        Assert.assertTrue(leafTimers.get(0).getTotalTime() >= leafTimers.get(1).getTotalTime());
+    }
+
+    @Test
+    public void testGetLeafTimersSortedByTimeWithSingleScope() throws InterruptedException {
+        // Single scope should be considered a leaf
+        try (Timer timer = tracer.watchScope("SingleScope")) {
+            Thread.sleep(10);
+        }
+
+        List<Timer> leafTimers = tracer.getLeafTimersSortedByTime();
+        Assert.assertEquals(1, leafTimers.size());
+        Assert.assertEquals("SingleScope", leafTimers.get(0).name());
+    }
+
+    @Test
+    public void testGetLeafTimersSortedByTimeEmpty() {
+        // No scopes should return empty list
+        List<Timer> leafTimers = tracer.getLeafTimersSortedByTime();
+        Assert.assertTrue(leafTimers.isEmpty());
+    }
+
+    @Test
+    public void testGetTopSlowLeafOperations() throws InterruptedException {
+        // Create nested scopes with different timings
+        try (Timer outer = tracer.watchScope("OuterScope")) {
+            try (Timer inner1 = tracer.watchScope("SlowOperation")) {
+                Thread.sleep(30);
+            }
+            try (Timer inner2 = tracer.watchScope("MediumOperation")) {
+                Thread.sleep(20);
+            }
+            try (Timer inner3 = tracer.watchScope("FastOperation")) {
+                Thread.sleep(10);
+            }
+        }
+
+        String output = tracer.getTopSlowLeafOperations(2);
+
+        // Should contain header
+        Assert.assertTrue(output.contains("Top 2 slowest leaf operations:"));
+
+        // Should contain top 2 slowest operations
+        Assert.assertTrue(output.contains("SlowOperation"));
+        Assert.assertTrue(output.contains("MediumOperation"));
+
+        // Should NOT contain FastOperation (only top 2)
+        Assert.assertFalse(output.contains("FastOperation"));
+
+        // Should NOT contain OuterScope (it's not a leaf)
+        Assert.assertFalse(output.contains("OuterScope"));
+
+        // Should contain count info
+        Assert.assertTrue(output.contains("count:"));
+    }
+
+    @Test
+    public void testGetTopSlowLeafOperationsFormat() throws InterruptedException {
+        // Test output format: no newlines, comma separated
+        try (Timer outer = tracer.watchScope("Outer")) {
+            try (Timer inner1 = tracer.watchScope("Op1")) {
+                Thread.sleep(10);
+            }
+            try (Timer inner2 = tracer.watchScope("Op2")) {
+                Thread.sleep(10);
+            }
+        }
+
+        String output = tracer.getTopSlowLeafOperations(3);
+
+        // Should not contain newlines
+        Assert.assertFalse(output.contains("\n"));
+
+        // Should contain comma separator between entries
+        Assert.assertTrue(output.contains(", "));
+    }
+
+    @Test
+    public void testGetTopSlowLeafOperationsWithLargerTopN() throws InterruptedException {
+        // Request more items than available
+        try (Timer timer = tracer.watchScope("OnlyScope")) {
+            Thread.sleep(10);
+        }
+
+        String output = tracer.getTopSlowLeafOperations(10);
+
+        // Should show actual count (1), not requested count (10)
+        Assert.assertTrue(output.contains("Top 1 slowest leaf operations:"));
+        Assert.assertTrue(output.contains("OnlyScope"));
+    }
+
+    @Test
+    public void testGetTopSlowLeafOperationsEmpty() {
+        // No scopes
+        String output = tracer.getTopSlowLeafOperations(5);
+        Assert.assertTrue(output.contains("Top 0 slowest leaf operations:"));
     }
 }
