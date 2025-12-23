@@ -22,7 +22,6 @@ import com.starrocks.analysis.LiteralExpr;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.HiveMetaStoreTable;
 import com.starrocks.catalog.HivePartitionKey;
-import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.Table;
@@ -66,10 +65,8 @@ public class OptThivePartitionPruner {
         HiveMetaStoreTable hmsTable = (HiveMetaStoreTable) table;
         List<Column> partitionColumns = hmsTable.getPartitionColumns();
 
-        String thivePartitionColumns =
-                ((HiveTable) table).getProperties().get(THiveConstants.THIVE_PARTITION_COLUMNS);
-        String thivePartitionTypesStr =
-                ((HiveTable) table).getProperties().get(THiveConstants.THIVE_PARTITION_TYPES);
+        String thivePartitionColumns = table.getProperties().get(THiveConstants.THIVE_PARTITION_COLUMNS);
+        String thivePartitionTypesStr = table.getProperties().get(THiveConstants.THIVE_PARTITION_TYPES);
 
         List<String> thivePartitionTypes = new ArrayList<>();
         if (StringUtils.isEmpty(thivePartitionColumns)) {
@@ -195,11 +192,9 @@ public class OptThivePartitionPruner {
         // {default=[], p_2021=[2020, 2021], p_2011=[2010, 2011], p_2001=[2000, 2001]}
         Map<String, List<String>> partitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumn);
 
-        Map<PartitionKey, Long> partitionKeys = Maps.newHashMap();
         // partitionColumnName -> (LiteralExpr -> partition ids)
         // partitionColumnName like id
-        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap =
-                Maps.newHashMap();
+        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap = Maps.newHashMap();
         // partitionColumnName -> null partitionIds
         Map<ColumnRefOperator, Set<Long>> columnToNullPartitions = Maps.newHashMap();
         List<ColumnRefOperator> partitionColumnRefOperators = new ArrayList<>();
@@ -213,6 +208,7 @@ public class OptThivePartitionPruner {
         List<ColumnRefOperator> hivePartPartitionColumnRefOperators = new ArrayList<>();
         buildPartitionColumnInfo(operator, hmsTable.getPartitionColumns(), hivePartColumnToPartitionValuesMap,
                 hivePartColumnToNullPartitions, hivePartPartitionColumnRefOperators);
+        boolean hasHivePartConjuncts = hasPartitionConjuncts(operator, hivePartPartitionColumnRefOperators);
 
         long partitionId = 0;
         Set<Long> defaultPartitionIds = new HashSet<>();
@@ -221,17 +217,14 @@ public class OptThivePartitionPruner {
             // entry.getKey() is default/p_2021/p_2011/p_2001
             PartitionKey partitionKey = new HivePartitionKey();
             partitionKey.pushColumn(LiteralExpr.create(entry.getKey(), Type.STRING), PrimitiveType.VARCHAR);
-            partitionKeys.put(partitionKey, partitionId);
 
             ColumnRefOperator columnRefOperator = partitionColumnRefOperators.get(0);
 
             // exclude default partition
             if (!entry.getKey().equalsIgnoreCase(THiveConstants.DEFAULT)) {
                 for (String rawValue : entry.getValue()) {
-                    LiteralExpr literal = LiteralExpr.create(rawValue, partitionColumn.getType());
-                    Set<Long> partitions = columnToPartitionValuesMap.get(columnRefOperator)
-                            .computeIfAbsent(literal, k -> Sets.newConcurrentHashSet());
-                    partitions.add(partitionId);
+                    addPartitionValue(rawValue, columnRefOperator, partitionId, partitionColumn.getType(),
+                            columnToPartitionValuesMap);
                 }
             } else {
                 defaultPartitionIds.add(partitionId);
@@ -240,8 +233,8 @@ public class OptThivePartitionPruner {
 
             // xxx_hive_part thive partition column
             // [id_hive_part=default, id_hive_part=p_2001, id_hive_part=p_2011, id_hive_part=p_2021]
-            addColumnToPartitionValuesMap(entry.getKey(), hivePartPartitionColumnRefOperators.get(0), partitionId,
-                    hivePartColumnToPartitionValuesMap);
+            addPartitionValue(entry.getKey(), hivePartPartitionColumnRefOperators.get(0), partitionId,
+                    Type.STRING, hivePartColumnToPartitionValuesMap);
 
             partitionId++;
         }
@@ -251,11 +244,13 @@ public class OptThivePartitionPruner {
         // partition prune use id = xxx
         thiveComputePartitionInfo(operator, columnToPartitionValuesMap, columnToNullPartitions, defaultPartitionIds);
 
-        // hivePartColumnToPartitionValuesMap id_hive_part = {default = [0], p_2021 = [1], p_2011 = [2], p_2001 = [3]}
-        // partition prune use id_hive_part = 'xxx'
-        thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
-        thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions, defaultPartitionIds);
+        if (hasHivePartConjuncts) {
+            // hivePartColumnToPartitionValuesMap id_hive_part = {default = [0], p_2021 = [1], p_2011 = [2], p_2001 = [3]}
+            // partition prune use id_hive_part = 'xxx'
+            thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
+            thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
+                    hivePartColumnToNullPartitions, defaultPartitionIds);
+        }
 
         // PARTITION(p_20241125) specify partition
         thiveComputeSpecifyPartition(operator, hivePartPartitionColumnRefOperators.get(0),
@@ -333,14 +328,34 @@ public class OptThivePartitionPruner {
         }
     }
 
-    static void addColumnToPartitionValuesMap(String value, ColumnRefOperator hivePartColumnRefOperator,
-                                              long partitionId,
-                                              Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>>
-                                                      hivePartColumnToPartitionValuesMap) throws AnalysisException {
-        LiteralExpr literal = LiteralExpr.create(value, Type.STRING);
-        Set<Long> partitions = hivePartColumnToPartitionValuesMap.get(hivePartColumnRefOperator)
-                .computeIfAbsent(literal, k -> Sets.newConcurrentHashSet());
+    static void addPartitionValue(Map<String, Set<Long>> partitionValuesMap, String value, long partitionId) {
+        Set<Long> partitions = partitionValuesMap.get(value);
+        if (partitions == null) {
+            partitions = Sets.newHashSet();
+            partitionValuesMap.put(value, partitions);
+        }
         partitions.add(partitionId);
+    }
+
+    static void addPartitionValue(String value, ColumnRefOperator columnRefOperator,
+                                  long partitionId, Type type,
+                                  Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>>
+                                          partitionValuesMap) throws AnalysisException {
+        LiteralExpr literal = LiteralExpr.create(value, type);
+        Set<Long> partitions = partitionValuesMap.get(columnRefOperator).get(literal);
+        if (partitions == null) {
+            partitions = Sets.newHashSet();
+            partitionValuesMap.get(columnRefOperator).put(literal, partitions);
+        }
+        partitions.add(partitionId);
+    }
+
+    static void convertPartitionValuesMap(Map<String, Set<Long>> sourceMap, Type type,
+                                          ConcurrentNavigableMap<LiteralExpr, Set<Long>> targetMap) throws AnalysisException {
+        for (Map.Entry<String, Set<Long>> entry : sourceMap.entrySet()) {
+            LiteralExpr literal = LiteralExpr.create(entry.getKey(), type);
+            targetMap.put(literal, entry.getValue());
+        }
     }
 
     /**
@@ -392,6 +407,7 @@ public class OptThivePartitionPruner {
         List<ColumnRefOperator> hivePartPartitionColumnRefOperators = new ArrayList<>();
         buildPartitionColumnInfo(operator, hmsTable.getPartitionColumns(), hivePartColumnToPartitionValuesMap,
                 hivePartColumnToNullPartitions, hivePartPartitionColumnRefOperators);
+        boolean hasHivePartConjuncts = hasPartitionConjuncts(operator, hivePartPartitionColumnRefOperators);
 
         Map<Long, Range<PartitionKey>> keyRangeById = Maps.newHashMap();
         long partitionId = 0;
@@ -423,8 +439,8 @@ public class OptThivePartitionPruner {
 
             // xxx_hive_part thive partition column
             // [id_hive_part=default, id_hive_part=p_5, id_hive_part=p_10, id_hive_part=p_15]
-            addColumnToPartitionValuesMap(entry.getKey(), hivePartPartitionColumnRefOperators.get(0), partitionId,
-                    hivePartColumnToPartitionValuesMap);
+            addPartitionValue(entry.getKey(), hivePartPartitionColumnRefOperators.get(0), partitionId,
+                    Type.STRING, hivePartColumnToPartitionValuesMap);
 
             partitionId++;
         }
@@ -438,13 +454,15 @@ public class OptThivePartitionPruner {
             scanOperatorPredicates.setPruningPredicateCanBeEvaluated(false);
         }
         Collection<Long> finalPartitions = processThiveDefaultParititions(operator, selectedPartitionIds, defaultPartitionIds,
-                new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
+                scanOperatorPredicates.getIdToPartitionKey());
         scanOperatorPredicates.setSelectedPartitionIds(finalPartitions);
 
-        // partition prune use id_hive_part = 'xxx'
-        thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
-        thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions, defaultPartitionIds);
+        if (hasHivePartConjuncts) {
+            // partition prune use id_hive_part = 'xxx'
+            thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
+            thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
+                    hivePartColumnToNullPartitions, defaultPartitionIds);
+        }
 
         // PARTITION(par_20241030) specify partition
         thiveComputeSpecifyPartition(operator, hivePartPartitionColumnRefOperators.get(0),
@@ -496,8 +514,7 @@ public class OptThivePartitionPruner {
             throws AnalysisException {
         // partitionColumnName -> (LiteralExpr -> partition ids)
         // partitionColumnName like imp_date
-        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap =
-                Maps.newHashMap();
+        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap = Maps.newHashMap();
         // partitionColumnName -> null partitionIds
         Map<ColumnRefOperator, Set<Long>> columnToNullPartitions = Maps.newHashMap();
         List<ColumnRefOperator> partitionColumnRefOperators = new ArrayList<>();
@@ -549,10 +566,8 @@ public class OptThivePartitionPruner {
                             String partVal = String.valueOf(startNum);
                             if (context.getSessionVariable().isThiveRangePartitionStringAsDate() &&
                                     checkPartValDateFormat(partVal)) {
-                                Set<Long> partitions = columnToPartitionValuesMap.get(columnRefOperator)
-                                        .computeIfAbsent(LiteralExpr.create(partVal, partitionColumn.getType()),
-                                                k -> Sets.newConcurrentHashSet());
-                                partitions.add(partitionId);
+                                addPartitionValue(partVal, columnRefOperator, partitionId, partitionColumn.getType(),
+                                        columnToPartitionValuesMap);
                             }
                             startNum++;
                         }
@@ -575,8 +590,7 @@ public class OptThivePartitionPruner {
         }
         if (!scanAllPartitions) {
             thiveClassifyConjuncts(operator, columnToPartitionValuesMap);
-            thiveComputePartitionInfo(operator, columnToPartitionValuesMap, columnToNullPartitions,
-                    defaultPartitionIds);
+            thiveComputePartitionInfo(operator, columnToPartitionValuesMap, columnToNullPartitions, defaultPartitionIds);
             ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
             if (scanOperatorPredicates.getSelectedPartitionIds().contains(secondRangePartitionId)) {
                 // if include secondRangePartitionId, we also add firstRangePartitionId
@@ -739,10 +753,21 @@ public class OptThivePartitionPruner {
             throws AnalysisException {
         for (ScalarOperator scalarOperator : Utils.extractConjuncts(operator.getPredicate())) {
             List<ColumnRefOperator> columnRefOperatorList = Utils.extractColumnRef(scalarOperator);
-            if (!columnRefOperatorList.retainAll(columnToPartitionValuesMap.keySet())) {
+            if (!columnRefOperatorList.isEmpty() && !columnRefOperatorList.retainAll(columnToPartitionValuesMap.keySet())) {
                 operator.getScanOperatorPredicates().getPartitionConjuncts().add(scalarOperator);
             }
         }
+    }
+
+    public static boolean hasPartitionConjuncts(LogicalScanOperator operator,
+                                                List<ColumnRefOperator> partitionColumns) {
+        for (ScalarOperator scalarOperator : Utils.extractConjuncts(operator.getPredicate())) {
+            List<ColumnRefOperator> columnRefOperatorList = Utils.extractColumnRef(scalarOperator);
+            if (!columnRefOperatorList.isEmpty() && partitionColumns.containsAll(columnRefOperatorList)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static void thiveComputePartitionInfo(LogicalScanOperator operator,
@@ -759,7 +784,7 @@ public class OptThivePartitionPruner {
             scanOperatorPredicates.setPruningPredicateCanBeEvaluated(false);
         }
         Collection<Long> finalPartitions = processThiveDefaultParititions(operator, selectedPartitionIds, defaultPartitionIds,
-                new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
+                scanOperatorPredicates.getIdToPartitionKey());
         scanOperatorPredicates.setSelectedPartitionIds(finalPartitions);
         //scanOperatorPredicates.getNoEvalPartitionConjuncts().addAll(partitionPruner.getNoEvalConjuncts());
     }
@@ -767,8 +792,9 @@ public class OptThivePartitionPruner {
     static Collection<Long> processThiveDefaultParititions(LogicalScanOperator operator,
                                                            Collection<Long> selectedPartitionIds,
                                                            Set<Long> defaultPartitionIds,
-                                                           Collection<Long> allPartitionIds) {
+                                                           Map<Long, PartitionKey> idToPartitionKey) {
         if (selectedPartitionIds == null) {
+            Set<Long> allPartitionIds = new HashSet(idToPartitionKey.keySet());
             // ListPartitionPruner.prune: Null is returned if all partitions.
             if (ConnectContext.get().getSessionVariable().getExcludeThiveDefaultPartition()) {
                 //if excludeThiveDefaultPartition exclude default partitions
@@ -841,16 +867,11 @@ public class OptThivePartitionPruner {
                                                        HiveMetaStoreTable hmsTable,
                                                        List<Column> partitionColumns)
             throws AnalysisException {
-        Map<String, List<String>> level1PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(0));
+        Map<String, List<String>> level1PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(0));
+        Map<String, List<String>> level2PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(1));
 
-        Map<String, List<String>> level2PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(1));
-
-        Map<PartitionKey, Long> partitionKeys = Maps.newHashMap();
         // partitionColumnName -> (LiteralExpr -> partition ids)
-        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap =
-                Maps.newHashMap();
+        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap = Maps.newHashMap();
         // partitionColumnName -> null partitionIds
         Map<ColumnRefOperator, Set<Long>> columnToNullPartitions = Maps.newHashMap();
         List<ColumnRefOperator> partitionColumnRefOperators = new ArrayList<>();
@@ -863,60 +884,76 @@ public class OptThivePartitionPruner {
         List<ColumnRefOperator> hivePartPartitionColumnRefOperators = new ArrayList<>();
         buildPartitionColumnInfo(operator, hmsTable.getPartitionColumns(), hivePartColumnToPartitionValuesMap,
                 hivePartColumnToNullPartitions, hivePartPartitionColumnRefOperators);
+        boolean hasHivePartConjuncts = hasPartitionConjuncts(operator, hivePartPartitionColumnRefOperators);
 
         long partitionId = 0;
         Set<Long> defaultPartitionIds = new HashSet<>();
+
+        Map<String, Set<Long>> level1RawValuesMap = Maps.newHashMap();
+        Map<String, Set<Long>> level2RawValuesMap = Maps.newHashMap();
+        Map<String, Set<Long>> level1HivePartRawValuesMap = Maps.newHashMap();
+        Map<String, Set<Long>> level2HivePartRawValuesMap = Maps.newHashMap();
+
         for (Map.Entry<String, List<String>> level1 : level1PartitionNameToPartitionValues.entrySet()) {
+            LiteralExpr level1KeyLiteral = LiteralExpr.create(level1.getKey(), Type.STRING);
             for (Map.Entry<String, List<String>> level2 : level2PartitionNameToPartitionValues.entrySet()) {
+                LiteralExpr level2KeyLiteral = LiteralExpr.create(level2.getKey(), Type.STRING);
                 PartitionKey partitionKey = new HivePartitionKey();
-                partitionKey.pushColumn(LiteralExpr.create(level1.getKey(), Type.STRING), PrimitiveType.VARCHAR);
-                partitionKey.pushColumn(LiteralExpr.create(level2.getKey(), Type.STRING), PrimitiveType.VARCHAR);
-                partitionKeys.put(partitionKey, partitionId);
-                LOG.debug(hmsTable.getTableName() + " partitionId = " + partitionId + ", level1 = " + level1 +
-                        ", level2 = " + level2);
+                partitionKey.pushColumn(level1KeyLiteral, PrimitiveType.VARCHAR);
+                partitionKey.pushColumn(level2KeyLiteral, PrimitiveType.VARCHAR);
 
                 if (!level1.getKey().equalsIgnoreCase(THiveConstants.DEFAULT)) {
-                    ColumnRefOperator columnRefOperator = partitionColumnRefOperators.get(0);
                     for (String rawValue : level1.getValue()) {
-                        LiteralExpr literal = LiteralExpr.create(rawValue, partitionColumns.get(0).getType());
-                        Set<Long> partitions = columnToPartitionValuesMap.get(columnRefOperator)
-                                .computeIfAbsent(literal, k -> Sets.newConcurrentHashSet());
-                        partitions.add(partitionId);
+                        addPartitionValue(level1RawValuesMap, rawValue, partitionId);
                     }
                 } else {
                     defaultPartitionIds.add(partitionId);
                 }
 
                 if (!level2.getKey().equalsIgnoreCase(THiveConstants.DEFAULT)) {
-                    ColumnRefOperator columnRefOperator = partitionColumnRefOperators.get(1);
                     for (String rawValue : level2.getValue()) {
-                        LiteralExpr literal = LiteralExpr.create(rawValue, partitionColumns.get(1).getType());
-                        Set<Long> partitions = columnToPartitionValuesMap.get(columnRefOperator)
-                                .computeIfAbsent(literal, k -> Sets.newConcurrentHashSet());
-                        partitions.add(partitionId);
+                        addPartitionValue(level2RawValuesMap, rawValue, partitionId);
                     }
                 } else {
                     defaultPartitionIds.add(partitionId);
                 }
                 operator.getScanOperatorPredicates().getIdToPartitionKey().put(partitionId, partitionKey);
 
-                addColumnToPartitionValuesMap(level1.getKey(), hivePartPartitionColumnRefOperators.get(0),
-                        partitionId,
-                        hivePartColumnToPartitionValuesMap);
-                addColumnToPartitionValuesMap(level2.getKey(), hivePartPartitionColumnRefOperators.get(1),
-                        partitionId,
-                        hivePartColumnToPartitionValuesMap);
+                if (hasHivePartConjuncts) {
+                    addPartitionValue(level1HivePartRawValuesMap, level1.getKey(), partitionId);
+                    addPartitionValue(level2HivePartRawValuesMap, level2.getKey(), partitionId);
+                }
 
                 partitionId++;
             }
         }
+        {
+            ConcurrentNavigableMap<LiteralExpr, Set<Long>> level1PartitionValuesMap =
+                    columnToPartitionValuesMap.get(partitionColumnRefOperators.get(0));
+            convertPartitionValuesMap(level1RawValuesMap, partitionColumns.get(0).getType(), level1PartitionValuesMap);
 
+            ConcurrentNavigableMap<LiteralExpr, Set<Long>> level2PartitionValuesMap =
+                    columnToPartitionValuesMap.get(partitionColumnRefOperators.get(1));
+            convertPartitionValuesMap(level2RawValuesMap, partitionColumns.get(1).getType(), level2PartitionValuesMap);
+
+            if (hasHivePartConjuncts) {
+                ConcurrentNavigableMap<LiteralExpr, Set<Long>> level1hivePartPartitionValuesMap =
+                        hivePartColumnToPartitionValuesMap.get(hivePartPartitionColumnRefOperators.get(0));
+                convertPartitionValuesMap(level1HivePartRawValuesMap, Type.STRING, level1hivePartPartitionValuesMap);
+
+                ConcurrentNavigableMap<LiteralExpr, Set<Long>> level2hivePartPartitionValuesMap =
+                        hivePartColumnToPartitionValuesMap.get(hivePartPartitionColumnRefOperators.get(1));
+                convertPartitionValuesMap(level2HivePartRawValuesMap, Type.STRING, level2hivePartPartitionValuesMap);
+            }
+        }
         thiveClassifyConjuncts(operator, columnToPartitionValuesMap);
         thiveComputePartitionInfo(operator, columnToPartitionValuesMap, columnToNullPartitions, defaultPartitionIds);
 
-        thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
-        thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions, defaultPartitionIds);
+        if (hasHivePartConjuncts) {
+            thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
+            thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
+                    hivePartColumnToNullPartitions, defaultPartitionIds);
+        }
 
         addConjunctsForThive(operator);
     }
@@ -925,16 +962,11 @@ public class OptThivePartitionPruner {
                                                         HiveMetaStoreTable hmsTable,
                                                         List<Column> partitionColumns)
             throws AnalysisException {
-        Map<String, List<String>> level1PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(0));
+        Map<String, List<String>> level1PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(0));
+        Map<String, List<String>> level2PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(1));
 
-        Map<String, List<String>> level2PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(1));
-
-        Map<PartitionKey, Long> partitionKeys = Maps.newHashMap();
         // partitionColumnName -> (LiteralExpr -> partition ids)
-        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap =
-                Maps.newHashMap();
+        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap = Maps.newHashMap();
         // partitionColumnName -> null partitionIds
         Map<ColumnRefOperator, Set<Long>> columnToNullPartitions = Maps.newHashMap();
         List<ColumnRefOperator> partitionColumnRefOperators = new ArrayList<>();
@@ -951,6 +983,7 @@ public class OptThivePartitionPruner {
         List<ColumnRefOperator> hivePartPartitionColumnRefOperators = new ArrayList<>();
         buildPartitionColumnInfo(operator, hmsTable.getPartitionColumns(), hivePartColumnToPartitionValuesMap,
                 hivePartColumnToNullPartitions, hivePartPartitionColumnRefOperators);
+        boolean hasHivePartConjuncts = hasPartitionConjuncts(operator, hivePartPartitionColumnRefOperators);
 
         long partitionId = 0;
         Set<Long> level1ListDefaultPartitionIds = new HashSet<>();
@@ -960,7 +993,6 @@ public class OptThivePartitionPruner {
                 PartitionKey partitionKey = new HivePartitionKey();
                 partitionKey.pushColumn(LiteralExpr.create(level1.getKey(), Type.STRING), PrimitiveType.VARCHAR);
                 partitionKey.pushColumn(LiteralExpr.create(level2.getKey(), Type.STRING), PrimitiveType.VARCHAR);
-                partitionKeys.put(partitionKey, partitionId);
                 level2RangePartitionNamesById.put(partitionId, level2.getKey());
                 LOG.debug(hmsTable.getTableName() + " partitionId = " + partitionId + ", level1 = " + level1 +
                         ", level2 = " + level2);
@@ -968,22 +1000,20 @@ public class OptThivePartitionPruner {
                 if (!level1.getKey().equalsIgnoreCase(THiveConstants.DEFAULT)) {
                     ColumnRefOperator columnRefOperator = partitionColumnRefOperators.get(0);
                     for (String rawValue : level1.getValue()) {
-                        LiteralExpr literal = LiteralExpr.create(rawValue, listPartitionColumn.getType());
-                        Set<Long> partitions = columnToPartitionValuesMap.get(columnRefOperator)
-                                .computeIfAbsent(literal, k -> Sets.newConcurrentHashSet());
-                        partitions.add(partitionId);
+                        addPartitionValue(rawValue, columnRefOperator, partitionId, listPartitionColumn.getType(),
+                                columnToPartitionValuesMap);
                     }
                 } else {
                     level1ListDefaultPartitionIds.add(partitionId);
                 }
                 operator.getScanOperatorPredicates().getIdToPartitionKey().put(partitionId, partitionKey);
 
-                addColumnToPartitionValuesMap(level1.getKey(), hivePartPartitionColumnRefOperators.get(0),
-                        partitionId,
-                        hivePartColumnToPartitionValuesMap);
-                addColumnToPartitionValuesMap(level2.getKey(), hivePartPartitionColumnRefOperators.get(1),
-                        partitionId,
-                        hivePartColumnToPartitionValuesMap);
+                if (hasHivePartConjuncts) {
+                    addPartitionValue(level1.getKey(), hivePartPartitionColumnRefOperators.get(0),
+                            partitionId, Type.STRING, hivePartColumnToPartitionValuesMap);
+                    addPartitionValue(level2.getKey(), hivePartPartitionColumnRefOperators.get(1),
+                            partitionId, Type.STRING, hivePartColumnToPartitionValuesMap);
+                }
 
                 partitionId++;
             }
@@ -992,9 +1022,8 @@ public class OptThivePartitionPruner {
         thiveClassifyConjuncts(operator, columnToPartitionValuesMap);
 
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
-        ListPartitionPruner partitionPruner =
-                new ListPartitionPruner(columnToPartitionValuesMap, columnToNullPartitions,
-                        scanOperatorPredicates.getPartitionConjuncts(), null);
+        ListPartitionPruner partitionPruner = new ListPartitionPruner(columnToPartitionValuesMap, columnToNullPartitions,
+                scanOperatorPredicates.getPartitionConjuncts(), null);
         Collection<Long> selectedPartitionIds = partitionPruner.prune();
         if (selectedPartitionIds == null) {
             selectedPartitionIds = new HashSet<>(scanOperatorPredicates.getIdToPartitionKey().keySet());
@@ -1016,15 +1045,17 @@ public class OptThivePartitionPruner {
 
         // add or not add thive default partitions
         Collection<Long> finalPartitions = processThiveDefaultParititions(operator, matches, level1ListDefaultPartitionIds,
-                new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
+                scanOperatorPredicates.getIdToPartitionKey());
         LOG.debug(hmsTable.getTableName() + " twoLevelListRangePrunePartitions selectedPartitionIds = " + matches +
                 ", level1ListDefaultPartitionIds = " + level1ListDefaultPartitionIds + ", finalPartitions = " +
                 finalPartitions);
         scanOperatorPredicates.setSelectedPartitionIds(finalPartitions);
 
-        thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
-        thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions, level1ListDefaultPartitionIds);
+        if (hasHivePartConjuncts) {
+            thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
+            thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
+                    hivePartColumnToNullPartitions, level1ListDefaultPartitionIds);
+        }
 
         addConjunctsForThive(operator);
     }
@@ -1033,16 +1064,11 @@ public class OptThivePartitionPruner {
                                                        HiveMetaStoreTable hmsTable,
                                                        List<Column> partitionColumns)
             throws AnalysisException {
-        Map<String, List<String>> level1PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(0));
+        Map<String, List<String>> level1PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(0));
+        Map<String, List<String>> level2PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(1));
 
-        Map<String, List<String>> level2PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(1));
-
-        Map<PartitionKey, Long> partitionKeys = Maps.newHashMap();
         // partitionColumnName -> (LiteralExpr -> partition ids)
-        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap =
-                Maps.newHashMap();
+        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap = Maps.newHashMap();
         // partitionColumnName -> null partitionIds
         Map<ColumnRefOperator, Set<Long>> columnToNullPartitions = Maps.newHashMap();
         List<ColumnRefOperator> partitionColumnRefOperators = new ArrayList<>();
@@ -1064,6 +1090,7 @@ public class OptThivePartitionPruner {
             hivePartColumnToNullPartitions.put(hivePartColumnRefOperator, Sets.newConcurrentHashSet());
             hivePartPartitionColumnRefOperators.add(hivePartColumnRefOperator);
         }
+        boolean hasHivePartConjuncts = hasPartitionConjuncts(operator, hivePartPartitionColumnRefOperators);
 
         long partitionId = 0;
         Set<Long> level1ListDefaultPartitionIds = new HashSet<>();
@@ -1073,7 +1100,6 @@ public class OptThivePartitionPruner {
                 PartitionKey partitionKey = new HivePartitionKey();
                 partitionKey.pushColumn(LiteralExpr.create(level1.getKey(), Type.STRING), PrimitiveType.VARCHAR);
                 partitionKey.pushColumn(LiteralExpr.create(level2.getKey(), Type.STRING), PrimitiveType.VARCHAR);
-                partitionKeys.put(partitionKey, partitionId);
                 level2RangePartitionNamesById.put(partitionId, level2.getKey());
                 LOG.debug(hmsTable.getTableName() + " partitionId = " + partitionId + ", level1 = " + level1 +
                         ", level2 = " + level2);
@@ -1081,18 +1107,17 @@ public class OptThivePartitionPruner {
                 if (!level1.getKey().equalsIgnoreCase(THiveConstants.DEFAULT)) {
                     ColumnRefOperator columnRefOperator = partitionColumnRefOperators.get(0);
                     for (String rawValue : level1.getValue()) {
-                        LiteralExpr literal = LiteralExpr.create(rawValue, listPartitionColumn.getType());
-                        Set<Long> partitions = columnToPartitionValuesMap.get(columnRefOperator)
-                                .computeIfAbsent(literal, k -> Sets.newConcurrentHashSet());
-                        partitions.add(partitionId);
+                        addPartitionValue(rawValue, columnRefOperator, partitionId, listPartitionColumn.getType(),
+                                columnToPartitionValuesMap);
                     }
                 } else {
                     level1ListDefaultPartitionIds.add(partitionId);
                 }
                 operator.getScanOperatorPredicates().getIdToPartitionKey().put(partitionId, partitionKey);
-                addColumnToPartitionValuesMap(level1.getKey(), hivePartPartitionColumnRefOperators.get(0),
-                        partitionId,
-                        hivePartColumnToPartitionValuesMap);
+                if (hasHivePartConjuncts) {
+                    addPartitionValue(level1.getKey(), hivePartPartitionColumnRefOperators.get(0),
+                            partitionId, Type.STRING, hivePartColumnToPartitionValuesMap);
+                }
                 partitionId++;
             }
         }
@@ -1100,23 +1125,23 @@ public class OptThivePartitionPruner {
         thiveClassifyConjuncts(operator, columnToPartitionValuesMap);
 
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
-        ListPartitionPruner partitionPruner =
-                new ListPartitionPruner(columnToPartitionValuesMap, columnToNullPartitions,
-                        scanOperatorPredicates.getPartitionConjuncts(), null);
+        ListPartitionPruner partitionPruner = new ListPartitionPruner(columnToPartitionValuesMap, columnToNullPartitions,
+                scanOperatorPredicates.getPartitionConjuncts(), null);
         List<Long> selectedPartitionIds = partitionPruner.prune();
         LOG.debug(hmsTable.getTableName() + " level1 ListPartitionPruner selectedPartitionIds = " + selectedPartitionIds);
         // process thive default parititions
-        Collection<Long> finalPartitions =
-                processThiveDefaultParititions(operator, selectedPartitionIds, level1ListDefaultPartitionIds,
-                        new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
+        Collection<Long> finalPartitions = processThiveDefaultParititions(operator, selectedPartitionIds,
+                level1ListDefaultPartitionIds, scanOperatorPredicates.getIdToPartitionKey());
         LOG.debug(hmsTable.getTableName() + " twoLevelListHashPrunePartitions selectedPartitionIds = " +
                 selectedPartitionIds + ", level1ListDefaultPartitionIds = " + level1ListDefaultPartitionIds +
                 ", finalPartitions = " + finalPartitions);
         scanOperatorPredicates.setSelectedPartitionIds(finalPartitions);
 
-        thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
-        thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions, level1ListDefaultPartitionIds);
+        if (hasHivePartConjuncts) {
+            thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
+            thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
+                    hivePartColumnToNullPartitions, level1ListDefaultPartitionIds);
+        }
 
         addConjunctsForThive(operator);
     }
@@ -1204,16 +1229,11 @@ public class OptThivePartitionPruner {
                                                         HiveMetaStoreTable hmsTable,
                                                         List<Column> partitionColumns)
             throws AnalysisException {
-        Map<String, List<String>> level1PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(0));
+        Map<String, List<String>> level1PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(0));
+        Map<String, List<String>> level2PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(1));
 
-        Map<String, List<String>> level2PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(1));
-
-        Map<PartitionKey, Long> partitionKeys = Maps.newHashMap();
         // partitionColumnName -> (LiteralExpr -> partition ids)
-        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap =
-                Maps.newHashMap();
+        Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> columnToPartitionValuesMap = Maps.newHashMap();
         // partitionColumnName -> null partitionIds
         Map<ColumnRefOperator, Set<Long>> columnToNullPartitions = Maps.newHashMap();
         List<ColumnRefOperator> partitionColumnRefOperators = new ArrayList<>();
@@ -1230,6 +1250,7 @@ public class OptThivePartitionPruner {
         List<ColumnRefOperator> hivePartPartitionColumnRefOperators = new ArrayList<>();
         buildPartitionColumnInfo(operator, hmsTable.getPartitionColumns(), hivePartColumnToPartitionValuesMap,
                 hivePartColumnToNullPartitions, hivePartPartitionColumnRefOperators);
+        boolean hasHivePartConjuncts = hasPartitionConjuncts(operator, hivePartPartitionColumnRefOperators);
 
         long partitionId = 0;
         Set<Long> level2ListDefaultPartitionIds = new HashSet<>();
@@ -1239,7 +1260,6 @@ public class OptThivePartitionPruner {
                 PartitionKey partitionKey = new HivePartitionKey();
                 partitionKey.pushColumn(LiteralExpr.create(level1.getKey(), Type.STRING), PrimitiveType.VARCHAR);
                 partitionKey.pushColumn(LiteralExpr.create(level2.getKey(), Type.STRING), PrimitiveType.VARCHAR);
-                partitionKeys.put(partitionKey, partitionId);
                 level1RangePartitionNamesById.put(partitionId, level1.getKey());
                 LOG.debug(hmsTable.getTableName() + " partitionId = " + partitionId + ", level1 = " + level1 +
                         ", level2 = " + level2);
@@ -1247,22 +1267,20 @@ public class OptThivePartitionPruner {
                 if (!level2.getKey().equalsIgnoreCase(THiveConstants.DEFAULT)) {
                     ColumnRefOperator columnRefOperator = partitionColumnRefOperators.get(0);
                     for (String rawValue : level2.getValue()) {
-                        LiteralExpr literal = LiteralExpr.create(rawValue, listPartitionColumn.getType());
-                        Set<Long> partitions = columnToPartitionValuesMap.get(columnRefOperator)
-                                .computeIfAbsent(literal, k -> Sets.newConcurrentHashSet());
-                        partitions.add(partitionId);
+                        addPartitionValue(rawValue, columnRefOperator, partitionId, listPartitionColumn.getType(),
+                                columnToPartitionValuesMap);
                     }
                 } else {
                     level2ListDefaultPartitionIds.add(partitionId);
                 }
                 operator.getScanOperatorPredicates().getIdToPartitionKey().put(partitionId, partitionKey);
 
-                addColumnToPartitionValuesMap(level1.getKey(), hivePartPartitionColumnRefOperators.get(0),
-                        partitionId,
-                        hivePartColumnToPartitionValuesMap);
-                addColumnToPartitionValuesMap(level2.getKey(), hivePartPartitionColumnRefOperators.get(1),
-                        partitionId,
-                        hivePartColumnToPartitionValuesMap);
+                if (hasHivePartConjuncts) {
+                    addPartitionValue(level1.getKey(), hivePartPartitionColumnRefOperators.get(0),
+                            partitionId, Type.STRING, hivePartColumnToPartitionValuesMap);
+                    addPartitionValue(level2.getKey(), hivePartPartitionColumnRefOperators.get(1),
+                            partitionId, Type.STRING, hivePartColumnToPartitionValuesMap);
+                }
 
                 partitionId++;
             }
@@ -1271,21 +1289,17 @@ public class OptThivePartitionPruner {
         thiveClassifyConjuncts(operator, columnToPartitionValuesMap);
 
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
-        ListPartitionPruner partitionPruner =
-                new ListPartitionPruner(columnToPartitionValuesMap, columnToNullPartitions,
-                        scanOperatorPredicates.getPartitionConjuncts(), null);
+        ListPartitionPruner partitionPruner = new ListPartitionPruner(columnToPartitionValuesMap, columnToNullPartitions,
+                scanOperatorPredicates.getPartitionConjuncts(), null);
         Collection<Long> selectedPartitionIds = partitionPruner.prune();
         if (selectedPartitionIds == null) {
             selectedPartitionIds = scanOperatorPredicates.getIdToPartitionKey().keySet();
         }
-        LOG.debug(hmsTable.getTableName() + " level2 ListPartitionPruner selectedPartitionIds = " +
-                selectedPartitionIds);
+        LOG.debug(hmsTable.getTableName() + " level2 ListPartitionPruner selectedPartitionIds = " + selectedPartitionIds);
 
-        Set<String> selectLevel1RangePartitionNames =
-                rangePrunePartitions(operator, context, hmsTable, level1PartitionNameToPartitionValues,
-                        partitionColumns.get(0));
-        LOG.debug(hmsTable.getTableName() + " level1 selectRangePartitionNames = " +
-                selectLevel1RangePartitionNames);
+        Set<String> selectLevel1RangePartitionNames = rangePrunePartitions(operator, context, hmsTable,
+                level1PartitionNameToPartitionValues, partitionColumns.get(0));
+        LOG.debug(hmsTable.getTableName() + " level1 selectRangePartitionNames = " + selectLevel1RangePartitionNames);
 
         List<Long> matches = new ArrayList<>();
         for (Long entry : selectedPartitionIds) {
@@ -1295,16 +1309,17 @@ public class OptThivePartitionPruner {
         }
 
         // process thive default partitions
-        Collection<Long> finalPartitions =
-                processThiveDefaultParititions(operator, matches, level2ListDefaultPartitionIds,
-                        new HashSet(scanOperatorPredicates.getIdToPartitionKey().keySet()));
+        Collection<Long> finalPartitions = processThiveDefaultParititions(operator, matches, level2ListDefaultPartitionIds,
+                scanOperatorPredicates.getIdToPartitionKey());
         LOG.debug(hmsTable.getTableName() + " twoLevelRangeListPrunePartitions selectedPartitionIds = " +
                 finalPartitions);
         scanOperatorPredicates.setSelectedPartitionIds(finalPartitions);
 
-        thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
-        thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions, level2ListDefaultPartitionIds);
+        if (hasHivePartConjuncts) {
+            thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
+            thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
+                    hivePartColumnToNullPartitions, level2ListDefaultPartitionIds);
+        }
 
         addConjunctsForThive(operator);
     }
@@ -1313,11 +1328,8 @@ public class OptThivePartitionPruner {
                                                          HiveMetaStoreTable hmsTable,
                                                          List<Column> partitionColumns)
             throws AnalysisException {
-        Map<String, List<String>> level1PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(0));
-
-        Map<String, List<String>> level2PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(1));
+        Map<String, List<String>> level1PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(0));
+        Map<String, List<String>> level2PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(1));
 
         Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> hivePartColumnToPartitionValuesMap =
                 Maps.newHashMap();
@@ -1325,6 +1337,7 @@ public class OptThivePartitionPruner {
         List<ColumnRefOperator> hivePartPartitionColumnRefOperators = new ArrayList<>();
         buildPartitionColumnInfo(operator, hmsTable.getPartitionColumns(), hivePartColumnToPartitionValuesMap,
                 hivePartColumnToNullPartitions, hivePartPartitionColumnRefOperators);
+        boolean hasHivePartConjuncts = hasPartitionConjuncts(operator, hivePartPartitionColumnRefOperators);
 
         long partitionId = 0;
         Map<Long, String> level1RangePartitionNamesById = Maps.newHashMap();
@@ -1341,24 +1354,22 @@ public class OptThivePartitionPruner {
 
                 operator.getScanOperatorPredicates().getIdToPartitionKey().put(partitionId, partitionKey);
 
-                addColumnToPartitionValuesMap(level1.getKey(), hivePartPartitionColumnRefOperators.get(0),
-                        partitionId,
-                        hivePartColumnToPartitionValuesMap);
-                addColumnToPartitionValuesMap(level2.getKey(), hivePartPartitionColumnRefOperators.get(1),
-                        partitionId,
-                        hivePartColumnToPartitionValuesMap);
+                if (hasHivePartConjuncts) {
+                    addPartitionValue(level1.getKey(), hivePartPartitionColumnRefOperators.get(0),
+                            partitionId, Type.STRING, hivePartColumnToPartitionValuesMap);
+                    addPartitionValue(level2.getKey(), hivePartPartitionColumnRefOperators.get(1),
+                            partitionId, Type.STRING, hivePartColumnToPartitionValuesMap);
+                }
 
                 partitionId++;
             }
         }
-        Set<String> selectLevel1RangePartitionNames =
-                rangePrunePartitions(operator, context, hmsTable, level1PartitionNameToPartitionValues,
-                        partitionColumns.get(0));
+        Set<String> selectLevel1RangePartitionNames = rangePrunePartitions(operator, context, hmsTable,
+                level1PartitionNameToPartitionValues, partitionColumns.get(0));
         LOG.debug(hmsTable.getTableName() + " level1 selectRangePartitionNames = " + selectLevel1RangePartitionNames);
 
-        Set<String> selectLevel2RangePartitionNames =
-                rangePrunePartitions(operator, context, hmsTable, level2PartitionNameToPartitionValues,
-                        partitionColumns.get(1));
+        Set<String> selectLevel2RangePartitionNames = rangePrunePartitions(operator, context, hmsTable,
+                level2PartitionNameToPartitionValues, partitionColumns.get(1));
         LOG.debug(hmsTable.getTableName() + " level2 selectRangePartitionNames = " + selectLevel2RangePartitionNames);
 
         List<Long> matches = new ArrayList<>();
@@ -1372,9 +1383,11 @@ public class OptThivePartitionPruner {
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
         scanOperatorPredicates.setSelectedPartitionIds(matches);
 
-        thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
-        thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions, null);
+        if (hasHivePartConjuncts) {
+            thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
+            thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
+                    hivePartColumnToNullPartitions, null);
+        }
 
         addConjunctsForThive(operator);
     }
@@ -1383,11 +1396,8 @@ public class OptThivePartitionPruner {
                                                         HiveMetaStoreTable hmsTable,
                                                         List<Column> partitionColumns)
             throws AnalysisException {
-        Map<String, List<String>> level1PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(0));
-
-        Map<String, List<String>> level2PartitionNameToPartitionValues =
-                getPartitionValues(hmsTable, partitionColumns.get(1));
+        Map<String, List<String>> level1PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(0));
+        Map<String, List<String>> level2PartitionNameToPartitionValues = getPartitionValues(hmsTable, partitionColumns.get(1));
 
         Map<ColumnRefOperator, ConcurrentNavigableMap<LiteralExpr, Set<Long>>> hivePartColumnToPartitionValuesMap =
                 Maps.newHashMap();
@@ -1400,6 +1410,7 @@ public class OptThivePartitionPruner {
             hivePartColumnToNullPartitions.put(hivePartColumnRefOperator, Sets.newConcurrentHashSet());
             hivePartPartitionColumnRefOperators.add(hivePartColumnRefOperator);
         }
+        boolean hasHivePartConjuncts = hasPartitionConjuncts(operator, hivePartPartitionColumnRefOperators);
 
         long partitionId = 0;
         Map<Long, String> level1RangePartitionNamesById = Maps.newHashMap();
@@ -1413,15 +1424,16 @@ public class OptThivePartitionPruner {
                         ", level2 = " + level2);
 
                 operator.getScanOperatorPredicates().getIdToPartitionKey().put(partitionId, partitionKey);
-                addColumnToPartitionValuesMap(level1.getKey(), hivePartPartitionColumnRefOperators.get(0), partitionId,
-                        hivePartColumnToPartitionValuesMap);
+                if (hasHivePartConjuncts) {
+                    addPartitionValue(level1.getKey(), hivePartPartitionColumnRefOperators.get(0), partitionId,
+                            Type.STRING, hivePartColumnToPartitionValuesMap);
+                }
                 partitionId++;
             }
         }
 
-        Set<String> selectLevel1RangePartitionNames =
-                rangePrunePartitions(operator, context, hmsTable, level1PartitionNameToPartitionValues,
-                        partitionColumns.get(0));
+        Set<String> selectLevel1RangePartitionNames = rangePrunePartitions(operator, context, hmsTable,
+                level1PartitionNameToPartitionValues, partitionColumns.get(0));
         LOG.debug(hmsTable.getTableName() + " level1 selectRangePartitionNames = " + selectLevel1RangePartitionNames);
 
         List<Long> matches = new ArrayList<>();
@@ -1434,9 +1446,11 @@ public class OptThivePartitionPruner {
         ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
         scanOperatorPredicates.setSelectedPartitionIds(matches);
 
-        thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
-        thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
-                hivePartColumnToNullPartitions, null);
+        if (hasHivePartConjuncts) {
+            thiveClassifyConjuncts(operator, hivePartColumnToPartitionValuesMap);
+            thiveHivePartColumnComputePartitionInfo(operator, hivePartColumnToPartitionValuesMap,
+                    hivePartColumnToNullPartitions, null);
+        }
 
         addConjunctsForThive(operator);
     }

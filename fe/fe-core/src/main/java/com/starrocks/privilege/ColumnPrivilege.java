@@ -116,6 +116,9 @@ public class ColumnPrivilege {
             optimizerConfig.disableRuleSet(RuleSetType.SINGLE_TABLE_MV_REWRITE);
             optimizerConfig.disableRuleSet(RuleSetType.MULTI_TABLE_MV_REWRITE);
             optimizerConfig.disableRuleSet(RuleSetType.PRUNE_EMPTY_OPERATOR);
+            // Column privilege check only needs column pruning, not partition pruning.
+            // Disable to avoid unnecessary external table metadata access.
+            optimizerConfig.disableRuleSet(RuleSetType.PARTITION_PRUNE);
             Optimizer optimizer = new Optimizer(optimizerConfig);
             optimizedPlan = optimizer.optimize(context, logicalPlan.getRoot(),
                     new PhysicalPropertySet(), new ColumnRefSet(logicalPlan.getOutputColumn()), columnRefFactory);
