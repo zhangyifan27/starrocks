@@ -49,6 +49,9 @@ CONF_Int32(brpc_port, "8060");
 // The number of bthreads for brpc, the default value is set to -1, which means the number of bthreads is #cpu-cores.
 CONF_Int32(brpc_num_threads, "-1");
 
+// Default timeout for RemoteNodeCache BRPC requests in milliseconds.
+CONF_mInt32(remote_node_cache_default_brpc_timeout_ms, "2000");
+
 // The max number of single connections maintained by the brpc client and each server.
 // Theses connections are created during the first few access and will be used thereafter
 CONF_Int32(brpc_max_connections_per_server, "1");

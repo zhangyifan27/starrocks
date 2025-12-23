@@ -121,7 +121,8 @@ Status RemoteNodeCache::read_buffer(const std::string& cache_key, const off_t of
         std::string error_msg = fmt::format("Failed to read node cache: key={}, offset={}, size={}, error={}",
                                             cache_key, offset, size, brpc_closure->cntl.ErrorText());
         LOG(WARNING) << error_msg;
-        return Status::InternalError(error_msg);
+        // transfer real error code to NotFound to let caller read that block from other place
+        return Status::NotFound(error_msg);
     }
     auto status = Status(brpc_closure->result.status());
     if (!status.ok()) {
@@ -134,6 +135,15 @@ Status RemoteNodeCache::read_buffer(const std::string& cache_key, const off_t of
     auto length = (size_t)brpc_closure->result.data().length();
     buffer->raw_buf().append((void*)brpc_closure->result.data().c_str(), length);
     return status;
+}
+
+int32_t RemoteNodeCache::_calculate_timeout(size_t size) const {
+    int32_t base_timeout_ms = config::remote_node_cache_default_brpc_timeout_ms;
+    if (base_timeout_ms <= 0) {
+        base_timeout_ms = 2000;
+    }
+    const int32_t estimated_transfer_ms = static_cast<int32_t>(size / 1024);
+    return std::min(base_timeout_ms + estimated_transfer_ms, MAX_BRPC_TIMEOUT_MS);
 }
 
 } // namespace starrocks::io

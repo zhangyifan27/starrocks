@@ -10,7 +10,6 @@ namespace starrocks::io {
 // Remote node cache reader - provides basic read_buffer functionality
 class RemoteNodeCache {
 public:
-    static constexpr int32_t DEFAULT_BRPC_TIMEOUT_MS = 3000;
     static constexpr int32_t MAX_BRPC_TIMEOUT_MS = 30000;
 
     explicit RemoteNodeCache(const TNetworkAddress& node_address) : _node_address(node_address) {}
@@ -25,10 +24,7 @@ public:
                        const ReadCacheOptions& options);
 
 private:
-    int32_t _calculate_timeout(size_t size) const {
-        // Base timeout + estimated data transfer time
-        return std::min(DEFAULT_BRPC_TIMEOUT_MS + static_cast<int32_t>(size / 1024), MAX_BRPC_TIMEOUT_MS);
-    }
+    int32_t _calculate_timeout(size_t size) const;
 
     TNetworkAddress _node_address;
     PInternalService_Stub* _brpc_stub = nullptr;
