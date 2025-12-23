@@ -389,7 +389,7 @@ public class OlapTable extends Table {
         if (this.defaultDistributionInfo != null) {
             olapTable.defaultDistributionInfo = this.defaultDistributionInfo.copy();
         }
-        Map<Long, Partition> idToPartitions = new HashMap<>(this.idToPartition.size());
+        Map<Long, Partition> idToPartitions = new ConcurrentHashMap<>(this.idToPartition.size());
         Map<String, Partition> nameToPartitions = Maps.newTreeMap(String.CASE_INSENSITIVE_ORDER);
         for (Map.Entry<Long, Partition> kv : this.idToPartition.entrySet()) {
             Partition copiedPartition = kv.getValue().shallowCopy();
@@ -1224,14 +1224,19 @@ public class OlapTable extends Table {
         Preconditions.checkState(partitionInfo instanceof RangePartitionInfo);
         RangePartitionInfo rangePartitionInfo = (RangePartitionInfo) partitionInfo;
         Map<String, Range<PartitionKey>> rangePartitionMap = Maps.newHashMap();
-        for (Map.Entry<Long, Partition> partitionEntry : idToPartition.entrySet()) {
-            Long partitionId = partitionEntry.getKey();
-            String partitionName = partitionEntry.getValue().getName();
+        for (Map.Entry<Long, Range<PartitionKey>> entry : rangePartitionInfo.getIdToRange(false).entrySet()) {
+            Long partitionId = entry.getKey();
+            Range<PartitionKey> range = entry.getValue();
+            Partition partition = getPartition(partitionId);
+            if (partition == null) {
+                continue;
+            }
+            String partitionName = partition.getName();
             // FE and BE at the same time ignore the hidden partition at the same time
             if (partitionName.startsWith(ExpressionRangePartitionInfo.SHADOW_PARTITION_PREFIX)) {
                 continue;
             }
-            rangePartitionMap.put(partitionName, rangePartitionInfo.getRange(partitionId));
+            rangePartitionMap.put(partitionName, range);
         }
         return rangePartitionMap;
     }
