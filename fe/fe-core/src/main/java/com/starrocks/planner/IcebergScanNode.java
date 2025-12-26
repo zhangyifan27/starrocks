@@ -32,6 +32,7 @@ import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
 import com.starrocks.common.UserException;
+import com.starrocks.common.util.DebugUtil;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.PartitionUtil;
@@ -484,6 +485,13 @@ public class IcebergScanNode extends ScanNode {
         output.append("\n");
 
         output.append(prefix).append(String.format("avgRowSize=%s", avgRowSize));
+        output.append("\n");
+
+        output.append(prefix).append(String.format("numFiles=%d", scanFileNum));
+        output.append("\n");
+
+        output.append(prefix).append(String.format("fileSize=%s",
+                DebugUtil.getPrettyStringBytes(scanFileSize)));
         output.append("\n");
 
         if (detailLevel == TExplainLevel.VERBOSE) {
