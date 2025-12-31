@@ -119,6 +119,7 @@ Status ColumnChunkReader::_parse_page_header() {
         _opts.stats->has_page_statistics |=
                 (header.data_page_header.__isset.statistics && (header.data_page_header.statistics.__isset.min_value ||
                                                                 header.data_page_header.statistics.__isset.min));
+        _opts.stats->pages_read_counter += 1;
     }
 
     return Status::OK();
@@ -170,6 +171,7 @@ Status ColumnChunkReader::_read_and_decompress_page_data(uint32_t compressed_siz
     if (is_compressed) {
         _uncompressed_buf.reserve(uncompressed_size);
         _data = Slice(_uncompressed_buf.data(), uncompressed_size);
+        SCOPED_RAW_TIMER(&_opts.stats->decompress_ns);
         RETURN_IF_ERROR(_compress_codec->decompress(read_data, &_data));
     } else {
         _data = read_data;

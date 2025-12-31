@@ -487,6 +487,7 @@ Status HdfsOrcScanner::do_open(RuntimeState* runtime_state) {
         errno = 0;
         orc::ReaderOptions options;
         options.setMemoryPool(*getOrcMemoryPool());
+        options.setReaderMetrics(&_reader_metrics);
         bool use_file_metacache = false;
         string metacache_key;
         DataCacheHandle footer_cache_handle;
@@ -868,6 +869,9 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
         COUNTER_UPDATE(selected_row_group_number_counter, _orc_reader->get_selected_row_group_number());
         COUNTER_UPDATE(skip_row_group_number_counter,
                        _orc_reader->get_total_row_group_number() - _orc_reader->get_selected_row_group_number());
+
+        // Get decompression time from ORC ReaderMetrics
+        _app_stats.decompress_ns = _reader_metrics.DecompressionLatencyUs * 1000;
     }
 
     // update footer cache counters
@@ -886,6 +890,10 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
     COUNTER_UPDATE(orc_footer_cache_write_fail_counter, _app_stats.footer_cache_write_fail_count);
     COUNTER_UPDATE(orc_footer_cache_read_counter, _app_stats.footer_cache_read_count);
     COUNTER_UPDATE(orc_footer_cache_read_timer, _app_stats.footer_cache_read_ns);
+
+    // update decompression time
+    RuntimeProfile::Counter* decompress_timer = ADD_CHILD_TIMER(root_profile, "DecompressionTime", orcProfileSectionPrefix);
+    COUNTER_UPDATE(decompress_timer, _app_stats.decompress_ns);
 }
 
 } // namespace starrocks

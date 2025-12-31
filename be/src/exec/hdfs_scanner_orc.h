@@ -71,6 +71,7 @@ private:
     std::unique_ptr<ORCHdfsFileStream> _input_stream;
 
     BlockCache* _cache = nullptr;
+    orc::ReaderMetrics _reader_metrics;
 };
 
 } // namespace starrocks

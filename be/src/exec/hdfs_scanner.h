@@ -63,6 +63,9 @@ struct HdfsScanStats {
     int64_t column_convert_ns = 0;
     int64_t reader_init_ns = 0;
 
+    // common for orc & parquet
+    int64_t decompress_ns = 0;
+
     // parquet only!
     // read & decode
     int64_t request_bytes_read = 0;
@@ -70,6 +73,7 @@ struct HdfsScanStats {
     int64_t level_decode_ns = 0;
     int64_t value_decode_ns = 0;
     int64_t page_read_ns = 0;
+    int64_t pages_read_counter = 0;
     // reader init
     int64_t footer_read_ns = 0;
     int64_t footer_cache_read_ns = 0;
