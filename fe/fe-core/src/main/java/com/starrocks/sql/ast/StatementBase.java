@@ -93,8 +93,6 @@ public abstract class StatementBase implements ParseNode {
     // True if this QueryStmt is the top level query from an EXPLAIN <query>
     protected boolean isExplain = false;
 
-    protected boolean withDigest = false;
-
     // Original statement to further usage, eg: enable_sql_blacklist.
     protected OriginStatement origStmt;
 
@@ -109,12 +107,6 @@ public abstract class StatementBase implements ParseNode {
         this.explainLevel = explainLevel;
     }
 
-    public void setIsExplain(boolean isExplain, ExplainLevel explainLevel, boolean withDigest) {
-        this.isExplain = isExplain;
-        this.explainLevel = explainLevel;
-        this.withDigest = withDigest;
-    }
-
     public void setIsTrace(Tracers.Mode mode, String module) {
         this.isExplain = true;
         this.traceMode = mode;
@@ -123,10 +115,6 @@ public abstract class StatementBase implements ParseNode {
 
     public boolean isExplain() {
         return isExplain;
-    }
-
-    public boolean withDigest() {
-        return withDigest;
     }
 
     public Tracers.Mode getTraceMode() {

@@ -274,7 +274,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static com.starrocks.common.ErrorCode.ERR_NO_PARTITIONS_HAVE_DATA_LOAD;
 import static com.starrocks.sql.common.ErrorMsgProxy.PARSER_ERROR_MSG;
@@ -599,10 +598,6 @@ public class StmtExecutor {
                         execPlan = StatementPlanner.plan(parsedStmt, context);
                         if (execPlan == null && parsedStmt.isExplain() && parsedStmt.getExplainLevel().equals(
                                 StatementBase.ExplainLevel.VALID)) {
-                            if (parsedStmt.withDigest()) {
-                                handleExplainValidWithDigestStmt();
-                                return;
-                            }
                             context.getState().setOk();
                             return;
                         }
@@ -2110,26 +2105,6 @@ public class StmtExecutor {
         }
 
         sendShowResult(resultSet);
-    }
-
-    private void handleExplainValidWithDigestStmt() throws IOException {
-        ShowResultSetMetaData metaData =
-                ShowResultSetMetaData.builder()
-                        .addColumn(new Column("Explain Valid With Digest String", ScalarType.createVarchar(20)))
-                        .build();
-        sendMetaData(metaData);
-
-        String digest = ConnectProcessor.computeStatementDigest(parsedStmt);
-        String resultSet = String.format("Digest: %s", digest);
-        if (isProxy) {
-            proxyResultSet = new ShowResultSet(metaData,
-                    Stream.of(resultSet).map(Collections::singletonList).collect(Collectors.toList()));
-        } else {
-            serializer.reset();
-            serializer.writeLenEncodedString(resultSet);
-            context.getMysqlChannel().sendOnePacket(serializer.toByteBuffer());
-        }
-        context.getState().setEof();
     }
 
     private void handleExplainStmt(String explainString) throws IOException {
