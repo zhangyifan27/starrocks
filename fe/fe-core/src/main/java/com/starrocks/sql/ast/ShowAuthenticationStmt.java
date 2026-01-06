@@ -29,6 +29,7 @@ public class ShowAuthenticationStmt extends ShowStmt {
         builder.addColumn(new Column("Password", ScalarType.createVarchar(20)));
         builder.addColumn(new Column("AuthPlugin", ScalarType.createVarchar(100)));
         builder.addColumn(new Column("UserForAuthPlugin", ScalarType.createVarchar(100)));
+        builder.addColumn(new Column("EncryptPassword", ScalarType.createVarchar(100)));
         META_DATA = builder.build();
     }
 

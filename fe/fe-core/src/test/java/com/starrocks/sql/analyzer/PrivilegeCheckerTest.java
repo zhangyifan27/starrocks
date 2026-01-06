@@ -3022,24 +3022,25 @@ public class PrivilegeCheckerTest {
         ShowAuthenticationStmt stmt = new ShowAuthenticationStmt(testUser, false);
         ShowResultSet resultSet = ShowExecutor.execute(stmt, starRocksAssert.getCtx());
 
-        Assert.assertEquals(4, resultSet.getMetaData().getColumnCount());
+        Assert.assertEquals(5, resultSet.getMetaData().getColumnCount());
         Assert.assertEquals("UserIdentity", resultSet.getMetaData().getColumn(0).getName());
         Assert.assertEquals("Password", resultSet.getMetaData().getColumn(1).getName());
         Assert.assertEquals("AuthPlugin", resultSet.getMetaData().getColumn(2).getName());
         Assert.assertEquals("UserForAuthPlugin", resultSet.getMetaData().getColumn(3).getName());
-        Assert.assertEquals("[['test'@'%', No, MYSQL_NATIVE_PASSWORD, null]]",
+        Assert.assertEquals("EncryptPassword", resultSet.getMetaData().getColumn(4).getName());
+        Assert.assertEquals("[['test'@'%', No, MYSQL_NATIVE_PASSWORD, null, ]]",
                 resultSet.getResultRows().toString());
 
         stmt = new ShowAuthenticationStmt(null, true);
         resultSet = ShowExecutor.execute(stmt, starRocksAssert.getCtx());
-        Assert.assertEquals("[['root'@'%', No, MYSQL_NATIVE_PASSWORD, null], " +
+        Assert.assertEquals("[['root'@'%', No, MYSQL_NATIVE_PASSWORD, null, ], " +
                         "['test2'@'%', No, " +
-                        "MYSQL_NATIVE_PASSWORD, null], ['test'@'%', No, MYSQL_NATIVE_PASSWORD, null]]",
+                        "MYSQL_NATIVE_PASSWORD, null, ], ['test'@'%', No, MYSQL_NATIVE_PASSWORD, null, ]]",
                 resultSet.getResultRows().toString());
 
         stmt = new ShowAuthenticationStmt(UserIdentity.ROOT, false);
         resultSet = ShowExecutor.execute(stmt, starRocksAssert.getCtx());
-        Assert.assertEquals("[['root'@'%', No, MYSQL_NATIVE_PASSWORD, null]]",
+        Assert.assertEquals("[['root'@'%', No, MYSQL_NATIVE_PASSWORD, null, ]]",
                 resultSet.getResultRows().toString());
     }
 
