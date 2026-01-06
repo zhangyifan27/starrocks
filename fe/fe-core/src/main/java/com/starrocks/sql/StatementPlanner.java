@@ -199,6 +199,7 @@ public class StatementPlanner {
                 Analyzer.analyze(statement, session);
             }
         }
+        Tracers.recordTimestamp("EndTime.Total.Analyzer");
     }
 
     public static ExecPlan planInsertStmt(PlannerMetaLocker plannerMetaLocker,
@@ -249,6 +250,7 @@ public class StatementPlanner {
             TransformerContext transformerContext = new TransformerContext(columnRefFactory, session, mvTransformerContext);
             logicalPlan = new RelationTransformer(transformerContext).transformWithSelectLimit(query);
         }
+        Tracers.recordTimestamp("EndTime.Total.Transformer");
 
         OptExpression root = ShortCircuitPlanner.checkSupportShortCircuitRead(logicalPlan.getRoot(), session);
 
@@ -265,6 +267,7 @@ public class StatementPlanner {
                     new ColumnRefSet(logicalPlan.getOutputColumn()),
                     columnRefFactory);
         }
+        Tracers.recordTimestamp("EndTime.Total.Optimizer");
 
         try (Timer ignored = Tracers.watchScope("ExecPlanBuild")) {
             // 3. Build fragment exec plan
@@ -279,6 +282,7 @@ public class StatementPlanner {
                     !session.getSessionVariable().isSingleNodeExecPlan());
             execPlan.setLogicalPlan(logicalPlan);
             execPlan.setColumnRefFactory(columnRefFactory);
+            Tracers.recordTimestamp("EndTime.Total.ExecPlanBuild");
             return execPlan;
         }
     }
@@ -315,6 +319,7 @@ public class StatementPlanner {
                 TransformerContext transformerContext = new TransformerContext(columnRefFactory, session, mvTransformerContext);
                 logicalPlan = new RelationTransformer(transformerContext).transformWithSelectLimit(query);
             }
+            Tracers.recordTimestamp("EndTime.Total.Transformer");
             SimpleLimitPlanner.checkSimpleLimit(logicalPlan.getRoot(), session);
 
             OptExpression root = ShortCircuitPlanner.checkSupportShortCircuitRead(logicalPlan.getRoot(), session);
@@ -337,6 +342,7 @@ public class StatementPlanner {
                         new ColumnRefSet(logicalPlan.getOutputColumn()),
                         columnRefFactory);
             }
+            Tracers.recordTimestamp("EndTime.Total.Optimizer");
 
             try (Timer ignored = Tracers.watchScope("ExecPlanBuild")) {
                 // 3. Build fragment exec plan
@@ -353,6 +359,7 @@ public class StatementPlanner {
                 if (isSchemaValid) {
                     plan.setLogicalPlan(logicalPlan);
                     plan.setColumnRefFactory(columnRefFactory);
+                    Tracers.recordTimestamp("EndTime.Total.ExecPlanBuild");
                     return plan;
                 }
             }

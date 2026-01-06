@@ -591,6 +591,7 @@ public class DefaultCoordinator extends Coordinator {
         try (Timer timer = Tracers.watchScope(Tracers.Module.SCHEDULER, "Pending")) {
             QueryQueueManager.getInstance().maybeWait(connectContext, this);
         }
+        Tracers.recordTimestamp("EndTime.Pending");
 
         try {
             if (isShortCircuit) {
@@ -601,6 +602,7 @@ public class DefaultCoordinator extends Coordinator {
             try (Timer timer = Tracers.watchScope(Tracers.Module.SCHEDULER, "Prepare")) {
                 prepareExec();
             }
+            Tracers.recordTimestamp("EndTime.Prepare");
         } catch (Exception e) {
             setErrorCodeAndMsg(null, QueryState.ErrType.INTERNAL_ERR, e.getMessage());
             throw e;
@@ -609,6 +611,7 @@ public class DefaultCoordinator extends Coordinator {
         try (Timer timer = Tracers.watchScope(Tracers.Module.SCHEDULER, "Deploy")) {
             deliverExecFragments(needDeploy);
         }
+        Tracers.recordTimestamp("EndTime.Deploy");
 
         // Prevent `explain scheduler` from waiting until the profile timeout.
         if (!needDeploy) {

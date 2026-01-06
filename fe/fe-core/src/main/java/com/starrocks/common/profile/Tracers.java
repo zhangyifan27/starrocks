@@ -16,6 +16,7 @@ package com.starrocks.common.profile;
 
 import com.google.common.base.Stopwatch;
 import com.starrocks.common.util.RuntimeProfile;
+import com.starrocks.common.util.TimeUtils;
 import com.starrocks.qe.ConnectContext;
 import org.apache.commons.lang3.StringUtils;
 
@@ -217,6 +218,14 @@ public class Tracers {
 
     public static void record(Tracers tracers, Module module, String name, String value) {
         tracers.tracer(module, Mode.VARS).record(name, value);
+    }
+
+    public static void recordTimestamp(String name) {
+        record(Module.BASE, name, TimeUtils.getProfileTimestampString());
+    }
+
+    public static void recordTimestamp(String name, long timestampMs) {
+        record(Module.BASE, name, TimeUtils.getProfileTimestampString(timestampMs));
     }
 
     public static void count(Module module, String name, long count) {

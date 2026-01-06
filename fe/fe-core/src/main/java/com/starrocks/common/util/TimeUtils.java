@@ -357,4 +357,18 @@ public class TimeUtils {
         }
         return timezone;
     }
+
+    public static synchronized String getProfileTimestampString() {
+        return getProfileTimestampString(System.currentTimeMillis());
+    }
+
+    public static synchronized String getProfileTimestampString(long timeStamp) {
+        if (timeStamp <= 0L) {
+            return FeConstants.NULL_STRING;
+        }
+        TimeZone timeZone = getTimeZone();
+        SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+        dateFormat.setTimeZone(timeZone);
+        return dateFormat.format(new Date(timeStamp));
+    }
 }

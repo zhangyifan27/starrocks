@@ -424,6 +424,7 @@ public class ConnectProcessor {
             } catch (ParsingException parsingException) {
                 throw new AnalysisException(parsingException.getMessage());
             }
+            long parserEndTime = System.currentTimeMillis();
 
             if (stmts.size() == 1 && Config.enable_record_audit_log_before_query) {
                 auditBeforeExec(originStmt, stmts.get(0));
@@ -460,6 +461,7 @@ public class ConnectProcessor {
                 }
                 parsedStmt.setOrigStmt(new OriginStatement(originStmt, i));
                 Tracers.init(ctx, parsedStmt.getTraceMode(), parsedStmt.getTraceModule());
+                Tracers.recordTimestamp("EndTime.Parser", parserEndTime);
 
                 executor = new StmtExecutor(ctx, parsedStmt);
                 ctx.setExecutor(executor);

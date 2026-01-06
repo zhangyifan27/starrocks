@@ -622,6 +622,7 @@ public class StmtExecutor {
                     throw e;
                 }
             }
+            Tracers.recordTimestamp("EndTime.Total");
 
             if (execPlan != null && execPlan.getPhysicalPlan() != null) {
                 context.getAuditEventBuilder().setCboMemCostBytes(execPlan.getPhysicalPlan().getCost());
@@ -1092,13 +1093,12 @@ public class StmtExecutor {
             return false;
         }
 
+        long profileCollectStartTime = System.currentTimeMillis();
         recordDetailInfoInProfile(plan);
-
         // This process will get information from the context, so it must be executed synchronously.
         // Otherwise, the context may be changed, for example, containing the wrong query id.
         profile = buildTopLevelProfile();
 
-        long profileCollectStartTime = System.currentTimeMillis();
         long startTime = context.getStartTime();
         TUniqueId executionId = context.getExecutionId();
         QueryDetail queryDetail = context.getQueryDetail();
@@ -1108,10 +1108,19 @@ public class StmtExecutor {
         // profile of query1 maybe executed when query2 is under execution.
         Consumer<Boolean> task = (Boolean isAsync) -> {
             RuntimeProfile summaryProfile = profile.getChild("Summary");
+            summaryProfile.addInfoString("IsProfileAsync", String.valueOf(isAsync));
+
+            long taskStartTime = System.currentTimeMillis();
+            long prepareTime = taskStartTime - profileCollectStartTime;
+            summaryProfile.addInfoString("ProfilePrepareTime", DebugUtil.getPrettyStringMs(prepareTime));
+
+            long buildStartTime = System.currentTimeMillis();
+            profile.addChild(coord.buildQueryProfile(needMerge));
+            long buildTime = System.currentTimeMillis() - buildStartTime;
+            summaryProfile.addInfoString("ProfileBuildTime", DebugUtil.getPrettyStringMs(buildTime));
+
             summaryProfile.addInfoString(ProfileManager.PROFILE_COLLECT_TIME,
                     DebugUtil.getPrettyStringMs(System.currentTimeMillis() - profileCollectStartTime));
-            summaryProfile.addInfoString("IsProfileAsync", String.valueOf(isAsync));
-            profile.addChild(coord.buildQueryProfile(needMerge));
 
             // Update TotalTime to include the Profile Collect Time and the time to build the profile.
             long now = System.currentTimeMillis();
@@ -1143,6 +1152,7 @@ public class StmtExecutor {
     }
 
     private void processProfileForNormalExplain(ExecPlan plan, int retryIndex) {
+        long profileCollectStartTime = System.currentTimeMillis();
         if (plan != null) {
             recordDetailInfoInProfile(plan);
         }
@@ -1151,7 +1161,6 @@ public class StmtExecutor {
         // Otherwise, the context may be changed, for example, containing the wrong query id.
         profile = buildTopLevelProfile();
 
-        long profileCollectStartTime = System.currentTimeMillis();
         long startTime = context.getStartTime();
         QueryDetail queryDetail = context.getQueryDetail();
 
@@ -1444,42 +1453,49 @@ public class StmtExecutor {
             // 2. If this is a query, send the result expr fields first, and send result data back to client.
             MysqlChannel channel = context.getMysqlChannel();
             boolean isSendFields = false;
-            do {
-                batch = coord.getNext();
-                // for outfile query, there will be only one empty batch send back with eos flag
-                if (batch.getBatch() != null && !isOutfileQuery && !isExplainAnalyze) {
-                    // For some language driver, getting error packet after fields packet will be recognized as a
-                    // success result
-                    // so We need to send fields after first batch arrived
-                    if (!isSendFields) {
-                        sendFields(colNames, outputExprs);
-                        isSendFields = true;
+            try (Timer ignored = Tracers.watchScope(Tracers.Module.SCHEDULER, "FetchResult")) {
+                do {
+                    try (Timer ignored2 = Tracers.watchScope(Tracers.Module.SCHEDULER, "GetNext")) {
+                        batch = coord.getNext();
                     }
-                    if (!isProxy && channel.isSendBufferNull()) {
-                        int bufferSize = 0;
-                        for (ByteBuffer row : batch.getBatch().getRows()) {
-                            bufferSize += (row.position() - row.limit());
-                        }
-                        // +8 for header size
-                        channel.initBuffer(bufferSize + 8);
-                    }
+                    // for outfile query, there will be only one empty batch send back with eos flag
+                    if (batch.getBatch() != null && !isOutfileQuery && !isExplainAnalyze) {
+                        try (Timer ignored3 = Tracers.watchScope(Tracers.Module.SCHEDULER, "SendResult")) {
+                            // For some language driver, getting error packet after fields packet will be recognized as a
+                            // success result
+                            // so We need to send fields after first batch arrived
+                            if (!isSendFields) {
+                                sendFields(colNames, outputExprs);
+                                isSendFields = true;
+                            }
+                            if (!isProxy && channel.isSendBufferNull()) {
+                                int bufferSize = 0;
+                                for (ByteBuffer row : batch.getBatch().getRows()) {
+                                    bufferSize += (row.position() - row.limit());
+                                }
+                                // +8 for header size
+                                channel.initBuffer(bufferSize + 8);
+                            }
 
-                    for (ByteBuffer row : batch.getBatch().getRows()) {
-                        if (isProxy) {
-                            proxyResultBuffer.add(row);
-                        } else {
-                            channel.sendOnePacket(row);
+                            for (ByteBuffer row : batch.getBatch().getRows()) {
+                                if (isProxy) {
+                                    proxyResultBuffer.add(row);
+                                } else {
+                                    channel.sendOnePacket(row);
+                                }
+                            }
+                            context.updateReturnRows(batch.getBatch().getRows().size());
                         }
                     }
-                    context.updateReturnRows(batch.getBatch().getRows().size());
+                } while (!batch.isEos());
+                if (context.getSessionVariable().isEnableSqlDialog()) {
+                    coord.checkInstancesSkew();
                 }
-            } while (!batch.isEos());
-            if (context.getSessionVariable().isEnableSqlDialog()) {
-                coord.checkInstancesSkew();
-            }
-            if (!isSendFields && !isOutfileQuery && !isExplainAnalyze) {
-                sendFields(colNames, outputExprs);
-            }
+                if (!isSendFields && !isOutfileQuery && !isExplainAnalyze) {
+                    sendFields(colNames, outputExprs);
+                }
+            } // end of FetchResult watchScope
+            Tracers.recordTimestamp("EndTime.FetchResult");
         }
 
         if (context instanceof ArrowFlightSqlConnectContext) {
