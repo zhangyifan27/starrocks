@@ -76,7 +76,8 @@ public:
                   std::vector<std::string> column_names, std::vector<TypeDescriptor> type_descs,
                   std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
                   TCompressionType::type compression_type, std::shared_ptr<ORCWriterOptions> writer_options,
-                  std::function<void()> rollback_action);
+                  std::function<void()> rollback_action,
+                  std::shared_ptr<FileSystem> fs = nullptr);
 
     ~ORCFileWriter() override = default;
 
@@ -132,6 +133,7 @@ private:
     std::shared_ptr<ORCWriterOptions> _writer_options;
     int64_t _row_counter{0};
     std::function<void()> _rollback_action;
+    std::shared_ptr<FileSystem> _fs;
 };
 
 class ORCFileWriterFactory : public FileWriterFactory {

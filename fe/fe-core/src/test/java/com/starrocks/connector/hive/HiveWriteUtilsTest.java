@@ -14,6 +14,7 @@
 
 package com.starrocks.connector.hive;
 
+import com.starrocks.catalog.HiveTable;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.ExceptionChecker;
 import com.starrocks.connector.exception.StarRocksConnectorException;
@@ -102,5 +103,45 @@ public class HiveWriteUtilsTest {
     @Test
     public void testFileCreateByQuery() {
         Assert.assertFalse(HiveWriteUtils.fileCreatedByQuery("000000_0", "aaaa-bbbb"));
+    }
+
+    @Test
+    public void testGetStagingDirForHdfsUrl() {
+        HiveTable table = new HiveTable.Builder()
+                .setTableName("test_table")
+                .setTableLocation("hdfs://ss-teg-7-v3/user/hive/warehouse/test_db.db/test_table")
+                .build();
+        String tempStagingDir = "/tmp/starrocks";
+        String stagingDir = HiveWriteUtils.getStagingDir(table, tempStagingDir);
+
+        // Verify the staging dir format: hdfs://[host]/[tempStagingDir]/[yearMonthDay]/[databaseName]/[tableName]/[UUID]/
+        Assert.assertTrue(stagingDir.startsWith("hdfs://ss-teg-7-v3/tmp/starrocks/"));
+        Assert.assertTrue(stagingDir.contains("/test_db.db/"));
+        Assert.assertTrue(stagingDir.contains("/test_table/"));
+        Assert.assertTrue(stagingDir.endsWith("/"));
+
+        // Verify date format (YYYYMMDD)
+        String datePattern = "\\d{8}";
+        Assert.assertTrue(stagingDir.matches(".*/" + datePattern + "/.*"));
+
+        // Verify UUID format (8-4-4-4-12)
+        String uuidPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}";
+        Assert.assertTrue(stagingDir.matches(".*/" + uuidPattern + "/"));
+    }
+
+    @Test
+    public void testGetStagingDirForHdfsUrlWithoutLeadingSlash() {
+        HiveTable table = new HiveTable.Builder()
+                .setTableName("test_table")
+                .setTableLocation("hdfs://host/user/hive/warehouse/db_name.db/table_name")
+                .build();
+        String tempStagingDir = "tmp/starrocks";  // without leading slash
+        String stagingDir = HiveWriteUtils.getStagingDir(table, tempStagingDir);
+
+        // Verify the staging dir format
+        Assert.assertTrue(stagingDir.startsWith("hdfs://host/tmp/starrocks/"));
+        Assert.assertTrue(stagingDir.contains("/db_name.db/"));
+        Assert.assertTrue(stagingDir.contains("/table_name/"));
+        Assert.assertTrue(stagingDir.endsWith("/"));
     }
 }

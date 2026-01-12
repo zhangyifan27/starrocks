@@ -113,7 +113,8 @@ ORCFileWriter::ORCFileWriter(std::string location, std::shared_ptr<orc::OutputSt
                              std::vector<std::string> column_names, std::vector<TypeDescriptor> type_descs,
                              std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
                              TCompressionType::type compression_type, std::shared_ptr<ORCWriterOptions> writer_options,
-                             std::function<void()> rollback_action)
+                             std::function<void()> rollback_action,
+                             std::shared_ptr<FileSystem> fs)
         : _location(std::move(location)),
           _output_stream(std::move(output_stream)),
           _column_names(std::move(column_names)),
@@ -121,7 +122,8 @@ ORCFileWriter::ORCFileWriter(std::string location, std::shared_ptr<orc::OutputSt
           _column_evaluators(std::move(column_evaluators)),
           _compression_type(compression_type),
           _writer_options(std::move(writer_options)),
-          _rollback_action(std::move(rollback_action)) {}
+          _rollback_action(std::move(rollback_action)),
+          _fs(std::move(fs)) {}
 
 Status ORCFileWriter::init() {
     RETURN_IF_ERROR(ColumnEvaluator::init(_column_evaluators));
@@ -168,6 +170,33 @@ FileWriter::CommitResult ORCFileWriter::commit() {
     if (result.io_status.ok()) {
         result.file_statistics.record_count = _row_counter;
         result.file_statistics.file_size = _output_stream->getLength();
+
+        // add row count suffix to the location
+        std::string new_location = _location;
+        const auto pos = new_location.find_last_of('.');
+        if (pos != std::string::npos) {
+            new_location.insert(pos, fmt::format("_{}", _row_counter));
+        } else {
+            new_location.append(fmt::format("_{}", _row_counter));
+        }
+
+        if (_fs != nullptr) {
+            Status st = _fs->rename_file(_location, new_location);
+            if (!st.ok()) {
+                result.io_status.update(Status::IOError(
+                        fmt::format("rename orc file from {} to {} failed: {}", _location, new_location,
+                                    st.to_string())));
+            } else {
+                // update the location and rollback action
+                result.location = new_location;
+                if (result.rollback_action) {
+                    auto rollback_path = new_location;
+                    result.rollback_action = [fs = _fs, rollback_path]() {
+                        WARN_IF_ERROR(ignore_not_found(fs->delete_file(rollback_path)), "fail to delete file");
+                    };
+                }
+            }
+        }
     }
 
     auto promise = std::make_shared<std::promise<FileWriter::CommitResult>>();
@@ -517,7 +546,7 @@ StatusOr<WriterAndStream> ORCFileWriterFactory::create(const string& path) const
     auto orc_output_stream = std::make_shared<AsyncOrcOutputStream>(async_output_stream.get());
     auto writer =
             std::make_unique<ORCFileWriter>(path, orc_output_stream, _column_names, types, std::move(column_evaluators),
-                                            _compression_type, _parsed_options, rollback_action);
+                                            _compression_type, _parsed_options, rollback_action, _fs);
     return WriterAndStream{
             .writer = std::move(writer),
             .stream = std::move(async_output_stream),

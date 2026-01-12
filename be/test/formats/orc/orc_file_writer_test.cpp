@@ -1077,4 +1077,46 @@ TEST_F(OrcFileWriterTest, TestOrcPatchedBaseWrongBaseWidth) {
     assert_equal_chunk(chunk.get(), read_chunk.get());
 }
 
+TEST_F(OrcFileWriterTest, TestCommitWithFileRename) {
+    ASSERT_OK(ignore_not_found(_fs->delete_file(_file_path)));
+    std::string original_path = "./be/test/exec/test_data/orc_scanner/tmp.orc";
+    std::string expected_renamed_path = "./be/test/exec/test_data/orc_scanner/tmp_5.orc";
+
+    std::vector<TypeDescriptor> type_descs{TypeDescriptor::from_logical_type(TYPE_INT)};
+    auto column_names = _make_type_names(type_descs);
+    auto output_file = _fs->new_writable_file(original_path).value();
+    auto output_stream = std::make_unique<OrcOutputStream>(std::move(output_file));
+    auto column_evaluators = ColumnSlotIdEvaluator::from_types(type_descs);
+    auto writer_options = std::make_shared<formats::ORCWriterOptions>();
+    // Create a shared_ptr from unique_ptr, using empty deleter since _fs manages the lifetime
+    std::shared_ptr<FileSystem> fs_shared(_fs.get(), [](FileSystem*) {});
+    auto writer = std::make_unique<formats::ORCFileWriter>(original_path, std::move(output_stream), column_names,
+                                                           type_descs, std::move(column_evaluators),
+                                                           TCompressionType::NO_COMPRESSION, writer_options, []() {},
+                                                           fs_shared);
+    ASSERT_OK(writer->init());
+
+    auto chunk = std::make_shared<Chunk>();
+    {
+        auto intColumn = Int32Column::create();
+        std::vector<int32_t> intValues = {1, 2, 3, 4, 5};
+        intColumn->append_numbers(intValues.data(), intValues.size() * sizeof(int32_t));
+        chunk->append_column(intColumn, chunk->num_columns());
+    }
+
+    ASSERT_OK(writer->write(chunk.get()));
+    auto result = writer->commit();
+    ASSERT_OK(result.io_status);
+    ASSERT_EQ(result.file_statistics.record_count, 5);
+    // Verify that the file was renamed with row count suffix
+    ASSERT_EQ(result.location, expected_renamed_path);
+    // Verify that the original file doesn't exist
+    ASSERT_FALSE(_fs->path_exists(original_path).ok());
+    // Verify that the renamed file exists
+    ASSERT_TRUE(_fs->path_exists(expected_renamed_path).ok());
+
+    // Clean up
+    ASSERT_OK(ignore_not_found(_fs->delete_file(expected_renamed_path)));
+}
+
 } // namespace starrocks::formats

@@ -17,6 +17,7 @@ package com.starrocks.connector.hive;
 import com.google.common.base.Preconditions;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.common.DdlException;
+import com.starrocks.common.util.DateUtils;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.utils.TAuthUtils;
@@ -32,6 +33,7 @@ import org.apache.parquet.Strings;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.security.PrivilegedExceptionAction;
+import java.time.LocalDate;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -149,9 +151,27 @@ public class HiveWriteUtils {
         if (isS3Url(location)) {
             stagingDir = location;
         } else {
-            Path tempRoot = Path.mergePaths(new Path(location).getParent(), new Path(tempStagingDir));
-            Path tempStagingPath = new Path(tempRoot, UUID.randomUUID().toString());
-            stagingDir = tempStagingPath.toString();
+            Path locationPath = new Path(location);
+            String scheme = locationPath.toUri().getScheme();
+            String host = locationPath.toUri().getHost();
+            String path = locationPath.toUri().getPath();
+
+            String[] pathParts = path.split("/");
+            String tableName = pathParts[pathParts.length - 1];
+            String dbName = pathParts[pathParts.length - 2];
+
+            String stagingDirPath = tempStagingDir.startsWith("/")
+                    ? tempStagingDir.substring(1)
+                    : tempStagingDir;
+
+            String dateStr = LocalDate.now().format(DateUtils.DATEKEY_FORMATTER);
+            String uuid = UUID.randomUUID().toString();
+
+            // hdfs://[host]/[tempStagingDir]/[yearMonthDay]/[databaseName]/[tableName]/[UUID]
+            // eg: hdfs://ss-teg-7-v3/tmp/starrocks/20260106/teg_tdw_testertb.db/abcp/14389f-54d7-4481-b99a-7bc65cd29f4d
+            String newPath = String.format("/%s/%s/%s/%s/%s",
+                    stagingDirPath, dateStr, dbName, tableName, uuid);
+            stagingDir = new Path(scheme, host, newPath).toString();
         }
         return stagingDir.endsWith("/") ? stagingDir : stagingDir + "/";
     }
