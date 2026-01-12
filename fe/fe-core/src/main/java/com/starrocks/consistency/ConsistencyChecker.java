@@ -47,6 +47,7 @@ import com.starrocks.catalog.Partition;
 import com.starrocks.catalog.PhysicalPartition;
 import com.starrocks.catalog.PhysicalPartitionImpl;
 import com.starrocks.catalog.Table;
+import com.starrocks.catalog.Tablet;
 import com.starrocks.common.Config;
 import com.starrocks.common.util.FrontendDaemon;
 import com.starrocks.common.util.concurrent.lock.AutoCloseableLock;
@@ -71,6 +72,7 @@ import java.util.PriorityQueue;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.stream.Collectors;
 
 public class ConsistencyChecker extends FrontendDaemon {
     private static final Logger LOG = LogManager.getLogger(ConsistencyChecker.class);
@@ -355,8 +357,13 @@ public class ConsistencyChecker extends FrontendDaemon {
 
                                 // sort tablets
                                 Queue<MetaObject> tabletQueue =
-                                            new PriorityQueue<>(Math.max(index.getTablets().size(), 1), COMPARATOR);
-                                tabletQueue.addAll(index.getTablets());
+                                        new PriorityQueue<>(Math.max(index.getTablets().size(), 1), COMPARATOR);
+                                long startCheckTime = System.currentTimeMillis();
+                                long cooldownedTimeMs = startCheckTime - Config.consistency_check_cooldown_time_second * 1000L;
+                                List<Tablet> cooldownedTablets = index.getTablets().stream()
+                                        .filter(t -> t.getLastCheckTime() < cooldownedTimeMs)
+                                        .collect(Collectors.toList());
+                                tabletQueue.addAll(cooldownedTablets);
 
                                 while ((chosenOne = tabletQueue.poll()) != null) {
                                     LocalTablet tablet = (LocalTablet) chosenOne;
