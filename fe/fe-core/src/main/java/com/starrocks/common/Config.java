@@ -3717,4 +3717,10 @@ public class Config extends ConfigBase {
 
     @ConfField(mutable = true)
     public static boolean enable_iceberg_write_timestamp_check = false;
+
+    /**
+     * StarRocks will behave like Hive 2.x - only check 'colelction.delim'
+     */
+    @ConfField(mutable = true)
+    public static boolean enable_hive2_collection_delim = true;
 }

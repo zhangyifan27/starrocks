@@ -14,6 +14,7 @@
 
 package com.starrocks.connector.hive;
 
+import com.starrocks.common.Config;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import mockit.Expectations;
 import mockit.Mock;
@@ -183,22 +184,51 @@ public class HiveMetaClientTest {
         Assert.assertNull(openCSVDesc.getCollectionDelim());
         Assert.assertNull(openCSVDesc.getMapkeyDelim());
 
-        // Check is using custom delimiter
-        Map<String, String> parameters = new HashMap<>();
-        parameters.put("field.delim", ",");
-        parameters.put("line.delim", "\004");
-        parameters.put("collection.delim", "\006");
-        parameters.put("mapkey.delim", ":");
-        parameters.put("skip.header.line.count", "2");
-        TextFileFormatDesc customDesc = HiveMetastoreApiConverter.toTextFileFormatDesc(parameters);
-        Assert.assertEquals(",", customDesc.getFieldDelim());
-        Assert.assertEquals("\004", customDesc.getLineDelim());
-        Assert.assertEquals("\006", customDesc.getCollectionDelim());
-        Assert.assertEquals(":", customDesc.getMapkeyDelim());
-        Assert.assertEquals(2, customDesc.getSkipHeaderLineCount());
-        parameters.put("skip.header.line.count", "-10");
-        customDesc = HiveMetastoreApiConverter.toTextFileFormatDesc(parameters);
-        Assert.assertEquals(0, customDesc.getSkipHeaderLineCount());
+        // Save original config value
+        boolean originalConfig = Config.enable_hive2_collection_delim;
+        try {
+            Config.enable_hive2_collection_delim = true;
+            
+            Map<String, String> hive2Parameters = new HashMap<>();
+            hive2Parameters.put("field.delim", ",");
+            hive2Parameters.put("line.delim", "\004");
+            hive2Parameters.put("collection.delim", "\006");
+            hive2Parameters.put("mapkey.delim", ":");
+            hive2Parameters.put("skip.header.line.count", "2");
+            
+            TextFileFormatDesc hive2Desc = HiveMetastoreApiConverter.toTextFileFormatDesc(hive2Parameters);
+            Assert.assertEquals(",", hive2Desc.getFieldDelim());
+            Assert.assertEquals("\004", hive2Desc.getLineDelim());
+            Assert.assertNull(hive2Desc.getCollectionDelim());
+            Assert.assertEquals(":", hive2Desc.getMapkeyDelim());
+            Assert.assertEquals(2, hive2Desc.getSkipHeaderLineCount());
+
+            Map<String, String> hive2ParametersWithColelction = new HashMap<>();
+            hive2ParametersWithColelction.put("field.delim", ",");
+            hive2ParametersWithColelction.put("line.delim", "\004");
+            hive2ParametersWithColelction.put("colelction.delim", "\006");
+            hive2ParametersWithColelction.put("mapkey.delim", ":");
+            TextFileFormatDesc hive2TypoDesc = HiveMetastoreApiConverter.toTextFileFormatDesc(hive2ParametersWithColelction);
+            Assert.assertEquals(",", hive2TypoDesc.getFieldDelim());
+            Assert.assertEquals("\004", hive2TypoDesc.getLineDelim());
+            Assert.assertEquals("\006", hive2TypoDesc.getCollectionDelim());
+            Assert.assertEquals(":", hive2TypoDesc.getMapkeyDelim());
+
+            Config.enable_hive2_collection_delim = false;
+            TextFileFormatDesc hive3Desc = HiveMetastoreApiConverter.toTextFileFormatDesc(hive2Parameters);
+            Assert.assertEquals(",", hive3Desc.getFieldDelim());
+            Assert.assertEquals("\004", hive3Desc.getLineDelim());
+            Assert.assertEquals("\006", hive3Desc.getCollectionDelim());
+            Assert.assertEquals(":", hive3Desc.getMapkeyDelim());
+            Assert.assertEquals(2, hive3Desc.getSkipHeaderLineCount());
+
+            hive2Parameters.put("skip.header.line.count", "-10");
+            TextFileFormatDesc negativeSkipDesc = HiveMetastoreApiConverter.toTextFileFormatDesc(hive2Parameters);
+            Assert.assertEquals(0, negativeSkipDesc.getSkipHeaderLineCount());
+        } finally {
+            // Restore original config value
+            Config.enable_hive2_collection_delim = originalConfig;
+        }
     }
 
     @Test

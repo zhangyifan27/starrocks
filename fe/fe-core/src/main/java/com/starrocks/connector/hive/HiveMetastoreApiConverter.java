@@ -641,11 +641,17 @@ public class HiveMetastoreApiConverter {
         // Here is for compatibility with Hive 2.x version.
         // There is a typo in Hive 2.x version, and fixed in Hive 3.x version.
         // https://issues.apache.org/jira/browse/HIVE-16922
+
+        // Use Config.enable_hive2_collection_delim to control this behavior
         String collectionDelim;
-        if (parameters.containsKey("colelction.delim")) {
+        if (Config.enable_hive2_collection_delim) {
             collectionDelim = parameters.getOrDefault("colelction.delim", "");
         } else {
-            collectionDelim = parameters.getOrDefault(serdeConstants.COLLECTION_DELIM, "");
+            if (parameters.containsKey("colelction.delim")) {
+                collectionDelim = parameters.getOrDefault("colelction.delim", "");
+            } else {
+                collectionDelim = parameters.getOrDefault(serdeConstants.COLLECTION_DELIM, "");
+            }
         }
 
         String fieldDelim = parameters.getOrDefault(serdeConstants.FIELD_DELIM, "");
