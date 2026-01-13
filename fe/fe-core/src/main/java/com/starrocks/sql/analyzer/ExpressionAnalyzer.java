@@ -1323,6 +1323,12 @@ public class ExpressionAnalyzer {
                     fnName = FunctionSet.MAX_ARRAY;
                     node.resetFnName(null, FunctionSet.MAX_ARRAY);
                 }
+                // Replace function `max` on struct column with function `max_struct`.
+                if (FunctionSet.MAX.equals(fnName) && !node.getChildren().isEmpty()
+                        && node.getChildren().get(0).getType().isStructType()) {
+                    fnName = FunctionSet.MAX_STRUCT;
+                    node.resetFnName(null, FunctionSet.MAX_STRUCT);
+                }
                 fn = Expr.getBuiltinFunction(fnName, argumentTypes, Function.CompareMode.IS_NONSTRICT_SUPERTYPE_OF);
             }
 
