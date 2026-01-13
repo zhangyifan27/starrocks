@@ -211,14 +211,14 @@ public class RemoteScanRangeLocationsTest extends PlanTestBase {
     // ==================== tryGetRowCountFromFileName method tests ====================
 
     /**
-     * Test empty file list returns -1
+     * Test empty file info returns -1
      */
     @Test
-    public void testTryGetRowCountFromFileName_EmptyList() {
+    public void testTryGetRowCountFromFileName_EmptyFileInfo() {
         RemoteScanRangeLocations locations = new RemoteScanRangeLocations();
 
-        List<RemoteFileInfo> emptyList = new java.util.ArrayList<>();
-        Assert.assertEquals(-1L, locations.tryGetRowCountFromFileName(emptyList));
+        RemoteFileInfo emptyInfo = createRemoteFileInfo();
+        Assert.assertEquals(-1L, locations.tryGetRowCountFromFileName(emptyInfo));
     }
 
     /**
@@ -228,15 +228,11 @@ public class RemoteScanRangeLocationsTest extends PlanTestBase {
     public void testTryGetRowCountFromFileName_AllValidFiles() {
         RemoteScanRangeLocations locations = new RemoteScanRangeLocations();
 
-        // Create mock RemoteFileInfo and RemoteFileDesc
-        List<RemoteFileInfo> fileInfos = new java.util.ArrayList<>();
-        RemoteFileInfo info1 = createRemoteFileInfo("part_00001_100.rcf", "part_00002_200.rcf");
-        RemoteFileInfo info2 = createRemoteFileInfo("part_00003_300.orcf");
-        fileInfos.add(info1);
-        fileInfos.add(info2);
+        // Create mock RemoteFileInfo with multiple files
+        RemoteFileInfo info = createRemoteFileInfo("part_00001_100.rcf", "part_00002_200.rcf", "part_00003_300.orcf");
 
         // 100 + 200 + 300 = 600
-        Assert.assertEquals(600L, locations.tryGetRowCountFromFileName(fileInfos));
+        Assert.assertEquals(600L, locations.tryGetRowCountFromFileName(info));
     }
 
     /**
@@ -246,13 +242,11 @@ public class RemoteScanRangeLocationsTest extends PlanTestBase {
     public void testTryGetRowCountFromFileName_PartialValidFiles() {
         RemoteScanRangeLocations locations = new RemoteScanRangeLocations();
 
-        List<RemoteFileInfo> fileInfos = new java.util.ArrayList<>();
         // Contains both parseable and non-parseable files
         RemoteFileInfo info = createRemoteFileInfo("part_00001_100.rcf", "invalid.parquet", "part_00002_200.rcf");
-        fileInfos.add(info);
 
         // Only count parseable files: 100 + 200 = 300
-        Assert.assertEquals(300L, locations.tryGetRowCountFromFileName(fileInfos));
+        Assert.assertEquals(300L, locations.tryGetRowCountFromFileName(info));
     }
 
     /**
@@ -262,12 +256,10 @@ public class RemoteScanRangeLocationsTest extends PlanTestBase {
     public void testTryGetRowCountFromFileName_NoValidFiles() {
         RemoteScanRangeLocations locations = new RemoteScanRangeLocations();
 
-        List<RemoteFileInfo> fileInfos = new java.util.ArrayList<>();
         RemoteFileInfo info = createRemoteFileInfo("file1.parquet", "file2.orc", "file3.csv");
-        fileInfos.add(info);
 
         // All files cannot be parsed, return -1
-        Assert.assertEquals(-1L, locations.tryGetRowCountFromFileName(fileInfos));
+        Assert.assertEquals(-1L, locations.tryGetRowCountFromFileName(info));
     }
 
     /**

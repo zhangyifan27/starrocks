@@ -92,7 +92,7 @@ public class RemoteScanRangeLocations {
         if (shouldPrunePartitionForSimpleQuery()) {
             try {
                 // Only sort when partition count is less than the configured limit
-                int sortMaxNum = ConnectContext.get().getSessionVariable().getHivePartitionSortMaxNum();
+                int sortMaxNum = ConnectContext.get().getSessionVariable().getPrunePartitionSimpleQuerySortMaxNum();
                 // sortMaxNum <= 0 means no limit, always sort
                 if (sortMaxNum <= 0 || partitionIdList.size() <= sortMaxNum) {
                     Map<Long, PartitionKey> idToPartitionKey = scanNodePredicates.getIdToPartitionKey();
@@ -179,65 +179,74 @@ public class RemoteScanRangeLocations {
             boolean useRowCount = false;
             long estimatedRowSize = context.getSessionVariable().getPrunePartitionSimpleQueryAvgRowSize();
 
+            // Batch size for fetching partition file info
+            final int batchSize = context.getSessionVariable().getPrunePartitionSimpleQueryBatchSize();
             List<DescriptorTable.ReferencedPartitionInfo> tmpPartitionInfos = new ArrayList<>();
-            for (int i = 0; i < partitionKeys.size(); i++) {
+            boolean shouldBreak = false;
+
+            for (int batchStart = 0; batchStart < partitionKeys.size() && !shouldBreak; batchStart += batchSize) {
+                int batchEnd = Math.min(batchStart + batchSize, partitionKeys.size());
+                List<PartitionKey> batchPartitionKeys = partitionKeys.subList(batchStart, batchEnd);
+
                 try {
-                    List<RemoteFileInfo> remoteFileInfos = GlobalStateMgr.getCurrentState().getMetadataMgr()
-                            .getRemoteFileInfos(catalogName, table, Lists.newArrayList(partitionKeys.get(i)));
-                    long partitionBytes = 0;
-                    for (int j = 0; j < remoteFileInfos.size(); j++) {
-                        for (RemoteFileDesc fileDesc : remoteFileInfos.get(j).getFiles()) {
-                            if (fileDesc.getLength() > 0) {
-                                partitionBytes += fileDesc.getLength();
+                    // Batch fetch file info for current batch of partitions
+                    List<RemoteFileInfo> batchRemoteFileInfos = GlobalStateMgr.getCurrentState().getMetadataMgr()
+                            .getRemoteFileInfos(catalogName, table, batchPartitionKeys);
+
+                    // Iterate over each partition in current batch
+                    for (int i = 0; i < batchPartitionKeys.size() && !shouldBreak; i++) {
+                        if (i >= batchRemoteFileInfos.size()) {
+                            continue;
+                        }
+                        RemoteFileInfo remoteFileInfo = batchRemoteFileInfos.get(i);
+                        long partitionBytes = calculatePartitionBytes(remoteFileInfo);
+                        if (partitionBytes <= 0) {
+                            continue;
+                        }
+
+                        // Determine mode on first valid partition
+                        if (firstPartition) {
+                            long fileRowCount = tryGetRowCountFromFileName(remoteFileInfo);
+                            if (fileRowCount > 0) {
+                                useRowCount = true;
+                            } else {
+                                estimatedRowSize = Math.max(estimatedRowSize, getEstimatedRowSize(table));
                             }
+                            firstPartition = false;
                         }
-                    }
-                    if (partitionBytes <= 0) {
-                        continue;
-                    }
 
-                    // Determine mode on first valid partition
-                    if (firstPartition) {
-                        long fileRowCount = tryGetRowCountFromFileName(remoteFileInfos);
-                        if (fileRowCount > 0) {
-                            useRowCount = true;
+                        // Add partition to result (common for both modes)
+                        partitions.add(remoteFileInfo);
+                        tmpPartitionInfos.add(partitionInfos.get(batchStart + i));
+                        totalSize += partitionBytes;
+                        selectedPartitionNum++;
+
+                        // Check if we have enough data
+                        if (useRowCount) {
+                            long fileRowCount = tryGetRowCountFromFileName(remoteFileInfo);
+                            if (fileRowCount > 0) {
+                                totalFileRowCount += fileRowCount;
+                            }
+                            if (totalFileRowCount >= simpleLimit) {
+                                partitionInfos = tmpPartitionInfos;
+                                maxScanSizeBytes = Long.MAX_VALUE;
+                                maxScanRowCount = simpleLimit;
+                                LOG.info("prune partition for simple query (row count mode) {}, limit {}, partitions {}, " +
+                                                "file sizes {}, with file row count {}",
+                                        context.getQueryId(), simpleLimit, selectedPartitionNum, totalSize, totalFileRowCount);
+                                shouldBreak = true;
+                            }
                         } else {
-                            estimatedRowSize = Math.max(estimatedRowSize, getEstimatedRowSize(table));
-                        }
-                        firstPartition = false;
-                    }
-
-                    // Add partition to result (common for both modes)
-                    partitions.addAll(remoteFileInfos);
-                    tmpPartitionInfos.add(partitionInfos.get(i));
-                    totalSize += partitionBytes;
-                    selectedPartitionNum++;
-
-                    // Check if we have enough data
-                    if (useRowCount) {
-                        long fileRowCount = tryGetRowCountFromFileName(remoteFileInfos);
-                        if (fileRowCount > 0) {
-                            totalFileRowCount += fileRowCount;
-                        }
-                        if (totalFileRowCount >= simpleLimit) {
-                            partitionInfos = tmpPartitionInfos;
-                            maxScanSizeBytes = Long.MAX_VALUE;
-                            maxScanRowCount = simpleLimit;
-                            LOG.info("prune partition for simple query (row count mode) {}, limit {}, partitions {}, " +
-                                            "file sizes {}, with file row count {}",
-                                    context.getQueryId(), simpleLimit, selectedPartitionNum, totalSize, totalFileRowCount);
-                            break;
-                        }
-                    } else {
-                        // File size mode: estimate based on avg row size
-                        if (totalSize > estimatedRowSize * simpleLimit) {
-                            partitionInfos = tmpPartitionInfos;
-                            maxScanSizeBytes = estimatedRowSize * simpleLimit;
-                            maxScanRowCount = Long.MAX_VALUE;
-                            LOG.info("prune partition for simple query (file size mode) {}, limit {}, partitions {}, " +
-                                            "file sizes {}, estimatedRowSize {}", context.getQueryId(), simpleLimit,
-                                    selectedPartitionNum, totalSize, estimatedRowSize);
-                            break;
+                            // File size mode: estimate based on avg row size
+                            if (totalSize > estimatedRowSize * simpleLimit) {
+                                partitionInfos = tmpPartitionInfos;
+                                maxScanSizeBytes = estimatedRowSize * simpleLimit;
+                                maxScanRowCount = Long.MAX_VALUE;
+                                LOG.info("prune partition for simple query (file size mode) {}, limit {}, partitions {}, " +
+                                                "file sizes {}, estimatedRowSize {}", context.getQueryId(), simpleLimit,
+                                        selectedPartitionNum, totalSize, estimatedRowSize);
+                                shouldBreak = true;
+                            }
                         }
                     }
                 } catch (Exception e) {
@@ -253,6 +262,7 @@ public class RemoteScanRangeLocations {
                 }
             }
         } else {
+            context.setSimpleLimit(-1);
             try {
                 partitions = GlobalStateMgr.getCurrentState().getMetadataMgr().getRemoteFileInfos(
                         catalogName, table, partitionKeys);
@@ -263,17 +273,30 @@ public class RemoteScanRangeLocations {
         }
     }
 
-    long tryGetRowCountFromFileName(List<RemoteFileInfo> remoteFileInfos) {
+    /**
+     * Calculate total bytes of all files in a partition.
+     * @param remoteFileInfo the partition file info
+     * @return total bytes of all files with positive length, 0 if no valid files
+     */
+    long calculatePartitionBytes(RemoteFileInfo remoteFileInfo) {
+        long partitionBytes = 0;
+        for (RemoteFileDesc fileDesc : remoteFileInfo.getFiles()) {
+            if (fileDesc.getLength() > 0) {
+                partitionBytes += fileDesc.getLength();
+            }
+        }
+        return partitionBytes;
+    }
+
+    long tryGetRowCountFromFileName(RemoteFileInfo remoteFileInfo) {
         long totalRowCount = -1;
-        for (RemoteFileInfo fileInfo : remoteFileInfos) {
-            for (RemoteFileDesc fileDesc : fileInfo.getFiles()) {
-                long rowCount = getFileRowCount(fileDesc.getFileName());
-                if (rowCount >= 0) {
-                    if (totalRowCount == -1) {
-                        totalRowCount = 0;
-                    }
-                    totalRowCount += rowCount;
+        for (RemoteFileDesc fileDesc : remoteFileInfo.getFiles()) {
+            long rowCount = getFileRowCount(fileDesc.getFileName());
+            if (rowCount >= 0) {
+                if (totalRowCount == -1) {
+                    totalRowCount = 0;
                 }
+                totalRowCount += rowCount;
             }
         }
         return totalRowCount;

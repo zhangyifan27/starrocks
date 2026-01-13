@@ -809,8 +809,6 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String SCAN_HIVE_DATAFILE_NUM_LIMIT = "scan_hive_datafile_num_limit";
 
-    public static final String HIVE_PARTITION_SORT_MAX_NUM = "hive_partition_sort_max_num";
-
     public static final String SCAN_OLAP_PARTITION_NUM_LIMIT = "scan_olap_partition_num_limit";
 
     public static final String AUDIT_EXECUTE_STMT = "audit_execute_stmt";
@@ -871,6 +869,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String ENABLE_PRUNE_PARTITION_SIMPLE_QUERY = "enable_prune_partition_simple_query";
     public static final String PRUNE_PARTITION_SIMPLE_QUERY_MAX_LIMIT = "prune_partition_simple_query_max_limit";
     public static final String PRUNE_PARTITION_SIMPLE_QUERY_AVG_ROW_SIZE = "prune_partition_simple_query_avg_row_size";
+    public static final String PRUNE_PARTITION_SIMPLE_QUERY_BATCH_SIZE = "prune_partition_simple_query_batch_size";
+    public static final String PRUNE_PARTITION_SIMPLE_QUERY_SORT_MAX_NUM = "prune_partition_simple_query_sort_max_num";
 
     // Whether to enable the optimization of marking `assertOneRow` exprs to be constant. 
     public static final String ENABLE_MARK_ONE_ROW_EXPR_CONSTANT = "enable_mark_one_row_expr_constant";
@@ -2262,11 +2262,6 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     // For the maximum number of partitions allowed to be scanned in a single olap table, 0 means no limit.
     @VarAttr(name = SCAN_OLAP_PARTITION_NUM_LIMIT)
     private int scanOlapPartitionNumLimit = 0;
-
-    // For the maximum number of hive partitions to sort, 0 means no limit.
-    // Default is 10000, when partition count exceeds this limit, skip sorting to improve performance.
-    @VarAttr(name = HIVE_PARTITION_SORT_MAX_NUM)
-    private int hivePartitionSortMaxNum = 10000;
 
     @VariableMgr.VarAttr(name = AUDIT_EXECUTE_STMT)
     private boolean auditExecuteStmt = false;
@@ -4468,14 +4463,6 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
         this.scanOlapPartitionNumLimit = scanOlapPartitionNumLimit;
     }
 
-    public int getHivePartitionSortMaxNum() {
-        return hivePartitionSortMaxNum;
-    }
-
-    public void setHivePartitionSortMaxNum(int hivePartitionSortMaxNum) {
-        this.hivePartitionSortMaxNum = hivePartitionSortMaxNum;
-    }
-
     public boolean enableCboDeriveRangeJoinPredicate() {
         return cboDeriveRangeJoinPredicate;
     }
@@ -4793,6 +4780,30 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setPrunePartitionSimpleQueryAvgRowSize(long prunePartitionSimpleQueryAvgRowSize) {
         this.prunePartitionSimpleQueryAvgRowSize = prunePartitionSimpleQueryAvgRowSize;
+    }
+
+    @VariableMgr.VarAttr(name = PRUNE_PARTITION_SIMPLE_QUERY_BATCH_SIZE)
+    private int prunePartitionSimpleQueryBatchSize = 64;
+
+    public int getPrunePartitionSimpleQueryBatchSize() {
+        return prunePartitionSimpleQueryBatchSize;
+    }
+
+    public void setPrunePartitionSimpleQueryBatchSize(int prunePartitionSimpleQueryBatchSize) {
+        this.prunePartitionSimpleQueryBatchSize = prunePartitionSimpleQueryBatchSize;
+    }
+
+    // For the maximum number of partitions to sort in simple query optimization, 0 means no limit.
+    // Default is 10000, when partition count exceeds this limit, skip sorting to improve performance.
+    @VarAttr(name = PRUNE_PARTITION_SIMPLE_QUERY_SORT_MAX_NUM)
+    private int prunePartitionSimpleQuerySortMaxNum = 10000;
+
+    public int getPrunePartitionSimpleQuerySortMaxNum() {
+        return prunePartitionSimpleQuerySortMaxNum;
+    }
+
+    public void setPrunePartitionSimpleQuerySortMaxNum(int prunePartitionSimpleQuerySortMaxNum) {
+        this.prunePartitionSimpleQuerySortMaxNum = prunePartitionSimpleQuerySortMaxNum;
     }
 
     public boolean isEnableGroupingSets() {
