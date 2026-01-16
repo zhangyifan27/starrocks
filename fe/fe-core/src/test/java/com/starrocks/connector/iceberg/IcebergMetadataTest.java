@@ -124,6 +124,7 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.junit.jupiter.api.Assertions;
 
 import java.io.File;
 import java.io.IOException;
@@ -335,7 +336,8 @@ public class IcebergMetadataTest extends TableTestBase {
 
         IcebergMetadata metadata = new IcebergMetadata(CATALOG_NAME, HDFS_ENVIRONMENT, icebergHiveCatalog,
                 Executors.newSingleThreadExecutor(), Executors.newSingleThreadExecutor(), null);
-        Assert.assertNull(metadata.getTable("db", "tbl2"));
+        Assertions.assertThrows(StarRocksConnectorException.class,
+                () -> metadata.getTable("db", "tbl2"));
     }
 
     @Test(expected = AlreadyExistsException.class)

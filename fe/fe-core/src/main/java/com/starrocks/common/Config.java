@@ -3634,7 +3634,7 @@ public class Config extends ConfigBase {
     public static int max_queue_size_for_report_metadata = 100000;
 
     @ConfField(mutable = true)
-    public static long remote_file_warn_response_time = 60000;
+    public static long remote_file_warn_response_time = 10000;
 
     @ConfField(mutable = true)
     public static boolean print_get_remote_file_info = false;

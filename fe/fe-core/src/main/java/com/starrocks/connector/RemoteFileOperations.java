@@ -26,6 +26,7 @@ import com.starrocks.connector.hive.HiveWriteUtils;
 import com.starrocks.connector.hive.Partition;
 import com.starrocks.connector.hive.RemoteFileInputFormat;
 import com.starrocks.metric.MetricRepo;
+import com.starrocks.persist.gson.GsonUtils;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.utils.TdwUtil;
@@ -47,6 +48,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Queue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CompletableFuture;
@@ -230,6 +232,9 @@ public class RemoteFileOperations {
         List<Future<Map<RemotePathKey, List<RemoteFileDesc>>>> futures = Lists.newArrayList();
         List<Map<RemotePathKey, List<RemoteFileDesc>>> results = Lists.newArrayList();
 
+        // For tracking queue time statistics
+        Queue<Long> startExecutionTimes = new LinkedBlockingQueue<>();
+
         try {
             long startTime = System.currentTimeMillis();
             // Submit tasks for all partitions
@@ -237,13 +242,21 @@ public class RemoteFileOperations {
                 Partition partition = partitions.get(i);
                 int executorIndex = getExecutorIndex(partition);
                 RemotePathKey pathKey = buildRemotePathKey(partition, isRecursive, hudiTableLocation, properties, hudiContext);
+
                 Future<Map<RemotePathKey, List<RemoteFileDesc>>> future =
-                        pullRemoteFileExecutors.get(executorIndex).submit(() -> remoteFileIO.getRemoteFiles(pathKey, useCache));
+                        pullRemoteFileExecutors.get(executorIndex).submit(() -> {
+                            // Record task execution start time
+                            startExecutionTimes.add(System.currentTimeMillis());
+                            return remoteFileIO.getRemoteFiles(pathKey, useCache);
+                        });
                 futures.add(future);
             }
 
             // Collect results from futures
             collectFutureResults(futures, results, startTime, remoteFilePullTimeout);
+
+            // Calculate and log queue time statistics
+            logQueueTimeStats(startTime, startExecutionTimes, "OriginalMode", partitions.size(), partitions.size());
 
             // Build remote file info
             collectRemoteFileInfos(results, pathKeyToPartition, resultRemoteFiles);
@@ -363,6 +376,9 @@ public class RemoteFileOperations {
                 executor = pullRemoteFileExecutors.get(index);
             }
 
+            // For tracking queue time statistics (TaskQueue mode)
+            Queue<Long> partitionStartExecutionTimes = new LinkedBlockingQueue<>();
+
             for (int i = 0; i < workerCount; i++) {
                 final int workerIndex = i;
 
@@ -374,6 +390,9 @@ public class RemoteFileOperations {
                                 break;
                             }
                             try {
+                                // Record execution start time for each partition
+                                partitionStartExecutionTimes.add(System.currentTimeMillis());
+
                                 RemotePathKey pathKey = buildRemotePathKey(partition, isRecursive, hudiTableLocation,
                                         properties, hudiContext);
                                 Map<RemotePathKey, List<RemoteFileDesc>> files = remoteFileIO.getRemoteFiles(pathKey, useCache);
@@ -426,6 +445,9 @@ public class RemoteFileOperations {
             if (error != null) {
                 throw new StarRocksConnectorException("Failed to get remote files", error);
             }
+
+            // Calculate and log queue time statistics (TaskQueue mode)
+            logQueueTimeStats(startTime, partitionStartExecutionTimes, "TaskQueueMode", partitions.size(), workerCount);
 
             // Collect results in the original partition order to ensure consistent ordering
             for (Partition partition : partitions) {
@@ -686,5 +708,65 @@ public class RemoteFileOperations {
             properties.put("forceScheduleLocal", String.valueOf(sessionVariable.getForceScheduleLocal()));
         }
         return properties;
+    }
+
+    /**
+     * Calculate and log the queue time statistics for tasks in the thread pool.
+     * @param submitTime task submit time
+     * @param startExecutionTimes queue of task execution start times
+     * @param mode execution mode name
+     * @param taskCount number of tasks
+     * @param parallelWorkerCount number of parallel workers
+     */
+    private void logQueueTimeStats(long submitTime, Queue<Long> startExecutionTimes,
+                                   String mode, int taskCount, int parallelWorkerCount) {
+        if (startExecutionTimes.isEmpty()) {
+            return;
+        }
+
+        long totalQueueTime = 0;
+        long maxQueueTime = 0;
+        long minQueueTime = Long.MAX_VALUE;
+        int validCount = 0;
+
+        Long executionStartTime;
+        while ((executionStartTime = startExecutionTimes.poll()) != null) {
+            long queueTime = executionStartTime - submitTime;
+            totalQueueTime += queueTime;
+            maxQueueTime = Math.max(maxQueueTime, queueTime);
+            minQueueTime = Math.min(minQueueTime, queueTime);
+            validCount++;
+            // Update metrics with queue time statistics
+            if (MetricRepo.hasInit) {
+                MetricRepo.HISTO_REMOTE_FILE_QUEUE_TIME.update(queueTime);
+            }
+        }
+
+        if (minQueueTime == Long.MAX_VALUE) {
+            minQueueTime = 0;
+        }
+
+        long avgQueueTime = totalQueueTime / validCount;
+
+        // Get query ID for log correlation
+        String queryId = "N/A";
+        if (ConnectContext.get() != null && ConnectContext.get().getQueryId() != null) {
+            queryId = ConnectContext.get().getQueryId().toString();
+        }
+
+        // Log queue time statistics
+        LOG.debug("[{}] Thread pool queue time stats - queryId: {}, taskCount: {}, executedCount: {}, " +
+                        "parallelWorkerCount: {}, avgQueueTime: {} ms, maxQueueTime: {} ms, minQueueTime: {} ms, " +
+                        "totalQueueTime: {} ms", mode, queryId, taskCount, validCount, parallelWorkerCount, avgQueueTime,
+                maxQueueTime, minQueueTime, totalQueueTime);
+
+        Map<String, Object> queueTimeStatsMap = Maps.newHashMap();
+        queueTimeStatsMap.put("avgQueueTime", avgQueueTime + "ms");
+        queueTimeStatsMap.put("maxQueueTime", maxQueueTime + "ms");
+        queueTimeStatsMap.put("minQueueTime", minQueueTime + "ms");
+        queueTimeStatsMap.put("parallelWorkerCount", parallelWorkerCount);
+        queueTimeStatsMap.put("partitionsNum", taskCount);
+        Tracers.record(Tracers.Module.EXTERNAL, HMS_PARTITIONS_REMOTE_FILES + ".QUEUE_WAIT_TIME",
+                GsonUtils.GSON.toJson(queueTimeStatsMap));
     }
 }

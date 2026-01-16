@@ -241,6 +241,7 @@ public final class MetricRepo {
     public static LongCounterMetric COUNTER_REMOTE_FILE_GET_SUCCESS;
     public static LongCounterMetric COUNTER_REMOTE_FILE_GET_ERR;
     public static Histogram HISTO_REMOTE_FILE_OPERATIONS_LATENCY;
+    public static Histogram HISTO_REMOTE_FILE_QUEUE_TIME;
 
     public static GaugeMetricImpl<Long> COUNTER_TOTAL_DISK_CAPACITYB;
     public static GaugeMetricImpl<Long> COUNTER_DISK_AVAILABLE_CAPACITYB;
@@ -772,6 +773,9 @@ public final class MetricRepo {
 
         HISTO_REMOTE_FILE_OPERATIONS_LATENCY = METRIC_REGISTER.histogram(
                 MetricRegistry.name("remote", "file", "operations", "latency", "ms"));
+
+        HISTO_REMOTE_FILE_QUEUE_TIME = METRIC_REGISTER.histogram(
+                MetricRegistry.name("remote", "file", "queue", "time", "ms"));
 
         COUNTER_TOTAL_DISK_CAPACITYB = new GaugeMetricImpl<>("system_statistics_total_disk_capacity", MetricUnit.BYTES,
                 "cluster total disk capacity") {
