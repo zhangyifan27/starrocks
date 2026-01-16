@@ -81,7 +81,7 @@ SargsApplier::SargsApplier(const Type& type, const SearchArgument* searchArgumen
 
 bool SargsApplier::pickRowGroups(uint64_t rowsInStripe, const std::unordered_map<uint64_t, proto::RowIndex>& rowIndexes,
                                  const std::map<uint32_t, BloomFilterIndex>& bloomFilters,
-                                 uint64_t* totalRowGroupNumber, uint64_t* selectedRowGroupNumber) {
+                                 uint64_t* selectedRowGroupNumber) {
     // init state of each row group
     uint64_t groupsInStripe = (rowsInStripe + mRowIndexStride - 1) / mRowIndexStride;
     mNextSkippedRows.resize(groupsInStripe);
@@ -161,9 +161,6 @@ bool SargsApplier::pickRowGroups(uint64_t rowsInStripe, const std::unordered_map
         mMetrics->EvaluatedRowGroupCount.fetch_add(groupsInStripe);
     }
 
-    if (totalRowGroupNumber != nullptr) {
-        *totalRowGroupNumber += groupsInStripe;
-    }
     if (selectedRowGroupNumber != nullptr) {
         *selectedRowGroupNumber += selectedRGs;
     }
@@ -206,7 +203,9 @@ bool SargsApplier::evaluateStripeStatistics(const proto::StripeStatistics& strip
     return ret;
 }
 
-bool SargsApplier::evaluateFileStatistics(const proto::Footer& footer, uint64_t numRowGroupsInStripeRange) {
+bool SargsApplier::evaluateFileStatistics(const proto::Footer& footer, uint64_t numRowGroupsInStripeRange,
+                                          uint64_t numStripesInStripeRange, uint64_t& skipFileNumber,
+                                          uint64_t& skipStripeNumber) {
     if (!mHasEvaluatedFileStats) {
         if (footer.statistics_size() == 0) {
             mFileStatsEvalResult = true;
@@ -217,8 +216,17 @@ bool SargsApplier::evaluateFileStatistics(const proto::Footer& footer, uint64_t 
             }
         }
         mHasEvaluatedFileStats = true;
+        if (!mFileStatsEvalResult) {
+            skipStripeNumber += numStripesInStripeRange;
+            skipFileNumber++;
+        }
     }
     return mFileStatsEvalResult;
 }
 
+void SargsApplier::rollbackSelectedRowGroupCount(uint64_t count) {
+    if (mMetrics != nullptr) {
+        mMetrics->SelectedRowGroupCount.fetch_sub(count);
+    }
+}
 } // namespace orc

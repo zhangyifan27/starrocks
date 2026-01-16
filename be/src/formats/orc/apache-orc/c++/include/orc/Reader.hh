@@ -666,5 +666,30 @@ public:
      * Get the number of selected row groups in the total row groups.
      */
     virtual uint64_t getSelectedRowGroupNumber() const = 0;
+
+    /**
+     * Get the number of stripes skipped by dictionary filter.
+     */
+    virtual uint64_t getDictFilterSkipStripeNumber() const = 0;
+
+    /**
+     * Get the number of stripes skipped by stripe statistics filter.
+     */
+    virtual uint64_t getStripeStatSkipStripeNumber() const = 0;
+
+    /**
+     * Get the number of stripes skipped by row group statistics filter.
+     */
+    virtual uint64_t getRowGroupStatSkipStripeNumber() const = 0;
+
+    /**
+     * Get the number of stripes skipped by file statistics filter.
+     */
+    virtual uint64_t getFileStatSkipStripeNumber() const = 0;
+
+    /**
+     * Get the number of files opened by the reader.
+     */
+    virtual uint64_t getOpenFileNumber() const { return 0; }
 };
 } // namespace orc

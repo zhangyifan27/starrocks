@@ -747,7 +747,7 @@ std::string build_metacache_key(const std::string& filename, uint64_t file_size,
         uint32_t mtime_s = (datacache_options.modification_time >> 9) & 0x00000000FFFFFFFF;
         memcpy(data + 10, &mtime_s, sizeof(mtime_s));
     } else {
-        uint32_t size = static_cast<uint32_t>(file_size & 0xFFFFFFFF); ;
+        uint32_t size = static_cast<uint32_t>(file_size & 0xFFFFFFFF);
         memcpy(data + 10, &size, sizeof(size));
     }
     return metacache_key;

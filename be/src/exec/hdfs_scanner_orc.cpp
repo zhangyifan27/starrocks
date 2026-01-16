@@ -565,6 +565,7 @@ Status HdfsOrcScanner::do_open(RuntimeState* runtime_state) {
     _orc_reader->set_read_chunk_size(runtime_state->chunk_size());
     _orc_reader->set_runtime_state(runtime_state);
     _orc_reader->set_current_file_name(_file->filename());
+    _orc_reader->set_read_range(_scanner_ctx.scan_range->offset, _scanner_ctx.scan_range->length);
     RETURN_IF_ERROR(_orc_reader->set_timezone(_scanner_ctx.timezone));
     _orc_reader->set_hive_column_names(_scanner_ctx.hive_column_names);
     _orc_reader->set_case_sensitive(_scanner_ctx.case_sensitive);
@@ -793,6 +794,10 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
             "SkipFileNumber", TUnit::UNIT, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
             orcProfileSectionPrefix);
 
+    RuntimeProfile::Counter* open_file_read_count_counter = root_profile->add_child_counter(
+            "OpenFileReadCount", TUnit::UNIT, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
+            orcProfileSectionPrefix);
+
     RuntimeProfile::Counter* total_stripe_size_counter = root_profile->add_child_counter(
             "TotalStripeSize", TUnit::BYTES, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
             orcProfileSectionPrefix);
@@ -831,6 +836,18 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
     RuntimeProfile::Counter* skip_row_group_number_counter = root_profile->add_child_counter(
             "SkipRowGroupNumber", TUnit::UNIT, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
             orcProfileSectionPrefix);
+    RuntimeProfile::Counter* dict_filter_skip_stripe_number_counter = root_profile->add_child_counter(
+            "DictFilterSkipStripeNumber", TUnit::UNIT,
+            RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM), orcProfileSectionPrefix);
+    RuntimeProfile::Counter* stripe_stat_skip_stripe_number_counter = root_profile->add_child_counter(
+            "StripeStatSkipStripeNumber", TUnit::UNIT,
+            RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM), orcProfileSectionPrefix);
+    RuntimeProfile::Counter* row_group_stat_skip_stripe_number_counter = root_profile->add_child_counter(
+            "RowGroupStatSkipStripeNumber", TUnit::UNIT,
+            RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM), orcProfileSectionPrefix);
+    RuntimeProfile::Counter* file_stat_skip_stripe_number_counter = root_profile->add_child_counter(
+            "FileStatSkipStripeNumber", TUnit::UNIT,
+            RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM), orcProfileSectionPrefix);
 
     size_t total_stripe_size = 0;
     for (const auto& v : _app_stats.orc_stripe_sizes) {
@@ -860,6 +877,7 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
         root_profile->add_info_string("ORCSearchArgument: ", _orc_reader->get_search_argument_string());
 
         COUNTER_UPDATE(skip_file_number_counter, _orc_reader->get_skip_file_number());
+        COUNTER_UPDATE(open_file_read_count_counter, _orc_reader->get_open_file_number());
         COUNTER_UPDATE(selected_stripe_size_counter, _orc_reader->get_selected_stripe_size());
         COUNTER_UPDATE(selected_stripe_number_counter, _orc_reader->get_selected_stripe_number());
         COUNTER_UPDATE(skip_stripe_size_counter, total_stripe_size - _orc_reader->get_selected_stripe_size());
@@ -869,6 +887,10 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
         COUNTER_UPDATE(selected_row_group_number_counter, _orc_reader->get_selected_row_group_number());
         COUNTER_UPDATE(skip_row_group_number_counter,
                        _orc_reader->get_total_row_group_number() - _orc_reader->get_selected_row_group_number());
+        COUNTER_UPDATE(dict_filter_skip_stripe_number_counter, _orc_reader->get_dict_filter_skip_stripe_number());
+        COUNTER_UPDATE(stripe_stat_skip_stripe_number_counter, _orc_reader->get_stripe_stat_skip_stripe_number());
+        COUNTER_UPDATE(row_group_stat_skip_stripe_number_counter, _orc_reader->get_row_group_stat_skip_stripe_number());
+        COUNTER_UPDATE(file_stat_skip_stripe_number_counter, _orc_reader->get_file_stat_skip_stripe_number());
 
         // Get decompression time from ORC ReaderMetrics
         _app_stats.decompress_ns = _reader_metrics.DecompressionLatencyUs * 1000;
@@ -892,7 +914,8 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
     COUNTER_UPDATE(orc_footer_cache_read_timer, _app_stats.footer_cache_read_ns);
 
     // update decompression time
-    RuntimeProfile::Counter* decompress_timer = ADD_CHILD_TIMER(root_profile, "DecompressionTime", orcProfileSectionPrefix);
+    RuntimeProfile::Counter* decompress_timer =
+            ADD_CHILD_TIMER(root_profile, "DecompressionTime", orcProfileSectionPrefix);
     COUNTER_UPDATE(decompress_timer, _app_stats.decompress_ns);
 }
 

@@ -69,6 +69,7 @@ public:
     ChunkPtr cast_chunk(ChunkPtr* chunk) { return cast_chunk_checked(chunk).value(); }
     // call them before calling init.
     void set_read_chunk_size(uint64_t v) { _read_chunk_size = v; }
+    void set_read_range(uint64_t offset, uint64_t length) { _row_reader_options.range(offset, length); }
     void set_row_reader_filter(std::shared_ptr<orc::RowReaderFilter> filter);
     Status build_search_argument_by_predicates(const OrcPredicates* orc_predicates);
     Status set_timezone(const std::string& tz);
@@ -140,6 +141,12 @@ public:
     int64_t get_selected_stripe_size() const { return _row_reader->getSelectedStripeSize(); }
     int64_t get_total_row_group_number() const { return _row_reader->getTotalRowGroupNumber(); }
     int64_t get_selected_row_group_number() const { return _row_reader->getSelectedRowGroupNumber(); }
+
+    int64_t get_dict_filter_skip_stripe_number() const { return _row_reader->getDictFilterSkipStripeNumber(); }
+    int64_t get_stripe_stat_skip_stripe_number() const { return _row_reader->getStripeStatSkipStripeNumber(); }
+    int64_t get_row_group_stat_skip_stripe_number() const { return _row_reader->getRowGroupStatSkipStripeNumber(); }
+    int64_t get_file_stat_skip_stripe_number() const { return _row_reader->getFileStatSkipStripeNumber(); }
+    int64_t get_open_file_number() const { return _row_reader->getOpenFileNumber(); }
 
 private:
     ChunkPtr _create_chunk(const std::vector<SlotDescriptor*>& slots, const std::vector<int>* indices);

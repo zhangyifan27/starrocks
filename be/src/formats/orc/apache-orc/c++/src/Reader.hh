@@ -136,6 +136,7 @@ private:
     uint64_t rowsInCurrentStripe;
     // number of row groups between first stripe and last stripe
     uint64_t numRowGroupsInStripeRange;
+    uint64_t numStripesInStripeRange;
     proto::StripeInformation currentStripeInfo;
     proto::StripeFooter currentStripeFooter;
     std::unique_ptr<ColumnReader> reader;
@@ -168,8 +169,11 @@ private:
     uint64_t skipFileNumber;
     uint64_t selectedStripeNumber;
     uint64_t selectedStripeSize;
-    uint64_t totalRowGroupNumber;
-    uint64_t selectedRowGroupNumber;
+    uint64_t fileStatSkipStripeNumber;
+    uint64_t stripeStatSkipStripeNumber;
+    uint64_t rowGroupStatSkipStripeNumber;
+    uint64_t dictFilterSkipStripeNumber;
+    bool isFirstSplit;
 
     // load stripe index if not done so
     void loadStripeIndex();
@@ -242,6 +246,11 @@ public:
     uint64_t getSelectedStripeSize() const override;
     uint64_t getTotalRowGroupNumber() const override;
     uint64_t getSelectedRowGroupNumber() const override;
+    uint64_t getDictFilterSkipStripeNumber() const override;
+    uint64_t getStripeStatSkipStripeNumber() const override;
+    uint64_t getRowGroupStatSkipStripeNumber() const override;
+    uint64_t getFileStatSkipStripeNumber() const override;
+    uint64_t getOpenFileNumber() const override;
 };
 
 class ReaderImpl : public Reader {

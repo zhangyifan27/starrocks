@@ -246,7 +246,8 @@ RowReaderImpl::RowReaderImpl(const std::shared_ptr<FileContents>& _contents, con
           enableEncodedBlock(opts.getEnableLazyDecoding()),
           readerTimezone(getTimezoneByName(opts.getTimezoneName())),
           useWriterTimezone(opts.getUseWriterTimezone()),
-          sharedBuffer(*contents->pool, 0) {
+          sharedBuffer(*contents->pool, 0),
+          isFirstSplit(opts.getOffset() == 0) {
     uint64_t numberOfStripes;
     numberOfStripes = static_cast<uint64_t>(footer->stripes_size());
     currentStripe = numberOfStripes;
@@ -255,11 +256,14 @@ RowReaderImpl::RowReaderImpl(const std::shared_ptr<FileContents>& _contents, con
     lazyLoadLastUsedRowInStripe = 0;
     rowsInCurrentStripe = 0;
     numRowGroupsInStripeRange = 0;
+    numStripesInStripeRange = 0;
     skipFileNumber = 0;
     selectedStripeNumber = 0;
     selectedStripeSize = 0;
-    totalRowGroupNumber = 0;
-    selectedRowGroupNumber = 0;
+    fileStatSkipStripeNumber = 0;
+    stripeStatSkipStripeNumber = 0;
+    rowGroupStatSkipStripeNumber = 0;
+    dictFilterSkipStripeNumber = 0;
     uint64_t rowTotal = 0;
 
     firstRowOfStripe.resize(numberOfStripes);
@@ -270,6 +274,8 @@ RowReaderImpl::RowReaderImpl(const std::shared_ptr<FileContents>& _contents, con
         bool isStripeInRange =
                 stripeInfo.offset() >= opts.getOffset() && stripeInfo.offset() < opts.getOffset() + opts.getLength();
         if (isStripeInRange) {
+            numStripesInStripeRange++;
+
             if (i < currentStripe) {
                 currentStripe = i;
             }
@@ -526,11 +532,31 @@ uint64_t RowReaderImpl::getSelectedStripeSize() const {
 }
 
 uint64_t RowReaderImpl::getTotalRowGroupNumber() const {
-    return totalRowGroupNumber;
+    return contents->readerMetrics->EvaluatedRowGroupCount;
 }
 
 uint64_t RowReaderImpl::getSelectedRowGroupNumber() const {
-    return selectedRowGroupNumber;
+    return contents->readerMetrics->SelectedRowGroupCount;
+}
+
+uint64_t RowReaderImpl::getDictFilterSkipStripeNumber() const {
+    return dictFilterSkipStripeNumber;
+}
+
+uint64_t RowReaderImpl::getStripeStatSkipStripeNumber() const {
+    return stripeStatSkipStripeNumber;
+}
+
+uint64_t RowReaderImpl::getRowGroupStatSkipStripeNumber() const {
+    return rowGroupStatSkipStripeNumber;
+}
+
+uint64_t RowReaderImpl::getFileStatSkipStripeNumber() const {
+    return fileStatSkipStripeNumber;
+}
+
+uint64_t RowReaderImpl::getOpenFileNumber() const {
+    return isFirstSplit ? 1 : 0;
 }
 
 proto::StripeFooter getStripeFooter(const proto::StripeInformation& info, const FileContents& contents) {
@@ -1071,14 +1097,20 @@ void RowReaderImpl::startNextStripe() {
     const bool isIOCoalesceEnabled = contents->stream->isIOCoalesceEnabled();
 
     // evaluate file statistics if it exists
-    if (sargsApplier && !sargsApplier->evaluateFileStatistics(*footer, numRowGroupsInStripeRange)) {
+    uint64_t localSkipFileNumber = 0;
+    if (sargsApplier &&
+        !sargsApplier->evaluateFileStatistics(*footer, numRowGroupsInStripeRange, numStripesInStripeRange,
+                                              localSkipFileNumber, fileStatSkipStripeNumber)) {
+        if (isFirstSplit) {
+            skipFileNumber += localSkipFileNumber;
+        }
         // skip the entire file
-        skipFileNumber++;
         markEndOfFile();
         return;
     }
 
     while (currentStripe < lastStripe) {
+        uint64_t thisStripeSelectedRowGroups = 0;
         currentStripeInfo = footer->stripes(static_cast<int>(currentStripe));
         uint64_t fileLength = contents->stream->getLength();
         size_t stripeSize =
@@ -1116,6 +1148,7 @@ void RowReaderImpl::startNextStripe() {
                 uint64_t stripeRowGroupCount =
                         (rowsInCurrentStripe + footer->rowindexstride() - 1) / footer->rowindexstride();
                 if (!sargsApplier->evaluateStripeStatistics(currentStripeStats, stripeRowGroupCount)) {
+                    stripeStatSkipStripeNumber++;
                     skipStripe = true;
                     goto end;
                 }
@@ -1145,9 +1178,10 @@ void RowReaderImpl::startNextStripe() {
             }
 
             // select row groups to read in the current stripe
-            sargsApplier->pickRowGroups(rowsInCurrentStripe, rowIndexes, bloomFilterIndex, &totalRowGroupNumber,
-                                        &selectedRowGroupNumber);
+            sargsApplier->pickRowGroups(rowsInCurrentStripe, rowIndexes, bloomFilterIndex,
+                                        &thisStripeSelectedRowGroups);
             if (!sargsApplier->hasSelectedFrom(currentRowInStripe)) {
+                rowGroupStatSkipStripeNumber++;
                 skipStripe = true;
                 goto end;
             }
@@ -1171,6 +1205,8 @@ void RowReaderImpl::startNextStripe() {
                     if (sargsApplier->getRowReaderFilter()->filterOnPickStringDictionary(sdicts)) {
                         skipStripe = true;
                         reader.reset();
+                        dictFilterSkipStripeNumber++;
+                        sargsApplier->rollbackSelectedRowGroupCount(thisStripeSelectedRowGroups);
                         goto end;
                     }
                 }
@@ -1600,8 +1636,8 @@ Reader::~Reader() {
     // PASS
 }
 
-InputStream::~InputStream(){
-        // PASS
+InputStream::~InputStream() {
+    // PASS
 };
 
 uint64_t InputStream::getNaturalReadSizeAfterSeek() const {

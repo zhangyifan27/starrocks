@@ -58,7 +58,8 @@ public:
      * will require further evaluation.
      * @return true if file statistics satisfy the sargs
      */
-    bool evaluateFileStatistics(const proto::Footer& footer, uint64_t numRowGroupsInStripeRange);
+    bool evaluateFileStatistics(const proto::Footer& footer, uint64_t numRowGroupsInStripeRange,
+                                uint64_t numStripesInStripeRange, uint64_t& skipFileNumber, uint64_t& skipStripeNumber);
 
     /**
      * Evaluate search argument on stripe statistics
@@ -76,8 +77,7 @@ public:
      * @return true if any row group is selected
      */
     bool pickRowGroups(uint64_t rowsInStripe, const std::unordered_map<uint64_t, proto::RowIndex>& rowIndexes,
-                       const std::map<uint32_t, BloomFilterIndex>& bloomFilters,
-                       uint64_t* totalRowGroupNumber = nullptr, uint64_t* selectedRowGroupNumber = nullptr);
+                       const std::map<uint32_t, BloomFilterIndex>& bloomFilters, uint64_t* selectedRowGroupNumber);
 
     /**
      * Return a vector of the next skipped row for each RowGroup. Each value is the row id
@@ -118,6 +118,8 @@ public:
     }
 
     RowReaderFilter* getRowReaderFilter() const { return mRowReaderFilter; }
+
+    void rollbackSelectedRowGroupCount(uint64_t count);
 
 private:
     // evaluate column statistics in the form of protobuf::RepeatedPtrField
