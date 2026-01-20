@@ -588,6 +588,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String ENABLE_PHASED_SCHEDULER = "enable_phased_scheduler";
     public static final String PHASED_SCHEDULER_MAX_CONCURRENCY = "phased_scheduler_max_concurrency";
 
+    public static final String ENABLE_TABLE_PARTITION_SAME_WITH_BUCKET = "enable_table_partition_same_with_bucket";
+
     public static final String ENABLE_COST_BY_FEEDBACK = "enable_cost_by_feedback";
 
     public static final String COST_BY_FEEDBACK_RECENTLY_NUMBER = "cost_by_feedback_recently_number";
@@ -2481,6 +2483,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VarAttr(name = ENABLE_PLAN_SERIALIZE_CONCURRENTLY)
     private boolean enablePlanSerializeConcurrently = true;
+
+
+    @VarAttr(name = ENABLE_TABLE_PARTITION_SAME_WITH_BUCKET)
+    private boolean enableTablePartitionSameWithBucket = true;
 
     @VarAttr(name = ENABLE_COST_BY_FEEDBACK)
     private boolean enableCostByFeedback = false;
@@ -4528,6 +4534,15 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean getEnablePlanSerializeConcurrently() {
         return enablePlanSerializeConcurrently;
+    }
+
+
+    public boolean isEnableTablePartitionSameWithBucket() {
+        return enableTablePartitionSameWithBucket;
+    }
+
+    public void setEnableTablePartitionSameWithBucket(boolean enableTablePartitionSameWithBucket) {
+        this.enableTablePartitionSameWithBucket = enableTablePartitionSameWithBucket;
     }
 
     public boolean isEnableCostByFeedback() {

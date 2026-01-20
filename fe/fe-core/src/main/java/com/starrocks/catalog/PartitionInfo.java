@@ -236,6 +236,10 @@ public class PartitionInfo extends JsonWriter implements Cloneable, GsonPreProce
         return "";
     }
 
+    public List<ColumnId> getPartitionColumns() {
+        return Collections.emptyList();
+    }
+
     @NotNull
     public List<Column> getPartitionColumns(Map<ColumnId, Column> idToColumn) {
         return Collections.emptyList();

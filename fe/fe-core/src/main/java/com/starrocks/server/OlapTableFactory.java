@@ -182,6 +182,14 @@ public class OlapTableFactory implements AbstractTableFactory {
         Preconditions.checkNotNull(distributionDesc);
         DistributionInfo distributionInfo = distributionDesc.toDistributionInfo(baseSchema);
 
+        if (ConnectContext.get() != null && !ConnectContext.get().getSessionVariable().isEnableTablePartitionSameWithBucket()
+                && partitionInfo.getPartitionColumnsSize() > 0
+                && partitionInfo.getPartitionColumnsSize() == distributionInfo.getDistributionColumns().size()
+                && partitionInfo.getPartitionColumns().containsAll(distributionInfo.getDistributionColumns())
+                && distributionInfo.getDistributionColumns().containsAll(partitionInfo.getPartitionColumns())) {
+            throw new DdlException("partition columns and distribution columns should not be the same");
+        }
+
         short shortKeyColumnCount = 0;
         List<Integer> sortKeyIdxes = new ArrayList<>();
         if (stmt.getSortKeys() != null) {

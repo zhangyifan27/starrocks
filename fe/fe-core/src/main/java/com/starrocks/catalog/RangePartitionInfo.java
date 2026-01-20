@@ -120,6 +120,11 @@ public class RangePartitionInfo extends PartitionInfo {
     }
 
     @Override
+    public List<ColumnId> getPartitionColumns() {
+        return partitionColumnIds;
+    }
+
+    @Override
     public List<Column> getPartitionColumns(Map<ColumnId, Column> idToColumn) {
         return MetaUtils.getColumnsByColumnIds(idToColumn, partitionColumnIds);
     }
