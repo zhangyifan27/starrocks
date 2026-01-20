@@ -710,13 +710,25 @@ void PipelineDriver::_update_driver_level_timer() {
     // Overhead Time
     int64_t overhead_time = _active_timer->value();
     RuntimeProfile* profile = _runtime_profile.get();
+    if (profile == nullptr) {
+        return;
+    }
     std::vector<RuntimeProfile*> operator_profiles;
     profile->get_children(&operator_profiles);
     for (auto* operator_profile : operator_profiles) {
+        if (operator_profile == nullptr) {
+            continue;
+        }
         auto* common_metrics = operator_profile->get_child("CommonMetrics");
-        DCHECK(common_metrics != nullptr);
+        if (common_metrics == nullptr) {
+            // Skip operators without CommonMetrics (e.g., CollectStats operators in some edge cases)
+            continue;
+        }
         auto* total_timer = common_metrics->get_counter("OperatorTotalTime");
-        DCHECK(total_timer != nullptr);
+        if (total_timer == nullptr) {
+            // Skip operators without OperatorTotalTime counter
+            continue;
+        }
         overhead_time -= total_timer->value();
     }
 
