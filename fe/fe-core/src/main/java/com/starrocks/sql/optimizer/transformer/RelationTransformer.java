@@ -976,9 +976,10 @@ public class RelationTransformer implements AstVisitor<LogicalPlan, ExpressionMa
         // case 1: no join on predicate
         // case 2: one join on predicate containing existential/quantified subquery which will be removed after subquery rewrite procedure
         if (onPredicate == null) {
+            String effectiveHint = getEffectiveJoinHint(node.getJoinHint(), JoinOperator.CROSS_JOIN, false);
             OptExprBuilder joinOptExprBuilder = new OptExprBuilder(new LogicalJoinOperator.Builder()
                     .setJoinType(JoinOperator.CROSS_JOIN)
-                    .setJoinHint(node.getJoinHint())
+                    .setJoinHint(effectiveHint)
                     .build(), Lists.newArrayList(leftOpt, rightOpt),
                     expressionMapping);
 
@@ -1018,10 +1019,11 @@ public class RelationTransformer implements AstVisitor<LogicalPlan, ExpressionMa
                     collect(Collectors.toList());
         }
 
+        String effectiveHint = getEffectiveJoinHint(node.getJoinHint(), node.getJoinOp(), true);
         LogicalJoinOperator joinOperator = new LogicalJoinOperator.Builder()
                 .setJoinType(node.getJoinOp())
                 .setOnPredicate(onPredicate)
-                .setJoinHint(node.getJoinHint())
+                .setJoinHint(effectiveHint)
                 .setSkewColumn(skewColumn)
                 .setSkewValues(skewValues)
                 .build();
@@ -1110,6 +1112,43 @@ public class RelationTransformer implements AstVisitor<LogicalPlan, ExpressionMa
         ExpressionMapping mapping = new ExpressionMapping(node.getScope(), output);
         builder.setExpressionMapping(mapping);
         return new LogicalPlan(builder, output, List.of());
+    }
+
+    /**
+     * Get the effective join hint based on user-specified hint and session variable.
+     * If user explicitly specifies a hint, use it; otherwise, use the session variable hint if applicable.
+     * This method also checks if the hint is compatible with the join type according to analyzeJoinHints rules.
+     */
+    private String getEffectiveJoinHint(String userHint, JoinOperator joinType, boolean hasOnPredicate) {
+        // If user explicitly specifies a hint, use it
+        if (userHint != null && !userHint.isEmpty()) {
+            return userHint;
+        }
+
+        // Get session variable hint
+        String sessionHint = session.getSessionVariable().getJoinHintType();
+        if (sessionHint == null || sessionHint.isEmpty() || sessionHint.equalsIgnoreCase("NONE")) {
+            return "";
+        }
+
+        // Check if the session hint is compatible with the join type
+        if (JoinOperator.HINT_BROADCAST.equals(sessionHint)) {
+            // BROADCAST hint does not support: RIGHT_OUTER_JOIN, FULL_OUTER_JOIN, RIGHT_SEMI_JOIN, RIGHT_ANTI_JOIN
+            if (joinType == JoinOperator.RIGHT_OUTER_JOIN ||
+                    joinType == JoinOperator.FULL_OUTER_JOIN ||
+                    joinType == JoinOperator.RIGHT_SEMI_JOIN ||
+                    joinType == JoinOperator.RIGHT_ANTI_JOIN) {
+                return "";
+            }
+        } else if (JoinOperator.HINT_SHUFFLE.equals(sessionHint)) {
+            // SHUFFLE hint does not support: CROSS_JOIN, INNER_JOIN without ON predicate
+            if (joinType == JoinOperator.CROSS_JOIN ||
+                    (joinType == JoinOperator.INNER_JOIN && !hasOnPredicate)) {
+                return "";
+            }
+        }
+
+        return sessionHint;
     }
 
     /**

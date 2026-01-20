@@ -100,6 +100,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     private static final Gson GSON = new GsonBuilder()
             .setObjectToNumberStrategy(ToNumberPolicy.LONG_OR_DOUBLE) // explicit default, may be omitted
             .create();
+    
+    private static final String JOIN_HINT_SHUFFLE = "SHUFFLE";
+    private static final String JOIN_HINT_BROADCAST = "BROADCAST";
+    private static final String JOIN_HINT_NONE = "NONE";
 
     public static final String USE_COMPUTE_NODES = "use_compute_nodes";
     public static final String PREFER_COMPUTE_NODE = "prefer_compute_node";
@@ -488,6 +492,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String INTERPOLATE_PASSTHROUGH = "interpolate_passthrough";
 
     public static final String HASH_JOIN_INTERPOLATE_PASSTHROUGH = "hash_join_interpolate_passthrough";
+
+    public static final String JOIN_HINT_TYPE = "join_hint_type";
 
     public static final String PARSE_TOKENS_LIMIT = "parse_tokens_limit";
 
@@ -1632,6 +1638,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = HASH_JOIN_INTERPOLATE_PASSTHROUGH, flag = VariableMgr.INVISIBLE)
     private boolean hashJoinInterpolatePassthrough = false;
+
+    @VariableMgr.VarAttr(name = JOIN_HINT_TYPE)
+    private String joinHintType = JOIN_HINT_NONE;
 
     @VarAttr(name = STATISTIC_COLLECT_PARALLEL, flag = VariableMgr.INVISIBLE)
     private int statisticCollectParallelism = 1;
@@ -3902,6 +3911,26 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public boolean isHashJoinInterpolatePassthrough() {
         return hashJoinInterpolatePassthrough;
+    }
+
+    public String getJoinHintType() {
+        return joinHintType;
+    }
+
+    public void setJoinHintType(String joinHintType) {
+        // validate the value of join_hint_type
+        if (joinHintType == null || joinHintType.isEmpty()) {
+            this.joinHintType = JOIN_HINT_NONE;
+            return;
+        }
+        String upperHint = joinHintType.toUpperCase();
+        if (upperHint.equals(JOIN_HINT_NONE) || upperHint.equals(JOIN_HINT_BROADCAST)
+                || upperHint.equals(JOIN_HINT_SHUFFLE)) {
+            this.joinHintType = upperHint;
+        } else {
+            throw new IllegalArgumentException(
+                "JOIN_HINT_TYPE must be : " + JOIN_HINT_NONE + ", " + JOIN_HINT_BROADCAST + " or " + JOIN_HINT_SHUFFLE);
+        }
     }
 
     public int getParseTokensLimit() {

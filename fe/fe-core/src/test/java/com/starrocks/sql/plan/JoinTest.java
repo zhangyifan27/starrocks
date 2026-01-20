@@ -3302,4 +3302,71 @@ public class JoinTest extends PlanTestBase {
                 "     PREAGGREGATION: ON\n" +
                 "     PREDICATES: coalesce('cccc', CAST(1: v1 AS VARCHAR)) = '1'");
     }
+
+    @Test
+    public void testJoinHintTypeSessionVariable() throws Exception {
+        // Test default value "NONE" - no hint applied
+        String sql = "select * from t0 join t1 on t0.v1 = t1.v4";
+        String plan = getFragmentPlan(sql);
+        // Default behavior (could be BROADCAST or PARTITIONED based on cost)
+        assertContains(plan, "INNER JOIN");
+
+        // Test join_hint_type = "SHUFFLE"
+        connectContext.getSessionVariable().setJoinHintType("SHUFFLE");
+        try {
+            sql = "select * from t0 join t1 on t0.v1 = t1.v4";
+            plan = getFragmentPlan(sql);
+            assertContains(plan, "INNER JOIN (PARTITIONED)");
+
+            // Test LEFT JOIN with shuffle hint
+            sql = "select * from t0 left join t1 on t0.v1 = t1.v4";
+            plan = getFragmentPlan(sql);
+            assertContains(plan, "LEFT OUTER JOIN (PARTITIONED)");
+
+            // Test RIGHT JOIN with shuffle hint
+            sql = "select * from t0 right join t1 on t0.v1 = t1.v4";
+            plan = getFragmentPlan(sql);
+            assertContains(plan, "RIGHT OUTER JOIN (PARTITIONED)");
+        } finally {
+            connectContext.getSessionVariable().setJoinHintType("NONE");
+        }
+
+        // Test join_hint_type = "BROADCAST"
+        connectContext.getSessionVariable().setJoinHintType("BROADCAST");
+        try {
+            sql = "select * from t0 join t1 on t0.v1 = t1.v4";
+            plan = getFragmentPlan(sql);
+            assertContains(plan, "INNER JOIN (BROADCAST)");
+
+            // Test LEFT JOIN with broadcast hint
+            sql = "select * from t0 left join t1 on t0.v1 = t1.v4";
+            plan = getFragmentPlan(sql);
+            assertContains(plan, "LEFT OUTER JOIN (BROADCAST)");
+
+            // Test RIGHT JOIN - broadcast hint should NOT be applied (incompatible)
+            // should use PARTITIONED instead of BROADCAST
+            sql = "select * from t0 right join t1 on t0.v1 = t1.v4";
+            plan = getFragmentPlan(sql);
+            assertContains(plan, "RIGHT OUTER JOIN (PARTITIONED)");
+
+            // Test FULL JOIN - broadcast hint should NOT be applied (incompatible)
+            // should use PARTITIONED instead of BROADCAST
+            sql = "select * from t0 full join t1 on t0.v1 = t1.v4";
+            plan = getFragmentPlan(sql);
+            assertContains(plan, "FULL OUTER JOIN (PARTITIONED)");
+        } finally {
+            connectContext.getSessionVariable().setJoinHintType("NONE");
+        }
+
+        // Test explicit hint takes precedence over session variable
+        connectContext.getSessionVariable().setJoinHintType("SHUFFLE");
+        try {
+            sql = "select * from t0 join [BROADCAST] t1 on t0.v1 = t1.v4";
+            plan = getFragmentPlan(sql);
+            // Explicit BROADCAST hint should override session variable
+            assertContains(plan, "INNER JOIN (BROADCAST)");
+        } finally {
+            connectContext.getSessionVariable().setJoinHintType("NONE");
+        }
+    }
 }
