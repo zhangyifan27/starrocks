@@ -1215,7 +1215,7 @@ void StructColumnReader::lazyLoadSeekToRowGroup(PositionProviderMap* positions) 
 
 void StructColumnReader::lazyLoadSkip(uint64_t numValues) {
     if (isAllFieldsLazy()) {
-        ColumnReader::skip(numValues);
+        numValues = ColumnReader::skip(numValues);
     }
     for (auto& ptr : lazyLoadChildren) {
         ptr->lazyLoadSkip(numValues);
