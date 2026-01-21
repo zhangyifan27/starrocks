@@ -193,23 +193,32 @@ void DataConsumerPool::start_bg_worker() {
 void DataConsumerPool::_clean_idle_consumer_bg() {
     const static int32_t max_idle_time_second = 600;
 
-    std::unique_lock<std::mutex> l(_lock);
-    time_t now = time(nullptr);
+    std::vector<std::shared_ptr<DataConsumer>> to_remove;
+    {
+        std::unique_lock<std::mutex> l(_lock);
+        time_t now = time(nullptr);
 
-    if (*_is_closed) {
-        return;
+        if (*_is_closed) {
+            return;
+        }
+
+        auto iter = std::begin(_pool);
+        while (iter != std::end(_pool)) {
+            if (difftime(now, (*iter)->last_visit_time()) >= max_idle_time_second) {
+                LOG(INFO) << "remove data consumer " << (*iter)->id()
+                          << ", since it last visit: " << (*iter)->last_visit_time() << ", now: " << now;
+                to_remove.emplace_back(*iter);
+                iter = _pool.erase(iter);
+            } else {
+                ++iter;
+            }
+        }
     }
 
-    auto iter = std::begin(_pool);
-    while (iter != std::end(_pool)) {
-        if (difftime(now, (*iter)->last_visit_time()) >= max_idle_time_second) {
-            LOG(INFO) << "remove data consumer " << (*iter)->id()
-                      << ", since it last visit: " << (*iter)->last_visit_time() << ", now: " << now;
-            (*iter)->clean_metric();
-            iter = _pool.erase(iter);
-        } else {
-            ++iter;
-        }
+    // Perform cleanup. let destructor & thread joins outside the lock
+    // to avoid holding _lock during long blocking operations.
+    for (auto& consumer : to_remove) {
+        consumer->clean_metric();
     }
 }
 
