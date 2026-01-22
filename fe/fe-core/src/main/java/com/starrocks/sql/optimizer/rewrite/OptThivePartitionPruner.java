@@ -212,6 +212,7 @@ public class OptThivePartitionPruner {
 
         long partitionId = 0;
         Set<Long> defaultPartitionIds = new HashSet<>();
+        boolean hasMultiValuePartition = false;
         for (Map.Entry<String, List<String>> entry : partitionNameToPartitionValues.entrySet()) {
             // entry is like default=[], p_2021=[2020, 2021], p_2011=[2010, 2011], p_2001=[2000, 2001]
             // entry.getKey() is default/p_2021/p_2011/p_2001
@@ -222,6 +223,10 @@ public class OptThivePartitionPruner {
 
             // exclude default partition
             if (!entry.getKey().equalsIgnoreCase(THiveConstants.DEFAULT)) {
+                // check if this partition has multi-values
+                if (!hasMultiValuePartition && entry.getValue().size() > 1) {
+                    hasMultiValuePartition = true;
+                }
                 for (String rawValue : entry.getValue()) {
                     addPartitionValue(rawValue, columnRefOperator, partitionId, partitionColumn.getType(),
                             columnToPartitionValuesMap);
@@ -256,7 +261,13 @@ public class OptThivePartitionPruner {
         thiveComputeSpecifyPartition(operator, hivePartPartitionColumnRefOperators.get(0),
                 hivePartColumnToPartitionValuesMap, defaultPartitionIds);
 
-        addConjunctsForThive(operator);
+        // Check if default partition is selected
+        ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
+        boolean hasDefaultPartition = scanOperatorPredicates.getSelectedPartitionIds() != null &&
+                !Collections.disjoint(scanOperatorPredicates.getSelectedPartitionIds(), defaultPartitionIds);
+        // If default partition is selected, always add partition conjuncts
+        boolean shouldAddPartitionConjuncts = hasMultiValuePartition || hasDefaultPartition;
+        addConjunctsForThive(operator, shouldAddPartitionConjuncts);
         computeMinMaxConjuncts(operator, columnToPartitionValuesMap.keySet(),
                 hivePartColumnToPartitionValuesMap.keySet(), context);
     }
@@ -732,8 +743,25 @@ public class OptThivePartitionPruner {
     }
 
     public static void addConjunctsForThive(LogicalScanOperator operator) throws AnalysisException {
-        // add all Conjuncts to nonPartitionConjuncts for thive
+        // For default, add all conjuncts to nonPartitionConjuncts for thive
+        addConjunctsForThive(operator, true);
+    }
+
+    /**
+     * Add all necessary Conjuncts to nonPartitionConjuncts for thive
+     * @param operator the scan operator
+     * @param addPartitionConjuncts whether to add partition conjuncts
+     */
+    public static void addConjunctsForThive(LogicalScanOperator operator, boolean addPartitionConjuncts)
+            throws AnalysisException {
+        // add all necessary Conjuncts to nonPartitionConjuncts for thive
         for (ScalarOperator scalarOperator : Utils.extractConjuncts(operator.getPredicate())) {
+            if (!addPartitionConjuncts) {
+                // if list partition without multi-values, skip partition conjuncts
+                if (operator.getScanOperatorPredicates().getPartitionConjuncts().contains(scalarOperator)) {
+                    continue;
+                }
+            }
             operator.getScanOperatorPredicates().getNonPartitionConjuncts().add(scalarOperator);
         }
     }
@@ -894,10 +922,21 @@ public class OptThivePartitionPruner {
         Map<String, Set<Long>> level1HivePartRawValuesMap = Maps.newHashMap();
         Map<String, Set<Long>> level2HivePartRawValuesMap = Maps.newHashMap();
 
+        boolean hasMultiValuePartition = false;
         for (Map.Entry<String, List<String>> level1 : level1PartitionNameToPartitionValues.entrySet()) {
             LiteralExpr level1KeyLiteral = LiteralExpr.create(level1.getKey(), Type.STRING);
+            // check level1 multi-values
+            if (!hasMultiValuePartition && !level1.getKey().equalsIgnoreCase(THiveConstants.DEFAULT) &&
+                    level1.getValue().size() > 1) {
+                hasMultiValuePartition = true;
+            }
             for (Map.Entry<String, List<String>> level2 : level2PartitionNameToPartitionValues.entrySet()) {
                 LiteralExpr level2KeyLiteral = LiteralExpr.create(level2.getKey(), Type.STRING);
+                // check level2 multi-values
+                if (!hasMultiValuePartition && !level2.getKey().equalsIgnoreCase(THiveConstants.DEFAULT) &&
+                        level2.getValue().size() > 1) {
+                    hasMultiValuePartition = true;
+                }
                 PartitionKey partitionKey = new HivePartitionKey();
                 partitionKey.pushColumn(level1KeyLiteral, PrimitiveType.VARCHAR);
                 partitionKey.pushColumn(level2KeyLiteral, PrimitiveType.VARCHAR);
@@ -955,7 +994,13 @@ public class OptThivePartitionPruner {
                     hivePartColumnToNullPartitions, defaultPartitionIds);
         }
 
-        addConjunctsForThive(operator);
+        // Check if default partition is selected
+        ScanOperatorPredicates scanOperatorPredicates = operator.getScanOperatorPredicates();
+        boolean hasDefaultPartition = scanOperatorPredicates.getSelectedPartitionIds() != null &&
+                !Collections.disjoint(scanOperatorPredicates.getSelectedPartitionIds(), defaultPartitionIds);
+        // If default partition is selected, always add partition conjuncts
+        boolean shouldAddPartitionConjuncts = hasMultiValuePartition || hasDefaultPartition;
+        addConjunctsForThive(operator, shouldAddPartitionConjuncts);
     }
 
     public static void twoLevelListRangePrunePartitions(LogicalScanOperator operator, OptimizerContext context,

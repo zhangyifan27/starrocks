@@ -21,6 +21,7 @@ import com.starrocks.catalog.AggregateFunction;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Function;
 import com.starrocks.catalog.FunctionSet;
+import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.AnalysisException;
@@ -29,6 +30,7 @@ import com.starrocks.sql.optimizer.OptimizerContext;
 import com.starrocks.sql.optimizer.base.ColumnRefFactory;
 import com.starrocks.sql.optimizer.base.ColumnRefSet;
 import com.starrocks.sql.optimizer.operator.OperatorType;
+import com.starrocks.sql.optimizer.operator.ScanOperatorPredicates;
 import com.starrocks.sql.optimizer.operator.logical.LogicalAggregationOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalFileScanOperator;
 import com.starrocks.sql.optimizer.operator.logical.LogicalHiveScanOperator;
@@ -90,6 +92,8 @@ public class RewriteSimpleAggToHDFSScanRule extends TransformationRule {
         Map<ColumnRefOperator, CallOperator> newAggCalls = Maps.newHashMap();
         Map<ColumnRefOperator, Column> newScanColumnRefs = Maps.newHashMap();
 
+        boolean isThiveTable = isThiveTable(scanOperator);
+
         // select out partition columns.
         int tableRelationId = -1;
         for (ColumnRefOperator c : scanOperator.getColRefToColumnMetaMap().keySet()) {
@@ -101,7 +105,8 @@ public class RewriteSimpleAggToHDFSScanRule extends TransformationRule {
                         tableRelationId, relationId);
                 return null;
             }
-            if (scanOperator.getPartitionColumns().contains(c.getName())) {
+            // For Thive tables, skip partition columns since partition pruning has already been applied.
+            if (!isThiveTable && scanOperator.getPartitionColumns().contains(c.getName())) {
                 newScanColumnRefs.put(c, scanOperator.getColRefToColumnMetaMap().get(c));
             }
         }
@@ -147,24 +152,46 @@ public class RewriteSimpleAggToHDFSScanRule extends TransformationRule {
             newScanColumnMeta.put(c.getValue(), c.getKey());
         }
 
+        // For Thive tables, partition columns are treated as regular columns in BE.
+        // Since partition predicates have already been applied during partition pruning,
+        // we don't need partition predicates in the new scan operator.
+        ScalarOperator newPredicate = isThiveTable ? null : scanOperator.getPredicate();
+
         LogicalScanOperator newMetaScan = null;
 
         if (scanOperator instanceof LogicalHiveScanOperator) {
             newMetaScan = new LogicalHiveScanOperator(scanOperator.getTable(),
-                    newScanColumnRefs, newScanColumnMeta, scanOperator.getLimit(), scanOperator.getPredicate());
+                    newScanColumnRefs, newScanColumnMeta, scanOperator.getLimit(), newPredicate);
         } else if (scanOperator instanceof LogicalIcebergScanOperator) {
             newMetaScan = new LogicalIcebergScanOperator(scanOperator.getTable(),
-                    newScanColumnRefs, newScanColumnMeta, scanOperator.getLimit(), scanOperator.getPredicate(),
+                    newScanColumnRefs, newScanColumnMeta, scanOperator.getLimit(), newPredicate,
                     scanOperator.getTableVersionRange());
         } else if (scanOperator instanceof LogicalFileScanOperator) {
             newMetaScan = new LogicalFileScanOperator(scanOperator.getTable(),
-                    newScanColumnRefs, newScanColumnMeta, scanOperator.getLimit(), scanOperator.getPredicate());
+                    newScanColumnRefs, newScanColumnMeta, scanOperator.getLimit(), newPredicate);
         } else {
             LOG.warn("Unexpected scan operator: " + scanOperator);
             return null;
         }
         try {
-            newMetaScan.setScanOperatorPredicates(scanOperator.getScanOperatorPredicates());
+            // For Thive tables, create a new ScanOperatorPredicates with only necessary information.
+            // In BE, Thive table's partition columns are treated as regular columns.
+            // Since partition predicates have already been applied during partition pruning,
+            // we only keep partition pruning results (selectedPartitionIds) and don't keep:
+            // 1. minMaxConjuncts - references columns that don't exist in the new scan operator
+            // 2. nonPartitionConjuncts - not needed since we only read metadata (file count) for COUNT(*)
+            if (isThiveTable) {
+                ScanOperatorPredicates oldPredicates = scanOperator.getScanOperatorPredicates();
+                ScanOperatorPredicates newPredicates = new ScanOperatorPredicates();
+
+                // Keep partition pruning results
+                newPredicates.setSelectedPartitionIds(oldPredicates.getSelectedPartitionIds());
+                newPredicates.getIdToPartitionKey().putAll(oldPredicates.getIdToPartitionKey());
+
+                newMetaScan.setScanOperatorPredicates(newPredicates);
+            } else {
+                newMetaScan.setScanOperatorPredicates(scanOperator.getScanOperatorPredicates());
+            }
         } catch (AnalysisException e) {
             LOG.warn("Exception caught when set scan operator predicates", e);
             return null;
@@ -191,6 +218,8 @@ public class RewriteSimpleAggToHDFSScanRule extends TransformationRule {
     @Override
     public boolean check(final OptExpression input, OptimizerContext context) {
         if (!context.getSessionVariable().isEnableRewriteSimpleAggToHdfsScan()) {
+            LOG.debug("RewriteSimpleAggToHDFSScanRule check failed: " +
+                    "enable_rewrite_simple_agg_to_hdfs_scan is disabled");
             return false;
         }
         LogicalAggregationOperator aggregationOperator = (LogicalAggregationOperator) input.getOp();
@@ -198,33 +227,54 @@ public class RewriteSimpleAggToHDFSScanRule extends TransformationRule {
 
         // no limit
         if (scanOperator.getLimit() != -1) {
+            LOG.debug("RewriteSimpleAggToHDFSScanRule check failed: " +
+                    "scan operator has limit {}", scanOperator.getLimit());
             return false;
         }
 
         // filter only involved with partition keys.
         if (scanOperator.getPredicate() != null) {
-            if (!scanOperator.getPartitionColumns()
-                    .containsAll(scanOperator.getPredicate().getColumnRefs().stream().map(x -> x.getName()).collect(
-                            Collectors.toList()))) {
+            List<String> predicateColumns = scanOperator.getPredicate().getColumnRefs().stream()
+                    .map(x -> x.getName()).collect(Collectors.toList());
+            if (!scanOperator.getPartitionColumns().containsAll(predicateColumns)) {
+                LOG.debug("RewriteSimpleAggToHDFSScanRule check failed: " +
+                        "predicate columns {} are not all partition columns, partition columns: {}",
+                        predicateColumns, scanOperator.getPartitionColumns());
                 return false;
             }
         }
 
         // all group by keys are partition keys.
         List<ColumnRefOperator> groupingKeys = aggregationOperator.getGroupingKeys();
-        if (!scanOperator.getPartitionColumns()
-                .containsAll(groupingKeys.stream().map(x -> x.getName()).collect(Collectors.toList()))) {
+        List<String> groupingKeyNames = groupingKeys.stream().map(x -> x.getName()).collect(Collectors.toList());
+        if (!scanOperator.getPartitionColumns().containsAll(groupingKeyNames)) {
+            LOG.debug("RewriteSimpleAggToHDFSScanRule check failed: " +
+                    "grouping keys {} are not all partition columns, partition columns: {}",
+                    groupingKeyNames, scanOperator.getPartitionColumns());
+            return false;
+        }
+
+        // For Thive tables, do not apply this rule if there are grouping keys.
+        // Thive tables' partition key is not actual partition value.
+        if (isThiveTable(scanOperator) && !groupingKeys.isEmpty()) {
+            LOG.debug("RewriteSimpleAggToHDFSScanRule check failed: " +
+                    "Thive table does not support GROUP BY optimization, table: {}, grouping keys: {}",
+                    scanOperator.getTable().getName(), groupingKeyNames);
             return false;
         }
 
         // no predicate on agg operator
         if (aggregationOperator.getPredicate() != null) {
+            LOG.debug("RewriteSimpleAggToHDFSScanRule check failed: " +
+                    "aggregation operator has predicate: {}", aggregationOperator.getPredicate());
             return false;
         }
 
         if (scanOperatorType == OperatorType.LOGICAL_ICEBERG_SCAN) {
             IcebergTable icebergTable = (IcebergTable) scanOperator.getTable();
             if (!icebergTable.isUnPartitioned() && !icebergTable.isAllPartitionColumnsAlwaysIdentity()) {
+                LOG.debug("RewriteSimpleAggToHDFSScanRule check failed: " +
+                        "iceberg table is partitioned but not all partition columns are identity transform");
                 return false;
             }
         }
@@ -244,12 +294,37 @@ public class RewriteSimpleAggToHDFSScanRule extends TransformationRule {
                             // count(non-null constant)
                             return true;
                         }
+                        LOG.debug("RewriteSimpleAggToHDFSScanRule check failed: " +
+                                "count aggregation has invalid arguments: {}", arguments);
                         return false;
                     }
+                    LOG.debug("RewriteSimpleAggToHDFSScanRule check failed: " +
+                            "aggregation function {} is not supported, isDistinct: {}, usedColumns: {}",
+                            functionName, aggregator.isDistinct(), usedColumns);
                     return false;
                 }
         );
         return allValid;
+    }
+
+    /**
+     * Check if the scan operator is a Thive table.
+     *
+     * @param scanOperator the scan operator to check
+     * @return true if it's a Thive table, false otherwise
+     */
+    private boolean isThiveTable(LogicalScanOperator scanOperator) {
+        if (!(scanOperator instanceof LogicalHiveScanOperator)) {
+            return false;
+        }
+
+        LogicalHiveScanOperator hiveScanOperator = (LogicalHiveScanOperator) scanOperator;
+        if (!(hiveScanOperator.getTable() instanceof HiveTable)) {
+            return false;
+        }
+
+        HiveTable hiveTable = (HiveTable) hiveScanOperator.getTable();
+        return hiveTable.isThiveTable();
     }
 
     @Override

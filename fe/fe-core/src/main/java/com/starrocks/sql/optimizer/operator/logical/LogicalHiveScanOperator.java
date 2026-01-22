@@ -59,7 +59,12 @@ public class LogicalHiveScanOperator extends LogicalScanOperator {
 
         Preconditions.checkState(table instanceof HiveTable);
         HiveTable hiveTable = (HiveTable) table;
-        partitionColumns.addAll(hiveTable.getPartitionColumnNames());
+        // For Thive tables, use Thive partition columns; for regular Hive tables, use standard partition columns
+        if (hiveTable.isThiveTable()) {
+            partitionColumns.addAll(hiveTable.getThivePartitionColumnsStr());
+        } else {
+            partitionColumns.addAll(hiveTable.getPartitionColumnNames());
+        }
     }
 
     private LogicalHiveScanOperator() {
@@ -80,7 +85,12 @@ public class LogicalHiveScanOperator extends LogicalScanOperator {
 
         Preconditions.checkState(table instanceof HiveTable);
         HiveTable hiveTable = (HiveTable) table;
-        partitionColumns.addAll(hiveTable.getPartitionColumnNames());
+        // For Thive tables, use Thive partition columns; for regular Hive tables, use standard partition columns
+        if (hiveTable.isThiveTable()) {
+            partitionColumns.addAll(hiveTable.getThivePartitionColumnsStr());
+        } else {
+            partitionColumns.addAll(hiveTable.getPartitionColumnNames());
+        }
     }
 
     @Override
