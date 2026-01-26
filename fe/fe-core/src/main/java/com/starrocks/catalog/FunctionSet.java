@@ -152,6 +152,7 @@ public class FunctionSet {
     public static final String TDW_DOUBLE = "tdw_double";
     public static final String TDW_STRING = "tdw_string";
     public static final String TDW_TIMESTAMP = "tdw_timestamp";
+    public static final String TDW_SUBSTR = "tdw_substr";
 
     // Encryption functions:
     public static final String AES_DECRYPT = "aes_decrypt";
@@ -644,7 +645,7 @@ public class FunctionSet {
     public final ImmutableSet<String> couldApplyDictOptimizationFunctions =
             ImmutableSet.of(APPEND_TRAILING_CHAR_IF_ABSENT, CONCAT, CONCAT_WS, HEX, LEFT, LIKE, LOWER, LPAD, LTRIM,
                     REGEXP_EXTRACT, REGEXP_REPLACE, REPEAT, REPLACE, REVERSE, RIGHT, RPAD, RTRIM, SPLIT_PART, SUBSTR,
-                    SUBSTRING, SUBSTRING_INDEX,
+                    SUBSTRING, SUBSTRING_INDEX, TDW_SUBSTR,
                     TRIM, UPPER, IF);
 
     public static final Set<String> alwaysReturnNonNullableFunctions =

@@ -186,6 +186,9 @@ public enum ScalarOperatorEvaluator {
                 new FunctionSignature(fn.functionName().toUpperCase(), argTypes, fn.getReturnType());
 
         FunctionInvoker invoker = functions.get(signature);
+        if (fn.getFunctionName().isThiveFunction()) {
+            invoker = null;
+        }
 
         if (invoker == null) {
             if (FunctionSet.nonDeterministicFunctions.contains(fn.getFunctionName().getFunction().toLowerCase())) {
@@ -258,6 +261,9 @@ public enum ScalarOperatorEvaluator {
         FunctionSignature signature;
         if (call.getFunction() != null) {
             Function fn = call.getFunction();
+            if (fn.getFunctionName().isThiveFunction()) {
+                return false;
+            }
             List<Type> argTypes = Arrays.asList(fn.getArgs());
             signature = new FunctionSignature(fn.functionName().toUpperCase(), argTypes, fn.getReturnType());
         } else {

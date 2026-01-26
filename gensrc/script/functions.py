@@ -277,6 +277,11 @@ vectorized_functions = [
     [30013, 'substring', True, False, 'VARCHAR', ['VARCHAR', 'INT', 'INT'], 'StringFunctions::substring',
      'StringFunctions::sub_str_prepare', 'StringFunctions::sub_str_close'],
 
+    [30014, 'tdw_substr', True, False, 'VARCHAR', ['VARCHAR', 'INT'], 'StringFunctions::tdw_substr',
+     'StringFunctions::sub_str_prepare', 'StringFunctions::sub_str_close'],
+    [30015, 'tdw_substr', True, False, 'VARCHAR', ['VARCHAR', 'INT', 'INT'], 'StringFunctions::tdw_substr',
+     'StringFunctions::sub_str_prepare', 'StringFunctions::sub_str_close'],
+
     [30020, 'left', True, False, 'VARCHAR', ['VARCHAR', 'INT'], 'StringFunctions::left',
      'StringFunctions::left_or_right_prepare', 'StringFunctions::left_or_right_close'],
     [30021, 'strleft', True, False, 'VARCHAR', ['VARCHAR', 'INT'], 'StringFunctions::left',

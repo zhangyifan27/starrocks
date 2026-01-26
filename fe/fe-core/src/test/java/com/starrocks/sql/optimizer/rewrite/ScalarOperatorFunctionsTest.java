@@ -1729,4 +1729,44 @@ public class ScalarOperatorFunctionsTest {
                 ScalarOperatorFunctions.tdwToDate(ConstantOperator.createVarchar("2015-03-23 09:23:55"),
                         ConstantOperator.createVarchar("yyyy-mm-dd hh24:mi:ss")).toString());
     }
+
+    @Test
+    public void testTdwSubstr() {
+        assertEquals("ab", ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createInt(0), ConstantOperator.createInt(2)).getVarchar());
+        assertEquals("ab", ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createInt(1), ConstantOperator.createInt(2)).getVarchar());
+        assertEquals("", ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createInt(0), ConstantOperator.createInt(0)).getVarchar());
+        assertEquals("abcde", ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createInt(0)).getVarchar());
+
+        // Case: start position is negative
+        assertEquals("de", ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createInt(-2), ConstantOperator.createInt(2)).getVarchar());
+        assertEquals("de", ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createInt(-2)).getVarchar());
+
+        // Case: length exceeds remaining characters
+        assertEquals("abcde", ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createInt(1), ConstantOperator.createInt(10)).getVarchar());
+
+        // Case: length is negative
+        assertEquals("", ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createInt(1), ConstantOperator.createInt(-1)).getVarchar());
+
+        // Case: start position out of bounds (positive)
+        assertEquals("", ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createInt(10), ConstantOperator.createInt(1)).getVarchar());
+        assertEquals("", ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createInt(10)).getVarchar());
+
+        // Case: input is NULL
+        assertTrue(ScalarOperatorFunctions.tdw_substr(ConstantOperator.createNull(Type.VARCHAR),
+                ConstantOperator.createInt(1), ConstantOperator.createInt(1)).isNull());
+        assertTrue(ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createNull(Type.INT), ConstantOperator.createInt(1)).isNull());
+        assertTrue(ScalarOperatorFunctions.tdw_substr(ConstantOperator.createVarchar("abcde"),
+                ConstantOperator.createInt(1), ConstantOperator.createNull(Type.INT)).isNull());
+    }
 }

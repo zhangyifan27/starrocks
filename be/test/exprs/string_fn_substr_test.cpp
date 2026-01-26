@@ -825,4 +825,116 @@ TEST_F(StringFunctionSubstrTest, substrNotConstUtf8Test) {
     test_substr_not_const(cases);
 }
 
+TEST_F(StringFunctionSubstrTest, tdwSubstrTest) {
+    std::unique_ptr<FunctionContext> ctx(FunctionContext::create_test_context());
+    Columns columns;
+
+    auto str = BinaryColumn::create();
+    auto pos = Int32Column::create();
+    auto len = Int32Column::create();
+
+    // Case 1: pos = 0, len = 2. Should be treated as pos = 1.
+    str->append("abcde");
+    pos->append(0);
+    len->append(2);
+
+    // Case 2: pos = 1, len = 2. Normal case.
+    str->append("abcde");
+    pos->append(1);
+    len->append(2);
+
+    // Case 3: pos = 0, len = 0.
+    str->append("abcde");
+    pos->append(0);
+    len->append(0);
+
+    columns.emplace_back(str);
+    columns.emplace_back(pos);
+    columns.emplace_back(len);
+
+    ColumnPtr result = StringFunctions::tdw_substr(ctx.get(), columns).value();
+
+    ASSERT_TRUE(result->is_binary());
+    ASSERT_FALSE(result->is_nullable());
+
+    auto v = ColumnHelper::as_column<BinaryColumn>(result);
+
+    // Case 1: tdw_substr("abcde", 0, 2) -> "ab"
+    ASSERT_EQ("ab", v->get_data()[0].to_string());
+
+    // Case 2: tdw_substr("abcde", 1, 2) -> "ab"
+    ASSERT_EQ("ab", v->get_data()[1].to_string());
+
+    // Case 3: tdw_substr("abcde", 0, 0) -> ""
+    ASSERT_EQ("", v->get_data()[2].to_string());
+
+    // Case 4: start position is negative
+    // tdw_substr("abcde", -2, 2) -> "de"
+    str->append("abcde");
+    pos->append(-2);
+    len->append(2);
+
+    // Case 5: length exceeds remaining characters
+    // tdw_substr("abcde", 1, 10) -> "abcde"
+    str->append("abcde");
+    pos->append(1);
+    len->append(10);
+
+    // Case 6: length is negative
+    // tdw_substr("abcde", 1, -1) -> ""
+    str->append("abcde");
+    pos->append(1);
+    len->append(-1);
+
+    // Case 7: start position out of bounds (positive)
+    // tdw_substr("abcde", 10, 1) -> ""
+    str->append("abcde");
+    pos->append(10);
+    len->append(1);
+
+    columns[0] = str;
+    columns[1] = pos;
+    columns[2] = len;
+
+    result = StringFunctions::tdw_substr(ctx.get(), columns).value();
+    v = ColumnHelper::as_column<BinaryColumn>(result);
+
+    // Check results for new cases
+    // Case 4
+    ASSERT_EQ("de", v->get_data()[3].to_string());
+    // Case 5
+    ASSERT_EQ("abcde", v->get_data()[4].to_string());
+    // Case 6
+    ASSERT_EQ("", v->get_data()[5].to_string());
+    // Case 7
+    ASSERT_EQ("", v->get_data()[6].to_string());
+}
+
+TEST_F(StringFunctionSubstrTest, tdwSubstrNullTest) {
+    std::unique_ptr<FunctionContext> ctx(FunctionContext::create_test_context());
+    Columns columns;
+
+    auto pos = Int32Column::create();
+    auto len = Int32Column::create();
+    pos->append(1);
+    len->append(2);
+
+    ColumnBuilder<TYPE_VARCHAR> b(config::vector_chunk_size);
+
+    // tdw_substr(NULL, 1, 2) -> NULL
+    b.append(Slice("abcde"), true); // is_null = true
+
+    columns.emplace_back(b.build(false));
+    columns.emplace_back(ConstColumn::create(pos, 1));
+    columns.emplace_back(ConstColumn::create(len, 1));
+
+    ColumnPtr result = StringFunctions::tdw_substr(ctx.get(), columns).value();
+
+    ASSERT_FALSE(result->is_binary());
+    ASSERT_TRUE(result->is_nullable());
+
+    auto nv = ColumnHelper::as_column<NullableColumn>(result);
+    ASSERT_TRUE(nv->is_null(0));
+}
+
 } // namespace starrocks

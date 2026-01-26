@@ -406,6 +406,7 @@ static inline void column_builder_non_empty_op(uint8_t* begin, uint8_t* end, Nul
     builder->append(begin, end, i);
 }
 
+template <bool is_tdw = false>
 ColumnPtr substr_const_not_null(const Columns& columns, BinaryColumn* src, SubstrState* state) {
     ColumnPtr result = BinaryColumn::create();
     auto* binary = down_cast<BinaryColumn*>(result.get());
@@ -413,6 +414,12 @@ ColumnPtr substr_const_not_null(const Columns& columns, BinaryColumn* src, Subst
     Offsets& offsets = binary->get_offset();
     int len = state->len;
     int off = state->pos;
+
+    if constexpr (is_tdw) {
+        if (off == 0) {
+            off = 1;
+        }
+    }
 
     const size_t size = src->size();
     // return a vector of NULL if off or len is trivial or invalid
@@ -559,14 +566,16 @@ ColumnPtr string_func_const(StringConstFuncType func, const Columns& columns, Ar
     }
 }
 
+template <bool is_tdw = false>
 ColumnPtr substr_const(SubstrState* state, const Columns& columns) {
-    return string_func_const(substr_const_not_null, columns, state);
+    return string_func_const(substr_const_not_null<is_tdw>, columns, state);
 }
 
 ColumnPtr right_const(SubstrState* state, const Columns& columns) {
     return string_func_const(right_const_not_null, columns, state);
 }
 
+template <bool is_tdw = false>
 static inline void ascii_substr_not_const(const size_t row_nums, ColumnViewer<TYPE_VARCHAR>* str_viewer,
                                           ColumnViewer<TYPE_INT>* off_viewer, ColumnViewer<TYPE_INT>* len_viewer,
                                           NullableBinaryColumnBuilder* builder) {
@@ -579,6 +588,13 @@ static inline void ascii_substr_not_const(const size_t row_nums, ColumnViewer<TY
         auto s = str_viewer->value(row);
         auto off = off_viewer->value(row);
         auto len = len_viewer->value(row);
+
+        if constexpr (is_tdw) {
+            if (off == 0) {
+                off = 1;
+            }
+        }
+
         if (off == 0 || len <= 0 || s.size == 0) {
             column_builder_empty_op(builder, row);
             continue;
@@ -617,6 +633,7 @@ static inline void ascii_right_not_const(const size_t num_rows, ColumnViewer<TYP
                                            row);
     }
 }
+template <bool is_tdw = false>
 static inline void utf8_substr_not_const(const size_t num_rows, ColumnViewer<TYPE_VARCHAR>* str_viewer,
                                          ColumnViewer<TYPE_INT>* off_viewer, ColumnViewer<TYPE_INT>* len_viewer,
                                          NullableBinaryColumnBuilder* builder) {
@@ -628,6 +645,13 @@ static inline void utf8_substr_not_const(const size_t num_rows, ColumnViewer<TYP
         auto s = str_viewer->value(row);
         auto off = off_viewer->value(row);
         auto len = len_viewer->value(row);
+
+        if constexpr (is_tdw) {
+            if (off == 0) {
+                off = 1;
+            }
+        }
+
         if (off == INT_MIN || off == 0 || len <= 0 || s.size == 0) {
             column_builder_empty_op(builder, row);
             continue;
@@ -660,6 +684,7 @@ static inline void utf8_right_not_const(const size_t row_nums, ColumnViewer<TYPE
     }
 }
 
+template <bool is_tdw = false>
 static inline ColumnPtr substr_not_const(FunctionContext* context, const starrocks::Columns& columns) {
     ColumnViewer<TYPE_VARCHAR> str_viewer(columns[0]);
     ColumnViewer<TYPE_INT> off_viewer(columns[1]);
@@ -684,9 +709,9 @@ static inline ColumnPtr substr_not_const(FunctionContext* context, const starroc
     Bytes& src_bytes = src->get_bytes();
     auto is_ascii = validate_ascii_fast((const char*)src_bytes.data(), src_bytes.size());
     if (is_ascii) {
-        ascii_substr_not_const(rows_num, &str_viewer, &off_viewer, &len_viewer, &result);
+        ascii_substr_not_const<is_tdw>(rows_num, &str_viewer, &off_viewer, &len_viewer, &result);
     } else {
-        utf8_substr_not_const(rows_num, &str_viewer, &off_viewer, &len_viewer, &result);
+        utf8_substr_not_const<is_tdw>(rows_num, &str_viewer, &off_viewer, &len_viewer, &result);
     }
     return result.build(ColumnHelper::is_all_const(columns));
 }
@@ -725,6 +750,20 @@ StatusOr<ColumnPtr> StringFunctions::substring(FunctionContext* context, const s
         return substr_const(state, columns);
     }
     return substr_not_const(context, columns);
+}
+
+/**
+ * @param: [string_value, position, length]
+ * @paramType: [BinaryColumn, IntColumn, IntColumn]
+ * @return: BinaryColumn
+ */
+StatusOr<ColumnPtr> StringFunctions::tdw_substr(FunctionContext* context, const starrocks::Columns& columns) {
+    RETURN_IF_COLUMNS_ONLY_NULL(columns);
+    auto state = reinterpret_cast<SubstrState*>(context->get_function_state(FunctionContext::FRAGMENT_LOCAL));
+    if (state != nullptr && state->is_const) {
+        return substr_const<true>(state, columns);
+    }
+    return substr_not_const<true>(context, columns);
 }
 
 // left

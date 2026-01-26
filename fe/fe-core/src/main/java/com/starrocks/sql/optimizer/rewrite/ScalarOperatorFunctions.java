@@ -1373,6 +1373,39 @@ public class ScalarOperatorFunctions {
         return ConstantOperator.createVarchar(string.substring(beginIndex, endIndex));
     }
 
+    @ConstantFunction.List(list = {
+            @ConstantFunction(name = "tdw_substr", argTypes = {VARCHAR, INT}, returnType = VARCHAR),
+            @ConstantFunction(name = "tdw_substr", argTypes = {VARCHAR, INT, INT}, returnType = VARCHAR)
+    })
+    public static ConstantOperator tdw_substr(ConstantOperator value, ConstantOperator... index) {
+        Preconditions.checkArgument(index.length == 1 || index.length == 2);
+
+        if (value.isNull()) {
+            return ConstantOperator.createNull(Type.VARCHAR);
+        }
+
+        for (ConstantOperator idx : index) {
+            if (idx.isNull()) {
+                return ConstantOperator.createNull(Type.VARCHAR);
+            }
+        }
+
+        String string = value.getVarchar();
+        int pos = index[0].getInt();
+        if (pos == 0) {
+            pos = 1;
+        }
+
+        int beginIndex = pos >= 0 ? pos - 1 : string.length() + pos;
+        int endIndex =
+                (index.length == 2) ? Math.min(beginIndex + index[1].getInt(), string.length()) : string.length();
+
+        if (beginIndex < 0 || beginIndex > endIndex) {
+            return ConstantOperator.createVarchar("");
+        }
+        return ConstantOperator.createVarchar(string.substring(beginIndex, endIndex));
+    }
+
     @ConstantFunction(name = "lower", argTypes = {VARCHAR}, returnType = VARCHAR)
     public static ConstantOperator lower(ConstantOperator str) {
         return ConstantOperator.createVarchar(StringUtils.lowerCase(str.getVarchar()));

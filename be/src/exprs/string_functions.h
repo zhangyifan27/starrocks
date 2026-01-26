@@ -125,6 +125,13 @@ public:
     DEFINE_VECTORIZED_FN(substring);
 
     /**
+     * @param: [string_value, position, optional<length>]
+     * @paramType: [BinaryColumn, IntColumn, optional<IntColumn>]
+     * @return: BinaryColumn
+     */
+    DEFINE_VECTORIZED_FN(tdw_substr);
+
+    /**
      * @param: [string_value, length]
      * @paramType: [BinaryColumn, IntColumn]
      * @return: BinaryColumn
