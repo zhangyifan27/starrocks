@@ -37,6 +37,7 @@ import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Timer;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.common.util.TimeUtils;
+import com.starrocks.common.util.Util;
 import com.starrocks.connector.ConnectorMetadata;
 import com.starrocks.connector.ConnectorTableVersion;
 import com.starrocks.connector.ConnectorViewDefinition;
@@ -382,6 +383,8 @@ public class IcebergMetadata implements ConnectorMetadata {
             throw e;
         } catch (NoSuchTableException e) {
             return getView(dbName, tblName);
+        } catch (Exception e) {
+            throw new StarRocksConnectorException(Util.getRealMessage(e));
         }
     }
 
