@@ -516,6 +516,15 @@ public class CatalogRecycleBin extends FrontendDaemon implements Writable {
 
         List<Long> finishedTables = Lists.newArrayList();
         for (RecycleTableInfo info : tableToErase) {
+            // For non-retryable tables (shared-nothing mode), skip async deletion to prevent memory leak
+            // These tables are already removed from idToTableInfo in pickTablesToErase
+            if (!info.table.isDeleteRetryable()) {
+                // Directly call deleteFromRecycleBin synchronously without tracking in asyncDeleteForTables
+                info.table.deleteFromRecycleBin(info.dbId, false);
+                continue;
+            }
+
+            // Only retryable tables (lake tables) use async deletion with tracking
             boolean finished = false;
             CompletableFuture<Boolean> future = asyncDeleteForTables.get(info);
             if (future == null) {
@@ -537,13 +546,10 @@ public class CatalogRecycleBin extends FrontendDaemon implements Writable {
                 }
             }
 
-            if (!info.table.isDeleteRetryable()) {
-                // Nothing to do
-                continue;
-            }
             Preconditions.checkState(!info.isRecoverable());
             if (finished) {
                 finishedTables.add(info.table.getId());
+                asyncDeleteForTables.remove(info);
             } else if (asyncDeleteForTables.get(info) == null) {
                 // treated as error if task is not running
                 setNextEraseMinTime(info.table.getId(), System.currentTimeMillis() + FAIL_RETRY_INTERVAL);
@@ -609,6 +615,7 @@ public class CatalogRecycleBin extends FrontendDaemon implements Writable {
 
             if (finished) {
                 iterator.remove();
+                asyncDeleteForPartitions.remove(partitionInfo);
                 removeRecycleMarkers(partitionId);
 
                 GlobalStateMgr.getCurrentState().getEditLog().logErasePartition(partitionId);
