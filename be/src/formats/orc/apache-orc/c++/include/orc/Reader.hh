@@ -72,6 +72,8 @@ struct ReaderMetrics {
     std::atomic<uint64_t> IOBlockingLatencyUs{0};
     std::atomic<uint64_t> SelectedRowGroupCount{0};
     std::atomic<uint64_t> EvaluatedRowGroupCount{0};
+    std::atomic<uint64_t> BloomFilterFilteredRowGroupCount{0};
+    std::atomic<uint64_t> NullFilteredRowGroupCount{0};
 };
 ReaderMetrics* getDefaultReaderMetrics();
 

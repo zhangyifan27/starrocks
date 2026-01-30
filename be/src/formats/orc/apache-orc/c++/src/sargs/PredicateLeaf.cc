@@ -256,7 +256,7 @@ size_t PredicateLeaf::hashCode() const {
                   [&](const Literal& literal) { value = value * 17 + literal.getHashCode(); });
     auto colHash = mHasColumnName ? std::hash<std::string>{}(mColumnName) : std::hash<uint64_t>{}(mColumnId);
     return value * 103 * 101 * 3 * 17 + std::hash<int>{}(static_cast<int>(mOperator)) +
-           std::hash<int>{}(static_cast<int>(mType)) * 17 + std::hash<std::string>{}(mColumnName)*3 * 17 +
+           std::hash<int>{}(static_cast<int>(mType)) * 17 + std::hash<std::string>{}(mColumnName) * 3 * 17 +
            colHash * 3 * 17 * 17;
 }
 
@@ -696,7 +696,8 @@ TruthValue PredicateLeaf::evaluatePredicateBloomFiter(const BloomFilter* bf, boo
 }
 
 TruthValue PredicateLeaf::evaluate(const WriterVersion writerVersion, const proto::ColumnStatistics& colStats,
-                                   const BloomFilter* bloomFilter) const {
+                                   const BloomFilter* bloomFilter, bool* filteredByBloomFilter,
+                                   bool* filteredByNull) const {
     // files written before ORC-135 stores timestamp wrt to local timezone
     // causing issues with PPD. disable PPD for timestamp for all old files
     if (mType == PredicateDataType::TIMESTAMP) {
@@ -715,12 +716,19 @@ TruthValue PredicateLeaf::evaluate(const WriterVersion writerVersion, const prot
         return allNull ? TruthValue::YES : (colStats.hasnull() ? TruthValue::YES_NO : TruthValue::NO);
     } else if (allNull) {
         // if we don't have any value, everything must have been null
+        if (filteredByNull != nullptr) {
+            *filteredByNull = true;
+        }
         return TruthValue::IS_NULL;
     }
 
     TruthValue result = evaluatePredicateMinMax(colStats);
     if (shouldEvaluateBloomFilter(mOperator, result, bloomFilter)) {
-        return evaluatePredicateBloomFiter(bloomFilter, colStats.hasnull());
+        TruthValue bfResult = evaluatePredicateBloomFiter(bloomFilter, colStats.hasnull());
+        if (filteredByBloomFilter != nullptr && (bfResult == TruthValue::NO || bfResult == TruthValue::NO_NULL)) {
+            *filteredByBloomFilter = true;
+        }
+        return bfResult;
     } else {
         return result;
     }

@@ -126,7 +126,8 @@ public:
      * Evaluate current PredicateLeaf based on ColumnStatistics and BloomFilter
      */
     TruthValue evaluate(const WriterVersion writerVersion, const proto::ColumnStatistics& colStats,
-                        const BloomFilter* bloomFilter) const;
+                        const BloomFilter* bloomFilter, bool* filteredByBloomFilter = nullptr,
+                        bool* filteredByNull = nullptr) const;
 
     std::string toString() const;
 

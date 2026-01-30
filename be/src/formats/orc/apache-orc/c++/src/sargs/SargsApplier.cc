@@ -106,8 +106,13 @@ bool SargsApplier::pickRowGroups(uint64_t rowsInStripe, const std::unordered_map
     mHasSkipped = false;
     uint64_t nextSkippedRowGroup = groupsInStripe;
     size_t rowGroup = groupsInStripe;
+    uint64_t bloomFilterFilteredCount = 0;
+    uint64_t nullFilteredCount = 0;
+
     do {
         --rowGroup;
+        bool hasBloomFilterError = false;
+        bool hasNullError = false;
         for (size_t pred = 0; pred != leaves.size(); ++pred) {
             uint64_t columnIdx = mFilterColumns[pred];
             auto rowIndexIter = rowIndexes.find(columnIdx);
@@ -126,11 +131,27 @@ bool SargsApplier::pickRowGroups(uint64_t rowsInStripe, const std::unordered_map
                     bloomFilter = iter->second.entries.at(rowGroup);
                 }
 
-                leafValues[pred] = leaves[pred].evaluate(mWriterVersion, statistics, bloomFilter.get());
+                bool bf = false;
+                bool nf = false;
+                leafValues[pred] = leaves[pred].evaluate(mWriterVersion, statistics, bloomFilter.get(), &bf, &nf);
+                if (bf) {
+                    hasBloomFilterError = true;
+                }
+                if (nf) {
+                    hasNullError = true;
+                }
             }
         }
 
         bool needed = isNeeded(mSearchArgument->evaluate(leafValues));
+        if (!needed) {
+            if (hasBloomFilterError) {
+                bloomFilterFilteredCount++;
+            } else if (hasNullError) {
+                nullFilteredCount++;
+            }
+        }
+
         // I guess cost of evaluating search argument is lower than our customized filter.
         // so better to put it ahead of our customized filter.
         if (mRowReaderFilter && needed && mRowReaderFilter->filterOnPickRowGroup(rowGroup, rowIndexes, bloomFilters)) {
@@ -159,6 +180,8 @@ bool SargsApplier::pickRowGroups(uint64_t rowsInStripe, const std::unordered_map
     if (mMetrics != nullptr) {
         mMetrics->SelectedRowGroupCount.fetch_add(selectedRGs);
         mMetrics->EvaluatedRowGroupCount.fetch_add(groupsInStripe);
+        mMetrics->BloomFilterFilteredRowGroupCount.fetch_add(bloomFilterFilteredCount);
+        mMetrics->NullFilteredRowGroupCount.fetch_add(nullFilteredCount);
     }
 
     if (selectedRowGroupNumber != nullptr) {

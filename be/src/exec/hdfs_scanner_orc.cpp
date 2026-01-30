@@ -836,6 +836,15 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
     RuntimeProfile::Counter* skip_row_group_number_counter = root_profile->add_child_counter(
             "SkipRowGroupNumber", TUnit::UNIT, RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM),
             orcProfileSectionPrefix);
+    RuntimeProfile::Counter* bloom_filter_filtered_row_group_number_counter = root_profile->add_child_counter(
+            "BloomFilterFilteredRowGroupNumber", TUnit::UNIT,
+            RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM), "SkipRowGroupNumber");
+    RuntimeProfile::Counter* null_filtered_row_group_number_counter = root_profile->add_child_counter(
+            "NullFilteredRowGroupNumber", TUnit::UNIT,
+            RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM), "SkipRowGroupNumber");
+    RuntimeProfile::Counter* min_max_filtered_row_group_number_counter = root_profile->add_child_counter(
+            "MinMaxFilteredRowGroupNumber", TUnit::UNIT,
+            RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM), "SkipRowGroupNumber");
     RuntimeProfile::Counter* dict_filter_skip_stripe_number_counter = root_profile->add_child_counter(
             "DictFilterSkipStripeNumber", TUnit::UNIT,
             RuntimeProfile::Counter::create_strategy(TCounterAggregateType::SUM), orcProfileSectionPrefix);
@@ -885,8 +894,18 @@ void HdfsOrcScanner::do_update_counter(HdfsScanProfile* profile) {
                        _app_stats.orc_stripe_sizes.size() - _orc_reader->get_selected_stripe_number());
         COUNTER_UPDATE(total_row_group_number_counter, _orc_reader->get_total_row_group_number());
         COUNTER_UPDATE(selected_row_group_number_counter, _orc_reader->get_selected_row_group_number());
-        COUNTER_UPDATE(skip_row_group_number_counter,
-                       _orc_reader->get_total_row_group_number() - _orc_reader->get_selected_row_group_number());
+        int64_t skip_row_groups =
+                _orc_reader->get_total_row_group_number() - _orc_reader->get_selected_row_group_number();
+        COUNTER_UPDATE(skip_row_group_number_counter, skip_row_groups);
+
+        int64_t bloom_filtered = _reader_metrics.BloomFilterFilteredRowGroupCount;
+        int64_t null_filtered = _reader_metrics.NullFilteredRowGroupCount;
+        int64_t min_max_filtered = skip_row_groups - bloom_filtered - null_filtered;
+        if (min_max_filtered < 0) min_max_filtered = 0;
+
+        COUNTER_UPDATE(bloom_filter_filtered_row_group_number_counter, bloom_filtered);
+        COUNTER_UPDATE(null_filtered_row_group_number_counter, null_filtered);
+        COUNTER_UPDATE(min_max_filtered_row_group_number_counter, min_max_filtered);
         COUNTER_UPDATE(dict_filter_skip_stripe_number_counter, _orc_reader->get_dict_filter_skip_stripe_number());
         COUNTER_UPDATE(stripe_stat_skip_stripe_number_counter, _orc_reader->get_stripe_stat_skip_stripe_number());
         COUNTER_UPDATE(row_group_stat_skip_stripe_number_counter, _orc_reader->get_row_group_stat_skip_stripe_number());
