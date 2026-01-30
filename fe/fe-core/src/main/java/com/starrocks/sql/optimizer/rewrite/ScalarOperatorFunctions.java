@@ -46,6 +46,7 @@ import com.starrocks.common.AnalysisException;
 import com.starrocks.common.Config;
 import com.starrocks.common.Pair;
 import com.starrocks.common.util.DateUtils;
+import com.starrocks.common.util.ThiveUDF;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.common.util.UDFDateAdd;
 import com.starrocks.common.util.UDFToChar;
@@ -1553,9 +1554,13 @@ public class ScalarOperatorFunctions {
     })
     public static ConstantOperator tdwDaysSub(ConstantOperator date, ConstantOperator day) {
         if (date.getType().isStringType()) {
-            LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
-            dateTime = dateTime.minusDays(day.getInt());
-            return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
+            try {
+                LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
+                dateTime = dateTime.minusDays(day.getInt());
+                return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
+            } catch (DateTimeParseException e) {
+                return ConstantOperator.createVarchar(ThiveUDF.dateSubEvaluate(date.getVarchar(), day.getInt()));
+            }
         } else {
             LocalDateTime dateTime = date.getDatetime().minusDays(day.getInt());
             return ConstantOperator.createVarchar(dateTime.format(DateUtils.DATE_FORMATTER_UNIX));
@@ -1569,9 +1574,13 @@ public class ScalarOperatorFunctions {
     })
     public static ConstantOperator tdwDaysAdd(ConstantOperator date, ConstantOperator day) {
         if (date.getType().isStringType()) {
-            LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
-            dateTime = dateTime.plusDays(day.getInt());
-            return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
+            try {
+                LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
+                dateTime = dateTime.plusDays(day.getInt());
+                return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
+            } catch (DateTimeParseException e) {
+                return ConstantOperator.createVarchar(ThiveUDF.dateAddEvaluate(date.getVarchar(), day.getInt()));
+            }
         } else {
             LocalDateTime dateTime = date.getDatetime().plusDays(day.getInt());
             return ConstantOperator.createVarchar(dateTime.format(DateUtils.DATE_FORMATTER_UNIX));
@@ -1585,9 +1594,13 @@ public class ScalarOperatorFunctions {
     })
     public static ConstantOperator tdwAddMonths(ConstantOperator date, ConstantOperator day) {
         if (date.getType().isStringType()) {
-            LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
-            dateTime = dateTime.plusMonths(day.getInt());
-            return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
+            try {
+                LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
+                dateTime = dateTime.plusMonths(day.getInt());
+                return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
+            } catch (DateTimeParseException e) {
+                return ConstantOperator.createVarchar(ThiveUDF.addMonthsEvaluate(date.getVarchar(), day.getInt()));
+            }
         } else {
             LocalDateTime dateTime = date.getDatetime().plusMonths(day.getInt());
             return ConstantOperator.createVarchar(dateTime.format(DateUtils.DATE_FORMATTER_UNIX));
@@ -1656,9 +1669,13 @@ public class ScalarOperatorFunctions {
     public static ConstantOperator tdwDaysAdd(ConstantOperator type, ConstantOperator plus, ConstantOperator date)
             throws AnalysisException {
         if (date.getType().isStringType()) {
-            LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
-            dateTime = UDFDateAdd.plus(type.getVarchar(), getPlus(plus), dateTime);
-            return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
+            try {
+                LocalDateTime dateTime = DateUtils.parseStrictDateTime(date.getVarchar());
+                dateTime = UDFDateAdd.plus(type.getVarchar(), getPlus(plus), dateTime);
+                return ConstantOperator.createVarchar(UDFDateAdd.evaluate(date.getVarchar(), dateTime));
+            } catch (DateTimeParseException e) {
+                return ConstantOperator.createVarchar(ThiveUDF.dateAddEvaluate(date.getVarchar(), (int) getPlus(plus)));
+            }
         } else if (date.getType().isDate()) {
             LocalDateTime dateTime = UDFDateAdd.plus(type.getVarchar(), getPlus(plus), date.getDatetime());
             return ConstantOperator.createDate(dateTime);

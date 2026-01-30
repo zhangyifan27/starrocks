@@ -1630,6 +1630,10 @@ public class ScalarOperatorFunctionsTest {
     public void tdwDaysSub() {
         assertEquals("2015-03-13",
                 ScalarOperatorFunctions.tdwDaysSub(O_DT_20150323_092355, O_INT_10).toString());
+
+        ConstantOperator date = ConstantOperator.createVarchar("2025-12-27 00:00:00:000");
+        ConstantOperator day = ConstantOperator.createInt(10);
+        assertEquals("2025-12-17", ScalarOperatorFunctions.tdwDaysSub(date, day).toString());
     }
 
     @Test
@@ -1704,12 +1708,22 @@ public class ScalarOperatorFunctionsTest {
         varchar = ConstantOperator.createVarchar("2025-03-23");
         assertEquals("2026-03-23",
                 ScalarOperatorFunctions.tdwDaysAdd(year, plus, varchar).toString());
+
+        ConstantOperator date = ConstantOperator.createVarchar("2025-12-27 00:00:00:000");
+        plus = ConstantOperator.createInt(10);
+        assertEquals("2026-01-06", ScalarOperatorFunctions.tdwDaysAdd(date, plus).toString());
+
+        assertEquals("2026-01-06", ScalarOperatorFunctions.tdwDaysAdd(hour, plus, date).toString());
     }
 
     @Test
     public void tdwAddMonths() {
         assertEquals("2016-01-23",
                 ScalarOperatorFunctions.tdwAddMonths(O_DT_20150323_092355, O_INT_10).toString());
+
+        ConstantOperator date = ConstantOperator.createVarchar("2025-12-27 00:00:00:000");
+        ConstantOperator day = ConstantOperator.createInt(10);
+        assertEquals("2026-10-27", ScalarOperatorFunctions.tdwAddMonths(date, day).toString());
     }
 
     @Test
