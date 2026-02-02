@@ -771,7 +771,7 @@ public class Config extends ConfigBase {
      * If you have higher requirements for security, you can turn off the acquisition of this information
      */
     @ConfField(mutable = true)
-    public static boolean http_web_page_display_hardware = true;
+    public static boolean http_web_page_display_hardware = false;
 
     /**
      * Whether to enable the detail metrics for http. It may be expensive
