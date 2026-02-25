@@ -89,7 +89,7 @@ Status JDBCScanner::get_next(RuntimeState* state, ChunkPtr* chunk, bool* eos) {
     size_t jchunk_rows = 0;
     LOCAL_REF_GUARD(jchunk);
     RETURN_IF_ERROR(_get_next_chunk(&jchunk, &jchunk_rows));
-    RETURN_IF_ERROR(_fill_chunk(jchunk, jchunk_rows, chunk));
+    RETURN_IF_ERROR(_fill_chunk(state, jchunk, jchunk_rows, chunk));
     return Status::OK();
 }
 
@@ -507,7 +507,7 @@ Status JDBCScanner::_close_jdbc_scanner() {
     return Status::OK();
 }
 
-Status JDBCScanner::_fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chunk) {
+Status JDBCScanner::_fill_chunk(RuntimeState* state, jobject jchunk, size_t num_rows, ChunkPtr* chunk) {
     SCOPED_TIMER(_profile.fill_chunk_timer);
     // get result from JNI
     {
@@ -528,6 +528,17 @@ Status JDBCScanner::_fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chunk
         }
     }
 
+    // Decide JDBC nullable strict mode from query options:
+    //  - strict (default): any NULL on NOT NULL column triggers DataQualityError.
+    //  - non-strict: log a warning and treat the column as nullable for compatibility.
+    bool jdbc_nullable_strict_mode = true;
+    if (state != nullptr) {
+        const auto& qopts = state->query_options();
+        if (qopts.__isset.jdbc_nullable_strict_mode) {
+            jdbc_nullable_strict_mode = qopts.jdbc_nullable_strict_mode;
+        }
+    }
+
     // convert intermediate results type to output chunks
     // TODO: avoid the cast overhead when from type == to type
     for (size_t col_idx = 0; col_idx < _slot_descs.size(); col_idx++) {
@@ -543,11 +554,18 @@ Status JDBCScanner::_fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chunk
         } else if (column->is_nullable() && !result->is_nullable()) {
             column = NullableColumn::create(result, NullColumn::create(num_rows));
         } else if (!column->is_nullable() && result->is_nullable()) {
-            if (result->has_null()) {
+            if (!result->has_null()) {
+                // No NULLs in result, it's safe to unwrap nullable and write into a non-nullable column.
+                column = down_cast<NullableColumn*>(result.get())->data_column();
+            } else if (jdbc_nullable_strict_mode) {
+                // In strict mode, trigger DataQualityError for NULL on NOT NULL column.
                 return Status::DataQualityError(
-                        fmt::format("Unexpected NULL value occurs on NOT NULL column[{}]", slot_desc->col_name()));
+                        fmt::format("Unexpected NULL value occurs on NOT NULL column[{}]",
+                                    slot_desc->col_name()));
+            } else {
+                // In non-strict mode, keep the nullable result (with NULLs) as the output column.
+                column = result;
             }
-            column = down_cast<NullableColumn*>(result.get())->data_column();
         }
     }
     return Status::OK();

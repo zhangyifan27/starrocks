@@ -240,6 +240,10 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
     public static final String MAX_PUSHDOWN_CONDITIONS_PER_COLUMN = "max_pushdown_conditions_per_column";
 
     public static final String ENABLE_LAMBDA_PUSHDOWN = "enable_lambda_pushdown";
+    // Control how JDBC scanner handles NULLs on NOT NULL columns for JDBC catalog queries.
+    // true: strict mode (current behavior), any NULL on NOT NULL column triggers DataQualityError.
+    // false: compatibility mode, JDBC scanner logs a warning and treats the column as nullable.
+    public static final String JDBC_NULLABLE_STRICT_MODE = "jdbc_nullable_strict_mode";
     // use new execution engine instead of the old one if enable_pipeline_engine is true,
     // the new execution engine split a fragment into pipelines, then create several drivers
     // from the pipeline for parallel executing, threads from global pool pick out the
@@ -1294,6 +1298,12 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_INSERT_STRICT)
     private boolean enableInsertStrict = true;
+
+    // Control how JDBC scanner handles NULLs on NOT NULL columns when scanning via JDBC catalog.
+    // true: strict mode (default), any NULL on NOT NULL column triggers DataQualityError.
+    // false: compatibility mode, JDBC scanner logs a warning and treats the column as nullable.
+    @VariableMgr.VarAttr(name = JDBC_NULLABLE_STRICT_MODE)
+    private boolean jdbcNullableStrictMode = true;
 
     @VariableMgr.VarAttr(name = ENABLE_SPILL)
     private boolean enableSpill = false;
@@ -5007,6 +5017,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
             }
             tResult.setSpill_options(spillOptions);
         }
+
+        // JDBC nullable strict mode: controls how BE JDBC scanner handles NULLs on NOT NULL columns.
+        tResult.setJdbc_nullable_strict_mode(jdbcNullableStrictMode);
 
         // Compression Type
         TCompressionType compressionType = CompressionUtils.findTCompressionByName(transmissionCompressionType);

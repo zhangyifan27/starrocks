@@ -330,6 +330,11 @@ struct TQueryOptions {
 
   141: optional i32 datacache_evict_probability;
   301: optional TCacheSelectMode cache_select_mode;
+
+  // Control how JDBC scanner handles NULLs on NOT NULL columns.
+  // true: strict mode, any NULL on NOT NULL column triggers DataQualityError.
+  // false: compatibility mode, JDBC scanner will log a warning and treat the column as nullable.
+  302: optional bool jdbc_nullable_strict_mode;
 }
 
 

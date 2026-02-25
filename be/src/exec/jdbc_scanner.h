@@ -82,7 +82,7 @@ protected:
 
     [[nodiscard]] Status _get_next_chunk(jobject* chunk, size_t* num_rows);
 
-    [[nodiscard]] Status _fill_chunk(jobject jchunk, size_t num_rows, ChunkPtr* chunk);
+    [[nodiscard]] Status _fill_chunk(RuntimeState* state, jobject jchunk, size_t num_rows, ChunkPtr* chunk);
 
     [[nodiscard]] Status _close_jdbc_scanner();
 
