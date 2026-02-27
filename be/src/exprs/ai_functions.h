@@ -14,6 +14,9 @@
 
 #pragma once
 
+#include <string>
+#include <string_view>
+
 #include "exprs/builtin_functions.h"
 #include "exprs/function_helper.h"
 #include "util/lru_cache.h"
@@ -23,24 +26,19 @@ namespace starrocks {
 constexpr double kDefaultTemperature = 0.7;
 constexpr int kDefaultMaxTokens = 1024;
 constexpr double kDefaultTopP = 1.0;
-const std::string kDefaultEndpoint = "https://api.openai.com/v1/chat/completions";
+constexpr std::string_view kDefaultEndpoint = "https://api.openai.com/v1/chat/completions";
 constexpr int kDefaultTimeout = 60000;
 
 struct ModelConfig {
-    std::string endpoint;
+    std::string endpoint = std::string(kDefaultEndpoint);
     std::string model;
     std::string api_key;
-    double temperature;
-    int max_tokens;
-    double top_p;
-    int timeout_ms;
+    double temperature = kDefaultTemperature;
+    int max_tokens = kDefaultMaxTokens;
+    double top_p = kDefaultTopP;
+    int timeout_ms = kDefaultTimeout;
 
-    ModelConfig()
-            : endpoint(kDefaultEndpoint),
-              temperature(kDefaultTemperature),
-              max_tokens(kDefaultMaxTokens),
-              top_p(kDefaultTopP),
-              timeout_ms(kDefaultTimeout) {}
+    ModelConfig() = default;
 };
 
 class AiFunctions {
