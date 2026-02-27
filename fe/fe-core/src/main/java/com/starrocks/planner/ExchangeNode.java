@@ -135,8 +135,6 @@ public class ExchangeNode extends PlanNode {
     }
 
     public void setPreferNonPipelineLevelShuffle(boolean prefer_non_pipeline_level_shuffle) {
-        // should only be setup once
-        Preconditions.checkState(!this.preferNonPipelineLevelShuffle);
         this.preferNonPipelineLevelShuffle = prefer_non_pipeline_level_shuffle;
     }
 

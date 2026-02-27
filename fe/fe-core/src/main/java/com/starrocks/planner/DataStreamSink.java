@@ -91,8 +91,6 @@ public class DataStreamSink extends DataSink {
     }
 
     public void setPreferNonPipelineLevelShuffle(boolean preferNonPipelineLevelShuffle) {
-        // should be setup once
-        Preconditions.checkState(!this.preferNonPipelineLevelShuffle);
         this.preferNonPipelineLevelShuffle = preferNonPipelineLevelShuffle;
     }
 
