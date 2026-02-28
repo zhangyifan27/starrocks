@@ -14,6 +14,7 @@
 
 #include "exprs/java_function_call_expr.h"
 
+#include <algorithm>
 #include <any>
 #include <memory>
 #include <sstream>
@@ -25,6 +26,7 @@
 #include "column/column_helper.h"
 #include "column/nullable_column.h"
 #include "column/vectorized_fwd.h"
+#include "common/config.h"
 #include "common/status.h"
 #include "common/statusor.h"
 #include "exprs/anyval_util.h"
@@ -42,6 +44,17 @@ namespace starrocks {
 
 constexpr const char* THIVE_UDF_DB_NAME = "__thive_udf_db_";
 
+size_t compute_udf_batch_size(size_t total_bytes, size_t num_rows, int64_t max_batch_bytes) {
+    if (num_rows == 0) {
+        return 0;
+    }
+    if (max_batch_bytes <= 0) {
+        return num_rows;
+    }
+    size_t per_row_bytes = total_bytes == 0 ? 1 : std::max<size_t>(1, total_bytes / num_rows);
+    return std::max<size_t>(1, static_cast<size_t>(max_batch_bytes) / per_row_bytes);
+}
+
 struct UDFFunctionCallHelper {
     JavaUDFContext* fn_desc;
     JavaMethodDescriptor* call_desc;
@@ -50,8 +63,8 @@ struct UDFFunctionCallHelper {
     StatusOr<ColumnPtr> call(FunctionContext* ctx, Columns& columns, size_t size) {
         auto& helper = JVMFunctionHelper::getInstance();
         JNIEnv* env = helper.getEnv();
-        std::vector<DirectByteBuffer> buffers;
         int num_cols = ctx->get_num_args();
+        bool is_thive_udf = fn_desc->f_db == THIVE_UDF_DB_NAME;
         std::vector<const Column*> input_cols;
 
         for (auto& column : columns) {
@@ -62,47 +75,110 @@ struct UDFFunctionCallHelper {
             }
         }
 
-        ColumnPtr const_column_ptr;
-        if (fn_desc->f_db == THIVE_UDF_DB_NAME) {
-            const_column_ptr = ColumnHelper::create_const_column<TYPE_VARCHAR>(fn_desc->f_name, size);
-            input_cols.emplace_back(const_column_ptr.get());
-        }
-        for (const auto& col : columns) {
-            input_cols.emplace_back(col.get());
-        }
-        // each input arguments as three local references (nullcolumn, offsetcolumn, bytescolumn)
-        // result column as a ref
-        env->PushLocalFrame((num_cols + 1) * 3 + 1);
-        auto defer = DeferOp([env]() { env->PopLocalFrame(nullptr); });
-        // convert input columns to object columns
-        std::vector<jobject> input_col_objs;
-        Status st;
-        if (fn_desc->f_db == THIVE_UDF_DB_NAME) {
-            st = JavaDataTypeConverter::convert_to_boxed_array_thive(ctx, &buffers, input_cols.data(), num_cols + 1,
-                                                                     size, &input_col_objs);
-        } else {
-            st = JavaDataTypeConverter::convert_to_boxed_array(ctx, &buffers, input_cols.data(), num_cols, size,
-                                                               &input_col_objs);
-        }
-        RETURN_IF_UNLIKELY(!st.ok(), ColumnHelper::create_const_null_column(size));
+        auto build_batch_columns = [&](size_t offset, size_t count, std::vector<ColumnPtr>* batch_columns) {
+            batch_columns->clear();
+            batch_columns->reserve(columns.size());
+            if (offset == 0 && count == size) {
+                *batch_columns = columns;
+                return;
+            }
+            for (const auto& col : columns) {
+                auto sliced = col->clone_empty();
+                sliced->append(*col, offset, count);
+                batch_columns->emplace_back(std::move(sliced));
+            }
+        };
 
-        jobject res = nullptr;
-        // call UDF method
-        if (fn_desc->f_db == THIVE_UDF_DB_NAME) {
-            ASSIGN_OR_RETURN(auto tmp_res,
-                             helper.batch_call(fn_desc->udf_handle.handle(), fn_desc->evaluate->method.handle(),
-                                               input_col_objs.data(), input_col_objs.size(), size));
-            res = tmp_res;
-        } else {
-            ASSIGN_OR_RETURN(auto tmp_res, helper.batch_call(fn_desc->call_stub.get(), input_col_objs.data(),
-                                                         input_col_objs.size(), size));
-            res = tmp_res;
+        auto calc_batch_bytes = [&](size_t offset, size_t count) -> size_t {
+            size_t bytes = 0;
+            for (const auto& col : columns) {
+                bytes += col->byte_size(offset, count);
+            }
+            return bytes;
+        };
+
+        auto call_one_batch = [&](size_t offset, size_t count) -> StatusOr<ColumnPtr> {
+            std::vector<ColumnPtr> batch_columns;
+            build_batch_columns(offset, count, &batch_columns);
+
+            ColumnPtr const_column_ptr;
+            input_cols.clear();
+            if (is_thive_udf) {
+                const_column_ptr = ColumnHelper::create_const_column<TYPE_VARCHAR>(fn_desc->f_name, count);
+                input_cols.emplace_back(const_column_ptr.get());
+            }
+            for (const auto& col : batch_columns) {
+                input_cols.emplace_back(col.get());
+            }
+
+            int input_num_cols = is_thive_udf ? num_cols + 1 : num_cols;
+            // each input arguments as three local references (nullcolumn, offsetcolumn, bytescolumn)
+            // result column as a ref
+            env->PushLocalFrame((num_cols + 1) * 3 + 1);
+            auto defer = DeferOp([env]() { env->PopLocalFrame(nullptr); });
+            // convert input columns to object columns
+            std::vector<DirectByteBuffer> buffers;
+            std::vector<jobject> input_col_objs;
+            Status st;
+            if (is_thive_udf) {
+                st = JavaDataTypeConverter::convert_to_boxed_array_thive(ctx, &buffers, input_cols.data(),
+                                                                         input_num_cols, count, &input_col_objs);
+            } else {
+                st = JavaDataTypeConverter::convert_to_boxed_array(ctx, &buffers, input_cols.data(), input_num_cols,
+                                                                   count, &input_col_objs);
+            }
+            RETURN_IF_UNLIKELY(!st.ok(), ColumnHelper::create_const_null_column(count));
+
+            jobject res = nullptr;
+            // call UDF method
+            if (is_thive_udf) {
+                ASSIGN_OR_RETURN(auto tmp_res,
+                                 helper.batch_call(fn_desc->udf_handle.handle(), fn_desc->evaluate->method.handle(),
+                                                   input_col_objs.data(), input_col_objs.size(), count));
+                res = tmp_res;
+            } else {
+                ASSIGN_OR_RETURN(auto tmp_res,
+                                 helper.batch_call(fn_desc->call_stub.get(), input_col_objs.data(),
+                                                   input_col_objs.size(), count));
+                res = tmp_res;
+            }
+
+            RETURN_IF_UNLIKELY_NULL(res, ColumnHelper::create_const_null_column(count));
+            // get result
+            return get_boxed_result(ctx, res, count);
+        };
+
+        if (size == 0) {
+            return ColumnHelper::create_const_null_column(0);
         }
 
-        RETURN_IF_UNLIKELY_NULL(res, ColumnHelper::create_const_null_column(size));
-        // get result
-        auto result_cols = get_boxed_result(ctx, res, size);
-        return result_cols;
+        size_t total_bytes = calc_batch_bytes(0, size);
+
+        int64_t max_batch_bytes = config::thive_udf_batch_call_max_size;
+        if (max_batch_bytes <= 0 || total_bytes <= max_batch_bytes) {
+            return call_one_batch(0, size);
+        }
+
+        size_t batch_size = compute_udf_batch_size(total_bytes, size, max_batch_bytes);
+        ColumnPtr result;
+        size_t offset = 0;
+        while (offset < size) {
+            size_t remaining = size - offset;
+            size_t current_batch_size = std::min(batch_size, remaining);
+
+            ASSIGN_OR_RETURN(auto batch_result, call_one_batch(offset, current_batch_size));
+            if (batch_result->is_constant()) {
+                batch_result = ColumnHelper::unpack_and_duplicate_const_column(current_batch_size, batch_result);
+            }
+            if (result == nullptr) {
+                result = std::move(batch_result);
+            } else {
+                result->append(*batch_result, 0, batch_result->size());
+            }
+            offset += current_batch_size;
+        }
+
+        return result;
     }
 
     ColumnPtr get_boxed_result(FunctionContext* ctx, jobject result, size_t num_rows) {

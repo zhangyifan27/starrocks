@@ -121,6 +121,7 @@ set(EXEC_FILES
         ./exprs/condition_expr_test.cpp
         ./exprs/encryption_functions_test.cpp
         ./exprs/function_call_expr_test.cpp
+        ./exprs/java_function_call_expr_test.cpp
         ./exprs/geography_functions_test.cpp
         ./exprs/hash_functions_test.cpp
         ./exprs/hyperloglog_functions_test.cpp

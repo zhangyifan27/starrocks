@@ -45,4 +45,8 @@ private:
     std::shared_ptr<UDFFunctionCallHelper> _call_helper;
     bool _is_returning_random_value;
 };
+
+#if BE_TEST
+size_t compute_udf_batch_size(size_t total_bytes, size_t num_rows, int64_t max_batch_bytes);
+#endif
 } // namespace starrocks
