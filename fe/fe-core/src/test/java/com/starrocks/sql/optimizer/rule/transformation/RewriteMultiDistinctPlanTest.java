@@ -710,5 +710,39 @@ public class RewriteMultiDistinctPlanTest extends PlanTestBase {
                         "  |  <slot 33> : if(32: expr, 1: emp_id, NULL)\n" +
                         "  |  <slot 31> : CAST(7: deptno AS VARCHAR(1048576))");
     }
+
+    @Test
+    public void testMultiDistinctUserCase9() throws Exception {
+        String sql = "SELECT * FROM ( " +
+                "SELECT count(CASE WHEN fret_code = '0' AND fpush_status = '1' THEN 1 END) AS index_1_20984 , " +
+                "count(CASE WHEN fret_code = '0' AND fpush_status = '1' THEN 1 END) / count(1) AS index_2_20987 , " +
+                "count(DISTINCT (`fuin`)) AS index_3_20991 , " +
+                "count(DISTINCT CASE WHEN fret_code = '0' AND fpush_status = '1' THEN if(coalesce(fuin, '') = '', " +
+                "fopenid, fuin) END) AS index_4_20990 " +
+                "FROM ( SELECT t1.`fuin` AS `fuin`, t1.`fret_code` AS `fret_code`, t1.`fpush_status` AS `fpush_status`, " +
+                "t1.`fopenid` AS `fopenid` FROM ( SELECT t0.`fuin` AS fuin, t0.`fret_code` AS fret_code, t0.`fpush_status` " +
+                "AS fpush_status, t0.`fopenid` AS fopenid, t0.`ds` AS ds , t0.`fmsg_type` AS fmsg_type " +
+                "FROM ( SELECT '1001' AS fuin, '0' AS fret_code, '1' AS fpush_status, 'openid1' AS fopenid, " +
+                "20260119 AS ds , '5' AS fmsg_type, 20260119100000 AS fcreate_time " +
+                "UNION ALL SELECT '1002', '0', '1', 'openid2', 20260119 , '5', 20260119120000 ) t0 " +
+                "WHERE t0.`ds`>=20260109 AND t0.`ds`<20260113 " +
+                "and t0.`fcreate_time`>=20260119000000 AND t0.`fcreate_time`<20260120000000 ) t1 " +
+                "WHERE CAST(t1.`fmsg_type` AS string) IN ('5') ) a ) t_ret LIMIT 20001";
+        String plan = getFragmentPlan(sql);
+        assertContains(plan,
+                "  2:Project\n" +
+                        "  |  <slot 26> : 42: coalesce\n" +
+                        "  |  <slot 28> : 40: count\n" +
+                        "  |  <slot 29> : 41: count\n" +
+                        "  |  <slot 30> : CAST(42: coalesce AS DOUBLE) / CAST(coalesce(39: count, 0) AS DOUBLE)\n" +
+                        "  |  common expressions:\n" +
+                        "  |  <slot 42> : coalesce(38: count, 0)\n" + //avoid count result is null
+                        "  |  limit: 20001\n" +
+                        "  |  \n" +
+                        "  1:AGGREGATE (update finalize)\n" +
+                        "  |  output: min(34: if), min(35: if), count(36: if), count(37: if)\n" +
+                        "  |  group by: \n" +
+                        "  |  limit: 20001");
+    }
 }
 

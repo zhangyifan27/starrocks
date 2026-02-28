@@ -367,7 +367,20 @@ public class MultiDistinctByGroupingSetsRewriter {
                     new CallOperator(func.functionName(), call.getType(), Lists.newArrayList(newColumnRef), func, false);
             ColumnRefOperator newColumn = factory.create(column.getName(), column.getType(), column.isNullable());
             aggregations.put(newColumn, newCall);
-            finalColumnRefMap.put(column, newColumn);
+            // For count aggregates, wrap with COALESCE in project layer to handle null results
+            if (!call.isDistinct() && call.getFnName().equalsIgnoreCase(FunctionSet.COUNT)) {
+                Type aggrType = newCall.getType();
+                Function coalesceFunc = Expr.getBuiltinFunction(
+                        FunctionSet.COALESCE,
+                        new Type[] {aggrType, Type.BIGINT},
+                        IS_SUPERTYPE_OF).copy();
+                coalesceFunc.setRetType(aggrType);
+                List<ScalarOperator> coalesceArgs = Lists.newArrayList(newColumn, ConstantOperator.createBigint(0));
+                CallOperator coalesceCall = new CallOperator(FunctionSet.COALESCE, aggrType, coalesceArgs, coalesceFunc);
+                finalColumnRefMap.put(column, coalesceCall);
+            } else {
+                finalColumnRefMap.put(column, newColumn);
+            }
         }
         LogicalAggregationOperator finalAggr = new LogicalAggregationOperator(AggType.GLOBAL,
                 aggregate.getGroupingKeys(),
