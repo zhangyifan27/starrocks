@@ -117,6 +117,8 @@ private:
 
     Status _write_datetime(orc::ColumnVectorBatch& orc_column, ColumnPtr& column);
 
+    Status _write_map(const TypeDescriptor& type, orc::ColumnVectorBatch& orc_column, ColumnPtr& column);
+
     inline static const std::string STARROCKS_ORC_WRITER_VERSION_KEY = "starrocks.writer.version";
 
     const std::string _location;
@@ -126,8 +128,8 @@ private:
     std::vector<std::unique_ptr<ColumnEvaluator>> _column_evaluators;
 
     std::unique_ptr<orc::Type> _schema;
-    std::shared_ptr<orc::Writer> _writer;
     OrcMemoryPool _memory_pool;
+    std::shared_ptr<orc::Writer> _writer;
     TCompressionType::type _compression_type = TCompressionType::UNKNOWN_COMPRESSION;
     std::shared_ptr<ORCWriterOptions> _writer_options;
     int64_t _row_counter{0};
@@ -144,8 +146,8 @@ public:
     ORCFileWriterFactory(std::shared_ptr<FileSystem> fs, TCompressionType::type compression_type,
                          std::map<std::string, std::string> options, std::vector<std::string> column_names,
                          std::vector<std::unique_ptr<ColumnEvaluator>>&& column_evaluators,
-                         std::optional<std::vector<formats::FileColumnId>> field_ids,
-                         PriorityThreadPool* executors, RuntimeState* runtime_state);
+                         std::optional<std::vector<formats::FileColumnId>> field_ids, PriorityThreadPool* executors,
+                         RuntimeState* runtime_state);
 
     Status init() override;
 

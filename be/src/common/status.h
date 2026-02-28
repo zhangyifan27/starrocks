@@ -170,6 +170,8 @@ public:
 
     bool is_end_of_file() const { return code() == TStatusCode::END_OF_FILE; }
 
+    bool is_internal_error() const { return code() == TStatusCode::INTERNAL_ERROR; }
+
     bool is_ok_or_eof() const { return ok() || is_end_of_file(); }
 
     bool is_not_found() const { return code() == TStatusCode::NOT_FOUND; }
@@ -385,7 +387,7 @@ struct StatusInstance {
                                                   TStatusCode::LABEL_ALREADY_EXISTS,
                                                   TStatusCode::RESOURCE_BUSY};
 
-    static constexpr int SIZE = sizeof(random) / sizeof(Status(*)(std::string_view msg));
+    static constexpr int SIZE = sizeof(random) / sizeof(Status (*)(std::string_view msg));
 };
 
 #define RETURN_INJECT(index)                                                         \
@@ -494,7 +496,9 @@ struct StatusInstance {
 #define RETURN_IF_EXCEPTION(stmt)                   \
     do {                                            \
         try {                                       \
-            { stmt; }                               \
+            {                                       \
+                stmt;                               \
+            }                                       \
         } catch (const std::exception& e) {         \
             return Status::InternalError(e.what()); \
         }                                           \
