@@ -498,7 +498,7 @@ public class ScalarOperatorToExpr {
                     if (call.getChildren().size() == 2) {
                         arguments.add(buildExpr.build(call.getChild(0), context));
                     }
-                    callExpr = new FunctionCallExpr(call.getFnName(), new FunctionParams(false, arguments));
+                    callExpr = new FunctionCallExpr(call.getFunction().getFunctionName(), new FunctionParams(false, arguments));
                     Preconditions.checkNotNull(call.getFunction());
                     callExpr.setFn(call.getFunction());
                     callExpr.setIgnoreNulls(call.getIgnoreNulls());
@@ -508,9 +508,10 @@ public class ScalarOperatorToExpr {
                             .map(expr -> buildExpr.build(expr, context))
                             .collect(Collectors.toList());
                     if (call.isCountStar()) {
-                        callExpr = new FunctionCallExpr(call.getFnName(), FunctionParams.createStarParam());
+                        callExpr = new FunctionCallExpr(call.getFunction().getFunctionName(), FunctionParams.createStarParam());
                     } else {
-                        callExpr = new FunctionCallExpr(call.getFnName(), new FunctionParams(call.isDistinct(), arg));
+                        callExpr = new FunctionCallExpr(call.getFunction().getFunctionName(),
+                                new FunctionParams(call.isDistinct(), arg));
                     }
                     Preconditions.checkNotNull(call.getFunction());
                     callExpr.setFn(call.getFunction());
