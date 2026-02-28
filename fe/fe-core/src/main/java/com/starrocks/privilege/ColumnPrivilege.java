@@ -126,8 +126,11 @@ public class ColumnPrivilege {
             optimizedPlan.getOp().accept(new ScanColumnCollector(tableObjectToTableName, scanColumns), optimizedPlan, null);
         }
 
-        for (TableName tableName : tableNameTableObj.keySet()) {
-            if (excludeTables.contains(tableName)) {
+        for (Map.Entry<TableName, Table> entry : tableNameTableObj.entrySet()) {
+            TableName tableName = entry.getKey();
+            Table table = entry.getValue();
+
+            if (excludeTables.contains(tableName) || table instanceof MetadataTable) {
                 continue;
             }
 
@@ -158,8 +161,6 @@ public class ColumnPrivilege {
                     }
                 }
             } else {
-                Table table = tableNameTableObj.get(tableName);
-
                 if (table instanceof View) {
                     try {
                         // for privilege checking, treat hive view as table
