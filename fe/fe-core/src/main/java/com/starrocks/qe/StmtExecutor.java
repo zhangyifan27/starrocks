@@ -2459,7 +2459,12 @@ public class StmtExecutor {
         } finally {
             boolean isAsync = false;
             if (context.isProfileEnabled()) {
-                isAsync = tryProcessProfileAsync(execPlan, 0);
+                if (parsedStmt.isExplain() &&
+                        StatementBase.ExplainLevel.NORMAL.equals(parsedStmt.getExplainLevel())) {
+                    processProfileForNormalExplain(execPlan, 0);
+                } else {
+                    isAsync = tryProcessProfileAsync(execPlan, 0);
+                }
                 if (parsedStmt.isExplain() &&
                         StatementBase.ExplainLevel.ANALYZE.equals(parsedStmt.getExplainLevel())) {
                     handleExplainStmt(ExplainAnalyzer.analyze(ProfilingExecPlan.buildFrom(execPlan), profile, null));
