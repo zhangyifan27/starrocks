@@ -963,7 +963,6 @@ public class DefaultCoordinator extends Coordinator {
             double value = counter.getValue();
             String result = String.format("%.2fms (%.2f%%)", value / NANOSECONDS_TO_MILLISECONDS,
                     totalTimeSeconds > 0 ? (value * 100.0 / totalTimeSeconds) : 0);
-            LOG.info(result);
             return result;
         }
         return "? (?%)";
