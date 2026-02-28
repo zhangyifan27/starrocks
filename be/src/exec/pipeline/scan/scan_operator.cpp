@@ -370,10 +370,13 @@ void ScanOperator::_close_chunk_source(RuntimeState* state, int chunk_source_ind
 }
 
 void ScanOperator::_finish_chunk_source_task(RuntimeState* state, int chunk_source_index, int64_t cpu_time_ns,
-                                             int64_t scan_rows, int64_t scan_bytes) {
+                                             int64_t scan_rows, int64_t scan_bytes, int64_t hdfs_scan_bytes,
+                                             int64_t datacache_scan_bytes) {
     _last_growth_cpu_time_ns += cpu_time_ns;
     _last_scan_rows_num += scan_rows;
     _last_scan_bytes += scan_bytes;
+    _last_scan_hdfs_bytes += hdfs_scan_bytes;
+    _last_scan_datacache_bytes += datacache_scan_bytes;
     _num_running_io_tasks--;
 
     DCHECK(_chunk_sources[chunk_source_index] != nullptr);
@@ -441,6 +444,8 @@ Status ScanOperator::_trigger_next_scan(RuntimeState* state, int chunk_source_in
             int64_t prev_cpu_time = chunk_source->get_cpu_time_spent();
             int64_t prev_scan_rows = chunk_source->get_scan_rows();
             int64_t prev_scan_bytes = chunk_source->get_scan_bytes();
+            int64_t prev_hdfs_scan_bytes = chunk_source->get_hdfs_scan_bytes();
+            int64_t prev_datacache_scan_bytes = chunk_source->get_datacache_scan_bytes();
 
             // kick start this chunk source
             auto start_status = chunk_source->start(state);
@@ -462,9 +467,13 @@ Status ScanOperator::_trigger_next_scan(RuntimeState* state, int chunk_source_in
             }
 
             int64_t delta_cpu_time = chunk_source->get_cpu_time_spent() - prev_cpu_time;
-            _finish_chunk_source_task(state, chunk_source_index, delta_cpu_time,
-                                      chunk_source->get_scan_rows() - prev_scan_rows,
-                                      chunk_source->get_scan_bytes() - prev_scan_bytes);
+            int64_t delta_scan_rows = chunk_source->get_scan_rows() - prev_scan_rows;
+            int64_t delta_scan_bytes = chunk_source->get_scan_bytes() - prev_scan_bytes;
+            int64_t delta_hdfs_bytes = chunk_source->get_hdfs_scan_bytes() - prev_hdfs_scan_bytes;
+            int64_t delta_datacache_bytes =
+                    chunk_source->get_datacache_scan_bytes() - prev_datacache_scan_bytes;
+            _finish_chunk_source_task(state, chunk_source_index, delta_cpu_time, delta_scan_rows, delta_scan_bytes,
+                                      delta_hdfs_bytes, delta_datacache_bytes);
 
             QUERY_TRACE_ASYNC_FINISH("io_task", category, query_trace_ctx);
             // make clang happy

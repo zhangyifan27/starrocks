@@ -221,6 +221,8 @@ std::shared_ptr<QueryStatistics> QueryContext::intermediate_query_statistic() {
             stats_item.set_table_id(table_id);
             stats_item.set_scan_rows(scan_stats->delta_scan_rows_num.exchange(0));
             stats_item.set_scan_bytes(scan_stats->delta_scan_bytes.exchange(0));
+            stats_item.set_hdfs_scan_bytes(scan_stats->delta_hdfs_scan_bytes.exchange(0));
+            stats_item.set_datacache_scan_bytes(scan_stats->delta_datacache_scan_bytes.exchange(0));
             query_statistic->add_stats_item(stats_item);
         }
     }
@@ -248,6 +250,8 @@ std::shared_ptr<QueryStatistics> QueryContext::final_query_statistic() {
             stats_item.set_table_id(table_id);
             stats_item.set_scan_rows(scan_stats->total_scan_rows_num);
             stats_item.set_scan_bytes(scan_stats->total_scan_bytes);
+            stats_item.set_hdfs_scan_bytes(scan_stats->total_hdfs_scan_bytes);
+            stats_item.set_datacache_scan_bytes(scan_stats->total_datacache_scan_bytes);
             res->add_stats_item(stats_item);
         }
     }
@@ -261,7 +265,8 @@ std::shared_ptr<QueryStatistics> QueryContext::final_query_statistic() {
     return res;
 }
 
-void QueryContext::update_scan_stats(int64_t table_id, int64_t scan_rows_num, int64_t scan_bytes) {
+void QueryContext::update_scan_stats(int64_t table_id, int64_t scan_rows_num, int64_t scan_bytes,
+                                     int64_t hdfs_scan_bytes, int64_t datacache_scan_bytes) {
     ScanStats* stats = nullptr;
     {
         std::lock_guard l(_scan_stats_lock);
@@ -277,6 +282,10 @@ void QueryContext::update_scan_stats(int64_t table_id, int64_t scan_rows_num, in
     stats->delta_scan_rows_num += scan_rows_num;
     stats->total_scan_bytes += scan_bytes;
     stats->delta_scan_bytes += scan_bytes;
+    stats->total_hdfs_scan_bytes += hdfs_scan_bytes;
+    stats->delta_hdfs_scan_bytes += hdfs_scan_bytes;
+    stats->total_datacache_scan_bytes += datacache_scan_bytes;
+    stats->delta_datacache_scan_bytes += datacache_scan_bytes;
 }
 
 void QueryContext::init_node_exec_stats(const std::vector<int32_t>& exec_stats_node_ids) {

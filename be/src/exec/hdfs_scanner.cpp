@@ -396,6 +396,13 @@ void HdfsScanner::update_hdfs_counter(HdfsScanProfile* profile) {
 
 void HdfsScanner::do_update_counter(HdfsScanProfile* profile) {}
 
+int64_t HdfsScanner::datacache_bytes_read() const {
+    if (_cache_input_stream) {
+        return _cache_input_stream->stats().read_cache_bytes;
+    }
+    return 0;
+}
+
 Status HdfsScanner::reinterpret_status(const Status& st) {
     auto msg = fmt::format("file = {}", _scanner_params.path);
 

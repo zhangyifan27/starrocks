@@ -181,6 +181,8 @@ public class AuditEvent {
     public String statistics = "";
     @AuditField(value = "TableUseOmsStatistics")
     public String tableUseOmsStatistics = "";
+    @AuditField(value = "ScanDetail")
+    public String scanDetail = "";
     @AuditField(value = "profileSize")
     public long profileSize = -1;
 
@@ -520,6 +522,11 @@ public class AuditEvent {
 
         public String getTableUseOmsStatistics() {
             return String.join(",", tableUseOmsStatistics);
+        }
+
+        public AuditEventBuilder setScanDetail(String scanDetail) {
+            auditEvent.scanDetail = scanDetail;
+            return this;
         }
 
         public AuditEventBuilder addTableStatisticInfo(String db, String tableName,

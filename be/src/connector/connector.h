@@ -54,6 +54,10 @@ public:
     virtual int64_t num_rows_read() const = 0;
     // how many bytes read from external
     virtual int64_t num_bytes_read() const = 0;
+    // how many bytes read from external storage (excluding datacache hits if any)
+    virtual int64_t hdfs_bytes_read() const { return 0; }
+    // how many bytes served from datacache layer (if supported)
+    virtual int64_t datacache_bytes_read() const { return 0; }
     // CPU time of this data source
     virtual int64_t cpu_time_spent() const = 0;
     // IO time of this data source

@@ -2401,6 +2401,12 @@ public class StmtExecutor {
         if (statisticsForAuditLog.spillBytes == null) {
             statisticsForAuditLog.spillBytes = 0L;
         }
+        if (statisticsForAuditLog.hdfsScanBytes == null) {
+            statisticsForAuditLog.hdfsScanBytes = 0L;
+        }
+        if (statisticsForAuditLog.datacacheScanBytes == null) {
+            statisticsForAuditLog.datacacheScanBytes = 0L;
+        }
         if (statisticsForAuditLog.feedbackMemCostBytes == null) {
             statisticsForAuditLog.feedbackMemCostBytes = 0.0D;
         }
@@ -3219,6 +3225,7 @@ public class StmtExecutor {
                 Map<String, Object> tableDetail = Maps.newHashMap();
 
                 tableDetail.put("NodeID", hdfsScanNode.getId().asInt());
+                tableDetail.put("TableId", hdfsScanNode.getHiveTable().getId());
                 tableDetail.put("TableName", hdfsScanNode.getHiveTable().getDbName() + "." +
                         hdfsScanNode.getHiveTable().getTableName());
 
@@ -3234,6 +3241,7 @@ public class StmtExecutor {
                 Map<String, Object> tableDetail = Maps.newHashMap();
 
                 tableDetail.put("NodeID", icebergScanNode.getId().asInt());
+                tableDetail.put("TableId", icebergScanNode.getIcebergTable().getId());
                 tableDetail.put("TableName", icebergScanNode.getIcebergTable().getRemoteDbName() + "." +
                         icebergScanNode.getIcebergTable().getRemoteTableName());
                 tableDetail.put("ScanPartitionNum", icebergScanNode.getScanPartitionNum());
@@ -3250,6 +3258,39 @@ public class StmtExecutor {
         if (statistics != null) {
             scanDetailMap.put("ScanRows", statistics.scanRows);
             scanDetailMap.put("ScanBytes", statistics.scanBytes);
+            scanDetailMap.put("HDFSTotalScanBytes", statistics.hdfsScanBytes);
+            scanDetailMap.put("DataCacheTotalScanBytes", statistics.datacacheScanBytes);
+            long totalBytes = statistics.hdfsScanBytes + statistics.datacacheScanBytes;
+            if (totalBytes > 0) {
+                scanDetailMap.put("DataCacheTotalHitRate", String.format("%.2f",
+                        statistics.datacacheScanBytes * 1.0 / totalBytes));
+            }
+
+            if (statistics.statsItems != null) {
+                // Map tableId -> stats for quick lookup
+                Map<Long, QueryStatisticsItemPB> statsByTableId = Maps.newHashMap();
+                for (QueryStatisticsItemPB item : statistics.statsItems) {
+                    if (item.tableId != null) {
+                        statsByTableId.put(item.tableId, item);
+                    }
+                }
+                for (Map<String, Object> tableDetail : tableDetails) {
+                    Object tableIdObj = tableDetail.get("TableId");
+                    if (tableIdObj instanceof Number) {
+                        long tableId = ((Number) tableIdObj).longValue();
+                        QueryStatisticsItemPB item = statsByTableId.get(tableId);
+                        long hdfsBytes = item != null && item.hdfsScanBytes != null ? item.hdfsScanBytes : 0L;
+                        long datacacheBytes =
+                                item != null && item.datacacheScanBytes != null ? item.datacacheScanBytes : 0L;
+                        tableDetail.put("HDFSScanBytes", hdfsBytes);
+                        tableDetail.put("DataCacheScanBytes", datacacheBytes);
+                        long sum = hdfsBytes + datacacheBytes;
+                        if (sum > 0) {
+                            tableDetail.put("DataCacheHitRate", String.format("%.2f", datacacheBytes * 1.0 / sum));
+                        }
+                    }
+                }
+            }
         }
 
         scanDetailMap.put("IsScanAllPartitions", execPlan.getIsScanAllPartitions());
@@ -3257,7 +3298,9 @@ public class StmtExecutor {
 
         scanDetailMap.put("TableUseOmsStatistics", context.getAuditEventBuilder().getTableUseOmsStatistics());
 
-        Tracers.record(Tracers.Module.EXTERNAL, "ScanDetail", GsonUtils.GSON.toJson(scanDetailMap));
+        String scanDetailJson = GsonUtils.GSON.toJson(scanDetailMap);
+        context.getAuditEventBuilder().setScanDetail(scanDetailJson);
+        Tracers.record(Tracers.Module.EXTERNAL, "ScanDetail", scanDetailJson);
 
         String explainString = buildExplainString(execPlan, ResourceGroupClassifier.QueryType.SELECT,
                 parsedStmt.getExplainLevel());

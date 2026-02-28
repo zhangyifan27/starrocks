@@ -141,6 +141,16 @@ Status ConnectorScanOperatorFactory::do_prepare(RuntimeState* state) {
     DictOptimizeParser::disable_open_rewrite(&conjunct_ctxs);
     RETURN_IF_ERROR(Expr::prepare(conjunct_ctxs, state));
     RETURN_IF_ERROR(Expr::open(conjunct_ctxs, state));
+
+    auto connector_scan_node = dynamic_cast<ConnectorScanNode*>(_scan_node);
+    if (connector_scan_node != nullptr) {
+        const TupleDescriptor* tuple_desc =
+                connector_scan_node->data_source_provider()->tuple_descriptor(state);
+        if (tuple_desc != nullptr && tuple_desc->table_desc() != nullptr) {
+            _scan_table_id = tuple_desc->table_desc()->table_id();
+        }
+    }
+
     return Status::OK();
 }
 
@@ -271,6 +281,11 @@ Status ConnectorScanOperator::do_prepare(RuntimeState* state) {
         }
     }
     return Status::OK();
+}
+
+int64_t ConnectorScanOperator::get_scan_table_id() const {
+    auto* factory = down_cast<ConnectorScanOperatorFactory*>(_factory);
+    return factory->scan_table_id();
 }
 
 void ConnectorScanOperator::do_close(RuntimeState* state) {
@@ -821,6 +836,8 @@ Status ConnectorChunkSource::_read_chunk(RuntimeState* state, ChunkPtr* chunk) {
         DCHECK(_status.ok() || _status.is_end_of_file());
         _scan_rows_num = _data_source->raw_rows_read();
         _scan_bytes = _data_source->num_bytes_read();
+        _hdfs_scan_bytes = _data_source->hdfs_bytes_read();
+        _datacache_scan_bytes = _data_source->datacache_bytes_read();
         _cpu_time_spent_ns = _data_source->cpu_time_spent();
         _io_time_spent_ns = _data_source->io_time_spent();
         delta_io_time_ns = _io_time_spent_ns - prev_io_time_ns;

@@ -69,11 +69,13 @@ public:
     void set_scan_mem_limit(int64_t scan_mem_limit);
     void set_mem_share_arb(ConnectorScanOperatorMemShareArbitrator* arb);
     void set_data_source_mem_bytes(int64_t value);
+    int64_t scan_table_id() const { return _scan_table_id; }
 
 private:
     // TODO: refactor the OlapScanContext, move them into the context
     BalancedChunkBuffer _chunk_buffer;
     ActiveInputSet _active_inputs;
+    int64_t _scan_table_id = -1;
 
 public:
     ConnectorScanOperatorIOTasksMemLimiter* _io_tasks_mem_limiter = nullptr;
@@ -119,6 +121,8 @@ public:
     workgroup::ScanSchedEntityType sched_entity_type() const override {
         return workgroup::ScanSchedEntityType::CONNECTOR;
     }
+
+    int64_t get_scan_table_id() const override;
 
 private:
     int64_t _adjust_scan_mem_limit(int64_t old_chunk_source_mem_bytes, int64_t new_chunk_source_mem_bytes);

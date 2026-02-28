@@ -40,6 +40,8 @@ void QueryStatistics::to_pb(PQueryStatistics* statistics) {
     DCHECK(statistics != nullptr);
     statistics->set_scan_rows(scan_rows);
     statistics->set_scan_bytes(scan_bytes);
+    statistics->set_hdfs_scan_bytes(hdfs_scan_bytes);
+    statistics->set_datacache_scan_bytes(datacache_scan_bytes);
     statistics->set_returned_rows(returned_rows);
     statistics->set_cpu_cost_ns(cpu_ns);
     statistics->set_mem_cost_bytes(mem_cost_bytes);
@@ -51,6 +53,8 @@ void QueryStatistics::to_pb(PQueryStatistics* statistics) {
             new_stats_item->set_table_id(table_id);
             new_stats_item->set_scan_rows(stats_item->scan_rows);
             new_stats_item->set_scan_bytes(stats_item->scan_bytes);
+            new_stats_item->set_hdfs_scan_bytes(stats_item->hdfs_scan_bytes);
+            new_stats_item->set_datacache_scan_bytes(stats_item->datacache_scan_bytes);
         }
     }
 
@@ -69,6 +73,8 @@ void QueryStatistics::to_params(TAuditStatistics* params) {
     DCHECK(params != nullptr);
     params->__set_scan_rows(scan_rows);
     params->__set_scan_bytes(scan_bytes);
+    params->__set_hdfs_scan_bytes(hdfs_scan_bytes);
+    params->__set_datacache_scan_bytes(datacache_scan_bytes);
     params->__set_returned_rows(returned_rows);
     params->__set_cpu_cost_ns(cpu_ns);
     params->__set_mem_cost_bytes(mem_cost_bytes);
@@ -80,6 +86,8 @@ void QueryStatistics::to_params(TAuditStatistics* params) {
             new_stats_item.__set_table_id(table_id);
             new_stats_item.__set_scan_rows(stats_item->scan_rows);
             new_stats_item.__set_scan_bytes(stats_item->scan_bytes);
+            new_stats_item.__set_hdfs_scan_bytes(stats_item->hdfs_scan_bytes);
+            new_stats_item.__set_datacache_scan_bytes(stats_item->datacache_scan_bytes);
         }
     }
 }
@@ -87,6 +95,8 @@ void QueryStatistics::to_params(TAuditStatistics* params) {
 void QueryStatistics::clear() {
     scan_rows = 0;
     scan_bytes = 0;
+    hdfs_scan_bytes = 0;
+    datacache_scan_bytes = 0;
     cpu_ns = 0;
     returned_rows = 0;
     spill_bytes = 0;
@@ -94,14 +104,18 @@ void QueryStatistics::clear() {
     _exec_stats_items.clear();
 }
 
-void QueryStatistics::update_stats_item(int64_t table_id, int64_t scan_rows, int64_t scan_bytes) {
+void QueryStatistics::update_stats_item(int64_t table_id, int64_t scan_rows, int64_t scan_bytes, int64_t hdfs_bytes,
+                                        int64_t datacache_bytes) {
     if (table_id > 0 && (scan_rows > 0 || scan_bytes > 0)) {
         auto iter = _stats_items.find(table_id);
         if (iter == _stats_items.end()) {
-            _stats_items.insert({table_id, std::make_shared<ScanStats>(scan_rows, scan_bytes)});
+            _stats_items.insert(
+                    {table_id, std::make_shared<ScanStats>(scan_rows, scan_bytes, hdfs_bytes, datacache_bytes)});
         } else {
             iter->second->scan_rows += scan_rows;
             iter->second->scan_bytes += scan_bytes;
+            iter->second->hdfs_scan_bytes += hdfs_bytes;
+            iter->second->datacache_scan_bytes += datacache_bytes;
         }
     }
 }
@@ -124,10 +138,13 @@ void QueryStatistics::update_exec_stats_item(uint32_t node_id, int64_t push, int
 void QueryStatistics::add_stats_item(QueryStatisticsItemPB& stats_item) {
     {
         std::lock_guard l(_lock);
-        update_stats_item(stats_item.table_id(), stats_item.scan_rows(), stats_item.scan_bytes());
+        update_stats_item(stats_item.table_id(), stats_item.scan_rows(), stats_item.scan_bytes(),
+                          stats_item.hdfs_scan_bytes(), stats_item.datacache_scan_bytes());
     }
     this->scan_rows += stats_item.scan_rows();
     this->scan_bytes += stats_item.scan_bytes();
+    this->hdfs_scan_bytes += stats_item.hdfs_scan_bytes();
+    this->datacache_scan_bytes += stats_item.datacache_scan_bytes();
 }
 
 void QueryStatistics::add_exec_stats_item(uint32_t node_id, int64_t push, int64_t pull, int64_t pred_filter,
@@ -135,9 +152,12 @@ void QueryStatistics::add_exec_stats_item(uint32_t node_id, int64_t push, int64_
     update_exec_stats_item(node_id, push, pull, pred_filter, index_filter, rf_filter);
 }
 
-void QueryStatistics::add_scan_stats(int64_t scan_rows, int64_t scan_bytes) {
+void QueryStatistics::add_scan_stats(int64_t scan_rows, int64_t scan_bytes, int64_t hdfs_bytes,
+                                     int64_t datacache_bytes) {
     this->scan_rows += scan_rows;
     this->scan_bytes += scan_bytes;
+    this->hdfs_scan_bytes += hdfs_bytes;
+    this->datacache_scan_bytes += datacache_bytes;
 }
 
 void QueryStatistics::merge(int sender_id, QueryStatistics& other) {
@@ -150,6 +170,16 @@ void QueryStatistics::merge(int sender_id, QueryStatistics& other) {
     int64_t scan_bytes = other.scan_bytes.load();
     if (other.scan_bytes.compare_exchange_strong(scan_bytes, 0)) {
         this->scan_bytes += scan_bytes;
+    }
+
+    int64_t hdfs_bytes = other.hdfs_scan_bytes.load();
+    if (other.hdfs_scan_bytes.compare_exchange_strong(hdfs_bytes, 0)) {
+        this->hdfs_scan_bytes += hdfs_bytes;
+    }
+
+    int64_t datacache_bytes = other.datacache_scan_bytes.load();
+    if (other.datacache_scan_bytes.compare_exchange_strong(datacache_bytes, 0)) {
+        this->datacache_scan_bytes += datacache_bytes;
     }
 
     int64_t cpu_ns = other.cpu_ns.load();
@@ -176,7 +206,8 @@ void QueryStatistics::merge(int sender_id, QueryStatistics& other) {
         }
         std::lock_guard l(_lock);
         for (const auto& [table_id, stats_item] : other_stats_item) {
-            update_stats_item(table_id, stats_item->scan_rows, stats_item->scan_bytes);
+            update_stats_item(table_id, stats_item->scan_rows, stats_item->scan_bytes, stats_item->hdfs_scan_bytes,
+                              stats_item->datacache_scan_bytes);
         }
         for (const auto& [node_id, exec_stats_item] : other_exec_stats_items) {
             update_exec_stats_item(node_id, exec_stats_item->push_rows, exec_stats_item->pull_rows,
@@ -193,6 +224,12 @@ void QueryStatistics::merge_pb(const PQueryStatistics& statistics) {
     if (statistics.has_scan_bytes()) {
         scan_bytes += statistics.scan_bytes();
     }
+    if (statistics.has_hdfs_scan_bytes()) {
+        hdfs_scan_bytes += statistics.hdfs_scan_bytes();
+    }
+    if (statistics.has_datacache_scan_bytes()) {
+        datacache_scan_bytes += statistics.datacache_scan_bytes();
+    }
     if (statistics.has_cpu_cost_ns()) {
         cpu_ns += statistics.cpu_cost_ns();
         DCHECK(cpu_ns >= 0);
@@ -207,7 +244,8 @@ void QueryStatistics::merge_pb(const PQueryStatistics& statistics) {
         std::lock_guard l(_lock);
         for (int i = 0; i < statistics.stats_items_size(); ++i) {
             const auto& stats_item = statistics.stats_items(i);
-            update_stats_item(stats_item.table_id(), stats_item.scan_rows(), stats_item.scan_bytes());
+            update_stats_item(stats_item.table_id(), stats_item.scan_rows(), stats_item.scan_bytes(),
+                              stats_item.hdfs_scan_bytes(), stats_item.datacache_scan_bytes());
         }
         for (int i = 0; i < statistics.node_exec_stats_items_size(); ++i) {
             const auto& exec_stats_item = statistics.node_exec_stats_items(i);

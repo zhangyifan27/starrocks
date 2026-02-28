@@ -56,7 +56,8 @@ public:
     void add_stats_item(QueryStatisticsItemPB& stats_item);
     void add_exec_stats_item(uint32_t node_id, int64_t push, int64_t pull, int64_t pred_filter, int64_t index_filter,
                              int64_t rf_filter);
-    void add_scan_stats(int64_t scan_rows, int64_t scan_bytes);
+    void add_scan_stats(int64_t scan_rows, int64_t scan_bytes, int64_t hdfs_scan_bytes = 0,
+                       int64_t datacache_scan_bytes = 0);
     void add_cpu_costs(int64_t cpu_ns) { this->cpu_ns += cpu_ns; }
     void add_mem_costs(int64_t bytes) { mem_cost_bytes += bytes; }
     void add_spill_bytes(int64_t bytes) { spill_bytes += bytes; }
@@ -73,13 +74,16 @@ public:
     void clear();
 
 private:
-    void update_stats_item(int64_t table_id, int64_t scan_rows, int64_t scan_bytes);
+    void update_stats_item(int64_t table_id, int64_t scan_rows, int64_t scan_bytes, int64_t hdfs_scan_bytes = 0,
+                           int64_t datacache_scan_bytes = 0);
 
     void update_exec_stats_item(uint32_t node_id, int64_t push, int64_t pull, int64_t pred_filter, int64_t index_filter,
                                 int64_t rf_filter);
 
     std::atomic_int64_t scan_rows{0};
     std::atomic_int64_t scan_bytes{0};
+    std::atomic_int64_t hdfs_scan_bytes{0};
+    std::atomic_int64_t datacache_scan_bytes{0};
     std::atomic_int64_t cpu_ns{0};
     std::atomic_int64_t mem_cost_bytes{0};
     std::atomic_int64_t spill_bytes{0};
@@ -88,9 +92,13 @@ private:
     // only set once by result sink when closing.
     int64_t returned_rows{0};
     struct ScanStats {
-        ScanStats(int64_t rows, int64_t bytes) : scan_rows(rows), scan_bytes(bytes) {}
+        ScanStats(int64_t rows, int64_t bytes, int64_t hdfs_bytes, int64_t datacache_bytes)
+                : scan_rows(rows), scan_bytes(bytes), hdfs_scan_bytes(hdfs_bytes),
+                  datacache_scan_bytes(datacache_bytes) {}
         int64_t scan_rows = 0;
         int64_t scan_bytes = 0;
+        int64_t hdfs_scan_bytes = 0;
+        int64_t datacache_scan_bytes = 0;
     };
 
     struct NodeExecStats {

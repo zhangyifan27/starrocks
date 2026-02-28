@@ -52,12 +52,16 @@ message PQueryStatistics {
     optional string digest = 17;
     optional int32 use_cn_num = 18;
     repeated NodeExecStatsItemPB node_exec_stats_items = 19;
+    optional int64 hdfs_scan_bytes = 20;
+    optional int64 datacache_scan_bytes = 21;
 }
 
 message QueryStatisticsItemPB {
     optional int64 scan_rows = 1;
     optional int64 scan_bytes = 2;
     optional int64 table_id = 3;
+    optional int64 hdfs_scan_bytes = 4;
+    optional int64 datacache_scan_bytes = 5;
 }
 
 message NodeExecStatsItemPB {

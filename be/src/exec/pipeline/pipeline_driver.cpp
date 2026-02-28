@@ -912,12 +912,17 @@ void PipelineDriver::_update_scan_statistics(RuntimeState* state) {
     if (ScanOperator* scan = source_scan_operator()) {
         int64_t scan_rows = scan->get_last_scan_rows_num();
         int64_t scan_bytes = scan->get_last_scan_bytes();
+        int64_t hdfs_scan_bytes = scan->get_last_scan_hdfs_bytes();
+        int64_t datacache_scan_bytes = scan->get_last_scan_datacache_bytes();
         int64_t table_id = scan->get_scan_table_id();
-        if (scan_rows > 0 || scan_bytes > 0) {
+        if (scan_rows > 0 || scan_bytes > 0 || hdfs_scan_bytes > 0 || datacache_scan_bytes > 0) {
             query_ctx()->incr_cur_scan_rows_num(scan_rows);
             query_ctx()->incr_cur_scan_bytes(scan_bytes);
+            query_ctx()->incr_cur_hdfs_scan_bytes(hdfs_scan_bytes);
+            query_ctx()->incr_cur_datacache_scan_bytes(datacache_scan_bytes);
             if (state->enable_collect_table_level_scan_stats()) {
-                query_ctx()->update_scan_stats(table_id, scan_rows, scan_bytes);
+                query_ctx()->update_scan_stats(table_id, scan_rows, scan_bytes, hdfs_scan_bytes,
+                                               datacache_scan_bytes);
             }
         }
     }

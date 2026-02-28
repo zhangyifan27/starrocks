@@ -788,6 +788,8 @@ struct TAuditStatistics {
     11: optional double cbo_mem_cost_bytes
     12: optional string digest
     13: optional i32 use_cn_num
+    14: optional i64 hdfs_scan_bytes
+    15: optional i64 datacache_scan_bytes
 }
 
 struct TReportAuditStatisticsParams {
@@ -800,6 +802,8 @@ struct TAuditStatisticsItem {
     1: optional i64 scan_rows
     2: optional i64 scan_bytes
     3: optional i64 table_id
+    4: optional i64 hdfs_scan_bytes
+    5: optional i64 datacache_scan_bytes
 }
 
 struct TFeResult {

@@ -805,6 +805,14 @@ int64_t HiveDataSource::num_bytes_read() const {
     if (_scanner == nullptr) return 0;
     return _scanner->num_bytes_read();
 }
+int64_t HiveDataSource::hdfs_bytes_read() const {
+    if (_scanner == nullptr) return 0;
+    return _scanner->hdfs_bytes_read();
+}
+int64_t HiveDataSource::datacache_bytes_read() const {
+    if (_scanner == nullptr) return 0;
+    return _scanner->datacache_bytes_read();
+}
 int64_t HiveDataSource::cpu_time_spent() const {
     if (_scanner == nullptr) return 0;
     return _scanner->cpu_time_spent();

@@ -67,6 +67,8 @@ public:
     int64_t get_io_time_spent() const { return _io_time_spent_ns; }
     int64_t get_scan_rows() const { return _scan_rows_num; }
     int64_t get_scan_bytes() const { return _scan_bytes; }
+    int64_t get_hdfs_scan_bytes() const { return _hdfs_scan_bytes; }
+    int64_t get_datacache_scan_bytes() const { return _datacache_scan_bytes; }
 
     RuntimeProfile::Counter* scan_timer() { return _scan_timer; }
     RuntimeProfile::Counter* io_task_wait_timer() { return _io_task_wait_timer; }
@@ -98,6 +100,8 @@ protected:
     int64_t _cpu_time_spent_ns = 0;
     int64_t _scan_rows_num = 0;
     int64_t _scan_bytes = 0;
+    int64_t _hdfs_scan_bytes = 0;
+    int64_t _datacache_scan_bytes = 0;
     int64_t _io_time_spent_ns = 0;
 
     BalancedChunkBuffer& _chunk_buffer;

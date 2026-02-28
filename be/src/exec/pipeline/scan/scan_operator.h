@@ -73,6 +73,8 @@ public:
 
     int64_t get_last_scan_rows_num() { return _last_scan_rows_num.exchange(0); }
     int64_t get_last_scan_bytes() { return _last_scan_bytes.exchange(0); }
+    int64_t get_last_scan_hdfs_bytes() { return _last_scan_hdfs_bytes.exchange(0); }
+    int64_t get_last_scan_datacache_bytes() { return _last_scan_datacache_bytes.exchange(0); }
 
     void set_lane_arbiter(const query_cache::LaneArbiterPtr& lane_arbiter) { _lane_arbiter = lane_arbiter; }
     void set_cache_operator(const query_cache::CacheOperatorPtr& cache_operator) { _cache_operator = cache_operator; }
@@ -122,7 +124,8 @@ protected:
     virtual void _close_chunk_source_unlocked(RuntimeState* state, int index);
     void _close_chunk_source(RuntimeState* state, int index);
     virtual void _finish_chunk_source_task(RuntimeState* state, int chunk_source_index, int64_t cpu_time_ns,
-                                           int64_t scan_rows, int64_t scan_bytes);
+                                           int64_t scan_rows, int64_t scan_bytes, int64_t hdfs_scan_bytes,
+                                           int64_t datacache_scan_bytes);
     void _detach_chunk_sources();
 
     void _merge_chunk_source_profiles(RuntimeState* state);
@@ -166,6 +169,8 @@ protected:
 
     std::atomic_int64_t _last_scan_rows_num = 0;
     std::atomic_int64_t _last_scan_bytes = 0;
+    std::atomic_int64_t _last_scan_hdfs_bytes = 0;
+    std::atomic_int64_t _last_scan_datacache_bytes = 0;
 
     // The number of morsels picked up by this scan operator.
     // A tablet may be divided into multiple morsels.

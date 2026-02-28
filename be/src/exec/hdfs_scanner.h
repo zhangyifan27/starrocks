@@ -381,6 +381,8 @@ public:
     void close() noexcept;
 
     int64_t num_bytes_read() const { return _app_stats.bytes_read; }
+    int64_t hdfs_bytes_read() const { return _fs_stats.bytes_read; }
+    int64_t datacache_bytes_read() const;
     int64_t raw_rows_read() const { return _app_stats.raw_rows_read; }
     int64_t num_rows_read() const { return _app_stats.rows_read; }
     int64_t cpu_time_spent() const { return _total_running_time - _app_stats.io_ns; }
