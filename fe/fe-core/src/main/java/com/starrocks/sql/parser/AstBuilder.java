@@ -535,19 +535,6 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                     FunctionSet.FROM_UNIXTIME, FunctionSet.FROM_UNIXTIME_MS,
                     FunctionSet.STR2DATE);
 
-    private static final Map<String, String> HIVE2SR_FUNCTION_MAPPINGS = Map.of(
-            "collect_list", FunctionSet.ARRAY_AGG,
-            "collect_set", FunctionSet.ARRAY_AGG_DISTINCT,
-            "wm_concat", FunctionSet.GROUP_CONCAT,
-            "string_to_map", FunctionSet.STR_TO_MAP,
-            "sort_array", FunctionSet.ARRAY_SORT,
-            "date_parse", FunctionSet.STR_TO_DATE,
-            "nvl", FunctionSet.IFNULL,
-            "approx_percentile", FunctionSet.PERCENTILE_APPROX,
-            "parse_datetime", FunctionSet.STR_TO_JODATIME,
-            "regexp_like", FunctionSet.REGEXP
-    );
-
     protected AstBuilder(long sqlMode) {
         this(sqlMode, new IdentityHashMap<>());
     }
@@ -6437,10 +6424,6 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
                     // 其他TDW函数不做处理
                     break;
             }
-        }
-        if (HIVE2SR_FUNCTION_MAPPINGS.containsKey(functionName.toLowerCase())) {
-            fnName = FunctionName.createFnName(HIVE2SR_FUNCTION_MAPPINGS.get(fullFunctionName.toLowerCase()));
-            functionName = fnName.getFunction();
         }
         if (functionName.equals(FunctionSet.TIME_SLICE) || functionName.equals(FunctionSet.DATE_SLICE)) {
             if (context.expression().size() == 2) {

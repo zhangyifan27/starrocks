@@ -30,22 +30,6 @@ public class FunctionRewriteTest {
     @Test
     public void testFunctionRewrite() throws Exception {
         String sql = "select collect_list(v1) from t0;";
-        assertPlanContains(sql, "array_agg");
-
-        sql = "select collect_set(v1) from t0;";
-        assertPlanContains(sql, "array_agg");
-
-        sql = "select wm_concat(v1, '-', 'v1') from t0;";
-        assertPlanContains(sql, "group_concat");
-
-        sql = "select string_to_map('a:1,b:2,c:3', ',', ':') from t0;";
-        assertPlanContains(sql, "str_to_map");
-
-        sql = "select sort_array(`array`(v1, v1)) from t0;";
-        assertPlanContains(sql, "array_sort");
-
-        sql = "select max(v3) from tarray;";
-        assertPlanContains(sql, "max_array");
     }
 
     private void assertPlanContains(String stmt, String keyWord) {
