@@ -938,11 +938,14 @@ public class OperationType {
     @IgnorableOnReplayFailed
     public static final short OP_ADD_KEY = 13512;
 
-
     // datacache  14000 ~ 14020
+    // To be compatible with older versions, reserve these opcodes
     public static final short OP_ADD_DATA_CACHE_RECORD = 14000;
     public static final short OP_REMOVE_BE_DATA_CACHE_RECORD = 14001;
     public static final short OP_DELETE_DATA_CACHE_RECORD = 14002;
+    public static final short OP_DATACACHE_TABLE_META = 14003;
+    public static final short OP_DATACACHE_PARTITION_META = 14004;
+    public static final short OP_DATACACHE_DELETE_PARTITION_META = 14005;
 
     // query memory 14100 ~ 14120
     public static final short OP_RECORD_QUERY_MEMORY = 14100;

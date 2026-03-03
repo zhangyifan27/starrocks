@@ -163,6 +163,10 @@ public class SelectRelation extends QueryRelation {
         return having;
     }
 
+    public void setPredicate(Expr predicate) {
+        this.predicate = predicate;
+    }
+
     public boolean isDistinct() {
         return isDistinct;
     }

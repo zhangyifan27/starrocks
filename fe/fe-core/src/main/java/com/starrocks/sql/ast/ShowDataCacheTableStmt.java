@@ -33,9 +33,15 @@ public class ShowDataCacheTableStmt extends ShowStmt {
     @Override
     public ShowResultSetMetaData getMetaData() {
         ShowResultSetMetaData.Builder builder = ShowResultSetMetaData.builder();
-        builder.addColumn(
-                new Column(NAME_COL_PREFIX + db, ScalarType.createVarchar(20)))
-                .addColumn(new Column("Cache Size", ScalarType.createVarchar(20)));
+        builder.addColumn(new Column("Catalog", ScalarType.createVarchar(64)))
+                .addColumn(new Column("Database", ScalarType.createVarchar(128)))
+                .addColumn(new Column("Table", ScalarType.createVarchar(128)))
+                .addColumn(new Column("Table Id", ScalarType.BIGINT))
+                .addColumn(new Column("Table Type", ScalarType.createVarchar(32)))
+                .addColumn(new Column("Created Time", ScalarType.createVarchar(32)))
+                .addColumn(new Column("Updated Time", ScalarType.createVarchar(32)))
+                .addColumn(new Column("Cache Size", ScalarType.createVarchar(32)))
+                .addColumn(new Column("Schedule Task Name", ScalarType.createVarchar(32)));
         return builder.build();
     }
 

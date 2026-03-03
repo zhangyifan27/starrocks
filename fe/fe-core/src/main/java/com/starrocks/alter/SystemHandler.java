@@ -276,10 +276,6 @@ public class SystemHandler extends AlterHandler {
                         GlobalStateMgr.getCurrentState().getEditLog().logBackendStateChange(backend);
                         LOG.info("set backend {} to decommission", backend.getId());
 
-                        // remove be data cache record when be is decommission
-                        if (GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor().removeBeRecord(backend.getId())) {
-                            GlobalStateMgr.getCurrentState().getEditLog().logRemoveBeDataCacheRecord(backend.getId());
-                        }
                     }
                 }
             });

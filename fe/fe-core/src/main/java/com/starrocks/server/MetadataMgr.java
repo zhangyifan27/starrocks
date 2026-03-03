@@ -32,6 +32,7 @@ import com.starrocks.catalog.BasicTable;
 import com.starrocks.catalog.Column;
 import com.starrocks.catalog.Database;
 import com.starrocks.catalog.ExternalCatalogTableBasicInfo;
+import com.starrocks.catalog.IcebergTable;
 import com.starrocks.catalog.MaterializedIndexMeta;
 import com.starrocks.catalog.PartitionKey;
 import com.starrocks.catalog.Table;
@@ -53,13 +54,21 @@ import com.starrocks.connector.ConnectorTableVersion;
 import com.starrocks.connector.ConnectorTblMetaInfoMgr;
 import com.starrocks.connector.MetaPreparationItem;
 import com.starrocks.connector.PartitionInfo;
+import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.SerializedMetaSpec;
 import com.starrocks.connector.TableVersionRange;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.connector.hive.RemoteFileInputFormat;
+import com.starrocks.connector.iceberg.IcebergRemoteFileDesc;
+import com.starrocks.connector.iceberg.IcebergSplitScanTask;
 import com.starrocks.connector.metadata.MetadataTable;
 import com.starrocks.connector.metadata.MetadataTableType;
 import com.starrocks.connector.statistics.ConnectorTableColumnStats;
+import com.starrocks.datacache.DataCacheMetaManager;
+import com.starrocks.datacache.DataCacheMetaManager.CacheDeleteMode;
+import com.starrocks.datacache.DataCachePartitionMeta;
+import com.starrocks.datacache.DataCacheRemoteFileDesc;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.sql.ast.AlterTableStmt;
 import com.starrocks.sql.ast.CleanTemporaryTableStmt;
@@ -67,6 +76,7 @@ import com.starrocks.sql.ast.CreateTableLikeStmt;
 import com.starrocks.sql.ast.CreateTableStmt;
 import com.starrocks.sql.ast.CreateTemporaryTableStmt;
 import com.starrocks.sql.ast.CreateViewStmt;
+import com.starrocks.sql.ast.DataCacheSelectStatement;
 import com.starrocks.sql.ast.DropTableStmt;
 import com.starrocks.sql.ast.DropTemporaryTableStmt;
 import com.starrocks.sql.optimizer.OptimizerContext;
@@ -77,6 +87,17 @@ import com.starrocks.sql.optimizer.statistics.Histogram;
 import com.starrocks.sql.optimizer.statistics.Statistics;
 import com.starrocks.statistic.StatisticUtils;
 import com.starrocks.thrift.TSinkCommitInfo;
+import org.apache.iceberg.BaseFileScanTask;
+import org.apache.iceberg.DataFile;
+import org.apache.iceberg.DataFiles;
+import org.apache.iceberg.DeleteFile;
+import org.apache.iceberg.FileFormat;
+//import org.apache.iceberg.FileScanTask;
+import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.PartitionSpecParser;
+import org.apache.iceberg.SchemaParser;
+import org.apache.iceberg.expressions.Expressions;
+import org.apache.iceberg.expressions.ResidualEvaluator;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.jetbrains.annotations.NotNull;
@@ -774,6 +795,10 @@ public class MetadataMgr {
     public List<RemoteFileInfo> getRemoteFileInfos(String catalogName, Table table, List<PartitionKey> partitionKeys,
                                                    TableVersionRange version, ScalarOperator predicate, List<String> fieldNames,
                                                    long limit) {
+        Optional<List<RemoteFileInfo>> cacheDeleteFileInfo = maybeRouteCacheDeleteFileInfos(table);
+        if (cacheDeleteFileInfo.isPresent()) {
+            return cacheDeleteFileInfo.get();
+        }
         Optional<ConnectorMetadata> connectorMetadata = getOptionalMetadata(catalogName);
         ImmutableSet.Builder<RemoteFileInfo> files = ImmutableSet.builder();
         if (connectorMetadata.isPresent()) {
@@ -786,6 +811,81 @@ public class MetadataMgr {
             }
         }
         return ImmutableList.copyOf(files.build());
+    }
+
+    private Optional<List<RemoteFileInfo>> maybeRouteCacheDeleteFileInfos(Table table) {
+        // Only use oteam datacache metadata when enable_oteam_datacache is enabled
+        if (!Config.enable_oteam_datacache) {
+            return Optional.empty();
+        }
+        ConnectContext context = ConnectContext.get();
+        if (context == null) {
+            return Optional.empty();
+        }
+        DataCacheSelectStatement statement = context.getDataCacheSelectStatement();
+        if (statement == null || !statement.isCacheDelete()) {
+            return Optional.empty();
+        }
+        DataCacheMetaManager metaManager = GlobalStateMgr.getCurrentState().getDataCacheMetaManager();
+        metaManager.initializeIfNeeded();
+        CacheDeleteMode mode = statement.isDeleteModeGc() ? CacheDeleteMode.GC : CacheDeleteMode.NORMAL;
+        List<DataCacheRemoteFileDesc> descs = metaManager.getCacheDeleteRemoteFileDescs(
+                statement.getTableName(), statement.getPartition(), mode);
+        String partitionPrefix = metaManager.getPartitionMeta(statement.getTableName(), statement.getPartition())
+                .map(DataCachePartitionMeta::getPartitionAbsPrefixPath)
+                .orElse(null);
+        List<RemoteFileInfo> infos;
+        if (descs.isEmpty()) {
+            infos = ImmutableList.of();
+        } else if (table instanceof IcebergTable) {
+            IcebergTable icebergTable = (IcebergTable) table;
+            org.apache.iceberg.Table nativeTable = icebergTable.getNativeTable();
+            PartitionSpec spec = PartitionSpec.builderFor(nativeTable.schema()).build();
+            String schemaString = SchemaParser.toJson(nativeTable.schema());
+            String specString = PartitionSpecParser.toJson(spec);
+            ResidualEvaluator residualEvaluator =
+                    ResidualEvaluator.of(spec, Expressions.alwaysTrue(), true);
+            String tableBasePath = icebergTable.getTableLocation();
+
+            List<RemoteFileDesc> remoteFileDescs = new ArrayList<>();
+            for (DataCacheRemoteFileDesc desc : descs) {
+                // getFullPath() is the method of base class, for cache delete, it depends on `isRelativePath` boolean
+                String path = desc.getFullPath();
+                FileFormat format = FileFormat.fromString(desc.getFormat());
+                boolean isRelativePath = desc.isRelativePath();
+                // iceberg DataFile need full path, so we need to attach table base path for relative file path
+                if (isRelativePath) {
+                    path = tableBasePath + path;
+                }
+                DataFile dataFile = DataFiles.builder(spec)
+                        .withPath(path)
+                        .withFormat(format)
+                        .withFileSizeInBytes(desc.getFileSize())
+                        .withRecordCount(0)
+                        .build();
+                BaseFileScanTask task = new BaseFileScanTask(
+                        dataFile, new DeleteFile[0], schemaString, specString, residualEvaluator);
+                IcebergSplitScanTask splitScanTask = new IcebergSplitScanTask(desc.getOffset(), desc.getLength(), task);
+                remoteFileDescs.add(
+                        IcebergRemoteFileDesc.createIcebergRemoteFileDesc(ImmutableList.of(splitScanTask), desc.getBackendId()));
+            }
+            RemoteFileInfo info = RemoteFileInfo.builder()
+                    .setFormat(RemoteFileInputFormat.UNKNOWN)
+                    .setFiles(ImmutableList.copyOf(remoteFileDescs))
+                    .setFullPath(partitionPrefix)
+                    .build();
+            infos = ImmutableList.of(info);
+        } else {
+            List<RemoteFileDesc> remoteDescs = Lists.newArrayListWithCapacity(descs.size());
+            remoteDescs.addAll(descs);
+            RemoteFileInfo info = RemoteFileInfo.builder()
+                    .setFormat(RemoteFileInputFormat.UNKNOWN) // TODO: record format info
+                    .setFiles(remoteDescs)
+                    .setFullPath(partitionPrefix)
+                    .build();
+            infos = ImmutableList.of(info);
+        }
+        return Optional.of(infos);
     }
 
     public List<PartitionInfo> getPartitions(String catalogName, Table table, List<String> partitionNames) {

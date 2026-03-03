@@ -31,6 +31,7 @@ import com.starrocks.connector.hudi.HudiRemoteFileDesc;
 import com.starrocks.datacache.DataCacheExprRewriter;
 import com.starrocks.datacache.DataCacheMgr;
 import com.starrocks.datacache.DataCacheOptions;
+import com.starrocks.datacache.DataCacheRemoteFileDesc;
 import com.starrocks.datacache.DataCacheRule;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
@@ -43,6 +44,7 @@ import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.optimizer.rewrite.ScalarOperatorRewriter;
 import com.starrocks.sql.optimizer.transformer.SqlToScalarOperatorTranslator;
 import com.starrocks.sql.plan.HDFSScanNodePredicates;
+import com.starrocks.system.ComputeNode;
 import com.starrocks.thrift.TDataCacheOptions;
 import com.starrocks.thrift.THdfsFileFormat;
 import com.starrocks.thrift.THdfsScanRange;
@@ -366,6 +368,10 @@ public class RemoteScanRangeLocations {
             RemoteFileBlockDesc block = blockDesc.get();
             totalSize = block.getLength();
             offset = block.getOffset();
+        } else if (fileDesc instanceof DataCacheRemoteFileDesc) {
+            DataCacheRemoteFileDesc desc = (DataCacheRemoteFileDesc) fileDesc;
+            totalSize = desc.getLength();
+            offset = desc.getOffset();
         }
 
         // assume we can not split at all.
@@ -458,6 +464,20 @@ public class RemoteScanRangeLocations {
                 TScanRangeLocation scanRangeLocation = new TScanRangeLocation(new TNetworkAddress(host, -1));
                 scanRangeLocations.addToLocations(scanRangeLocation);
             }
+        } else if (fileDesc instanceof DataCacheRemoteFileDesc) {
+            DataCacheRemoteFileDesc cacheFile = (DataCacheRemoteFileDesc) fileDesc;
+            TScanRangeLocation location = new TScanRangeLocation();
+            location.setBackend_id(cacheFile.getBackendId());
+            ComputeNode backend = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo()
+                    .getBackendOrComputeNode(cacheFile.getBackendId());
+            if (backend != null) {
+                location.setServer(new TNetworkAddress(backend.getHost(), backend.getBePort()));
+            } else {
+                location.setServer(new TNetworkAddress("-1", -1));
+                LOG.error("Backend {} referenced by cache delete file {} not found", cacheFile.getBackendId(),
+                        cacheFile.getFullPath());
+            }
+            scanRangeLocations.addToLocations(location);
         } else {
             TScanRangeLocation scanRangeLocation = new TScanRangeLocation(new TNetworkAddress("-1", -1));
             ArrayList<TScanRangeLocation> locations = new ArrayList<>(1);
@@ -702,13 +722,21 @@ public class RemoteScanRangeLocations {
                         continue;
                     }
                     if (forceScheduleLocal) {
-                        for (RemoteFileBlockDesc blockDesc : fileDesc.getBlockDescs()) {
+                        if (fileDesc instanceof DataCacheRemoteFileDesc) {
                             addScanRangeLocations(partitionInfos.get(i).getId(), partitions.get(i), fileDesc,
-                                    Optional.of(blockDesc),
+                                    Optional.empty(),
                                     dataCacheOptions);
-                            LOG.debug("Add scan range success. partition: {}, file: {}, block: {}-{}",
-                                    partitions.get(i).getFullPath(), fileDesc.getFileName(), blockDesc.getOffset(),
-                                    blockDesc.getLength());
+                            LOG.debug("Add scan range success. partition: {}, file: {}, range: {}-{}",
+                                    partitions.get(i).getFullPath(), fileDesc.getFileName(), 0, fileDesc.getLength());
+                        } else {
+                            for (RemoteFileBlockDesc blockDesc : fileDesc.getBlockDescs()) {
+                                addScanRangeLocations(partitionInfos.get(i).getId(), partitions.get(i), fileDesc,
+                                        Optional.of(blockDesc),
+                                        dataCacheOptions);
+                                LOG.debug("Add scan range success. partition: {}, file: {}, block: {}-{}",
+                                        partitions.get(i).getFullPath(), fileDesc.getFileName(), blockDesc.getOffset(),
+                                        blockDesc.getLength());
+                            }
                         }
                     } else {
                         addScanRangeLocations(partitionInfos.get(i).getId(), partitions.get(i), fileDesc,
@@ -780,5 +808,13 @@ public class RemoteScanRangeLocations {
 
     public int getPartitionNum() {
         return partitionInfos.size();
+    }
+
+    public List<RemoteFileInfo> getRemoteFiles() {
+        return Collections.unmodifiableList(partitions);
+    }
+
+    public List<DescriptorTable.ReferencedPartitionInfo> getPartitionInfos() {
+        return Collections.unmodifiableList(partitionInfos);
     }
 }

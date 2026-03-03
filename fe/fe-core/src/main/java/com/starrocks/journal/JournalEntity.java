@@ -51,6 +51,8 @@ import com.starrocks.common.Config;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.common.util.SmallFileMgr.SmallFile;
+import com.starrocks.datacache.DataCachePartitionMetaLog;
+import com.starrocks.datacache.DataCacheTableMetaLog;
 import com.starrocks.ha.LeaderInfo;
 import com.starrocks.journal.bdbje.Timestamp;
 import com.starrocks.leader.Checkpoint;
@@ -63,7 +65,6 @@ import com.starrocks.load.loadv2.LoadJob.LoadJobStateUpdateInfo;
 import com.starrocks.load.loadv2.LoadJobFinalOperation;
 import com.starrocks.load.routineload.RoutineLoadJob;
 import com.starrocks.load.streamload.StreamLoadTask;
-import com.starrocks.persist.AddDataCacheInfo;
 import com.starrocks.persist.AddPartitionsInfoV2;
 import com.starrocks.persist.AddSubPartitionsInfoV2;
 import com.starrocks.persist.AlterCatalogLog;
@@ -91,7 +92,6 @@ import com.starrocks.persist.CreateTableInfo;
 import com.starrocks.persist.CreateUserInfo;
 import com.starrocks.persist.DatabaseInfo;
 import com.starrocks.persist.DecommissionDiskInfo;
-import com.starrocks.persist.DeleteDataCacheInfo;
 import com.starrocks.persist.DictionaryMgrInfo;
 import com.starrocks.persist.DisableDiskInfo;
 import com.starrocks.persist.DisablePartitionRecoveryInfo;
@@ -216,8 +216,29 @@ public class JournalEntity implements Writable {
             case OperationType.OP_ERASE_PARTITION:
             case OperationType.OP_META_VERSION:
             case OperationType.OP_DROP_ALL_BROKER:
-            case OperationType.OP_DROP_REPOSITORY:
-            case OperationType.OP_REMOVE_BE_DATA_CACHE_RECORD: {
+            case OperationType.OP_DROP_REPOSITORY: {
+                data = new Text();
+                ((Text) data).readFields(in);
+                break;
+            }
+            case OperationType.OP_ADD_DATA_CACHE_RECORD:
+            case OperationType.OP_REMOVE_BE_DATA_CACHE_RECORD:
+            case OperationType.OP_DELETE_DATA_CACHE_RECORD: {
+                data = new Text();
+                ((Text) data).readFields(in);
+                break;
+            }
+            case OperationType.OP_DATACACHE_TABLE_META: {
+                data = new DataCacheTableMetaLog();
+                ((DataCacheTableMetaLog) data).readFields(in);
+                break;
+            }
+            case OperationType.OP_DATACACHE_PARTITION_META: {
+                data = new DataCachePartitionMetaLog();
+                ((DataCachePartitionMetaLog) data).readFields(in);
+                break;
+            }
+            case OperationType.OP_DATACACHE_DELETE_PARTITION_META: {
                 data = new Text();
                 ((Text) data).readFields(in);
                 break;
@@ -973,14 +994,6 @@ public class JournalEntity implements Writable {
                 break;
             case OperationType.OP_DROP_WAREHOUSE: {
                 data = DropWarehouseLog.read(in);
-                break;
-            }
-            case OperationType.OP_ADD_DATA_CACHE_RECORD: {
-                data = GsonUtils.GSON.fromJson(Text.readString(in), AddDataCacheInfo.class);
-                break;
-            }
-            case OperationType.OP_DELETE_DATA_CACHE_RECORD: {
-                data = GsonUtils.GSON.fromJson(Text.readString(in), DeleteDataCacheInfo.class);
                 break;
             }
             default: {

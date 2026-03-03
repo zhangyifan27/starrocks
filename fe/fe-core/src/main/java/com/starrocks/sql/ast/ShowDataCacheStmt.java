@@ -36,9 +36,23 @@ public class ShowDataCacheStmt extends ShowStmt {
     @Override
     public ShowResultSetMetaData getMetaData() {
         ShowResultSetMetaData.Builder builder = ShowResultSetMetaData.builder();
-        builder.addColumn(new Column("Partition", ScalarType.createVarchar(20)))
-                .addColumn(new Column("Data Cache Size", ScalarType.createVarchar(20)))
-                .addColumn(new Column("Ttl Time", ScalarType.createVarchar(20)));
+        builder.addColumn(new Column("Partition Id", ScalarType.BIGINT))
+                .addColumn(new Column("Table Id", ScalarType.BIGINT))
+                .addColumn(new Column("Partition", ScalarType.createVarchar(128)))
+                .addColumn(new Column("Version", ScalarType.BIGINT))
+                .addColumn(new Column("Cache Status", ScalarType.createVarchar(32)))
+                .addColumn(new Column("Created Time", ScalarType.createVarchar(32)))
+                .addColumn(new Column("Last Refresh Time", ScalarType.createVarchar(32)))
+                .addColumn(new Column("Expired Files", ScalarType.BIGINT))
+                .addColumn(new Column("Expired Bytes", ScalarType.BIGINT))
+                .addColumn(new Column("TTL Expire At", ScalarType.createVarchar(32)))
+                .addColumn(new Column("Partition Field", ScalarType.createVarchar(64)))
+                .addColumn(new Column("Partition Field Type", ScalarType.createVarchar(32)))
+                .addColumn(new Column("Cache Data Size", ScalarType.createVarchar(32)))
+                .addColumn(new Column("Partition Path", ScalarType.createVarchar(256)))
+                .addColumn(new Column("Partition Unit", ScalarType.createVarchar(32)))
+                .addColumn(new Column("Partition Field Format", ScalarType.createVarchar(64)))
+                .addColumn(new Column("Hash Ring Signature", ScalarType.createVarchar(128)));
         return builder.build();
     }
 

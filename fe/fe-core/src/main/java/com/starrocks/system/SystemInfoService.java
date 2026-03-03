@@ -572,10 +572,6 @@ public class SystemInfoService implements GsonPostProcessable {
         GlobalStateMgr.getCurrentState().getEditLog().logDropBackend(droppedBackend);
         LOG.info("finished to drop {}", droppedBackend);
 
-        // remove be data cache record when drop be
-        GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor().removeBeRecord(droppedBackend.getId());
-        GlobalStateMgr.getCurrentState().getEditLog().logRemoveBeDataCacheRecord(droppedBackend.getId());
-
         // backends are changed, regenerated tablet number metrics
         MetricRepo.generateBackendsTabletMetrics();
     }
@@ -1330,4 +1326,3 @@ public class SystemInfoService implements GsonPostProcessable {
         }
     }
 }
-

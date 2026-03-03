@@ -21,11 +21,13 @@ public class DropTaskStmt extends DdlStmt {
 
     private final TaskName taskName;
     private final boolean force;
+    private final boolean dataCacheJob;
 
-    public DropTaskStmt(TaskName taskName, boolean force, NodePosition pos) {
+    public DropTaskStmt(TaskName taskName, boolean force, boolean dataCacheJob, NodePosition pos) {
         super(pos);
         this.taskName = taskName;
         this.force = force;
+        this.dataCacheJob = dataCacheJob;
     }
 
     public TaskName getTaskName() {
@@ -34,6 +36,10 @@ public class DropTaskStmt extends DdlStmt {
 
     public boolean isForce() {
         return force;
+    }
+
+    public boolean isDataCacheJob() {
+        return dataCacheJob;
     }
 
     @Override

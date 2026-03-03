@@ -113,6 +113,7 @@ import com.starrocks.consistency.ConsistencyChecker;
 import com.starrocks.consistency.LockChecker;
 import com.starrocks.consistency.MetaRecoveryDaemon;
 import com.starrocks.datacache.DataCacheJobMgr;
+import com.starrocks.datacache.DataCacheMetaManager;
 import com.starrocks.datacache.DataCacheSelectExecutor;
 import com.starrocks.encryption.KeyMgr;
 import com.starrocks.encryption.KeyRotationDaemon;
@@ -452,6 +453,7 @@ public class GlobalStateMgr {
     private final InsertOverwriteJobMgr insertOverwriteJobMgr;
 
     private final DataCacheJobMgr dataCacheJobMgr;
+    private final DataCacheMetaManager dataCacheMetaManager;
 
     private final LocalMetastore localMetastore;
     private final GlobalFunctionMgr globalFunctionMgr;
@@ -749,6 +751,7 @@ public class GlobalStateMgr {
         this.taskManager = new TaskManager();
         this.insertOverwriteJobMgr = new InsertOverwriteJobMgr();
         this.dataCacheJobMgr = new DataCacheJobMgr();
+        this.dataCacheMetaManager = new DataCacheMetaManager();
         this.shardManager = new ShardManager();
         this.compactionMgr = new CompactionMgr();
         this.compactionControlScheduler = new CompactionControlScheduler();
@@ -1013,6 +1016,10 @@ public class GlobalStateMgr {
         return dataCacheJobMgr;
     }
 
+    public DataCacheMetaManager getDataCacheMetaManager() {
+        return dataCacheMetaManager;
+    }
+
     public WarehouseManager getWarehouseMgr() {
         return warehouseMgr;
     }
@@ -1188,8 +1195,7 @@ public class GlobalStateMgr {
             // 5. create txn timeout checker thread
             createTxnTimeoutChecker();
 
-            // init data cache select executor and query memory recorder
-            dataCacheSelectExecutor.initialize();
+            // init query memory recorder
             queryMemoryRecorder.initialize();
 
             // 6. start task cleaner thread
@@ -1438,6 +1444,7 @@ public class GlobalStateMgr {
         // start daemon thread to update db used data quota for db txn manager periodically
         updateDbUsedDataQuotaDaemon.start();
         statisticsMetaManager.start();
+        dataCacheMetaManager.start();
         statisticAutoCollector.start();
         taskManager.start();
         taskCleaner.start();
@@ -1589,7 +1596,7 @@ public class GlobalStateMgr {
                     .put(SRMetaBlockID.KEY_MGR, keyMgr::load)
                     .put(SRMetaBlockID.PIPE_MGR, pipeManager.getRepo()::load)
                     .put(SRMetaBlockID.WAREHOUSE_MGR, warehouseMgr::load)
-                    .put(SRMetaBlockID.DATA_CACHE_MGR, dataCacheSelectExecutor::load)
+                    .put(SRMetaBlockID.DATA_CACHE_MGR, dataCacheMetaManager::loadCacheRecords)
                     .put(SRMetaBlockID.QUERY_MEM_MGR, queryMemoryRecorder::load)
                     .build();
 
@@ -1792,7 +1799,6 @@ public class GlobalStateMgr {
                 keyMgr.save(imageWriter);
                 pipeManager.getRepo().save(imageWriter);
                 warehouseMgr.save(imageWriter);
-                dataCacheSelectExecutor.save(imageWriter);
                 queryMemoryRecorder.save(imageWriter);
             } catch (SRMetaBlockException e) {
                 LOG.error("Save meta block failed ", e);

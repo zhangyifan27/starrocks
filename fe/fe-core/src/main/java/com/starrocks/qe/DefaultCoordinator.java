@@ -137,6 +137,7 @@ public class DefaultCoordinator extends Coordinator {
 
     private final JobSpec jobSpec;
     private final ExecutionDAG executionDAG;
+    private ExecPlan execPlan;
 
     private final ConnectContext connectContext;
 
@@ -460,7 +461,13 @@ public class DefaultCoordinator extends Coordinator {
 
     @Override
     public void setExecPlan(ExecPlan execPlan) {
+        this.execPlan = execPlan;
         queryProfile.setExecPlan(execPlan);
+    }
+
+    @Override
+    public ExecPlan getExecPlan() {
+        return this.execPlan;
     }
 
     @Override

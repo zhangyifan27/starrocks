@@ -21,18 +21,29 @@ import java.util.List;
 
 public class IcebergRemoteFileDesc extends RemoteFileDesc {
     private final List<FileScanTask> icebergScanTasks;
+    private final long backendId;
 
-    private IcebergRemoteFileDesc(List<FileScanTask> tasks) {
+    private IcebergRemoteFileDesc(List<FileScanTask> tasks, long backendId) {
         super(null, null, 0, 0, null);
         icebergScanTasks = tasks;
+        this.backendId = backendId;
     }
 
     public static IcebergRemoteFileDesc createIcebergRemoteFileDesc(List<FileScanTask> icebergScanTasks) {
-        return new IcebergRemoteFileDesc(icebergScanTasks);
+        return new IcebergRemoteFileDesc(icebergScanTasks, -1);
+    }
+
+    public static IcebergRemoteFileDesc createIcebergRemoteFileDesc(List<FileScanTask> icebergScanTasks,
+                                                                    long backendId) {
+        return new IcebergRemoteFileDesc(icebergScanTasks, backendId);
     }
 
     public List<FileScanTask> getIcebergScanTasks() {
         return icebergScanTasks;
+    }
+
+    public long getBackendId() {
+        return backendId;
     }
 
     @Override

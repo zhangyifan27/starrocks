@@ -83,6 +83,7 @@ public class HDFSBackendSelector implements BackendSelector {
     Map<ComputeNode, Long> reBalanceBytesPerComputeNode = Maps.newHashMap();
     // be host -> bes
     Multimap<String, ComputeNode> hostToBackends = HashMultimap.create();
+    Map<Long, ComputeNode> idToBackend = Maps.newHashMap();
     private final ScanNode scanNode;
     private final List<TScanRangeLocations> locations;
     private final FragmentScanRangeAssignment assignment;
@@ -311,6 +312,7 @@ public class HDFSBackendSelector implements BackendSelector {
             assignedScanNumPerComputeNode.put(computeNode, 0L);
             reBalanceBytesPerComputeNode.put(computeNode, 0L);
             hostToBackends.put(computeNode.getHost(), computeNode);
+            idToBackend.put(computeNode.getId(), computeNode);
         }
 
         // schedule scan ranges to co-located backends.
@@ -322,13 +324,29 @@ public class HDFSBackendSelector implements BackendSelector {
                 TScanRangeLocations scanRangeLocations = locations.get(i);
                 List<ComputeNode> backends = new ArrayList<>();
                 // select all backends that are co-located with this scan range.
+                boolean ignoreScanRange = false;
                 for (final TScanRangeLocation location : scanRangeLocations.getLocations()) {
+                    if (location.getBackend_id() != 0) {
+                        ComputeNode node = idToBackend.get(location.getBackend_id());
+                        if (node != null) {
+                            backends.add(node);
+                        } else {
+                            // cache delete: data cache file meta中记录的be id目前不活跃，跳过，防止走入hashring逻辑,覆盖file meta中的be id
+                            ignoreScanRange = true;
+                        }
+                        break;
+                    }
                     Collection<ComputeNode> servers = hostToBackends.get(location.getServer().getHostname());
                     if (servers == null || servers.isEmpty()) {
                         continue;
                     }
                     backends.addAll(servers);
                 }
+
+                if (ignoreScanRange) {
+                    continue;
+                }
+
                 ComputeNode node =
                         reBalanceScanRangeForComputeNode(backends, avgNodeScanRangeBytes, scanRangeLocations, needRebalance);
                 if (node == null) {

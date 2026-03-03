@@ -505,12 +505,19 @@ public class ShowExecutor {
             }
 
             String dbName = stmt.getDb();
+            // If dbName is null or empty, show all cached tables across all databases
+            if (Strings.isNullOrEmpty(dbName)) {
+                List<List<String>> rows = GlobalStateMgr.getCurrentState().getDataCacheMetaManager()
+                        .getTablesDataCacheSize(catalogName, null);
+                return new ShowResultSet(stmt.getMetaData(), rows);
+            }
+
             Database db = GlobalStateMgr.getCurrentState().getMetadataMgr().getDb(catalogName, dbName);
 
             Locker locker = new Locker();
             locker.lockDatabase(db, LockType.READ);
             try {
-                List<List<String>> rows = GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor()
+                List<List<String>> rows = GlobalStateMgr.getCurrentState().getDataCacheMetaManager()
                         .getTablesDataCacheSize(catalogName, dbName);
                 return new ShowResultSet(stmt.getMetaData(), rows);
             } finally {
@@ -529,7 +536,7 @@ public class ShowExecutor {
                 }
             }
 
-            List<List<String>> rows = GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor()
+            List<List<String>> rows = GlobalStateMgr.getCurrentState().getDataCacheMetaManager()
                     .getPartitionsDataCacheSize(tableName);
             return new ShowResultSet(stmt.getMetaData(), rows);
         }

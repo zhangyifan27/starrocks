@@ -35,16 +35,19 @@
 package com.starrocks.planner;
 
 import com.google.common.base.MoreObjects;
+import com.starrocks.analysis.DescriptorTable;
 import com.starrocks.analysis.Expr;
 import com.starrocks.analysis.SlotDescriptor;
 import com.starrocks.analysis.TupleDescriptor;
 import com.starrocks.catalog.ColumnAccessPath;
+import com.starrocks.catalog.Table;
 import com.starrocks.common.UserException;
 import com.starrocks.datacache.DataCacheOptions;
 import com.starrocks.server.WarehouseManager;
 import com.starrocks.sql.optimizer.ScanOptimzeOption;
 import com.starrocks.thrift.TColumnAccessPath;
 import com.starrocks.thrift.TScanRangeLocations;
+import com.starrocks.connector.RemoteFileInfo;
 import org.jetbrains.annotations.TestOnly;
 
 import java.util.Collections;
@@ -115,6 +118,14 @@ public abstract class ScanNode extends PlanNode {
 
     public boolean isLocalNativeTable() {
         return false;
+    }
+
+    public Table getTable() {
+        return desc.getTable();
+    }
+
+    public List<RemoteFileInfo> getRemoteFiles() {
+        return Collections.emptyList();
     }
 
     /**

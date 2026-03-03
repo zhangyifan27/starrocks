@@ -14,13 +14,11 @@
 
 package com.starrocks.scheduler;
 
-import com.starrocks.analysis.TableName;
 import com.starrocks.common.UserException;
 import com.starrocks.common.profile.Tracers;
 import com.starrocks.datacache.DataCacheSelectMetrics;
 import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.StmtExecutor;
-import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.DataCacheSelectStatement;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -61,14 +59,16 @@ public class DataCacheSelectProcessor extends BaseTaskRunProcessor {
 
             // Cache select's metrics is held by sub StmtExecutor
             DataCacheSelectMetrics metrics = getDataCacheSelectMetrics(executor);
-            // update compute node or backend's metrics
-            TableName tableName = task.getTableName();
-            long ttlSecond = task.getTtlSeconds();
-            GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor().updateDataCacheMetrics(metrics,
-                    tableName, context.taskRun.getPartition(), ttlSecond);
             DataCacheSelectStatement dataCacheSelectStatement = (DataCacheSelectStatement) executor.getParsedStmt();
             boolean isVerbose = dataCacheSelectStatement.isVerbose();
+
             context.getStatus().setExtraMessage(metrics.debugString(isVerbose));
+            String partition = dataCacheSelectStatement.getPartition();
+            if (partition != null && Constants.TaskType.PERIODICAL.equals(task.getType())) {
+                context.getStatus().setTaskName(task.getName() + "_" + partition);
+            } else {
+                context.getStatus().setTaskName(task.getName());
+            }
         } finally {
             Tracers.close();
             if (executor != null) {

@@ -36,6 +36,7 @@ import com.starrocks.common.util.DebugUtil;
 import com.starrocks.common.util.TimeUtils;
 import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.PartitionUtil;
+import com.starrocks.connector.RemoteFileDesc;
 import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.connector.TableVersionRange;
 import com.starrocks.connector.exception.StarRocksConnectorException;
@@ -51,6 +52,7 @@ import com.starrocks.qe.ConnectContext;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.optimizer.operator.scalar.ScalarOperator;
 import com.starrocks.sql.plan.HDFSScanNodePredicates;
+import com.starrocks.system.ComputeNode;
 import com.starrocks.thrift.TExplainLevel;
 import com.starrocks.thrift.THdfsScanNode;
 import com.starrocks.thrift.THdfsScanRange;
@@ -81,6 +83,7 @@ import org.apache.logging.log4j.Logger;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -98,6 +101,7 @@ public class IcebergScanNode extends ScanNode {
     private final IcebergTable icebergTable;
     private final HDFSScanNodePredicates scanNodePredicates = new HDFSScanNodePredicates();
     private final List<TScanRangeLocations> result = new ArrayList<>();
+    private List<RemoteFileInfo> remoteFileInfos = new ArrayList<>();
     private ScalarOperator predicate = null;
     private CloudConfiguration cloudConfiguration = null;
     private final List<Integer> deleteColumnSlotIds = new ArrayList<>();
@@ -171,6 +175,11 @@ public class IcebergScanNode extends ScanNode {
     @Override
     public List<TScanRangeLocations> getScanRangeLocations(long maxScanRangeLength) {
         return result;
+    }
+
+    @Override
+    public List<RemoteFileInfo> getRemoteFiles() {
+        return Collections.unmodifiableList(remoteFileInfos);
     }
 
     public void setSnapshotId(Optional<Long> snapshotId) {
@@ -250,12 +259,7 @@ public class IcebergScanNode extends ScanNode {
             return;
         }
 
-        IcebergRemoteFileDesc remoteFileDesc = (IcebergRemoteFileDesc) splits.get(0).getFiles().get(0);
-        if (remoteFileDesc == null) {
-            LOG.warn("There is no scan tasks after planFies on {}.{} and predicate: [{}]",
-                    icebergTable.getRemoteDbName(), icebergTable.getRemoteTableName(), predicate);
-            return;
-        }
+        remoteFileInfos = new ArrayList<>(splits);
 
         // this partition list filtered out based on logical partition secondary pruner
         boolean enableSecondaryPrunner = icebergTable.isAllIdentityTransform() &&
@@ -265,112 +269,129 @@ public class IcebergScanNode extends ScanNode {
         Map<Long, List<Integer>> idToPartitionSlots = Maps.newHashMap();
         Map<String, Long> scanFileSizes = Maps.newHashMap();
         List<Integer> currentEqualityIds = new ArrayList<>();
-        for (FileScanTask task : remoteFileDesc.getIcebergScanTasks()) {
-            DataFile file = task.file();
-            LOG.debug("Scan with file " + file.path() + ", file record count " + file.recordCount());
-            if (file.fileSizeInBytes() == 0) {
-                continue;
-            }
-
-            StructLike partition = task.file().partition();
-            long partitionId = 0;
-            if (!partitionKeyToId.containsKey(partition)) {
-                partitionId = icebergTable.nextPartitionId();
-                BiMap<Integer, PartitionField> indexToField = getIdentityPartitions(task.spec());
-                if (!indexToField.isEmpty()) {
-                    List<Integer> partitionSlotIds = task.spec().fields().stream()
-                            .map(x -> desc.getColumnSlot(x.name()))
-                            .filter(Objects::nonNull)
-                            .map(SlotDescriptor::getId)
-                            .map(SlotId::asInt)
-                            .collect(Collectors.toList());
-                    List<Integer> indexes = task.spec().fields().stream()
-                            .filter(x -> desc.getColumnSlot(x.name()) != null)
-                            .map(x -> indexToField.inverse().get(x))
-                            .collect(Collectors.toList());
-                    PartitionKey partitionKey = getPartitionKey(partition, task.spec(), indexes, indexToField);
-                    if (enableSecondaryPrunner &&
-                            !partitionKeyContains(selectedPartitionKeys, partitionKey, partition, task.spec())) {
+        for (RemoteFileInfo fileInfo : splits) {
+            for (RemoteFileDesc fileDesc : fileInfo.getFiles()) {
+                if (!(fileDesc instanceof IcebergRemoteFileDesc)) {
+                    continue;
+                }
+                IcebergRemoteFileDesc remoteFileDesc = (IcebergRemoteFileDesc) fileDesc;
+                long backendId = remoteFileDesc.getBackendId();
+                for (FileScanTask task : remoteFileDesc.getIcebergScanTasks()) {
+                    DataFile file = task.file();
+                    LOG.debug("Scan with file " + file.path() + ", file record count " + file.recordCount());
+                    if (file.fileSizeInBytes() == 0) {
                         continue;
                     }
-                    partitionKeyToId.put(partition, partitionId);
-                    DescriptorTable.ReferencedPartitionInfo partitionInfo =
-                            new DescriptorTable.ReferencedPartitionInfo(partitionId, partitionKey);
 
-                    descTbl.addReferencedPartitions(icebergTable, partitionInfo);
-                    idToPartitionSlots.put(partitionId, partitionSlotIds);
-                } else {
-                    partitionKeyToId.put(partition, partitionId);
+                    StructLike partition = task.file().partition();
+                    long partitionId = 0;
+                    if (!partitionKeyToId.containsKey(partition)) {
+                        partitionId = icebergTable.nextPartitionId();
+                        BiMap<Integer, PartitionField> indexToField = getIdentityPartitions(task.spec());
+                        if (!indexToField.isEmpty()) {
+                            List<Integer> partitionSlotIds = task.spec().fields().stream()
+                                    .map(x -> desc.getColumnSlot(x.name()))
+                                    .filter(Objects::nonNull)
+                                    .map(SlotDescriptor::getId)
+                                    .map(SlotId::asInt)
+                                    .collect(Collectors.toList());
+                            List<Integer> indexes = task.spec().fields().stream()
+                                    .filter(x -> desc.getColumnSlot(x.name()) != null)
+                                    .map(x -> indexToField.inverse().get(x))
+                                    .collect(Collectors.toList());
+                            PartitionKey partitionKey = getPartitionKey(partition, task.spec(), indexes, indexToField);
+                            if (enableSecondaryPrunner &&
+                                    !partitionKeyContains(selectedPartitionKeys, partitionKey, partition, task.spec())) {
+                                continue;
+                            }
+                            partitionKeyToId.put(partition, partitionId);
+                            DescriptorTable.ReferencedPartitionInfo partitionInfo =
+                                    new DescriptorTable.ReferencedPartitionInfo(partitionId, partitionKey);
+
+                            descTbl.addReferencedPartitions(icebergTable, partitionInfo);
+                            idToPartitionSlots.put(partitionId, partitionSlotIds);
+                        } else {
+                            partitionKeyToId.put(partition, partitionId);
+                        }
+                    }
+
+                    partitionId = partitionKeyToId.get(partition);
+
+                    TScanRangeLocations scanRangeLocations = new TScanRangeLocations();
+
+                    THdfsScanRange hdfsScanRange = new THdfsScanRange();
+                    if (file.path().toString().startsWith(icebergTable.getTableLocation())) {
+                        hdfsScanRange.setRelative_path(file.path().toString().substring(icebergTable.getTableLocation().length()));
+                    } else {
+                        hdfsScanRange.setFull_path(file.path().toString());
+                    }
+                    hdfsScanRange.setOffset(task.start());
+                    hdfsScanRange.setLength(task.length());
+                    scanFileSizes.put(file.path().toString(), scanFileSizes.getOrDefault(file.path().toString(), 0L) + task.length());
+                    // For iceberg table we do not need partition id
+                    if (!idToPartitionSlots.containsKey(partitionId)) {
+                        hdfsScanRange.setPartition_id(-1);
+                    } else {
+                        hdfsScanRange.setPartition_id(partitionId);
+                        hdfsScanRange.setIdentity_partition_slot_ids(idToPartitionSlots.get(partitionId));
+                    }
+                    hdfsScanRange.setFile_length(file.fileSizeInBytes());
+                    // Iceberg data file cannot be overwritten
+                    hdfsScanRange.setModification_time(0);
+                    hdfsScanRange.setFile_format(IcebergApiConverter.getHdfsFileFormat(file.format()).toThrift());
+
+                    List<TIcebergDeleteFile> deleteFiles = new ArrayList<>();
+                    for (DeleteFile deleteFile : task.deletes()) {
+                        FileContent content = deleteFile.content();
+                        if (content == FileContent.EQUALITY_DELETES) {
+                            List<Integer> taskEqualityFieldIds = deleteFile.equalityFieldIds();
+                            if (taskEqualityFieldIds.isEmpty()) {
+                                continue;
+                            }
+                            if (!currentEqualityIds.isEmpty() && !currentEqualityIds.equals(taskEqualityFieldIds)) {
+                                throw new StarRocksConnectorException("Schema change of equality columns changed is not supported");
+                            }
+
+                            if (currentEqualityIds.isEmpty()) {
+                                currentEqualityIds = taskEqualityFieldIds;
+                                prepareRequiredColumnsForDeletes(currentEqualityIds);
+                            }
+                        }
+
+                        TIcebergDeleteFile target = new TIcebergDeleteFile();
+                        target.setFull_path(deleteFile.path().toString());
+                        target.setFile_content(content == FileContent.EQUALITY_DELETES ? TIcebergFileContent.EQUALITY_DELETES :
+                                TIcebergFileContent.POSITION_DELETES);
+                        target.setLength(deleteFile.fileSizeInBytes());
+                        deleteFiles.add(target);
+                    }
+
+                    if (!deleteFiles.isEmpty()) {
+                        hdfsScanRange.setDelete_files(deleteFiles);
+                    }
+
+                    if (!deleteColumnSlotIds.isEmpty()) {
+                        hdfsScanRange.setDelete_column_slot_ids(deleteColumnSlotIds);
+                    }
+
+                    TScanRange scanRange = new TScanRange();
+                    scanRange.setHdfs_scan_range(hdfsScanRange);
+                    scanRangeLocations.setScan_range(scanRange);
+
+                    TScanRangeLocation scanRangeLocation = new TScanRangeLocation(new TNetworkAddress("-1", -1));
+                    if (backendId > 0) {
+                        scanRangeLocation.setBackend_id(backendId);
+                        ComputeNode backend = GlobalStateMgr.getCurrentState().getNodeMgr().getClusterInfo()
+                                .getBackendOrComputeNode(backendId);
+                        if (backend != null) {
+                            scanRangeLocation.setServer(new TNetworkAddress(backend.getHost(), backend.getBePort()));
+                        }
+                    }
+                    scanRangeLocations.addToLocations(scanRangeLocation);
+
+                    result.add(scanRangeLocations);
                 }
             }
-
-            partitionId = partitionKeyToId.get(partition);
-
-            TScanRangeLocations scanRangeLocations = new TScanRangeLocations();
-
-            THdfsScanRange hdfsScanRange = new THdfsScanRange();
-            if (file.path().toString().startsWith(icebergTable.getTableLocation())) {
-                hdfsScanRange.setRelative_path(file.path().toString().substring(icebergTable.getTableLocation().length()));
-            } else {
-                hdfsScanRange.setFull_path(file.path().toString());
-            }
-            hdfsScanRange.setOffset(task.start());
-            hdfsScanRange.setLength(task.length());
-            scanFileSizes.put(file.path().toString(), scanFileSizes.getOrDefault(file.path().toString(), 0L) + task.length());
-            // For iceberg table we do not need partition id
-            if (!idToPartitionSlots.containsKey(partitionId)) {
-                hdfsScanRange.setPartition_id(-1);
-            } else {
-                hdfsScanRange.setPartition_id(partitionId);
-                hdfsScanRange.setIdentity_partition_slot_ids(idToPartitionSlots.get(partitionId));
-            }
-            hdfsScanRange.setFile_length(file.fileSizeInBytes());
-            // Iceberg data file cannot be overwritten
-            hdfsScanRange.setModification_time(0);
-            hdfsScanRange.setFile_format(IcebergApiConverter.getHdfsFileFormat(file.format()).toThrift());
-
-            List<TIcebergDeleteFile> deleteFiles = new ArrayList<>();
-            for (DeleteFile deleteFile : task.deletes()) {
-                FileContent content = deleteFile.content();
-                if (content == FileContent.EQUALITY_DELETES) {
-                    List<Integer> taskEqualityFieldIds = deleteFile.equalityFieldIds();
-                    if (taskEqualityFieldIds.isEmpty()) {
-                        continue;
-                    }
-                    if (!currentEqualityIds.isEmpty() && !currentEqualityIds.equals(taskEqualityFieldIds)) {
-                        throw new StarRocksConnectorException("Schema change of equality columns changed is not supported");
-                    }
-
-                    if (currentEqualityIds.isEmpty()) {
-                        currentEqualityIds = taskEqualityFieldIds;
-                        prepareRequiredColumnsForDeletes(currentEqualityIds);
-                    }
-                }
-
-                TIcebergDeleteFile target = new TIcebergDeleteFile();
-                target.setFull_path(deleteFile.path().toString());
-                target.setFile_content(content == FileContent.EQUALITY_DELETES ? TIcebergFileContent.EQUALITY_DELETES :
-                        TIcebergFileContent.POSITION_DELETES);
-                target.setLength(deleteFile.fileSizeInBytes());
-                deleteFiles.add(target);
-            }
-
-            if (!deleteFiles.isEmpty()) {
-                hdfsScanRange.setDelete_files(deleteFiles);
-            }
-
-            if (!deleteColumnSlotIds.isEmpty()) {
-                hdfsScanRange.setDelete_column_slot_ids(deleteColumnSlotIds);
-            }
-
-            TScanRange scanRange = new TScanRange();
-            scanRange.setHdfs_scan_range(hdfsScanRange);
-            scanRangeLocations.setScan_range(scanRange);
-
-            TScanRangeLocation scanRangeLocation = new TScanRangeLocation(new TNetworkAddress("-1", -1));
-            scanRangeLocations.addToLocations(scanRangeLocation);
-
-            result.add(scanRangeLocations);
         }
 
         if (!currentEqualityIds.isEmpty()) {

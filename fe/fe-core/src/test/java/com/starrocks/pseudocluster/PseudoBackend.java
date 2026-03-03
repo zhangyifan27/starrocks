@@ -127,6 +127,7 @@ import com.starrocks.thrift.TFetchDataParams;
 import com.starrocks.thrift.TFetchDataResult;
 import com.starrocks.thrift.TFinishTaskRequest;
 import com.starrocks.thrift.THeartbeatResult;
+import com.starrocks.thrift.TLoadDataCacheMetrics;
 import com.starrocks.thrift.TMasterInfo;
 import com.starrocks.thrift.TMasterResult;
 import com.starrocks.thrift.TMiniLoadEtlStatusRequest;
@@ -1246,6 +1247,23 @@ public class PseudoBackend {
             LOG.warn("error execPlanFragmentWithReport", e);
             report.setStatus(status(TStatusCode.INTERNAL_ERROR, e.getMessage()));
         }
+
+        // Add mock DataCache metrics for CACHE SELECT operations
+        if (params.isSetQuery_options() && params.query_options.isSetEnable_cache_select()
+                && params.query_options.enable_cache_select) {
+            TLoadDataCacheMetrics mockMetrics = new TLoadDataCacheMetrics();
+            // Simulate reading and writing data to cache
+            long mockDataSize = 50 * 1024 * 1024L; // 50MB mock data
+            mockMetrics.setRead_bytes(mockDataSize / 2);
+            mockMetrics.setWrite_bytes(mockDataSize / 2);
+            mockMetrics.setRead_time_ns(1000000L);
+            mockMetrics.setWrite_time_ns(2000000L);
+            mockMetrics.setCount(1);
+            report.setLoad_datacache_metrics(mockMetrics);
+            LOG.info("Added mock DataCache metrics for CACHE SELECT: read_bytes={}, write_bytes={}",
+                    mockMetrics.read_bytes, mockMetrics.write_bytes);
+        }
+
         report.setDone(true);
         try {
             TReportExecStatusResult ret = frontendService.reportExecStatus(report);
@@ -1326,6 +1344,22 @@ public class PseudoBackend {
             LOG.warn("error execBatchPlanFragment", e);
             report.setStatus(status(TStatusCode.INTERNAL_ERROR, e.getMessage()));
         }
+
+        // Add mock DataCache metrics for CACHE SELECT operations
+        if (commonParams.isSetQuery_options() && commonParams.query_options.isSetEnable_cache_select()
+                && commonParams.query_options.enable_cache_select) {
+            TLoadDataCacheMetrics mockMetrics = new TLoadDataCacheMetrics();
+            long mockDataSize = 50 * 1024 * 1024L; // 50MB mock data
+            mockMetrics.setRead_bytes(mockDataSize / 2);
+            mockMetrics.setWrite_bytes(mockDataSize / 2);
+            mockMetrics.setRead_time_ns(1000000L);
+            mockMetrics.setWrite_time_ns(2000000L);
+            mockMetrics.setCount(1);
+            report.setLoad_datacache_metrics(mockMetrics);
+            LOG.info("Added mock DataCache metrics for batch CACHE SELECT: read_bytes={}, write_bytes={}",
+                    mockMetrics.read_bytes, mockMetrics.write_bytes);
+        }
+
         report.setDone(true);
         try {
             TReportExecStatusResult ret = frontendService.reportExecStatus(report);

@@ -61,6 +61,8 @@ import com.starrocks.common.io.DataOutputBuffer;
 import com.starrocks.common.io.Text;
 import com.starrocks.common.io.Writable;
 import com.starrocks.common.util.SmallFileMgr.SmallFile;
+import com.starrocks.datacache.DataCachePartitionMetaLog;
+import com.starrocks.datacache.DataCacheTableMetaLog;
 import com.starrocks.ha.LeaderInfo;
 import com.starrocks.journal.JournalEntity;
 import com.starrocks.journal.JournalInconsistentException;
@@ -1224,27 +1226,32 @@ public class EditLog {
                     warehouseMgr.replayAlterWarehouse(wh);
                     break;
                 }
-                case OperationType.OP_ADD_DATA_CACHE_RECORD: {
-                    AddDataCacheInfo addDataCacheInfo = (AddDataCacheInfo) journal.getData();
-                    GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor().addDataCacheRecord(addDataCacheInfo.getBeid(),
-                            addDataCacheInfo.getTableName(), addDataCacheInfo.getDataCacheRecord());
-                    break;
-                }
-                case OperationType.OP_DELETE_DATA_CACHE_RECORD: {
-                    DeleteDataCacheInfo addDataCacheInfo = (DeleteDataCacheInfo) journal.getData();
-                    GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor()
-                            .removePartitionRecord(addDataCacheInfo.getTableName(), addDataCacheInfo.getPartitions());
-                    break;
-                }
-                case OperationType.OP_REMOVE_BE_DATA_CACHE_RECORD: {
-                    Text beId = (Text) journal.getData();
-                    GlobalStateMgr.getCurrentState().getDataCacheSelectExecutor().removeBeRecord(Long.parseLong(beId.toString()));
-                    break;
-                }
                 case OperationType.OP_RECORD_QUERY_MEMORY: {
                     MemoryRecordInfo memoryRecordInfo = (MemoryRecordInfo) journal.getData();
                     GlobalStateMgr.getCurrentState().getQueryMemoryRecorder().put(memoryRecordInfo.getId(),
                             memoryRecordInfo.getValue(), memoryRecordInfo.getTime());
+                    break;
+                }
+                case OperationType.OP_ADD_DATA_CACHE_RECORD:
+                case OperationType.OP_REMOVE_BE_DATA_CACHE_RECORD:
+                case OperationType.OP_DELETE_DATA_CACHE_RECORD: {
+                    // deprecated data cache record logs (no-op on replay, kept for compatibility)
+                    LOG.warn("Ignore deprecated data cache record log, opCode {}", opCode);
+                    break;
+                }
+                case OperationType.OP_DATACACHE_TABLE_META: {
+                    DataCacheTableMetaLog log = (DataCacheTableMetaLog) journal.getData();
+                    globalStateMgr.getDataCacheMetaManager().replayUpsertTableMeta(log.getTableMeta());
+                    break;
+                }
+                case OperationType.OP_DATACACHE_PARTITION_META: {
+                    DataCachePartitionMetaLog log = (DataCachePartitionMetaLog) journal.getData();
+                    globalStateMgr.getDataCacheMetaManager().replayUpsertPartitionMeta(log.getPartitionMeta());
+                    break;
+                }
+                case OperationType.OP_DATACACHE_DELETE_PARTITION_META: {
+                    long partitionUid = Long.parseLong(journal.getData().toString());
+                    globalStateMgr.getDataCacheMetaManager().replayDeletePartitionMeta(partitionUid);
                     break;
                 }
                 default: {
@@ -1434,6 +1441,18 @@ public class EditLog {
 
     public void logAddSubPartitions(AddSubPartitionsInfoV2 info) {
         logEdit(OperationType.OP_ADD_SUB_PARTITIONS_V2, info);
+    }
+
+    public void logDataCacheTableMeta(DataCacheTableMetaLog log) {
+        logEdit(OperationType.OP_DATACACHE_TABLE_META, log);
+    }
+
+    public void logDataCachePartitionMeta(DataCachePartitionMetaLog log) {
+        logEdit(OperationType.OP_DATACACHE_PARTITION_META, log);
+    }
+
+    public void logDeleteDataCachePartitionMeta(long partitionUid) {
+        logEdit(OperationType.OP_DATACACHE_DELETE_PARTITION_META, new Text(String.valueOf(partitionUid)));
     }
 
     public void logDropPartition(DropPartitionInfo info) {
@@ -2119,19 +2138,7 @@ public class EditLog {
         logEdit(OperationType.OP_RECOVER_PARTITION_VERSION, info);
     }
 
-    public void logDataCacheRecord(AddDataCacheInfo info) {
-        logJsonObject(OperationType.OP_ADD_DATA_CACHE_RECORD, info);
-    }
-
-    public void logRemoveBeDataCacheRecord(long beId) {
-        logEdit(OperationType.OP_REMOVE_BE_DATA_CACHE_RECORD, new Text(Long.toString(beId)));
-    }
-
     public void logRecordQueryMemory(MemoryRecordInfo info) {
         logEdit(OperationType.OP_RECORD_QUERY_MEMORY, info);
-    }
-
-    public void logDataCacheRecordDelete(DeleteDataCacheInfo info) {
-        logJsonObject(OperationType.OP_DELETE_DATA_CACHE_RECORD, info);
     }
 }

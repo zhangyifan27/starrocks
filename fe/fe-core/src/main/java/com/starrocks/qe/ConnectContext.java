@@ -70,6 +70,7 @@ import com.starrocks.server.WarehouseManager;
 import com.starrocks.sql.analyzer.Authorizer;
 import com.starrocks.sql.analyzer.SemanticException;
 import com.starrocks.sql.ast.CleanTemporaryTableStmt;
+import com.starrocks.sql.ast.DataCacheSelectStatement;
 import com.starrocks.sql.ast.ExecuteStmt;
 import com.starrocks.sql.ast.QueryStatement;
 import com.starrocks.sql.ast.SetListItem;
@@ -258,6 +259,8 @@ public class ConnectContext {
     // QueryMaterializationContext is different from MaterializationContext that it keeps the context during the query
     // lifecycle instead of per materialized view.
     private QueryMaterializationContext queryMVContext;
+
+    private DataCacheSelectStatement dataCacheSelectStatement;
 
     // first use qualifiedUser to verify privileges, if qualifiedUser do not pass through check privileges
     // then use platformUser to check privileges.
@@ -967,6 +970,14 @@ public class ConnectContext {
 
     public void setQueryMVContext(QueryMaterializationContext queryMVContext) {
         this.queryMVContext = queryMVContext;
+    }
+
+    public DataCacheSelectStatement getDataCacheSelectStatement() {
+        return dataCacheSelectStatement;
+    }
+
+    public void setDataCacheSelectStatement(DataCacheSelectStatement dataCacheSelectStatement) {
+        this.dataCacheSelectStatement = dataCacheSelectStatement;
     }
 
     // kill operation with no protect.

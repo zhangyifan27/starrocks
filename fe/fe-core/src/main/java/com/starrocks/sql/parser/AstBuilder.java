@@ -483,6 +483,8 @@ import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.collections4.ListUtils;
 import org.apache.commons.collections4.MapUtils;
 import org.apache.commons.lang3.StringUtils;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import java.io.StringWriter;
 import java.math.BigDecimal;
@@ -510,6 +512,7 @@ import static java.lang.String.format;
 import static java.util.stream.Collectors.toList;
 
 public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
+    private static final Logger LOG = LogManager.getLogger(AstBuilder.class);
     private final long sqlMode;
 
     private final IdentityHashMap<ParserRuleContext, List<HintNode>> hintMap;
@@ -1685,7 +1688,8 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         QualifiedName qualifiedName = getQualifiedName(context.qualifiedName());
         TaskName taskName = qualifiedNameToTaskName(qualifiedName);
         boolean force = context.FORCE() != null;
-        return new DropTaskStmt(taskName, force, createPos(context));
+        boolean dataCacheJob = context.DATA() != null;
+        return new DropTaskStmt(taskName, force, dataCacheJob, createPos(context));
     }
 
     // ------------------------------------------- Materialized View Statement -----------------------------------------
@@ -3437,11 +3441,18 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         List<SelectListItem> selectItems = visit(ctx.selectItem(), SelectListItem.class);
         SelectList selectList = new SelectList(selectItems, false);
 
+        // cache select does not allow explicit predicates, they will be injected later during analysis
+        Expr originalPredicate = (Expr) visitIfPresent(ctx.where);
+
+        List<String> rawSelectItems = ctx.selectItem().stream()
+                .map(RuleContext::getText)
+                .collect(Collectors.toList());
+
         // create query relation based on tableRelation and selectItems
         QueryRelation queryRelation = new SelectRelation(
                 selectList,
                 tableRelation,
-                (Expr) visitIfPresent(ctx.where),
+                originalPredicate,
                 null,
                 null,
                 createPos(ctx));
@@ -3454,13 +3465,16 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
 
         // properties
         Map<String, String> properties = new HashMap<>();
+        // Properties values are case-sensitive, especially partition_field_format for string types (using Unix date format).
+        // For case-insensitive properties, do transform when using
         if (ctx.properties() != null) {
             List<Property> propertyList = visit(ctx.properties().property(), Property.class);
             for (Property property : propertyList) {
-                // ignore case sensitive
-                properties.put(property.getKey().toLowerCase(), property.getValue().toLowerCase());
+                properties.put(property.getKey().toLowerCase(), property.getValue());
             }
         }
+
+        LOG.debug("Cache Select AstBuilder: Normalized DataCache select properties: {}", properties);
 
         TCacheSelectMode mode = TCacheSelectMode.DEFAULT;
         if (isDelete) {
@@ -3468,7 +3482,12 @@ public class AstBuilder extends StarRocksBaseVisitor<ParseNode> {
         } else if (isDesc) {
             mode = TCacheSelectMode.DESC;
         }
-        return new DataCacheSelectStatement(mode, insertStmt, properties, createPos(ctx));
+        DataCacheSelectStatement stmt = new DataCacheSelectStatement(mode, insertStmt, properties, createPos(ctx));
+        if (originalPredicate != null) {
+            stmt.setUserPredicatePresent(true);
+        }
+
+        return stmt;
     }
 
     @Override

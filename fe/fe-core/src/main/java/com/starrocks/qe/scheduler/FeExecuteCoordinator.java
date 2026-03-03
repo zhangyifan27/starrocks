@@ -193,6 +193,11 @@ public class FeExecuteCoordinator extends Coordinator {
     }
 
     @Override
+    public ExecPlan getExecPlan() {
+        return null;
+    }
+
+    @Override
     public RuntimeProfile buildQueryProfile(boolean needMerge) {
         return null;
     }

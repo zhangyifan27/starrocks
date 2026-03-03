@@ -2120,6 +2120,10 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static long statistic_manager_sleep_time_sec = 60; // 60s
 
+
+    @ConfField(mutable = true)
+    public static long datacache_manager_sleep_time_sec = 60; // 60s
+
     /**
      * Analyze status keep time in catalog
      */
@@ -3353,6 +3357,8 @@ public class Config extends ConfigBase {
     @ConfField(mutable = true)
     public static boolean disable_datacache_without_partition = true;
 
+    @ConfField(mutable = true)
+    public static boolean enable_oteam_datacache = false;
     /**
      * To prevent the external catalog from displaying too many entries in the grantsTo system table,
      * you can use this variable to ignore the entries in the external catalog

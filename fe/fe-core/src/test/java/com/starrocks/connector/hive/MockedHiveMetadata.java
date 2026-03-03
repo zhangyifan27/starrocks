@@ -1354,6 +1354,70 @@ public class MockedHiveMetadata implements ConnectorMetadata {
         mockDataCacheTableWithoutPartition();
         mockDataCacheTableWithSinglePartitionColumns();
         mockDataCacheTableWithMultiPartitionColumns();
+        mockDataCacheTestTables();
+    }
+
+    /**
+     * Mock additional tables for DataCache analyzer tests.
+     * These tables support different partition units (day, hour, month, year)
+     * and different partition field types (DATE, DATETIME, INT, STRING).
+     */
+    public static void mockDataCacheTestTables() {
+        MOCK_TABLE_MAP.putIfAbsent(MOCKED_DATACACHE_DB, new CaseInsensitiveMap<>());
+        Map<String, HiveTableInfo> mockTables = MOCK_TABLE_MAP.get(MOCKED_DATACACHE_DB);
+
+        // day_partition_table - DATE partition field, DAY unit
+        mockSimplePartitionedTable(mockTables, "day_partition_table", "dt", "date",
+                ImmutableList.of("dt=2024-01-15", "dt=2024-01-16"));
+
+        // hour_partition_table - DATE partition field, HOUR unit
+        mockSimplePartitionedTable(mockTables, "hour_partition_table", "dt", "date",
+                ImmutableList.of("dt=2024-01-15-10", "dt=2024-01-15-11"));
+
+        // month_partition_table - DATE partition field, MONTH unit
+        mockSimplePartitionedTable(mockTables, "month_partition_table", "dt", "date",
+                ImmutableList.of("dt=2024-01", "dt=2024-02"));
+
+        // year_partition_table - INT partition field, YEAR unit
+        mockSimplePartitionedTable(mockTables, "year_partition_table", "dt", "int",
+                ImmutableList.of("dt=2024", "dt=2023"));
+
+        // string_partition_table - STRING partition field
+        mockSimplePartitionedTable(mockTables, "string_partition_table", "dt", "string",
+                ImmutableList.of("dt=2024-01-15", "dt=2024-01-16"));
+
+        // datetime_partition_table - DATETIME partition field
+        mockSimplePartitionedTable(mockTables, "datetime_partition_table", "dt", "timestamp",
+                ImmutableList.of("dt=2024-01-15 10:00:00", "dt=2024-01-15 11:00:00"));
+    }
+
+    private static void mockSimplePartitionedTable(Map<String, HiveTableInfo> mockTables,
+                                                   String tableName,
+                                                   String partitionColName,
+                                                   String partitionColType,
+                                                   List<String> partitionNames) {
+        List<FieldSchema> cols = Lists.newArrayList();
+        cols.add(new FieldSchema("id", "int", null));
+        cols.add(new FieldSchema("name", "string", null));
+
+        StorageDescriptor sd = new StorageDescriptor(cols, "", MAPRED_PARQUET_INPUT_FORMAT_CLASS,
+                "", false, -1, null, Lists.newArrayList(), Lists.newArrayList(), Maps.newHashMap());
+
+        Table table = new Table(tableName, MOCKED_DATACACHE_DB, null, 0, 0, 0, sd,
+                ImmutableList.of(new FieldSchema(partitionColName, partitionColType, null)),
+                Maps.newHashMap(), null, null, "EXTERNAL_TABLE");
+
+        CaseInsensitiveMap<String, ColumnStatistic> stats = new CaseInsensitiveMap<>();
+        stats.put("id", new ColumnStatistic(0, 1000, 0, 4, 1000));
+        stats.put("name", ColumnStatistic.unknown());
+        stats.put(partitionColName, ColumnStatistic.unknown());
+
+        List<RemoteFileInfo> remoteFileInfos = Lists.newArrayList();
+        partitionNames.forEach(k -> remoteFileInfos.add(mockDataCacheFile()));
+
+        mockTables.put(table.getTableName(),
+                new HiveTableInfo(HiveMetastoreApiConverter.toHiveTable(table, MOCKED_HIVE_CATALOG_NAME),
+                        partitionNames, 1000, stats, remoteFileInfos));
     }
 
     public static void mockT1() {

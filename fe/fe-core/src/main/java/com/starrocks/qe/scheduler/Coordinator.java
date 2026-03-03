@@ -188,6 +188,8 @@ public abstract class Coordinator {
 
     public abstract void setExecPlan(ExecPlan execPlan);
 
+    public abstract ExecPlan getExecPlan();
+
     public abstract RuntimeProfile buildQueryProfile(boolean needMerge);
 
     public abstract RuntimeProfile getQueryProfile();

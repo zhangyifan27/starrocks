@@ -15,18 +15,12 @@
 package com.starrocks.sql.ast;
 
 import com.starrocks.analysis.TaskName;
-import com.starrocks.catalog.Type;
 import com.starrocks.sql.parser.NodePosition;
 
 public class CreateDataCacheJobStmt extends SubmitTaskStmt {
 
     private int dataCacheSelectStart;
     private int dataCacheSelectPropertiesStart;
-
-    private String partitionFiled;
-    private Type partitionFiledType;
-    private String partitionFiledFormat;
-    private String partitionUnit;
     private int cachePartitionNum;
 
     public CreateDataCacheJobStmt(TaskName taskName, DataCacheSelectStatement dataCacheSelectStatement,
@@ -52,37 +46,6 @@ public class CreateDataCacheJobStmt extends SubmitTaskStmt {
         return dataCacheSelectPropertiesStart;
     }
 
-    public String getPartitionFiled() {
-        return partitionFiled;
-    }
-
-    public void setPartitionFiled(String partitionFiled) {
-        this.partitionFiled = partitionFiled;
-    }
-
-    public Type getPartitionFiledType() {
-        return partitionFiledType;
-    }
-
-    public void setPartitionFiledType(Type partitionFiledType) {
-        this.partitionFiledType = partitionFiledType;
-    }
-
-    public String getPartitionFiledFormat() {
-        return partitionFiledFormat;
-    }
-
-    public void setPartitionFiledFormat(String partitionFiledFormat) {
-        this.partitionFiledFormat = partitionFiledFormat;
-    }
-
-    public String getPartitionUnit() {
-        return partitionUnit;
-    }
-
-    public void setPartitionUnit(String partitionUnit) {
-        this.partitionUnit = partitionUnit;
-    }
 
     public int getCachePartitionNum() {
         return cachePartitionNum;

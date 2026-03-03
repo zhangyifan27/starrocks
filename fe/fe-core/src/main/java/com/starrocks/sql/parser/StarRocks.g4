@@ -616,7 +616,7 @@ taskClause
     ;
 
 dropTaskStatement
-    : DROP TASK qualifiedName FORCE?
+    : DROP (TASK | DATA CACHE JOB) qualifiedName FORCE?
     ;
 
 taskScheduleDesc

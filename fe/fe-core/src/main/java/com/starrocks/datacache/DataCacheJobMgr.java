@@ -14,11 +14,13 @@
 
 package com.starrocks.datacache;
 
+import com.starrocks.analysis.TableName;
 import com.starrocks.analysis.TimestampArithmeticExpr;
-import com.starrocks.catalog.Type;
 import com.starrocks.common.DdlException;
 import com.starrocks.common.util.DateUtils;
+import com.starrocks.common.util.TimeUtils;
 import com.starrocks.qe.ConnectContext;
+import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.StatementPlanner;
 import com.starrocks.sql.ast.CreateDataCacheJobStmt;
 import com.starrocks.sql.ast.DataCacheSelectStatement;
@@ -27,9 +29,10 @@ import com.starrocks.sql.parser.SqlParser;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.Map;
 
 public class DataCacheJobMgr {
@@ -40,88 +43,125 @@ public class DataCacheJobMgr {
 
     public void createJob(CreateDataCacheJobStmt stmt, ConnectContext context) throws DdlException {
         DataCacheSelectStatement cacheSelectStatement = stmt.getDataCacheSelectStatement();
-        String dataCacheSelectWithoutProperties = stmt.getOrigStmt().originStmt.substring(stmt.getDataCacheSelectStart(),
-                stmt.getDataCacheSelectPropertiesStart());
-        Map<String, String> properties = cacheSelectStatement.getProperties();
-        properties.put("verbose", "true");
-        // use original ttl for schedule task
-        String ttl = properties.get("ttl");
-        // full table cache
-        if (stmt.getPartitionFiled() == null) {
+
+        cacheHistoryPartitions(stmt, cacheSelectStatement, context);
+
+        //submit schedule task
+        if (stmt.getSchedule() != null) {
+            Map<String, String> properties = new HashMap<>(cacheSelectStatement.getProperties());
             StringBuilder sql = new StringBuilder("SUBMIT TASK ");
             String jobStmt = stmt.getOrigStmt().originStmt
                     .substring("CREATE DATA CACHE JOB".length(), stmt.getDataCacheSelectStart());
-            sql.append(jobStmt).append(dataCacheSelectWithoutProperties);
-            sql.append(" ").append(buildProperties(properties));
-            executeSubmitTaskStmt(sql.toString(), context);
-        } else { // cache previous partition
-            String partition;
-            LocalDateTime now = LocalDateTime.now();
-            String partitionUnit = stmt.getPartitionUnit();
-            long ttlSeconds = cacheSelectStatement.getTTLSeconds();
-            int beforeUnit = 0;
-            // there is schedule and no start time; last unit cache by schedule task;
-            if (stmt.getSchedule() != null && stmt.getSchedule().getStartTime() == 0) {
-                beforeUnit =  1;
-            }
-            for (; beforeUnit < stmt.getCachePartitionNum(); beforeUnit++) {
-                if (cacheSelectStatement.getProperties() != null && !cacheSelectStatement.getProperties().isEmpty()) {
-                    if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
-                        long ttlHour = (ttlSeconds - (beforeUnit * 60 * 60L)) / (60 * 60L);
-                        properties.put("ttl", "PT" + ttlHour + "H");
-                        partition = DateUtils.HOUR_FORMATTER_UNIX.format(now.minusHours(beforeUnit + 1)
-                                .truncatedTo(ChronoUnit.HOURS));
-                    } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
-                        long ttlDay = (ttlSeconds - (beforeUnit * 24 * 60 * 60L)) / (24 * 60 * 60L);
-                        properties.put("ttl", "P" + ttlDay + "D");
-                        partition = DateUtils.DATEKEY_FORMATTER_UNIX.format(now.minusDays(beforeUnit + 1)
-                                .truncatedTo(ChronoUnit.DAYS));
-                    } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
-                        long ttlDay = (ttlSeconds - (beforeUnit * 31 * 24 * 60 * 60L)) / (24 * 60 * 60L);
-                        properties.put("ttl", "P" + ttlDay + "D");
-                        partition = DateUtils.MONTH_FORMATTER_UNIX.format(now.minusMonths(beforeUnit + 1)
-                                .truncatedTo(ChronoUnit.MONTHS));
-                    } else { // YEAR
-                        long ttlDay = (ttlSeconds - (beforeUnit * 365 * 31 * 24 * 60 * 60L)) / (24 * 60 * 60L);
-                        properties.put("ttl", "P" + ttlDay + "D");
-                        partition = DateUtils.YEAR_FORMATTER_UNIX.format(now.minusYears(beforeUnit + 1)
-                                .truncatedTo(ChronoUnit.YEARS));
-                    }
-
-                    StringBuilder sql = new StringBuilder("SUBMIT TASK ")
-                            .append(stmt.getTaskName()).append("_").append(PARTITION_PREFIX).append(partition).append(" ");
-                    if (stmt.getProperties() != null && !stmt.getProperties().isEmpty()) {
-                        String taskProperties = buildProperties(stmt.getProperties());
-                        sql.append(taskProperties);
-                    }
-                    sql.append(" AS ");
-                    sql.append(dataCacheSelectWithoutProperties);
-                    String where = buildWhere(stmt, beforeUnit);
-                    sql.append(where);
-                    properties.put("partition", PARTITION_PREFIX + partition);
-                    sql.append(" ").append(buildProperties(properties));
-
-                    executeSubmitTaskStmt(sql.toString(), context);
-                }
-            }
-
-            //submit schedule task
-            if (stmt.getSchedule() != null) {
-                StringBuilder sql = new StringBuilder("SUBMIT TASK ");
-                String jobStmt = stmt.getOrigStmt().originStmt
-                        .substring("CREATE DATA CACHE JOB".length(), stmt.getDataCacheSelectStart());
-                sql.append(jobStmt).append(dataCacheSelectWithoutProperties);
-                String where = buildScheduleWhere(stmt);
-                sql.append(where);
-                properties.put("verbose", "true");
+            sql.append(jobStmt).append(cacheSelectStatement.toSQLStringWithoutProperties());
+            if (!cacheSelectStatement.isFullTableCache()) {
                 properties.put("partition", PARTITION_SCHEDULE);
-                if (ttl != null) {
-                    properties.put("ttl", ttl);
-                }
-                sql.append(" ").append(buildProperties(properties));
-
-                executeSubmitTaskStmt(sql.toString(), context);
             }
+            sql.append(" ").append(buildProperties(properties));
+
+            executeSubmitTaskStmt(sql.toString(), context);
+            // Record the schedule task name in table meta so we can trace the job from SHOW DATA CACHE.
+
+            TableName tableName = cacheSelectStatement.getTableName();
+            if (tableName != null) {
+                DataCacheMetaManager metaManager = GlobalStateMgr.getCurrentState().getDataCacheMetaManager();
+                if (metaManager != null) {
+                    metaManager.upsertTableMeta(tableName, stmt.getTaskName());
+                }
+            }
+        }
+    }
+
+    private void cacheHistoryPartitions(CreateDataCacheJobStmt stmt,
+                                        DataCacheSelectStatement cacheSelectStatement,
+                                        ConnectContext context) throws DdlException {
+        int cachePartitionNum = stmt.getCachePartitionNum();
+        if (cachePartitionNum <= 1) {
+            return;
+        }
+
+        LocalDateTime now = LocalDateTime.now(TimeUtils.getTimeZone().toZoneId());
+        LocalDateTime baseTime = now;
+        if (stmt.getSchedule() != null && stmt.getSchedule().getStartTime() > 0) {
+            LocalDateTime startScheduleTime = Instant.ofEpochMilli(stmt.getSchedule().getStartTime())
+                    .atZone(TimeUtils.getTimeZone().toZoneId()).toLocalDateTime();
+            if (startScheduleTime.isAfter(now)) {
+                baseTime = startScheduleTime;
+            }
+        }
+
+        long ttlSeconds = cacheSelectStatement.getTTLSeconds();
+        String partitionUnit = cacheSelectStatement.getPartitionUnit();
+
+        long partitionUnitSeconds;
+        if (partitionUnit.equalsIgnoreCase("hour")) {
+            partitionUnitSeconds = 60L * 60L;
+        } else if (partitionUnit.equalsIgnoreCase("day")) {
+            partitionUnitSeconds = 24L * 60L * 60L;
+        } else if (partitionUnit.equalsIgnoreCase("month")) {
+            partitionUnitSeconds = 31L * 24L * 60L * 60L;
+        } else { // YEAR
+            partitionUnitSeconds = 365L * 24L * 60L * 60L;
+        }
+
+        String currentPartition = computeKthPreviousPartition(now, 0, partitionUnit);
+
+        for (int beforeUnit = cachePartitionNum; beforeUnit >= 1; beforeUnit--) {
+            Map<String, String> properties = new HashMap<>(cacheSelectStatement.getProperties());
+            long consumedTime = (beforeUnit - 1) * partitionUnitSeconds;
+            long remainingSeconds = ttlSeconds - consumedTime;
+            if (remainingSeconds < 0) {
+                remainingSeconds = 0;
+                LOG.error("CREATE CACHE JOB: invalid cachePartitionNum:{} and ttl:{}", cachePartitionNum, ttlSeconds);
+                continue;
+            }
+
+            String partition = computeKthPreviousPartition(baseTime, beforeUnit, partitionUnit);
+
+            if (partition.compareTo(currentPartition) > 0) {
+                break;
+            }
+
+            if (partitionUnit.equalsIgnoreCase("hour")) {
+                long ttlHour = remainingSeconds / (60L * 60L);
+                properties.put("ttl", "PT" + ttlHour + "H");
+            } else {
+                long ttlDay = remainingSeconds / (24L * 60L * 60L);
+                properties.put("ttl", "P" + ttlDay + "D");
+            }
+
+            StringBuilder sql = new StringBuilder("SUBMIT TASK ")
+                    .append(stmt.getTaskName()).append("_").append(partition).append(" ");
+            if (stmt.getProperties() != null && !stmt.getProperties().isEmpty()) {
+                String taskProperties = buildProperties(stmt.getProperties());
+                sql.append(taskProperties);
+            }
+            sql.append(" AS ");
+            sql.append(cacheSelectStatement.toSQLStringWithoutProperties());
+            properties.put("partition", partition);
+            sql.append(" ").append(buildProperties(properties));
+
+            executeSubmitTaskStmt(sql.toString(), context);
+        }
+    }
+
+    public static String computeKthPreviousPartition(LocalDateTime baseTime, int k, String partitionUnit) {
+        LocalDateTime partitionTime;
+        if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
+            partitionTime = baseTime.minusHours(k).truncatedTo(ChronoUnit.HOURS);
+            return PARTITION_PREFIX + DateUtils.HOUR_FORMATTER_UNIX.format(partitionTime);
+        } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
+            partitionTime = baseTime.minusDays(k).truncatedTo(ChronoUnit.DAYS);
+            return PARTITION_PREFIX + DateUtils.DATEKEY_FORMATTER_UNIX.format(partitionTime);
+        } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
+            // truncatedTo(ChronoUnit.MONTHS) is not supported, manually truncate to first day of month
+            LocalDateTime adjustedTime = baseTime.minusMonths(k);
+            partitionTime = adjustedTime.withDayOfMonth(1).truncatedTo(ChronoUnit.DAYS);
+            return PARTITION_PREFIX + DateUtils.MONTH_FORMATTER_UNIX.format(partitionTime);
+        } else { // YEAR
+            // truncatedTo(ChronoUnit.YEARS) is not supported, manually truncate to first day of year
+            LocalDateTime adjustedTime = baseTime.minusYears(k);
+            partitionTime = adjustedTime.withDayOfYear(1).truncatedTo(ChronoUnit.DAYS);
+            return PARTITION_PREFIX + DateUtils.YEAR_FORMATTER_UNIX.format(partitionTime);
         }
     }
 
@@ -130,128 +170,6 @@ public class DataCacheJobMgr {
                 context.getSessionVariable()).get(0);
         StatementPlanner.plan(parsedStmt, context);
         context.getGlobalStateMgr().getTaskManager().handleSubmitTaskStmt(parsedStmt);
-    }
-
-    private String buildScheduleWhere(CreateDataCacheJobStmt stmt) {
-        StringBuilder whereSql = new StringBuilder(" WHERE ");
-        String partitionFiled = stmt.getPartitionFiled();
-        whereSql.append(partitionFiled).append(" >= ");
-
-        Type partitionFiledType = stmt.getPartitionFiledType();
-        String partitionUnit = stmt.getPartitionUnit();
-        String start;
-        String end;
-        if (partitionFiledType.isInt() || partitionFiledType.isBigint()) {
-            if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
-                start = "CAST(date_format(hours_sub(hours_add(to_date(now()), hour(now())), 1), '%Y%m%d%H') AS INT)";
-                end = "CAST(date_format(hours_add(to_date(now()), hour(now())), '%Y%m%d%H') AS INT)";
-            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
-                start = "CAST(date_format(days_sub(to_date(now()), 1), '%Y%m%d') AS INT)";
-                end = "CAST(date_format(to_date(now()), '%Y%m%d') AS INT)";
-            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
-                start = "CAST(date_format(months_sub(days_sub(to_date(now()), dayofmonth(now()) - 1), 1), '%Y%m%d') AS INT)";
-                end = "CAST(date_format(days_sub(to_date(now()), dayofmonth(now()) - 1), '%Y%m%d') AS INT)";
-            } else { // YEAR
-                start = "CAST(date_format(years_sub(days_sub(to_date(now()), dayofyear(now()) - 1), 1), '%Y%m%d') AS INT)";
-                end = "CAST(date_format(days_sub(to_date(now()), dayofyear(now()) - 1), '%Y%m%d') AS INT)";
-            }
-        } else if (partitionFiledType.isDateType()) { // date or datetime
-            if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
-                start = "hours_sub(hours_add(to_date(now()), hour(now())), 1)";
-                end = "hours_add(to_date(now()), hour(now()))";
-            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
-                start = "days_sub(to_date(now()), 1)";
-                end = "to_date(now())";
-            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
-                start = "months_sub(days_sub(to_date(now()), dayofmonth(now()) - 1), 1)";
-                end = "days_sub(to_date(now()), dayofmonth(now()) - 1)";
-            } else { // YEAR
-                start = "years_sub(days_sub(to_date(now()), dayofyear(now()) - 1), 1)";
-                end = "days_sub(to_date(now()), dayofyear(now()) - 1)";
-            }
-        } else { // String type
-            String partitionFiledFormat = stmt.getPartitionFiledFormat();
-            if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
-                start = "date_format(hours_sub(hours_add(to_date(now()), hour(now())), 1),'" + partitionFiledFormat + "')";
-                end = "date_format(hours_add(to_date(now()), hour(now())),'" + partitionFiledFormat + "')";
-            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
-                start = "date_format(days_sub(to_date(now()), 1),'" + partitionFiledFormat + "')";
-                end = "date_format(to_date(now()),'" + partitionFiledFormat + "')";
-            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
-                start = "date_format(months_sub(days_sub(to_date(now()), dayofmonth(now()) - 1), 1),'"
-                        + partitionFiledFormat + "')";
-                end = "date_format(days_sub(to_date(now()), dayofmonth(now()) - 1),'"  + partitionFiledFormat + "')";
-            } else { // YEAR
-                start = "date_format(years_sub(days_sub(to_date(now()), dayofyear(now()) - 1), 1),'"
-                        + partitionFiledFormat + "')";
-                end = "date_format(days_sub(to_date(now()), dayofyear(now()) - 1),'" + partitionFiledFormat + "')";
-            }
-        }
-        whereSql.append(start).append(" AND ").append(partitionFiled).append(" < ").append(end);
-        return whereSql.toString();
-    }
-
-    private String buildWhere(CreateDataCacheJobStmt stmt, int beforeUnit) {
-        StringBuilder whereSql = new StringBuilder(" WHERE ");
-        String partitionFiled = stmt.getPartitionFiled();
-        whereSql.append(partitionFiled).append(" >= ");
-
-        Type partitionFiledType = stmt.getPartitionFiledType();
-        String partitionUnit = stmt.getPartitionUnit();
-        LocalDateTime now = LocalDateTime.now();
-        String start;
-        String end;
-        if (partitionFiledType.isInt() || partitionFiledType.isBigint()) {
-            if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
-                start = DateUtils.HOUR_FORMATTER_UNIX.format(now.minusHours(beforeUnit + 1).truncatedTo(ChronoUnit.HOURS));
-                end = DateUtils.HOUR_FORMATTER_UNIX.format(now.minusHours(beforeUnit).truncatedTo(ChronoUnit.HOURS));
-            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
-                start = DateUtils.DATEKEY_FORMATTER_UNIX.format(now.minusDays(beforeUnit + 1).truncatedTo(ChronoUnit.DAYS));
-                end = DateUtils.DATEKEY_FORMATTER_UNIX.format(now.minusDays(beforeUnit).truncatedTo(ChronoUnit.DAYS));
-            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
-                start = DateUtils.MONTH_FORMATTER_UNIX.format(now.minusMonths(beforeUnit + 1).truncatedTo(ChronoUnit.MONTHS));
-                end = DateUtils.MONTH_FORMATTER_UNIX.format(now.minusMonths(beforeUnit).truncatedTo(ChronoUnit.MONTHS));
-            } else { // YEAR
-                start = DateUtils.YEAR_FORMATTER_UNIX.format(now.minusYears(beforeUnit + 1).truncatedTo(ChronoUnit.YEARS));
-                end = DateUtils.YEAR_FORMATTER_UNIX.format(now.minusYears(beforeUnit).truncatedTo(ChronoUnit.YEARS));
-            }
-            whereSql.append(start).append(" AND ").append(partitionFiled).append(" < ").append(end);
-        } else if (partitionFiledType.isDate()) {
-            if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
-                start = DateUtils.DATE_FORMATTER_UNIX.format(now.minusDays(beforeUnit + 1).truncatedTo(ChronoUnit.DAYS));
-                end = DateUtils.DATE_FORMATTER_UNIX.format(now.minusDays(beforeUnit).truncatedTo(ChronoUnit.DAYS));
-            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
-                start = DateUtils.DATE_FORMATTER_UNIX.format(now.minusMonths(beforeUnit + 1).truncatedTo(ChronoUnit.MONTHS));
-                end = DateUtils.DATE_FORMATTER_UNIX.format(now.minusMonths(beforeUnit).truncatedTo(ChronoUnit.MONTHS));
-            } else { // YEAR
-                start = DateUtils.DATE_FORMATTER_UNIX.format(now.minusYears(beforeUnit + 1).truncatedTo(ChronoUnit.YEARS));
-                end = DateUtils.DATE_FORMATTER_UNIX.format(now.minusYears(beforeUnit).truncatedTo(ChronoUnit.YEARS));
-            }
-            whereSql.append("\"").append(start).append("\"").append(" AND ").append(partitionFiled).append(" < ")
-                    .append("\"").append(end).append("\"");
-        } else { // datetime | string
-            DateTimeFormatter dateTimeFormatter = DateUtils.DATE_TIME_FORMATTER_UNIX;
-            if (partitionFiledType.isStringType()) {
-                String partitionFiledFormat = stmt.getPartitionFiledFormat();
-                dateTimeFormatter = DateUtils.unixDatetimeFormatter(partitionFiledFormat);
-            }
-            if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.HOUR.toString())) {
-                start = dateTimeFormatter.format(now.minusHours(beforeUnit + 1).truncatedTo(ChronoUnit.HOURS));
-                end = dateTimeFormatter.format(now.minusHours(beforeUnit).truncatedTo(ChronoUnit.HOURS));
-            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.DAY.toString())) {
-                start = dateTimeFormatter.format(now.minusDays(beforeUnit + 1).truncatedTo(ChronoUnit.DAYS));
-                end = dateTimeFormatter.format(now.minusDays(beforeUnit).truncatedTo(ChronoUnit.DAYS));
-            } else if (partitionUnit.equalsIgnoreCase(TimestampArithmeticExpr.TimeUnit.MONTH.toString())) {
-                start = dateTimeFormatter.format(now.minusMonths(beforeUnit + 1).truncatedTo(ChronoUnit.MONTHS));
-                end = dateTimeFormatter.format(now.minusMonths(beforeUnit).truncatedTo(ChronoUnit.MONTHS));
-            } else { // YEAR
-                start = dateTimeFormatter.format(now.minusYears(beforeUnit + 1).truncatedTo(ChronoUnit.YEARS));
-                end = dateTimeFormatter.format(now.minusYears(beforeUnit).truncatedTo(ChronoUnit.YEARS));
-            }
-            whereSql.append("\"").append(start).append("\"").append(" AND ").append(partitionFiled).append(" < ")
-                    .append("\"").append(end).append("\"");
-        }
-        return whereSql.toString();
     }
 
     private String buildProperties(Map<String, String> properties) {

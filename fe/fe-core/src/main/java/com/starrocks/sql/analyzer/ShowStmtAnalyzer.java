@@ -137,8 +137,13 @@ public class ShowStmtAnalyzer {
             }
             node.setCatalogName(catalogName);
 
+            // For SHOW DATA CACHE TABLES, db can be null to show all cached tables across all databases
             String db = node.getDb();
-            db = getDatabaseName(db, context);
+            if (Strings.isNullOrEmpty(db)) {
+                db = context.getDatabase();
+                // If db is still null/empty, it means user hasn't used any db, which is allowed
+                // In this case, we'll show all cached tables across all databases
+            }
             node.setDb(db);
             return null;
         }

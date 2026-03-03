@@ -25,6 +25,7 @@ import com.starrocks.catalog.Type;
 import com.starrocks.common.util.DebugUtil;
 import com.starrocks.connector.CatalogConnector;
 import com.starrocks.connector.RemoteScanRangeLocations;
+import com.starrocks.connector.RemoteFileInfo;
 import com.starrocks.credential.CloudConfiguration;
 import com.starrocks.datacache.DataCacheOptions;
 import com.starrocks.qe.ConnectContext;
@@ -78,6 +79,11 @@ public class HdfsScanNode extends ScanNode {
 
     public RemoteScanRangeLocations getScanRangeLocations() {
         return scanRangeLocations;
+    }
+
+    @Override
+    public List<RemoteFileInfo> getRemoteFiles() {
+        return scanRangeLocations.getRemoteFiles();
     }
 
     public HiveTable getHiveTable() {
