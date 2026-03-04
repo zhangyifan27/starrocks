@@ -523,6 +523,13 @@ Status HdfsOrcScanner::do_open(RuntimeState* runtime_state) {
                     _app_stats.footer_cache_write_count += 1;
                 } else {
                     _app_stats.footer_cache_write_fail_count += 1;
+                    // Manually free memory to prevent leak when write_object fails.
+                    // This is safe and will NOT cause double-free because:
+                    // 1. If write_object fails, ObjectItem is NOT created in starcache
+                    // 2. The deleter lambda is only called when ObjectItem is destroyed
+                    // 3. Since ObjectItem doesn't exist, deleter will never be called
+                    // 4. Therefore, we must manually delete here to prevent memory leak
+                    delete capture;
                 }
             });
             auto deleter = [capture]() { delete capture; };
