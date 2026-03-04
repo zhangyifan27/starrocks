@@ -39,16 +39,10 @@ done
 export BROKER_HOME=`cd "$curdir/.."; pwd`
 export PID_DIR=`cd "$curdir"; pwd`
 
+# NOTE: Default JAVA_OPTS is set here only as a fallback.
+# To customize, please modify JAVA_OPTS in conf/apache_hdfs_broker.conf instead of here.
 export JAVA_OPTS="-Dlog4j2.formatMsgNoLookups=true -Xmx1024m -Dfile.encoding=UTF-8"
 export BROKER_LOG_DIR="$BROKER_HOME/log"
-# export JAVA_HOME="/usr/java/jdk1.8.0_131"
-# java
-if [ "$JAVA_HOME" = "" ]; then
-  echo "Error: JAVA_HOME is not set."
-  exit 1
-fi
-
-JAVA=$JAVA_HOME/bin/java
 
 # add libs to CLASSPATH
 for f in $BROKER_HOME/lib/*.jar; do
@@ -63,6 +57,13 @@ while read line; do
         eval 'export "$envline"'
     fi
 done < $BROKER_HOME/conf/apache_hdfs_broker.conf
+
+if [ "$JAVA_HOME" = "" ]; then
+  echo "Error: JAVA_HOME is not set."
+  exit 1
+fi
+
+JAVA=$JAVA_HOME/bin/java
 
 pidfile=$PID_DIR/apache_hdfs_broker.pid
 
