@@ -30,6 +30,41 @@
 
 namespace starrocks {
 
+// Helper function to execute HTTP request with intelligent retry logic
+// Retries on: rate limiting (429), server errors (5xx), network errors (0)
+// Does not retry on: client errors (4xx except 429)
+static Status execute_http_with_retry(const std::function<Status(HttpClient*)>& http_func, int retry_times,
+                                      int sleep_seconds) {
+    Status last_status;
+
+    for (int attempt = 0; attempt < retry_times; ++attempt) {
+        HttpClient client;
+        last_status = http_func(&client);
+
+        if (last_status.ok()) {
+            return last_status;
+        }
+
+        // Check if the error is retryable
+        long http_status = client.get_http_status();
+
+        // Retry on: rate limiting (429), server errors (5xx), or network errors (0)
+        // Don't retry on: client errors (4xx except 429)
+        bool should_retry =
+                (http_status == 429 || (http_status >= 500 && http_status < 600) || http_status == 0);
+
+        // If not retryable or last attempt, return the error
+        if (!should_retry || attempt >= retry_times - 1) {
+            return last_status;
+        }
+
+        // Sleep before next retry
+        sleep(sleep_seconds);
+    }
+
+    return last_status;
+}
+
 LLMQueryService* LLMQueryService::instance() {
     static LLMQueryService service;
     return &service;
@@ -170,16 +205,20 @@ StatusOr<std::string> LLMQueryService::execute_query(const std::string& prompt, 
     request_doc.Accept(writer);
     std::string request_body = buffer.GetString();
 
-    HttpClient client;
-    RETURN_IF_ERROR(client.init(config.endpoint));
-    client.set_method(POST);
-    client.set_content_type("application/json");
-    client.set_bearer_token(config.api_key);
-    client.set_timeout_ms(config.timeout_ms);
-
     std::string response;
 
-    RETURN_IF_ERROR(client.execute_post_request(request_body, &response));
+    // Execute HTTP request with intelligent retry
+    auto http_request = [&](HttpClient* client) -> Status {
+        RETURN_IF_ERROR(client->init(config.endpoint));
+        client->set_method(POST);
+        client->set_content_type("application/json");
+        client->set_bearer_token(config.api_key);
+        client->set_timeout_ms(config.timeout_ms);
+        RETURN_IF_ERROR(client->execute_post_request(request_body, &response));
+        return Status::OK();
+    };
+
+    RETURN_IF_ERROR(execute_http_with_retry(http_request, config::llm_retry_times, config::llm_retry_sleep_seconds));
 
     rapidjson::Document doc;
     rapidjson::ParseResult ok = doc.Parse(response.c_str());
