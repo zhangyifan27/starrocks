@@ -113,6 +113,7 @@ public class IcebergScanNode extends ScanNode {
     private long scanPartitionNum = 0;
     private long scanFileSize = 0;
     private long scanFileNum = 0;
+    private String scanFileFormat = "";
 
     public IcebergScanNode(PlanNodeId id, TupleDescriptor desc, String planNodeName, TupleDescriptor equalityDeleteTupleDesc) {
         super(id, desc, planNodeName);
@@ -269,6 +270,7 @@ public class IcebergScanNode extends ScanNode {
         Map<Long, List<Integer>> idToPartitionSlots = Maps.newHashMap();
         Map<String, Long> scanFileSizes = Maps.newHashMap();
         List<Integer> currentEqualityIds = new ArrayList<>();
+        Set<String> fileFormats = new HashSet<>();
         for (RemoteFileInfo fileInfo : splits) {
             for (RemoteFileDesc fileDesc : fileInfo.getFiles()) {
                 if (!(fileDesc instanceof IcebergRemoteFileDesc)) {
@@ -328,6 +330,7 @@ public class IcebergScanNode extends ScanNode {
                     hdfsScanRange.setOffset(task.start());
                     hdfsScanRange.setLength(task.length());
                     scanFileSizes.put(file.path().toString(), scanFileSizes.getOrDefault(file.path().toString(), 0L) + task.length());
+                    fileFormats.add(file.format().name());
                     // For iceberg table we do not need partition id
                     if (!idToPartitionSlots.containsKey(partitionId)) {
                         hdfsScanRange.setPartition_id(-1);
@@ -408,6 +411,7 @@ public class IcebergScanNode extends ScanNode {
         scanPartitionNum = partitionKeyToId.size();
         scanFileSize = scanFileSizes.values().stream().reduce(0L, Long::sum);
         scanFileNum = scanFileSizes.size();
+        scanFileFormat = String.join(",", fileFormats);
     }
 
     private boolean partitionKeyContains(Set<PartitionKey> selectedPartitionKeys, PartitionKey partitionKey,
@@ -514,6 +518,12 @@ public class IcebergScanNode extends ScanNode {
         output.append(prefix).append(String.format("fileSize=%s",
                 DebugUtil.getPrettyStringBytes(scanFileSize)));
         output.append("\n");
+
+        if (!scanFileFormat.isEmpty()) {
+            output.append(prefix).append(String.format("fileFormat=%s",
+                    scanFileFormat));
+            output.append("\n");
+        }
 
         if (detailLevel == TExplainLevel.VERBOSE) {
             HdfsScanNode.appendDataCacheOptionsInExplain(output, prefix, dataCacheOptions);

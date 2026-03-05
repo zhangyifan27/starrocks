@@ -169,6 +169,12 @@ public class HdfsScanNode extends ScanNode {
                 DebugUtil.getPrettyStringBytes(scanRangeLocations.getFileSizeBytes())));
         output.append("\n");
 
+        if (!scanRangeLocations.getFileFormat().isEmpty()) {
+            output.append(prefix).append(String.format("fileFormat=%s", scanRangeLocations.getFileFormat()));
+            output.append("\n");
+        }
+
+
         if (detailLevel == TExplainLevel.VERBOSE) {
             HdfsScanNode.appendDataCacheOptionsInExplain(output, prefix, dataCacheOptions);
 

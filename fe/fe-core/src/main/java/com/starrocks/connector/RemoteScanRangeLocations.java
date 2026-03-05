@@ -60,9 +60,11 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 public class RemoteScanRangeLocations {
     private static final Logger LOG = LogManager.getLogger(RemoteScanRangeLocations.class);
@@ -82,6 +84,7 @@ public class RemoteScanRangeLocations {
     private boolean isThiveTable = false;
     private int scanRangeLimit = 0;
     private int scanRangeCount = 0;
+    private String fileFormat = "";
 
     public void setup(DescriptorTable descTbl, Table table, HDFSScanNodePredicates scanNodePredicates) {
         Collection<Long> selectedPartitionIds = scanNodePredicates.getSelectedPartitionIds();
@@ -151,14 +154,18 @@ public class RemoteScanRangeLocations {
 
         int scannableFileCount = 0;
 
+
+        Set<String> fileFormats = new HashSet<>();
         for (int i = 0; i < partitions.size(); i++) {
-            for (RemoteFileDesc fileDesc : partitions.get(i).getFiles()) {
+            RemoteFileInfo remoteFileInfo = partitions.get(i);
+            boolean isScanable = false;
+            for (RemoteFileDesc fileDesc : remoteFileInfo.getFiles()) {
                 fileNum++;
                 long fileLength = fileDesc.getLength();
                 if (fileLength > 0) {
                     fileSizeBytes += fileLength;
                     scannableFileCount++;
-
+                    isScanable = true;
                     if (isThiveTable && datafileLimit > 0 && scannableFileCount > datafileLimit) {
                         String msg = "Exceeded the limit of " + datafileLimit + " max scan thive external data files";
                         LOG.warn("{} queryId: {}", msg, DebugUtil.printId(connectContext.getQueryId()));
@@ -166,7 +173,11 @@ public class RemoteScanRangeLocations {
                     }
                 }
             }
+            if (isScanable && remoteFileInfo.getFormat() != null) {
+                fileFormats.add(remoteFileInfo.getFormat().name());
+            }
         }
+        fileFormat = String.join(",", fileFormats);
     }
 
     void tryPrunePartitionForSimpleQuery(DescriptorTable descTbl, String catalogName, Table table,
@@ -804,6 +815,10 @@ public class RemoteScanRangeLocations {
 
     public long getFileSizeBytes() {
         return fileSizeBytes;
+    }
+
+    public String getFileFormat() {
+        return fileFormat;
     }
 
     public int getPartitionNum() {
