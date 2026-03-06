@@ -145,6 +145,13 @@ public class CachingIcebergCatalog implements IcebergCatalog {
             tableLatestAccessTime.put(icebergTableName, System.currentTimeMillis());
         }
 
+        // Check session variable to control cache usage
+        if (ConnectContext.isMetastoreCacheDisabled()) {
+            Table freshTable = delegate.getTable(dbName, tableName);
+            tables.put(icebergTableName, freshTable);  // Update cache with fresh data
+            return freshTable;
+        }
+
         if (tables.getIfPresent(icebergTableName) != null) {
             return tables.getIfPresent(icebergTableName);
         }
@@ -198,6 +205,28 @@ public class CachingIcebergCatalog implements IcebergCatalog {
     @Override
     public List<String> listPartitionNames(String dbName, String tableName, long snapshotId, ExecutorService executorService) {
         IcebergTableName icebergTableName = new IcebergTableName(dbName, tableName, snapshotId);
+
+        // Check session variable to control cache usage
+        if (ConnectContext.isMetastoreCacheDisabled()) {
+            org.apache.iceberg.Table icebergTable = delegate.getTable(dbName, tableName);
+            List<String> freshPartitionNames = Lists.newArrayList();
+            if (icebergTable.specs().values().stream().allMatch(PartitionSpec::isUnpartitioned)) {
+                return freshPartitionNames;
+            }
+            long resolvedSnapshotId = snapshotId;
+            if (resolvedSnapshotId == -1) {
+                if (icebergTable.currentSnapshot() == null) {
+                    return freshPartitionNames;
+                } else {
+                    resolvedSnapshotId = icebergTable.currentSnapshot().snapshotId();
+                }
+            }
+            freshPartitionNames = listPartitionNamesWithSnapshotId(icebergTable, dbName, tableName,
+                    resolvedSnapshotId, executorService);
+            partitionNames.put(icebergTableName, freshPartitionNames);
+            return freshPartitionNames;
+        }
+
         if (partitionNames.asMap().containsKey(icebergTableName)) {
             return partitionNames.getIfPresent(icebergTableName);
         } else {
@@ -228,7 +257,13 @@ public class CachingIcebergCatalog implements IcebergCatalog {
         StarRocksIcebergTableScanContext scanContext = new StarRocksIcebergTableScanContext(
                 catalogName, dbName, tableName, PlanMode.LOCAL);
         scanContext.setOnlyReadCache(true);
-        TableScan tableScan = getTableScan(table, scanContext)
+        // Directly use cache to build tableScan, avoiding session variable influence (background refresh thread has no ConnectContext)
+        scanContext.setDataFileCache(dataFileCache);
+        scanContext.setDeleteFileCache(deleteFileCache);
+        scanContext.setDataFileCacheWithMetrics(icebergProperties.isIcebergManifestCacheWithColumnStatistics());
+        scanContext.setEnableCacheDataFileIdentifierColumnMetrics(
+                icebergProperties.enableCacheDataFileIdentifierColumnStatistics());
+        TableScan tableScan = delegate.getTableScan(table, scanContext)
                 .planWith(executorService)
                 .useSnapshot(snapshotId);
 
@@ -328,7 +363,13 @@ public class CachingIcebergCatalog implements IcebergCatalog {
 
         StarRocksIcebergTableScanContext scanContext = new StarRocksIcebergTableScanContext(
                 catalogName, dbName, tableName, PlanMode.LOCAL);
-        StarRocksIcebergTableScan tableScan = (StarRocksIcebergTableScan) getTableScan(updatedTable, scanContext)
+        // Directly use cache during background refresh, avoiding session variable influence
+        scanContext.setDataFileCache(dataFileCache);
+        scanContext.setDeleteFileCache(deleteFileCache);
+        scanContext.setDataFileCacheWithMetrics(icebergProperties.isIcebergManifestCacheWithColumnStatistics());
+        scanContext.setEnableCacheDataFileIdentifierColumnMetrics(
+                icebergProperties.enableCacheDataFileIdentifierColumnStatistics());
+        StarRocksIcebergTableScan tableScan = (StarRocksIcebergTableScan) delegate.getTableScan(updatedTable, scanContext)
                 .planWith(executorService)
                 .useSnapshot(updatedSnapshotId);
         tableScan.refreshDataFileCache(manifestFiles);
@@ -366,11 +407,19 @@ public class CachingIcebergCatalog implements IcebergCatalog {
 
     @Override
     public StarRocksIcebergTableScan getTableScan(Table table, StarRocksIcebergTableScanContext scanContext) {
-        scanContext.setDataFileCache(dataFileCache);
-        scanContext.setDeleteFileCache(deleteFileCache);
-        scanContext.setDataFileCacheWithMetrics(icebergProperties.isIcebergManifestCacheWithColumnStatistics());
-        scanContext.setEnableCacheDataFileIdentifierColumnMetrics(
-                icebergProperties.enableCacheDataFileIdentifierColumnStatistics());
+        // Check session variable to control cache usage
+        if (!ConnectContext.isMetastoreCacheDisabled()) {
+            scanContext.setDataFileCache(dataFileCache);
+            scanContext.setDeleteFileCache(deleteFileCache);
+            scanContext.setDataFileCacheWithMetrics(icebergProperties.isIcebergManifestCacheWithColumnStatistics());
+            scanContext.setEnableCacheDataFileIdentifierColumnMetrics(
+                    icebergProperties.enableCacheDataFileIdentifierColumnStatistics());
+        } else {
+            scanContext.setDataFileCache(null);
+            scanContext.setDeleteFileCache(null);
+            scanContext.setDataFileCacheWithMetrics(false);
+            scanContext.setEnableCacheDataFileIdentifierColumnMetrics(false);
+        }
 
         return delegate.getTableScan(table, scanContext);
     }

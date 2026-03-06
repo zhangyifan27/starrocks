@@ -38,6 +38,7 @@ import com.starrocks.connector.TableVersionRange;
 import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.PartitionUpdate.UpdateMode;
 import com.starrocks.credential.CloudConfiguration;
+import com.starrocks.qe.ConnectContext;
 import com.starrocks.qe.SessionVariable;
 import com.starrocks.server.GlobalStateMgr;
 import com.starrocks.sql.ast.CreateTableLikeStmt;
@@ -263,6 +264,11 @@ public class HiveMetadata implements ConnectorMetadata {
         boolean useRemoteFileCache = true;
         if (table instanceof HiveTable) {
             useRemoteFileCache = ((HiveTable) table).isUseMetadataCache();
+        }
+
+        // Check session variable to control cache usage
+        if (ConnectContext.isMetastoreCacheDisabled()) {
+            useRemoteFileCache = false;
         }
 
         return fileOps.getRemoteFiles(partitions.build(), useRemoteFileCache);

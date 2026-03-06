@@ -33,6 +33,8 @@ import org.apache.hadoop.hive.metastore.api.CurrentNotificationEventId;
 import org.apache.hadoop.hive.metastore.api.FieldSchema;
 import org.apache.hadoop.hive.metastore.api.LongColumnStatsData;
 import org.apache.hadoop.hive.metastore.api.Partition;
+import org.apache.hadoop.hive.metastore.api.PartitionValuesResponse;
+import org.apache.hadoop.hive.metastore.api.PartitionValuesRow;
 import org.apache.hadoop.hive.metastore.api.SerDeInfo;
 import org.apache.hadoop.hive.metastore.api.StorageDescriptor;
 import org.apache.hadoop.hive.metastore.api.Table;
@@ -533,6 +535,20 @@ public class HiveMetastoreTest {
             stats.setStatsData(data);
             stats.setColName("col1");
             return Lists.newArrayList(stats);
+        }
+
+        public PartitionValuesResponse getPartitionValues(String dbName, String tblName, String partitionColumn) {
+            PartitionValuesResponse response = new PartitionValuesResponse();
+            List<PartitionValuesRow> rows = Lists.newArrayList();
+            // Return mock partition values: partitionName -> partitionValue
+            PartitionValuesRow row1 = new PartitionValuesRow();
+            row1.setRow(Lists.newArrayList("p1", "10"));
+            rows.add(row1);
+            PartitionValuesRow row2 = new PartitionValuesRow();
+            row2.setRow(Lists.newArrayList("p2", "20"));
+            rows.add(row2);
+            response.setPartitionValues(rows);
+            return response;
         }
 
         public Map<String, List<ColumnStatisticsObj>> getPartitionColumnStats(String dbName,

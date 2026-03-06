@@ -456,6 +456,8 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public static final String ENABLE_HIVE_METADATA_CACHE_WITH_INSERT = "enable_hive_metadata_cache_with_insert";
 
+    public static final String USE_METASTORE_CACHE = "use_metastore_cache";
+
     public static final String DEFAULT_TABLE_COMPRESSION = "default_table_compression";
 
     public static final String ENABLE_SAME_ALIAS_IN_SUBQUERY = "enable_same_alias_in_subquery";
@@ -1614,6 +1616,9 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     @VariableMgr.VarAttr(name = ENABLE_HIVE_METADATA_CACHE_WITH_INSERT)
     private boolean enableHiveMetadataCacheWithInsert = false;
+
+    @VariableMgr.VarAttr(name = USE_METASTORE_CACHE)
+    private boolean useMetastoreCache = true;
 
     @VariableMgr.VarAttr(name = HIVE_PARTITION_STATS_SAMPLE_SIZE)
     private int hivePartitionStatsSampleSize = 1000;
@@ -2871,6 +2876,14 @@ public class SessionVariable implements Serializable, Writable, Cloneable {
 
     public void setEnableHiveMetadataCacheWithInsert(boolean enableHiveMetadataCacheWithInsert) {
         this.enableHiveMetadataCacheWithInsert = enableHiveMetadataCacheWithInsert;
+    }
+
+    public boolean isUseMetastoreCache() {
+        return useMetastoreCache;
+    }
+
+    public void setUseMetastoreCache(boolean useMetastoreCache) {
+        this.useMetastoreCache = useMetastoreCache;
     }
 
     public boolean isEnableSameAliasInSubquery() {

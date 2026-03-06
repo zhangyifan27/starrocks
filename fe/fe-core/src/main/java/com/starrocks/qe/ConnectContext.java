@@ -278,6 +278,16 @@ public class ConnectContext {
         return threadLocalInfo.get();
     }
 
+    /**
+     * Returns true if the current session has explicitly disabled metastore cache,
+     * meaning fresh data should be fetched and the cache should be bypassed.
+     */
+    public static boolean isMetastoreCacheDisabled() {
+        ConnectContext context = get();
+        return context != null && context.getSessionVariable() != null
+                && !context.getSessionVariable().isUseMetastoreCache();
+    }
+
     public ObjectId getNextObjectId() {
         return objectIdGenerator.getNextId();
     }

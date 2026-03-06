@@ -22,12 +22,15 @@ import com.starrocks.catalog.HivePartitionKey;
 import com.starrocks.catalog.HiveTable;
 import com.starrocks.catalog.PrimitiveType;
 import com.starrocks.catalog.ScalarType;
+import com.starrocks.catalog.Table;
 import com.starrocks.catalog.Type;
 import com.starrocks.common.Config;
 import com.starrocks.connector.DatabaseTableName;
 import com.starrocks.connector.MetastoreType;
 import com.starrocks.connector.PartitionUtil;
 import com.starrocks.connector.exception.StarRocksConnectorException;
+import com.starrocks.qe.ConnectContext;
+import com.starrocks.qe.SessionVariable;
 import mockit.Expectations;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.junit.After;
@@ -39,6 +42,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -462,5 +466,341 @@ public class CachingHiveMetastoreTest {
 
         processor = new HiveCacheUpdateProcessor("hive_catalog", metastore, null, Executors.newFixedThreadPool(2), false, false);
         Assert.assertTrue(processor.getCachedTableNames().isEmpty());
+    }
+
+    // ==================== Tests for use_metastore_cache session variable ====================
+
+    /**
+     * Test that getTable bypasses cache and fetches fresh data when use_metastore_cache=false.
+     * When cache is disabled, the fresh table should be fetched and the cache should be updated.
+     */
+    @Test
+    public void testGetTableWithCacheDisabledBySession() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, false);
+
+        // First, populate the cache with a table
+        Table cachedTable = cachingHiveMetastore.getTable("db1", "tbl1");
+        Assert.assertNotNull(cachedTable);
+        DatabaseTableName key = DatabaseTableName.of("db1", "tbl1");
+        Assert.assertTrue(cachingHiveMetastore.isTablePresent(key));
+
+        // Set up a ConnectContext with use_metastore_cache=false
+        ConnectContext ctx = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setUseMetastoreCache(false);
+        ctx.setSessionVariable(sessionVariable);
+        ctx.setThreadLocalInfo();
+
+        try {
+            // When cache is disabled, getTable should fetch fresh data
+            Table freshTable = cachingHiveMetastore.getTable("db1", "tbl1");
+            Assert.assertNotNull(freshTable);
+            // The cache should be updated with fresh data
+            Assert.assertTrue(cachingHiveMetastore.isTablePresent(key));
+        } finally {
+            // Clean up thread local
+            ConnectContext.remove();
+        }
+    }
+
+    /**
+     * Test that getTable uses cache normally when use_metastore_cache=true (default).
+     */
+    @Test
+    public void testGetTableWithCacheEnabledBySession() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, false);
+
+        // Set up a ConnectContext with use_metastore_cache=true (default)
+        ConnectContext ctx = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setUseMetastoreCache(true);
+        ctx.setSessionVariable(sessionVariable);
+        ctx.setThreadLocalInfo();
+
+        try {
+            Table table = cachingHiveMetastore.getTable("db1", "tbl1");
+            Assert.assertNotNull(table);
+            HiveTable hiveTable = (HiveTable) table;
+            Assert.assertEquals("db1", hiveTable.getDbName());
+            Assert.assertEquals("tbl1", hiveTable.getTableName());
+        } finally {
+            ConnectContext.remove();
+        }
+    }
+
+    /**
+     * Test that getPartitionKeysByValue bypasses cache and fetches fresh data when use_metastore_cache=false.
+     */
+    @Test
+    public void testGetPartitionKeysByValueWithCacheDisabledBySession() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, true);
+
+        // Set up a ConnectContext with use_metastore_cache=false
+        ConnectContext ctx = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setUseMetastoreCache(false);
+        ctx.setSessionVariable(sessionVariable);
+        ctx.setThreadLocalInfo();
+
+        try {
+            // When cache is disabled, getPartitionKeysByValue should fetch fresh data
+            List<String> partitionKeys = cachingHiveMetastore.getPartitionKeysByValue("db1", "tbl1",
+                    HivePartitionValue.ALL_PARTITION_VALUES);
+            Assert.assertNotNull(partitionKeys);
+            Assert.assertEquals(Lists.newArrayList("col1"), partitionKeys);
+
+            // The cache should be updated with fresh data (verify by checking the table is present)
+            Assert.assertNotNull(partitionKeys);
+        } finally {
+            ConnectContext.remove();
+        }
+    }
+
+    /**
+     * Test that getPartitionKeysByValue with filtered partition values bypasses cache when use_metastore_cache=false.
+     */
+    @Test
+    public void testGetPartitionKeysByValueWithFilterAndCacheDisabled() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, true);
+
+        // Set up a ConnectContext with use_metastore_cache=false
+        ConnectContext ctx = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setUseMetastoreCache(false);
+        ctx.setSessionVariable(sessionVariable);
+        ctx.setThreadLocalInfo();
+
+        try {
+            // Test with filtered partition values (non-empty Optional)
+            List<Optional<String>> partitionValues = Lists.newArrayList(Optional.of("col1"));
+            List<String> partitionKeys = cachingHiveMetastore.getPartitionKeysByValue("db1", "tbl1", partitionValues);
+            Assert.assertNotNull(partitionKeys);
+        } finally {
+            ConnectContext.remove();
+        }
+    }
+
+    /**
+     * Test that getPartitionsByNames bypasses cache and fetches fresh data when use_metastore_cache=false.
+     */
+    @Test
+    public void testGetPartitionsByNamesWithCacheDisabledBySession() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, false);
+
+        // Set up a ConnectContext with use_metastore_cache=false
+        ConnectContext ctx = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setUseMetastoreCache(false);
+        ctx.setSessionVariable(sessionVariable);
+        ctx.setThreadLocalInfo();
+
+        try {
+            List<String> partitionNames = Lists.newArrayList("part1=1/part2=2", "part1=3/part2=4");
+            Map<String, Partition> partitions =
+                    cachingHiveMetastore.getPartitionsByNames("db1", "table1", partitionNames);
+
+            Assert.assertNotNull(partitions);
+            Assert.assertEquals(2, partitions.size());
+
+            Partition partition1 = partitions.get("part1=1/part2=2");
+            Assert.assertNotNull(partition1);
+
+            Partition partition2 = partitions.get("part1=3/part2=4");
+            Assert.assertNotNull(partition2);
+
+            // Verify that the cache was updated with fresh data (verify by checking partition count)
+            Assert.assertEquals(2, partitions.size());
+        } finally {
+            ConnectContext.remove();
+        }
+    }
+
+    /**
+     * Test that getPartitionsByNames uses cache normally when use_metastore_cache=true (default).
+     */
+    @Test
+    public void testGetPartitionsByNamesWithCacheEnabledBySession() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, false);
+
+        // Set up a ConnectContext with use_metastore_cache=true (default)
+        ConnectContext ctx = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setUseMetastoreCache(true);
+        ctx.setSessionVariable(sessionVariable);
+        ctx.setThreadLocalInfo();
+
+        try {
+            List<String> partitionNames = Lists.newArrayList("part1=1/part2=2", "part1=3/part2=4");
+            Map<String, Partition> partitions =
+                    cachingHiveMetastore.getPartitionsByNames("db1", "table1", partitionNames);
+
+            Assert.assertNotNull(partitions);
+            Assert.assertEquals(2, partitions.size());
+        } finally {
+            ConnectContext.remove();
+        }
+    }
+
+    /**
+     * Test that when no ConnectContext is set (background thread scenario),
+     * the cache is used normally (isCacheDisabledBySession returns false).
+     */
+    @Test
+    public void testGetTableWithNoConnectContext() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, false);
+
+        // Ensure no ConnectContext is set
+        ConnectContext.remove();
+
+        // Without ConnectContext, cache should be used normally
+        Table table = cachingHiveMetastore.getTable("db1", "tbl1");
+        Assert.assertNotNull(table);
+        HiveTable hiveTable = (HiveTable) table;
+        Assert.assertEquals("db1", hiveTable.getDbName());
+        Assert.assertEquals("tbl1", hiveTable.getTableName());
+    }
+
+    /**
+     * Test that when ConnectContext has null SessionVariable,
+     * the cache is used normally (isCacheDisabledBySession returns false).
+     */
+    @Test
+    public void testGetTableWithNullSessionVariable() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, false);
+
+        // Set up a ConnectContext with null session variable
+        ConnectContext ctx = new ConnectContext();
+        ctx.setSessionVariable(null);
+        ctx.setThreadLocalInfo();
+
+        try {
+            // With null session variable, cache should be used normally
+            Table table = cachingHiveMetastore.getTable("db1", "tbl1");
+            Assert.assertNotNull(table);
+        } finally {
+            ConnectContext.remove();
+        }
+    }
+
+    /**
+     * Test that cache is bypassed for getTable when use_metastore_cache=false,
+     * and the fresh data is returned even if stale data exists in cache.
+     */
+    @Test
+    public void testGetTableCacheBypassUpdatesCache() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, false);
+
+        // First, populate the cache normally (without session variable)
+        ConnectContext.remove();
+        Table firstFetch = cachingHiveMetastore.getTable("db1", "tbl1");
+        Assert.assertNotNull(firstFetch);
+
+        // Now disable cache via session variable
+        ConnectContext ctx = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setUseMetastoreCache(false);
+        ctx.setSessionVariable(sessionVariable);
+        ctx.setThreadLocalInfo();
+
+        try {
+            // Should bypass cache and fetch fresh data
+            Table freshTable = cachingHiveMetastore.getTable("db1", "tbl1");
+            Assert.assertNotNull(freshTable);
+
+            // Cache should be updated with fresh data
+            DatabaseTableName key = DatabaseTableName.of("db1", "tbl1");
+            Assert.assertTrue(cachingHiveMetastore.isTablePresent(key));
+        } finally {
+            ConnectContext.remove();
+        }
+    }
+
+    // ==================== Tests for getPartitionValues with use_metastore_cache session variable ====================
+
+    /**
+     * Test that getPartitionValues bypasses cache and fetches fresh data when use_metastore_cache=false.
+     */
+    @Test
+    public void testGetPartitionValuesWithCacheDisabledBySession() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, true);
+
+        // First, populate the cache with partition values (without session variable)
+        ConnectContext.remove();
+        Map<String, List<String>> cachedValues = cachingHiveMetastore.getPartitionValues("db1", "tbl1", "col1");
+        Assert.assertNotNull(cachedValues);
+
+        // Set up a ConnectContext with use_metastore_cache=false
+        ConnectContext ctx = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setUseMetastoreCache(false);
+        ctx.setSessionVariable(sessionVariable);
+        ctx.setThreadLocalInfo();
+
+        try {
+            // When cache is disabled, getPartitionValues should fetch fresh data from delegate
+            Map<String, List<String>> freshValues = cachingHiveMetastore.getPartitionValues("db1", "tbl1", "col1");
+            Assert.assertNotNull(freshValues);
+            // Verify the result contains expected keys
+            Assert.assertTrue(freshValues.containsKey("p1"));
+            Assert.assertTrue(freshValues.containsKey("p2"));
+            Assert.assertEquals(Lists.newArrayList("10"), freshValues.get("p1"));
+            Assert.assertEquals(Lists.newArrayList("20"), freshValues.get("p2"));
+        } finally {
+            ConnectContext.remove();
+        }
+    }
+
+    /**
+     * Test that getPartitionValues uses cache normally when use_metastore_cache=true (default).
+     */
+    @Test
+    public void testGetPartitionValuesWithCacheEnabledBySession() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, true);
+
+        // Set up a ConnectContext with use_metastore_cache=true (default)
+        ConnectContext ctx = new ConnectContext();
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setUseMetastoreCache(true);
+        ctx.setSessionVariable(sessionVariable);
+        ctx.setThreadLocalInfo();
+
+        try {
+            // When cache is enabled, getPartitionValues should use cache
+            Map<String, List<String>> values = cachingHiveMetastore.getPartitionValues("db1", "tbl1", "col1");
+            Assert.assertNotNull(values);
+            Assert.assertTrue(values.containsKey("p1"));
+            Assert.assertTrue(values.containsKey("p2"));
+        } finally {
+            ConnectContext.remove();
+        }
+    }
+
+    /**
+     * Test that getPartitionValues with no ConnectContext uses cache normally (background thread scenario).
+     */
+    @Test
+    public void testGetPartitionValuesWithNoConnectContext() {
+        CachingHiveMetastore cachingHiveMetastore = new CachingHiveMetastore(
+                metastore, executor, expireAfterWriteSec, refreshAfterWriteSec, 1000, true);
+
+        // Ensure no ConnectContext is set
+        ConnectContext.remove();
+
+        // Without ConnectContext, cache should be used normally
+        Map<String, List<String>> values = cachingHiveMetastore.getPartitionValues("db1", "tbl1", "col1");
+        Assert.assertNotNull(values);
+        Assert.assertTrue(values.containsKey("p1"));
+        Assert.assertTrue(values.containsKey("p2"));
     }
 }

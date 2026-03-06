@@ -36,6 +36,7 @@ import com.starrocks.connector.exception.StarRocksConnectorException;
 import com.starrocks.connector.hive.events.MetastoreNotificationFetchException;
 import com.starrocks.connector.metastore.CachingMetastore;
 import com.starrocks.connector.metastore.MetastoreTable;
+import com.starrocks.qe.ConnectContext;
 import org.apache.hadoop.hive.metastore.api.NoSuchObjectException;
 import org.apache.hadoop.hive.metastore.api.NotificationEventResponse;
 import org.apache.logging.log4j.LogManager;
@@ -282,6 +283,18 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         }
         // update last access time
         lastAccessTimeMap.put(databaseTableName, System.currentTimeMillis());
+
+        // Check session variable to control cache usage
+        if (isCacheDisabledBySession()) {
+            // If cache is disabled, fetch fresh partition keys and update cache
+            List<String> freshPartitionKeys = loadPartitionKeys(hivePartitionValue);
+            partitionKeysCache.put(hivePartitionValue, freshPartitionKeys);
+            if (partitionValues.stream().noneMatch(Optional::isPresent)) {
+                return freshPartitionKeys;
+            }
+            return PartitionUtil.getFilteredPartitionKeys(freshPartitionKeys, partitionValues);
+        }
+
         // first check if the all partition keys are cached
         HivePartitionValue allPartitionValue = HivePartitionValue.of(databaseTableName, HivePartitionValue.ALL_PARTITION_VALUES);
         if (partitionKeysCache.asMap().containsKey(allPartitionValue)) {
@@ -319,7 +332,16 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
     }
 
     public Table getTable(String dbName, String tableName) {
-        return get(tableCache, DatabaseTableName.of(dbName, tableName));
+        DatabaseTableName key = DatabaseTableName.of(dbName, tableName);
+        
+        // Check session variable to control cache usage
+        if (isCacheDisabledBySession()) {
+            // If cache is disabled, fetch fresh table metadata and update cache
+            Table freshTable = loadTable(key);
+            tableCache.put(key, freshTable);  // Update cache with fresh data
+            return freshTable;
+        }
+        return get(tableCache, key);
     }
 
     public boolean tableExists(String dbName, String tableName) {
@@ -373,7 +395,16 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                         "partition name is missing"))
                 .collect(Collectors.toList());
 
-        Map<HivePartitionName, Partition> all = getAll(partitionCache, hivePartitionNames);
+        Map<HivePartitionName, Partition> all;
+        // Check session variable to control cache usage
+        if (isCacheDisabledBySession()) {
+            // If cache is disabled, fetch fresh partitions and update cache
+            all = loadPartitionsByNames(hivePartitionNames);
+            partitionCache.putAll(all);  // Update cache with fresh data
+        } else {
+            all = getAll(partitionCache, hivePartitionNames);
+        }
+
         ImmutableMap.Builder<String, Partition> partitionsByName = ImmutableMap.builder();
         for (Map.Entry<HivePartitionName, Partition> entry : all.entrySet()) {
             Optional<String> optPartitionNames = entry.getKey().getPartitionNames();
@@ -707,6 +738,14 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
         }
     }
 
+    /**
+     * Returns true if the session variable explicitly disables metastore cache,
+     * meaning fresh data should be fetched and the cache should be bypassed.
+     */
+    private boolean isCacheDisabledBySession() {
+        return ConnectContext.isMetastoreCacheDisabled();
+    }
+
     private static <K, V> Map<K, V> getAll(LoadingCache<K, V> cache, Iterable<K> keys) {
         try {
             return cache.getAll(keys);
@@ -858,7 +897,18 @@ public class CachingHiveMetastore extends CachingMetastore implements IHiveMetas
                                                          String partitionColumn) {
         DatabaseTableName hiveTableName = DatabaseTableName.of(databaseName, tableName);
         lastAccessTimeMap.put(hiveTableName, System.currentTimeMillis());
-        return get(partitionValuesCache, HiveTablePartitionColumn.of(databaseName, tableName, partitionColumn));
+
+        HiveTablePartitionColumn key = HiveTablePartitionColumn.of(databaseName, tableName, partitionColumn);
+
+        // Check session variable to control cache usage
+        if (isCacheDisabledBySession()) {
+            // If cache is disabled, fetch fresh partition values and update cache
+            Map<String, List<String>> freshValues = loadPartitionValues(key);
+            partitionValuesCache.put(key, freshValues);
+            return freshValues;
+        }
+
+        return get(partitionValuesCache, key);
     }
 
     public String showCreateTable(String dbName, String tblName) {
