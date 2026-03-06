@@ -229,30 +229,42 @@ public enum ScalarOperatorEvaluator {
         return root;
     }
 
+    /**
+     * Evaluate a Thive UDF with constant arguments and return the folded result.
+     *
+     * @return the constant-folded result, or null if the function is not found or evaluation fails
+     */
     public ScalarOperator evaluationThiveUdf(Function fn, CallOperator root) {
         try {
             FunctionInfo functionInfo = ThiveFunctionRegistry.getFunctionInfo(fn.functionName());
             if (functionInfo == null) {
                 return null;
             }
-            ObjectInspector[] objectInspectors = new ObjectInspector[fn.getArgs().length];
-            GenericUDF.DeferredObject[] objects = new GenericUDF.DeferredObject[fn.getArgs().length];
-            for (int i = 0; i < fn.getArgs().length; i++) {
-                objectInspectors[i] = TypeConvert.fromStarRocksToHiveType(fn.getArgs()[i]);
-                ConstantOperator child = (ConstantOperator) root.getChildren().get(i);
-                objects[i] = new GenericUDF.DeferredJavaObject(child.getValue());
-            }
-            GenericUDF udf = ThiveUdfUtils.createGenericUDF(functionInfo.getDisplayName(), functionInfo.getFunctionClass());
-            ObjectInspector objectInspector = udf.initialize(objectInspectors);
 
-            Object hiveResult = udf.evaluate(objects);
-            if (hiveResult == null) {
-                return ConstantOperator.createNull(fn.getReturnType());
+            // Prepare argument inspectors and deferred objects
+            List<ScalarOperator> children = root.getChildren();
+            int argCount = children.size();
+            ObjectInspector[] argInspectors = new ObjectInspector[argCount];
+            GenericUDF.DeferredObject[] deferredArgs = new GenericUDF.DeferredObject[argCount];
+            for (int i = 0; i < argCount; i++) {
+                ConstantOperator child = (ConstantOperator) children.get(i);
+                argInspectors[i] = TypeConvert.fromStarRocksToHiveType(child.getType());
+                deferredArgs[i] = new GenericUDF.DeferredJavaObject(child.getValue());
             }
-            Object object = TypeConvert.fromObjectInspector(objectInspector, hiveResult);
-            return new ConstantOperator(object, fn.getReturnType());
+
+            // Create UDF, initialize with argument types, and evaluate
+            try (GenericUDF udf = ThiveUdfUtils.createGenericUDF(
+                    functionInfo.getDisplayName(), functionInfo.getFunctionClass())) {
+                ObjectInspector resultInspector = udf.initialize(argInspectors);
+                Object hiveResult = udf.evaluate(deferredArgs);
+                if (hiveResult == null) {
+                    return ConstantOperator.createNull(fn.getReturnType());
+                }
+                Object javaResult = TypeConvert.fromObjectInspector(resultInspector, hiveResult);
+                return new ConstantOperator(javaResult, fn.getReturnType());
+            }
         } catch (Throwable e) {
-            LOG.warn("failed to invoke thive function", e);
+            LOG.warn("failed to invoke thive function: {}", fn.functionName(), e);
             return null;
         }
     }

@@ -30,6 +30,7 @@ import org.junit.Test;
 
 import java.math.BigInteger;
 import java.time.LocalDateTime;
+import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -143,4 +144,213 @@ public class ScalarOperatorEvaluatorTest {
         Assert.assertTrue(largeInt.getLargeInt().equals(new BigInteger("1")));
     }
 
+    // ========== evaluationThiveUdf tests ==========
+
+    @Test
+    public void testEvaluationThiveUdf_upper() {
+        // Test thive upper function: upper("hello") -> "HELLO"
+        FunctionName fnName = new FunctionName("upper");
+        fnName.setAsThiveFunction();
+        Function fn = new Function(fnName, new Type[] {Type.VARCHAR}, Type.VARCHAR, false);
+
+        CallOperator root = new CallOperator("upper", Type.VARCHAR,
+                Arrays.asList(ConstantOperator.createVarchar("hello")), fn);
+
+        ScalarOperator result = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fn, root);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result instanceof ConstantOperator);
+        Assert.assertEquals("HELLO", ((ConstantOperator) result).getVarchar());
+    }
+
+    @Test
+    public void testEvaluationThiveUdf_lower() {
+        // Test thive lower function: lower("WORLD") -> "world"
+        FunctionName fnName = new FunctionName("lower");
+        fnName.setAsThiveFunction();
+        Function fn = new Function(fnName, new Type[] {Type.VARCHAR}, Type.VARCHAR, false);
+
+        CallOperator root = new CallOperator("lower", Type.VARCHAR,
+                Arrays.asList(ConstantOperator.createVarchar("WORLD")), fn);
+
+        ScalarOperator result = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fn, root);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result instanceof ConstantOperator);
+        Assert.assertEquals("world", ((ConstantOperator) result).getVarchar());
+    }
+
+    @Test
+    public void testEvaluationThiveUdf_concat() {
+        // Test thive concat function: concat("foo", "bar") -> "foobar"
+        FunctionName fnName = new FunctionName("concat");
+        fnName.setAsThiveFunction();
+        Function fn = new Function(fnName, new Type[] {Type.VARCHAR, Type.VARCHAR}, Type.VARCHAR, false);
+
+        CallOperator root = new CallOperator("concat", Type.VARCHAR,
+                Arrays.asList(ConstantOperator.createVarchar("foo"), ConstantOperator.createVarchar("bar")), fn);
+
+        ScalarOperator result = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fn, root);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result instanceof ConstantOperator);
+        Assert.assertEquals("foobar", ((ConstantOperator) result).getVarchar());
+    }
+
+    @Test
+    public void testEvaluationThiveUdf_length() {
+        // Test thive length function: length("hello") -> 5
+        FunctionName fnName = new FunctionName("length");
+        fnName.setAsThiveFunction();
+        Function fn = new Function(fnName, new Type[] {Type.VARCHAR}, Type.INT, false);
+
+        CallOperator root = new CallOperator("length", Type.INT,
+                Arrays.asList(ConstantOperator.createVarchar("hello")), fn);
+
+        ScalarOperator result = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fn, root);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result instanceof ConstantOperator);
+        Assert.assertEquals(5, ((ConstantOperator) result).getInt());
+    }
+
+    @Test
+    public void testEvaluationThiveUdf_functionNotFound() {
+        // Test function name not found in ThiveFunctionRegistry, should return null
+        FunctionName fnName = new FunctionName("non_existent_function_xyz");
+        fnName.setAsThiveFunction();
+        Function fn = new Function(fnName, new Type[] {Type.VARCHAR}, Type.VARCHAR, false);
+
+        CallOperator root = new CallOperator("non_existent_function_xyz", Type.VARCHAR,
+                Arrays.asList(ConstantOperator.createVarchar("test")), fn);
+
+        ScalarOperator result = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fn, root);
+        Assert.assertNull(result);
+    }
+
+    @Test
+    public void testEvaluationThiveUdf_reverse() {
+        // Test thive reverse function: reverse("abcde") -> "edcba"
+        FunctionName fnName = new FunctionName("reverse");
+        fnName.setAsThiveFunction();
+        Function fn = new Function(fnName, new Type[] {Type.VARCHAR}, Type.VARCHAR, false);
+
+        CallOperator root = new CallOperator("reverse", Type.VARCHAR,
+                Arrays.asList(ConstantOperator.createVarchar("abcde")), fn);
+
+        ScalarOperator result = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fn, root);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result instanceof ConstantOperator);
+        Assert.assertEquals("edcba", ((ConstantOperator) result).getVarchar());
+    }
+
+    @Test
+    public void testEvaluationThiveUdf_trim() {
+        // Test thive trim function: trim("  hello  ") -> "hello"
+        FunctionName fnName = new FunctionName("trim");
+        fnName.setAsThiveFunction();
+        Function fn = new Function(fnName, new Type[] {Type.VARCHAR}, Type.VARCHAR, false);
+
+        CallOperator root = new CallOperator("trim", Type.VARCHAR,
+                Arrays.asList(ConstantOperator.createVarchar("  hello  ")), fn);
+
+        ScalarOperator result = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fn, root);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result instanceof ConstantOperator);
+        Assert.assertEquals("hello", ((ConstantOperator) result).getVarchar());
+    }
+
+    @Test
+    public void testEvaluationThiveUdf_nullResult() {
+        // Test UDF returning null path by passing NULL constant
+        // Hive upper(null) should return null
+        FunctionName fnName = new FunctionName("upper");
+        fnName.setAsThiveFunction();
+        Function fn = new Function(fnName, new Type[] {Type.VARCHAR}, Type.VARCHAR, false);
+
+        CallOperator root = new CallOperator("upper", Type.VARCHAR,
+                Arrays.asList(ConstantOperator.createNull(Type.VARCHAR)), fn);
+
+        ScalarOperator result = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fn, root);
+        // Hive upper(null) returns null
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result instanceof ConstantOperator);
+        Assert.assertTrue(((ConstantOperator) result).isNull());
+    }
+
+    @Test
+    public void testEvaluationThiveUdf_ascii() {
+        // Test thive ascii function: ascii("A") -> 65
+        FunctionName fnName = new FunctionName("ascii");
+        fnName.setAsThiveFunction();
+        Function fn = new Function(fnName, new Type[] {Type.VARCHAR}, Type.INT, false);
+
+        CallOperator root = new CallOperator("ascii", Type.INT,
+                Arrays.asList(ConstantOperator.createVarchar("A")), fn);
+
+        ScalarOperator result = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fn, root);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result instanceof ConstantOperator);
+        Assert.assertEquals(65, ((ConstantOperator) result).getInt());
+    }
+
+    @Test
+    public void testEvaluationThiveUdf_repeat() {
+        // Test thive repeat function: repeat("ab", 3) -> "ababab"
+        FunctionName fnName = new FunctionName("repeat");
+        fnName.setAsThiveFunction();
+        Function fn = new Function(fnName, new Type[] {Type.VARCHAR, Type.INT}, Type.VARCHAR, false);
+
+        CallOperator root = new CallOperator("repeat", Type.VARCHAR,
+                Arrays.asList(ConstantOperator.createVarchar("ab"), ConstantOperator.createInt(3)), fn);
+
+        ScalarOperator result = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fn, root);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result instanceof ConstantOperator);
+        Assert.assertEquals("ababab", ((ConstantOperator) result).getVarchar());
+    }
+
+    @Test
+    public void testEvaluationThiveUdf_space() {
+        // Test thive space function: space(5) -> "     "
+        FunctionName fnName = new FunctionName("space");
+        fnName.setAsThiveFunction();
+        Function fn = new Function(fnName, new Type[] {Type.INT}, Type.VARCHAR, false);
+
+        CallOperator root = new CallOperator("space", Type.VARCHAR,
+                Arrays.asList(ConstantOperator.createInt(5)), fn);
+
+        ScalarOperator result = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fn, root);
+        Assert.assertNotNull(result);
+        Assert.assertTrue(result instanceof ConstantOperator);
+        Assert.assertEquals("     ", ((ConstantOperator) result).getVarchar());
+    }
+
+    @Test
+    public void testEvaluationThiveUdf_greatest() {
+        // Test thive greatest function with string arguments: greatest('20251119','20260228') -> '20260228'
+        // Hive greatest compares strings lexicographically, '20260228' > '20251119'
+        FunctionName fnNameStr = new FunctionName("greatest");
+        fnNameStr.setAsThiveFunction();
+        Function fnStr = new Function(fnNameStr, new Type[] {Type.VARCHAR, Type.VARCHAR}, Type.VARCHAR, false);
+
+        CallOperator rootStr = new CallOperator("greatest", Type.VARCHAR,
+                Arrays.asList(ConstantOperator.createVarchar("20251119"),
+                        ConstantOperator.createVarchar("20260228")), fnStr);
+
+        ScalarOperator resultStr = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fnStr, rootStr);
+        Assert.assertNotNull(resultStr);
+        Assert.assertTrue(resultStr instanceof ConstantOperator);
+        Assert.assertEquals("20260228", ((ConstantOperator) resultStr).getVarchar());
+
+        // Test thive greatest function with integer arguments: greatest(20251119, 20260228) -> 20260228
+        FunctionName fnNameInt = new FunctionName("greatest");
+        fnNameInt.setAsThiveFunction();
+        Function fnInt = new Function(fnNameInt, new Type[] {Type.INT, Type.INT}, Type.INT, false);
+
+        CallOperator rootInt = new CallOperator("greatest", Type.INT,
+                Arrays.asList(ConstantOperator.createInt(20251119),
+                        ConstantOperator.createInt(20260228)), fnInt);
+
+        ScalarOperator resultInt = ScalarOperatorEvaluator.INSTANCE.evaluationThiveUdf(fnInt, rootInt);
+        Assert.assertNotNull(resultInt);
+        Assert.assertTrue(resultInt instanceof ConstantOperator);
+        Assert.assertEquals(20260228, ((ConstantOperator) resultInt).getInt());
+    }
 }
