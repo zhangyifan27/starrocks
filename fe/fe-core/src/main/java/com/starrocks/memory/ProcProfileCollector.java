@@ -82,6 +82,7 @@ public class ProcProfileCollector extends FrontendDaemon {
         collectProfile(StarRocksFE.STARROCKS_HOME_DIR + "/bin/async-profiler/bin/asprof",
                 "-e", "alloc",
                 "--alloc", "2m",
+                "--cstack", "vm",
                 "-d", String.valueOf(Config.proc_profile_collect_time_s),
                 "-f", profileLogDir + "/" +  fileName,
                 getPid());
@@ -97,6 +98,7 @@ public class ProcProfileCollector extends FrontendDaemon {
         String fileName = CPU_FILE_NAME_PREFIX + currentTimeString() + ".html";
         collectProfile(StarRocksFE.STARROCKS_HOME_DIR + "/bin/async-profiler/bin/asprof",
                 "-e", "cpu",
+                "--cstack", "vm",
                 "-d", String.valueOf(Config.proc_profile_collect_time_s),
                 "-f", profileLogDir + "/" +  fileName,
                 getPid());
