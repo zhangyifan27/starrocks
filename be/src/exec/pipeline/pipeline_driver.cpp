@@ -216,7 +216,6 @@ Status PipelineDriver::prepare(RuntimeState* runtime_state) {
     _all_local_rf_ready = _local_rf_holders.empty();
     // Driver has no global rf to wait for completion always sets _all_global_rf_ready_or_timeout to true;
     _all_global_rf_ready_or_timeout = _global_rf_descriptors.empty();
-    set_driver_state(DriverState::READY);
 
     _total_timer_sw = runtime_state->obj_pool()->add(new MonotonicStopWatch());
     _pending_timer_sw = runtime_state->obj_pool()->add(new MonotonicStopWatch());
@@ -224,6 +223,8 @@ Status PipelineDriver::prepare(RuntimeState* runtime_state) {
     _input_empty_timer_sw = runtime_state->obj_pool()->add(new MonotonicStopWatch());
     _output_full_timer_sw = runtime_state->obj_pool()->add(new MonotonicStopWatch());
     _pending_finish_timer_sw = runtime_state->obj_pool()->add(new MonotonicStopWatch());
+
+    set_driver_state(DriverState::READY);
 
     return Status::OK();
 }
@@ -503,7 +504,7 @@ void PipelineDriver::report_exec_state_if_necessary() {
 }
 
 void PipelineDriver::runtime_report_action() {
-    if (is_finished()) {
+    if (is_finished() || _state == DriverState::NOT_READY) {
         return;
     }
 
