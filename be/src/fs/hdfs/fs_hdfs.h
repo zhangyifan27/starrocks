@@ -95,9 +95,10 @@ public:
         }
 
         for (int i = 0; i < 2; i++) {
-            if (_count[i]) {
-                stats.avg_size[i] = _total_size[i] / _count[i];
+            if (_count[i] == 0) {
+                continue;
             }
+            stats.avg_size[i] = _total_size[i] / _count[i];
             std::sort(_read_sizes[i].begin(), _read_sizes[i].end());
             stats.p50_size[i] = _read_sizes[i][_count[i] * 50 / 100];
             stats.p90_size[i] = _read_sizes[i][_count[i] * 90 / 100];
